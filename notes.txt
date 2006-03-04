@@ -1,0 +1,13 @@
+
+Ideas for dirmi:
+
+- Bidirectional
+- Operates on a single InputStream and OutputStream pair
+- Uses @Remote annotation on interface, method (return value), or parameter.
+- Byte and character streams supported
+- Custom annotation describes how other kinds of streams can be connected
+- How about custom annotation which can describe how anything is relayed?
+  Can @Remote be defined this way? @Stream?
+- Custom annotation handler is just given a raw stream to play with. Default
+  annotation is @Object, which creates a new Object stream.
+- Perhaps session ID is passed to handler too? To keep things separate?
