@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * 
+ * Basic interface for a bidirectional I/O connection.
  *
  * @author Brian S O'Neill
  */

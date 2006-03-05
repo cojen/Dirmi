@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * 
+ * Connection implementation of {@link MultiplexConnection}.
  *
  * @author Brian S O'Neill
  */
@@ -77,57 +77,83 @@ final class MultiplexConnection implements Connection {
             mBuffer = new byte[bufferSize];
         }
 
-        public synchronized int read() throws IOException {
+        public int read() throws IOException {
             checkClosed();
-            waitForAvail();
             byte[] buffer = mBuffer;
-            int b = buffer[mStart++];
-            if (mStart >= buffer.length) {
-                mStart = 0;
+            synchronized (buffer) {
+                waitForAvail();
+                int b = buffer[mStart];
+                if (++mStart >= buffer.length) {
+                    mStart = 0;
+                }
+                if (--mAvail < (buffer.length >> 1)) {
+                    mMux.receive(mId, mBuffer.length - mAvail);
+                }
+                return b;
             }
-            if (--mAvail < (buffer.length >> 1)) {
-                // FIXME: RECEIVE command
-            }
-            return b;
         }
 
         public int read(byte[] bytes) throws IOException {
             return read(bytes, 0, bytes.length);
         }
 
-        public synchronized int read(byte[] bytes, int offset, int length) throws IOException {
+        public int read(byte[] bytes, int offset, int length) throws IOException {
             checkClosed();
-            waitForAvail();
-            byte[] buffer = mBuffer;
-            // TODO
-            return 0;
-        }
-
-        public synchronized long skip(long n) throws IOException {
-            checkClosed();
-            long total = 0;
-            while (n > 0) {
-                waitForAvail();
-                if (mAvail > n) {
-                    total += n;
-                    mStart += n;
-                    mAvail -= n;
-                    if (mStart >= mBuffer.length) {
-                        mStart -= mBuffer.length;
-                    }
-                    break;
-                }
-                total += mAvail;
-                n -= mAvail;
-                mStart = 0;
-                mAvail = 0;
+            if (length <= 0) {
+                return 0;
             }
-            return total;
+            byte[] buffer = mBuffer;
+            synchronized (buffer) {
+                waitForAvail();
+                if (length > mAvail) {
+                    length = mAvail;
+                }
+                int firstLength = buffer.length - mStart;
+                if (firstLength >= length) {
+                    System.arraycopy(buffer, mStart, bytes, offset, length);
+                } else {
+                    System.arraycopy(buffer, mStart, bytes, offset, firstLength);
+                    System.arraycopy(buffer, 0, bytes, offset + firstLength, length - firstLength);
+                }
+                if ((mStart += length) >= buffer.length) {
+                    mStart -= buffer.length;
+                }
+                if ((mAvail -= length) < (buffer.length >> 1)) {
+                    mMux.receive(mId, buffer.length - mAvail);
+                }
+                return length;
+            }
         }
 
-        public synchronized int available() throws IOException {
+        public long skip(long n) throws IOException {
             checkClosed();
-            return mAvail;
+            synchronized (mBuffer) {
+                long total = 0;
+                while (n > 0) {
+                    waitForAvail();
+                    if (mAvail > n) {
+                        total += n;
+                        mStart += n;
+                        mAvail -= n;
+                        if (mStart >= mBuffer.length) {
+                            mStart -= mBuffer.length;
+                        }
+                        break;
+                    }
+                    total += mAvail;
+                    n -= mAvail;
+                    mStart = 0;
+                    mAvail = 0;
+                }
+                return total;
+            }
+        }
+
+        public int available() throws IOException {
+            checkClosed();
+            synchronized (mBuffer) {
+                return mAvail;
+            }
         }
 
         public void close() throws IOException {
@@ -140,16 +166,38 @@ final class MultiplexConnection implements Connection {
             }
         }
 
-        // Caller must be synchronized on this
+        void supply(byte[] bytes, int offset, int length) throws IOException {
+            byte[] buffer = mBuffer;
+            synchronized (buffer) {
+                int capacity = buffer.length - mAvail;
+                if (length > capacity) {
+                    throw new IOException
+                        ("Protocol error: too much data received: " + length + " > " + capacity);
+                }
+                int end = mStart + mAvail;
+                if (end > buffer.length) {
+                    end -= buffer.length;
+                }
+                int firstLength = buffer.length - end;
+                if (firstLength >= length) {
+                    System.arraycopy(bytes, offset, buffer, end, length);
+                } else {
+                    System.arraycopy(bytes, offset, buffer, end, firstLength);
+                    System.arraycopy(bytes, offset + firstLength, buffer, 0, length - firstLength);
+                }
+                mAvail += length;
+                buffer.notify();
+            }
+        }
+
+        // Caller must be synchronized on mBuffer.
         private void waitForAvail() throws IOException {
             if (mAvail == 0) {
                 try {
-                    synchronized (mBuffer) {
-                        while (mAvail == 0) {
-                            mBuffer.wait();
-                            checkClosed();
-                        }
-                    }
+                    do {
+                        mBuffer.wait();
+                        checkClosed();
+                    } while (mAvail == 0);
                 } catch (InterruptedException e) {
                     disconnect();
                     throw new InterruptedIOException();
@@ -163,10 +211,12 @@ final class MultiplexConnection implements Connection {
         private final byte[] mBuffer;
         private int mEnd;
 
+        private boolean mOpened;
+
         Output(int receiveWindow, int bufferSize) {
             mReceiveWindow = receiveWindow;
-            mBuffer = new byte[Multiplexer.HEADER_SIZE + bufferSize];
-            mEnd = Multiplexer.HEADER_SIZE;
+            mBuffer = new byte[Multiplexer.SEND_HEADER_SIZE + bufferSize];
+            mEnd = Multiplexer.SEND_HEADER_SIZE;
         }
 
         public synchronized void write(int b) throws IOException {
@@ -189,6 +239,7 @@ final class MultiplexConnection implements Connection {
             while (length > 0) {
                 if (avail >= length) {
                     System.arraycopy(bytes, offset, buffer, mEnd, length);
+                    mEnd += length;
                     return;
                 }
                 if (avail > 0) {
@@ -233,7 +284,7 @@ final class MultiplexConnection implements Connection {
         private void sendBuffer(boolean flush) throws IOException {
             byte[] buffer = mBuffer;
             int end = mEnd;
-            int offset = Multiplexer.HEADER_SIZE;
+            int offset = Multiplexer.SEND_HEADER_SIZE;
             while (offset < end) {
                 Multiplexer mux = mMux;
                 if (mux == null) {
@@ -256,23 +307,26 @@ final class MultiplexConnection implements Connection {
 
                 int size = end - offset;
                 if (size <= window) {
-                    if (flush || size >= ((buffer.length - (Multiplexer.HEADER_SIZE - 1)) >> 1)) {
-                        mux.send(mId, buffer, offset, size);
+                    if (flush ||
+                        size >= ((buffer.length - (Multiplexer.SEND_HEADER_SIZE - 1)) >> 1))
+                    {
+                        mux.send(mId, sendOp(), buffer, offset, size);
                         synchronized (buffer) {
                             if ((mReceiveWindow -= size) < 0) {
                                 mReceiveWindow = 0;
                             }
                         }
-                        mEnd = Multiplexer.HEADER_SIZE;
+                        mEnd = Multiplexer.SEND_HEADER_SIZE;
                     } else {
                         // Save for later, hoping to fill window.
-                        System.arraycopy(buffer, offset, buffer, Multiplexer.HEADER_SIZE, size);
-                        mEnd = Multiplexer.HEADER_SIZE + size;
+                        System.arraycopy
+                            (buffer, offset, buffer, Multiplexer.SEND_HEADER_SIZE, size);
+                        mEnd = Multiplexer.SEND_HEADER_SIZE + size;
                     }
                     return;
                 }
 
-                mux.send(mId, buffer, offset, window);
+                mux.send(mId, sendOp(), buffer, offset, window);
                 synchronized (buffer) {
                     if ((mReceiveWindow -= window) < 0) {
                         mReceiveWindow = 0;
@@ -281,7 +335,16 @@ final class MultiplexConnection implements Connection {
                 offset += window;
             }
 
-            mEnd = Multiplexer.HEADER_SIZE;
+            mEnd = Multiplexer.SEND_HEADER_SIZE;
+        }
+
+        // Caller must be synchronized on this
+        private int sendOp() {
+            if (mOpened) {
+                return Multiplexer.SEND;
+            }
+            mOpened = true;
+            return Multiplexer.OPEN;
         }
     }
 }

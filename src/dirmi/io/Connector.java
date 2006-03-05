@@ -17,31 +17,38 @@
 package dirmi.io;
 
 import java.io.IOException;
-import java.io.InterruptedIOException;
 
 /**
- * 
+ * Factory for {@link Connection}s.
  *
  * @author Brian S O'Neill
  */
 public interface Connector {
     /**
      * Called by client to establish a new connection.
+     *
+     * @return new connection
      */
-    public Connection connect() throws IOException;
+    Connection connect() throws IOException;
 
     /**
      * Called by client to establish a new connection.
+     *
+     * @return new connection, or null if timed out
      */
-    public Connection connect(int timeoutMillis) throws IOException;
+    Connection connect(int timeoutMillis) throws IOException;
 
     /**
      * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection
      */
-    public Connection accept() throws IOException;
+    Connection accept() throws IOException;
 
     /**
      * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection, or null if timed out
      */
-    public Connection accept(int timeoutMillis) throws IOException;
+    Connection accept(int timeoutMillis) throws IOException;
 }
