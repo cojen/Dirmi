@@ -24,16 +24,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.InputStream;
-import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
 import java.util.ArrayList;
 import java.util.Collection;
-
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import java.security.SecureRandom;
 
@@ -41,8 +36,8 @@ import com.amazon.carbonado.util.IntHashMap;
 
 /**
  * Multiplexer allows new connections to be established over a single master
- * connection. Opening a new connection never blocks. The {@link #pump} method
- * must be called from a dedicated thread in order for the Multiplexer to work.
+ * connection. Opening a new connection never blocks. At least one thread must be
+ * calling accept at all times in order for the Multiplexer to work.
  *
  * @author Brian S O'Neill
  */
@@ -77,7 +72,6 @@ public class Multiplexer implements Connector {
 
     private final IntHashMap<Reference<MultiplexConnection>> mConnections;
     private int mNextId;
-    private final BlockingQueue<Connection> mAcceptQueue;
 
     final int mInputBufferSize;
     final int mOutputBufferSize;
@@ -101,7 +95,6 @@ public class Multiplexer implements Connector {
     {
         mMaster = master;
         mConnections = new IntHashMap<Reference<MultiplexConnection>>();
-        mAcceptQueue = new LinkedBlockingQueue<Connection>();
 
         if (inputBufferSize <= 0) {
             throw new IllegalArgumentException
@@ -179,26 +172,30 @@ public class Multiplexer implements Connector {
     }
 
     public Connection accept() throws IOException {
-        try {
-            return mAcceptQueue.take();
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
-        }
+        Connection con;
+        while ((con = pump()) == null) {}
+        return con;
     }
 
     public Connection accept(int timeoutMillis) throws IOException {
-        try {
-            return mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
+        if (timeoutMillis <= 0) {
+            return pump();
         }
+        long start = System.nanoTime();
+        long end = start + 1000000L * timeoutMillis;
+        Connection con = pump();
+        while ((con = pump()) == null) {
+            if (System.nanoTime() >= end) {
+                break;
+            }
+        }
+        return con;
     }
 
     /**
-     * Call this method repeatedly in order for Multiplexer to actually
-     * work. Generally, this is performed by a dedicated thread.
+     * @return newly accepted connection, or null if none
      */
-    public void pump() throws IOException {
+    private Connection pump() throws IOException {
         Connection master = checkClosed();
         try {
             InputStream in = checkClosed().getInputStream();
@@ -233,14 +230,6 @@ public class Multiplexer implements Connector {
                             if (command == OPEN) {
                                 con = new MultiplexConnection(this, id);
                                 mConnections.put(id, new WeakReference<MultiplexConnection>(con));
-                                if (!mAcceptQueue.offer(con)) {
-                                    // This will synchronize on "out", which
-                                    // should not cause deadlock because
-                                    // nothing that synchronizes on "out" first
-                                    // should synchronize on "in".
-                                    unregister(con);
-                                    con = null;
-                                }
                             } else {
                                 con = null;
                             }
@@ -276,6 +265,9 @@ public class Multiplexer implements Connector {
                         mReadStart = 0;
                         mReadAvail = 0;
                     }
+                    if (command == OPEN) {
+                        return con;
+                    }
                 } else if (command == CLOSE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
@@ -301,6 +293,8 @@ public class Multiplexer implements Connector {
             }
             throw e;
         }
+
+        return null;
     }
 
     // Caller should synchronize on InputStream.
