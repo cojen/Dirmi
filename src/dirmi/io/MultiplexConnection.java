@@ -200,12 +200,14 @@ final class MultiplexConnection implements Connection {
             if (mAvail == 0) {
                 checkClosed();
                 try {
-                    do {
+                    while (true) {
                         mBuffer.wait();
                         if (mAvail == 0) {
                             checkClosed();
+                        } else {
+                            break;
                         }
-                    } while (mAvail == 0);
+                    }
                 } catch (InterruptedException e) {
                     disconnect();
                     throw new InterruptedIOException();
