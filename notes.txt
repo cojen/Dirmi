@@ -11,3 +11,4 @@ Ideas for dirmi:
 - Custom annotation handler is just given a raw stream to play with. Default
   annotation is @Object, which creates a new Object stream.
 - Perhaps session ID is passed to handler too? To keep things separate?
+- Can use @Asynchronous annotation for methods that return void and declare no exceptions.
