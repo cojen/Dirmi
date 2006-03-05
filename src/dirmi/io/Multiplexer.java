@@ -353,7 +353,9 @@ public class Multiplexer implements Connector {
      * @param bytes must always have enough header bytes before the offset
      * @param offset must always be at least SEND_HEADER_SIZE
      */
-    void send(int id, int op, byte[] bytes, int offset, int size) throws IOException {
+    void send(int id, int op, byte[] bytes, int offset, int size, boolean flush)
+        throws IOException
+    {
         Connection master = checkClosed();
         id |= op;
         try {
@@ -376,7 +378,9 @@ public class Multiplexer implements Connector {
                     offset += chunk;
                     size -= chunk;
                 }
-                out.flush();
+                if (flush) {
+                    out.flush();
+                }
             }
         } catch (IOException e) {
             mMaster = null;

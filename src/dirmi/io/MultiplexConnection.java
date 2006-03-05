@@ -260,7 +260,9 @@ final class MultiplexConnection implements Connection {
         public synchronized void close() throws IOException {
             if (mMux != null) {
                 try {
-                    sendBuffer(true);
+                    // Don't need to flush right away since disconnect will
+                    // send CLOSE command and flush master.
+                    sendBuffer(false);
                 } finally {
                     disconnect();
                 }
@@ -310,7 +312,7 @@ final class MultiplexConnection implements Connection {
                     if (flush ||
                         size >= ((buffer.length - (Multiplexer.SEND_HEADER_SIZE - 1)) >> 1))
                     {
-                        mux.send(mId, sendOp(), buffer, offset, size);
+                        mux.send(mId, sendOp(), buffer, offset, size, flush);
                         synchronized (buffer) {
                             if ((mReceiveWindow -= size) < 0) {
                                 mReceiveWindow = 0;
@@ -326,7 +328,7 @@ final class MultiplexConnection implements Connection {
                     return;
                 }
 
-                mux.send(mId, sendOp(), buffer, offset, window);
+                mux.send(mId, sendOp(), buffer, offset, window, flush);
                 synchronized (buffer) {
                     if ((mReceiveWindow -= window) < 0) {
                         mReceiveWindow = 0;
