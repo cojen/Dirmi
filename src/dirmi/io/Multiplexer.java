@@ -47,24 +47,24 @@ public class Multiplexer implements Connector {
     private static final int DEFAULT_BUFFER_SIZE = 4000;
 
     static final int CLOSE   = 0 << 30;
-    static final int OPEN    = 1 << 30;
-    static final int SEND    = 2 << 30;
-    static final int RECEIVE = 3 << 30;
+    static final int RECEIVE = 1 << 30;
+    static final int OPEN    = 2 << 30;
+    static final int SEND    = 3 << 30;
 
     // CLOSE command
     // size: 4 bytes
     // format: 4 byte header with connection id
+    // byte 0: 00xxxxxx
+
+    // RECEIVE command
+    // size: 8 bytes
+    // format: 4 byte header with connection id, 4 byte receive window size
     // byte 0: 01xxxxxx
 
     // OPEN/SEND command
     // size: 7..65542 bytes
     // format: 4 byte header with connection id, 2 byte size, 1..65536 bytes of data
-    // byte 0: 10xxxxxx
-
-    // RECEIVE command
-    // size: 8 bytes
-    // format: 4 byte header with connection id, 4 byte receive window size
-    // byte 0: 11xxxxxx
+    // byte 0: 10xxxxxx or 11xxxxxx
 
     static final int SEND_HEADER_SIZE = 6;
 
