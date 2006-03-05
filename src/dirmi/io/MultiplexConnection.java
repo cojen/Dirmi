@@ -80,9 +80,7 @@ final class MultiplexConnection implements Connection {
         public int read() throws IOException {
             byte[] buffer = mBuffer;
             synchronized (buffer) {
-                if (!waitForAvail()) {
-                    return -1;
-                }
+                waitForAvail();
                 int b = buffer[mStart];
                 if (++mStart >= buffer.length) {
                     mStart = 0;
@@ -107,9 +105,7 @@ final class MultiplexConnection implements Connection {
             }
             byte[] buffer = mBuffer;
             synchronized (buffer) {
-                if (!waitForAvail()) {
-                    return -1;
-                }
+                waitForAvail();
                 if (length > mAvail) {
                     length = mAvail;
                 }
@@ -137,9 +133,7 @@ final class MultiplexConnection implements Connection {
             synchronized (mBuffer) {
                 long total = 0;
                 while (n > 0) {
-                    if (!waitForAvail()) {
-                        return 0;
-                    }
+                    waitForAvail();
                     if (mAvail > n) {
                         total += n;
                         mStart += n;
@@ -202,19 +196,14 @@ final class MultiplexConnection implements Connection {
         }
 
         // Caller must be synchronized on mBuffer.
-        private boolean waitForAvail() throws IOException {
+        private void waitForAvail() throws IOException {
             if (mAvail == 0) {
-                if (mMux == null) {
-                    return false;
-                }
+                checkClosed();
                 try {
                     do {
                         mBuffer.wait();
-                        if (mMux == null) {
-                            if (mAvail == 0) {
-                                return false;
-                            }
-                            break;
+                        if (mAvail == 0) {
+                            checkClosed();
                         }
                     } while (mAvail == 0);
                 } catch (InterruptedException e) {
@@ -222,7 +211,6 @@ final class MultiplexConnection implements Connection {
                     throw new InterruptedIOException();
                 }
             }
-            return true;
         }
     }
 
