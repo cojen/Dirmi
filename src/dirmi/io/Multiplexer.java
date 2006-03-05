@@ -22,7 +22,6 @@ import java.lang.ref.WeakReference;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -256,7 +255,7 @@ public class Multiplexer implements Connector {
                             while (length > 0) {
                                 int amt = in.read(buffer, 0, buffer.length);
                                 if (amt < 0) {
-                                    throw new EOFException();
+                                    throw new IOException("Master connection closed");
                                 }
                                 mci.supply(buffer, 0, amt);
                                 length -= amt;
@@ -338,7 +337,7 @@ public class Multiplexer implements Connector {
         while (true) {
             int amt = in.read(buffer, mReadStart, buffer.length - mReadStart);
             if (amt < 0) {
-                throw new EOFException();
+                throw new IOException("Master connection closed");
             }
             if ((mReadAvail += amt) >= minAmount) {
                 break;
