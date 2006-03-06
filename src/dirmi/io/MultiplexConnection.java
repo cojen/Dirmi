@@ -33,11 +33,11 @@ final class MultiplexConnection implements Connection {
     final Input mIn;
     final Output mOut;
 
-    MultiplexConnection(Multiplexer mux, int id) {
+    MultiplexConnection(Multiplexer mux, int id, boolean opened) {
         mMux = mux;
         mId = id;
         mIn = new Input(mux.mInputBufferSize);
-        mOut = new Output(mux.mReceiveWindow, mux.mOutputBufferSize);
+        mOut = new Output(mux.mReceiveWindow, mux.mOutputBufferSize, opened);
     }
 
     public InputStream getInputStream() {
@@ -73,26 +73,37 @@ final class MultiplexConnection implements Connection {
         private int mStart;
         private int mAvail;
 
+        private int mWindowConsumed;
+
         Input(int bufferSize) {
             mBuffer = new byte[bufferSize];
         }
 
         public int read() throws IOException {
             byte[] buffer = mBuffer;
+            int b;
+            int received;
             synchronized (buffer) {
                 waitForAvail();
-                int b = buffer[mStart];
+                b = buffer[mStart];
                 if (++mStart >= buffer.length) {
                     mStart = 0;
                 }
-                if (--mAvail < (buffer.length >> 1)) {
-                    Multiplexer mux;
-                    if ((mux = mMux) != null) {
-                        mux.receive(mId, mBuffer.length - mAvail);
-                    }
+                --mAvail;
+                if ((received = ++mWindowConsumed) < (buffer.length >> 1)) {
+                    received = 0;
+                } else {
+                    mWindowConsumed = 0;
                 }
-                return b;
             }
+            // Write received outside of synchronized section to avoid deadlock.
+            if (received > 0) {
+                Multiplexer mux;
+                if ((mux = mMux) != null) {
+                    mux.receive(mId, received);
+                }
+            }
+            return b;
         }
 
         public int read(byte[] bytes) throws IOException {
@@ -104,6 +115,7 @@ final class MultiplexConnection implements Connection {
                 return 0;
             }
             byte[] buffer = mBuffer;
+            int received;
             synchronized (buffer) {
                 waitForAvail();
                 if (length > mAvail) {
@@ -119,14 +131,21 @@ final class MultiplexConnection implements Connection {
                 if ((mStart += length) >= buffer.length) {
                     mStart -= buffer.length;
                 }
-                if ((mAvail -= length) < (buffer.length >> 1)) {
-                    Multiplexer mux;
-                    if ((mux = mMux) != null) {
-                        mux.receive(mId, buffer.length - mAvail);
-                    }
+                mAvail -= length;
+                if ((received = (mWindowConsumed += length)) < (buffer.length >> 1)) {
+                    received = 0;
+                } else {
+                    mWindowConsumed = 0;
                 }
-                return length;
             }
+            // Write received outside of synchronized section to avoid deadlock.
+            if (received > 0) {
+                Multiplexer mux;
+                if ((mux = mMux) != null) {
+                    mux.receive(mId, received);
+                }
+            }
+            return length;
         }
 
         public long skip(long n) throws IOException {
@@ -217,25 +236,25 @@ final class MultiplexConnection implements Connection {
     }
 
     final class Output extends OutputStream {
-        private static final int NO_FLUSH = 0, PARTIAL_FLUSH = 1, FULL_FLUSH = 2;
+        private static final int SEND_NO_FLUSH = 0, SEND_AND_FLUSH = 1, SEND_AND_CLOSE = 2;
 
         private int mReceiveWindow;
         private final byte[] mBuffer;
         private int mEnd;
-
         private boolean mOpened;
 
-        Output(int receiveWindow, int bufferSize) {
+        Output(int receiveWindow, int bufferSize, boolean opened) {
             mReceiveWindow = receiveWindow;
             mBuffer = new byte[Multiplexer.SEND_HEADER_SIZE + bufferSize];
             mEnd = Multiplexer.SEND_HEADER_SIZE;
+            mOpened = opened;
         }
 
         public synchronized void write(int b) throws IOException {
             checkClosed();
             byte[] buffer = mBuffer;
             if (mEnd >= buffer.length) {
-                sendBuffer(NO_FLUSH);
+                sendBuffer(SEND_NO_FLUSH);
             }
             buffer[mEnd++] = (byte) b;
         }
@@ -257,24 +276,27 @@ final class MultiplexConnection implements Connection {
                 if (avail > 0) {
                     System.arraycopy(bytes, offset, buffer, mEnd, avail);
                     mEnd += avail;
+                    offset += avail;
                     length -= avail;
                 }
-                sendBuffer(NO_FLUSH);
-                avail = buffer.length;
+                sendBuffer(SEND_NO_FLUSH);
+                avail = buffer.length - mEnd;
             }
         }
 
         public synchronized void flush() throws IOException {
             checkClosed();
-            sendBuffer(FULL_FLUSH);
+            sendBuffer(SEND_AND_FLUSH);
         }
 
         public synchronized void close() throws IOException {
             if (mMux != null) {
                 try {
-                    // Don't need to flush right away since disconnect will
-                    // send CLOSE command and flush master.
-                    sendBuffer(PARTIAL_FLUSH);
+                    sendBuffer(SEND_AND_CLOSE);
+                } catch (IOException e) {
+                    if (mMux != null) {
+                        throw e;
+                    }
                 } finally {
                     disconnect();
                 }
@@ -289,13 +311,13 @@ final class MultiplexConnection implements Connection {
 
         void updateReceiveWindow(int receiveWindow) {
             synchronized (mBuffer) {
-                mReceiveWindow = receiveWindow;
+                mReceiveWindow += receiveWindow;
                 mBuffer.notify();
             }
         }
 
         // Caller must be synchronized on this
-        private void sendBuffer(int flushMode) throws IOException {
+        private void sendBuffer(int sendMode) throws IOException {
             byte[] buffer = mBuffer;
             int end = mEnd;
             int offset = Multiplexer.SEND_HEADER_SIZE;
@@ -321,14 +343,12 @@ final class MultiplexConnection implements Connection {
 
                 int size = end - offset;
                 if (size <= window) {
-                    if (flushMode != NO_FLUSH ||
+                    if (sendMode != SEND_NO_FLUSH ||
                         size >= ((buffer.length - (Multiplexer.SEND_HEADER_SIZE - 1)) >> 1))
                     {
-                        mux.send(mId, sendOp(), buffer, offset, size, flushMode == FULL_FLUSH);
+                        mux.send(mId, sendOp(), buffer, offset, size, sendMode == SEND_AND_CLOSE);
                         synchronized (buffer) {
-                            if ((mReceiveWindow -= size) < 0) {
-                                mReceiveWindow = 0;
-                            }
+                            mReceiveWindow -= size;
                         }
                         mEnd = Multiplexer.SEND_HEADER_SIZE;
                     } else {
@@ -340,11 +360,9 @@ final class MultiplexConnection implements Connection {
                     return;
                 }
 
-                mux.send(mId, sendOp(), buffer, offset, window, flushMode == FULL_FLUSH);
+                mux.send(mId, sendOp(), buffer, offset, window, sendMode == SEND_AND_CLOSE);
                 synchronized (buffer) {
-                    if ((mReceiveWindow -= window) < 0) {
-                        mReceiveWindow = 0;
-                    }
+                    mReceiveWindow -= window;
                 }
                 offset += window;
             }

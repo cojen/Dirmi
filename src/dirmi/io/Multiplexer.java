@@ -31,7 +31,7 @@ import java.util.Collection;
 
 import java.security.SecureRandom;
 
-import com.amazon.carbonado.util.IntHashMap;
+import cojen.util.IntHashMap;
 
 /**
  * Multiplexer allows new connections to be established over a single master
@@ -56,8 +56,8 @@ public class Multiplexer implements Connector {
     // byte 0: 00xxxxxx
 
     // RECEIVE command
-    // size: 8 bytes
-    // format: 4 byte header with connection id, 4 byte receive window size
+    // size: 6 bytes
+    // format: 4 byte header with connection id, 2 byte receive window size (delta)
     // byte 0: 01xxxxxx
 
     // OPEN/SEND command
@@ -69,7 +69,7 @@ public class Multiplexer implements Connector {
 
     private volatile Connection mMaster;
 
-    private final IntHashMap<Reference<MultiplexConnection>> mConnections;
+    private final IntHashMap mConnections;
     private int mNextId;
 
     final int mInputBufferSize;
@@ -81,7 +81,7 @@ public class Multiplexer implements Connector {
     private int mReadAvail;
 
     // Buffer for sending close and receive commands.
-    private final byte[] mWriteBuffer = new byte[8];
+    private final byte[] mWriteBuffer = new byte[6];
 
     public Multiplexer(Connection master)
         throws IOException
@@ -93,7 +93,7 @@ public class Multiplexer implements Connector {
         throws IOException
     {
         mMaster = master;
-        mConnections = new IntHashMap<Reference<MultiplexConnection>>();
+        mConnections = new IntHashMap();
 
         if (inputBufferSize <= 0) {
             throw new IllegalArgumentException
@@ -160,7 +160,7 @@ public class Multiplexer implements Connector {
                 }
             } while (mConnections.containsKey(id));
             
-            MultiplexConnection con = new MultiplexConnection(this, id);
+            MultiplexConnection con = new MultiplexConnection(this, id, false);
             mConnections.put(id, new WeakReference<MultiplexConnection>(con));
             return con;
         }
@@ -210,24 +210,26 @@ public class Multiplexer implements Connector {
                 if (command == RECEIVE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef = mConnections.get(id);
+                        Reference<MultiplexConnection> conRef =
+                            (Reference<MultiplexConnection>) mConnections.get(id);
                         if (conRef == null) {
                             con = null;
                         } else {
                             con = conRef.get();
                         }
                     }
-                    int receiveWindow = readInt(in);
+                    int receiveWindow = readUnsignedShort(in) + 1;
                     if (con != null) {
                         con.mOut.updateReceiveWindow(receiveWindow);
                     }
                 } else if (command == SEND || command == OPEN) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef = mConnections.get(id);
+                        Reference<MultiplexConnection> conRef =
+                            (Reference<MultiplexConnection>) mConnections.get(id);
                         if (conRef == null || (con = conRef.get()) == null) {
                             if (command == OPEN) {
-                                con = new MultiplexConnection(this, id);
+                                con = new MultiplexConnection(this, id, true);
                                 mConnections.put(id, new WeakReference<MultiplexConnection>(con));
                             } else {
                                 con = null;
@@ -247,22 +249,28 @@ public class Multiplexer implements Connector {
                             while (length > 0) {
                                 length -= in.skip(length);
                             }
+                            mReadStart = 0;
+                            mReadAvail = 0;
                         } else {
                             MultiplexConnection.Input mci = con.mIn;
                             // Drain read buffer.
                             mci.supply(buffer, mReadStart, mReadAvail);
                             length -= mReadAvail;
-                            while (length > 0) {
+                            while (true) {
                                 int amt = in.read(buffer, 0, buffer.length);
                                 if (amt < 0) {
                                     throw new IOException("Master connection closed");
+                                }
+                                if (amt >= length) {
+                                    mci.supply(buffer, 0, length);
+                                    mReadStart = length;
+                                    mReadAvail = amt - length;
+                                    break;
                                 }
                                 mci.supply(buffer, 0, amt);
                                 length -= amt;
                             }
                         }
-                        mReadStart = 0;
-                        mReadAvail = 0;
                     }
                     if (command == OPEN) {
                         return con;
@@ -270,7 +278,8 @@ public class Multiplexer implements Connector {
                 } else if (command == CLOSE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef = mConnections.remove(id);
+                        Reference<MultiplexConnection> conRef =
+                            (Reference<MultiplexConnection>) mConnections.remove(id);
                         if (conRef == null) {
                             con = null;
                         } else {
@@ -335,13 +344,15 @@ public class Multiplexer implements Connector {
         }
 
         while (true) {
-            int amt = in.read(buffer, mReadStart, buffer.length - mReadStart);
+            int offset = mReadStart + mReadAvail;
+            int amt = in.read(buffer, offset, buffer.length - offset);
             if (amt < 0) {
                 throw new IOException("Master connection closed");
             }
             if ((mReadAvail += amt) >= minAmount) {
                 break;
             }
+            offset += amt;
         }
     }
 
@@ -351,8 +362,9 @@ public class Multiplexer implements Connector {
      *
      * @param bytes must always have enough header bytes before the offset
      * @param offset must always be at least SEND_HEADER_SIZE
+     * @param close when true, close connection after sending
      */
-    void send(int id, int op, byte[] bytes, int offset, int size, boolean flush)
+    void send(int id, int op, byte[] bytes, int offset, int size, boolean close)
         throws IOException
     {
         Connection master = checkClosed();
@@ -371,15 +383,44 @@ public class Multiplexer implements Connector {
                     bytes[offset - 3] = (byte)id;
                     bytes[offset - 2] = (byte)((chunk - 1) >> 8);
                     bytes[offset - 1] = (byte)(chunk - 1);
-                    
+
+                    if ((size -= chunk) <= 0 && close) {
+                        // Try to piggyback close command.
+                        if (offset + chunk + 4 <= bytes.length) {
+                            id &= ~(3 << 30);
+                            synchronized (mConnections) {
+                                mConnections.remove(id);
+                            }
+                            id |= CLOSE;
+                            bytes[offset + chunk]     = (byte)(id >> 24);
+                            bytes[offset + chunk + 1] = (byte)(id >> 16);
+                            bytes[offset + chunk + 2] = (byte)(id >> 8);
+                            bytes[offset + chunk + 3] = (byte)id;
+                            chunk += 4;
+                            close = false;
+                        }
+                    }
+
                     out.write(bytes, offset - SEND_HEADER_SIZE, chunk + SEND_HEADER_SIZE);
-                    
+
                     offset += chunk;
-                    size -= chunk;
                 }
-                if (flush) {
-                    out.flush();
+
+                if (close) {
+                    id &= ~(3 << 30);
+                    synchronized (mConnections) {
+                        mConnections.remove(id);
+                    }
+                    id |= CLOSE;
+                    byte[] buffer = mWriteBuffer;
+                    buffer[0] = (byte)(id >> 24);
+                    buffer[1] = (byte)(id >> 16);
+                    buffer[2] = (byte)(id >> 8);
+                    buffer[3] = (byte)id;
+                    out.write(buffer, 0, 4);
                 }
+
+                out.flush();
             }
         } catch (IOException e) {
             mMaster = null;
@@ -401,15 +442,19 @@ public class Multiplexer implements Connector {
             OutputStream out = master.getOutputStream();
             synchronized (out) {
                 byte[] buffer = mWriteBuffer;
-                buffer[0] = (byte)(id >> 24);
-                buffer[1] = (byte)(id >> 16);
-                buffer[2] = (byte)(id >> 8);
-                buffer[3] = (byte)id;
-                buffer[4] = (byte)(size >> 24);
-                buffer[5] = (byte)(size >> 16);
-                buffer[6] = (byte)(size >> 8);
-                buffer[7] = (byte)id;
-                out.write(buffer, 0, 8);
+                while (size > 0) {
+                    int chunk = size <= 65536 ? size : 65536;
+
+                    buffer[0] = (byte)(id >> 24);
+                    buffer[1] = (byte)(id >> 16);
+                    buffer[2] = (byte)(id >> 8);
+                    buffer[3] = (byte)id;
+                    buffer[4] = (byte)((chunk - 1) >> 8);
+                    buffer[5] = (byte)(chunk - 1);
+
+                    out.write(buffer, 0, 6);
+                    size -= chunk;
+                }
                 out.flush();
             }
         } catch (IOException e) {
