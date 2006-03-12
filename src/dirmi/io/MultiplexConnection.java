@@ -228,7 +228,6 @@ final class MultiplexConnection implements Connection {
                         }
                     }
                 } catch (InterruptedException e) {
-                    disconnect();
                     throw new InterruptedIOException();
                 }
             }
@@ -337,7 +336,6 @@ final class MultiplexConnection implements Connection {
                         }
                     }
                 } catch (InterruptedException e) {
-                    disconnect();
                     throw new InterruptedIOException();
                 }
 

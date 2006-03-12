@@ -137,6 +137,25 @@ public class PipedOutputStream extends OutputStream {
         }
     }
 
+    public String toString() {
+        String superStr = superToString();
+
+        mLock.lock();
+        try {
+            if (mPin == null) {
+                return superStr.concat(" (unconnected)");
+            } else {
+                return superStr + " connected to " + mPin.superToString();
+            }
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    String superToString() {
+        return super.toString();
+    }
+
     // Caller must hold mLock.
     int read() throws IOException {
         try {
@@ -169,33 +188,25 @@ public class PipedOutputStream extends OutputStream {
 
         int amt = 0;
         
-        while (length > 0) {
-            try {
-                while (mData == null) {
-                    mReadCondition.await();
-                }
-            } catch (InterruptedException e) {
-                throw new InterruptedIOException();
+        try {
+            while (mData == null) {
+                mReadCondition.await();
             }
+        } catch (InterruptedException e) {
+            throw new InterruptedIOException();
+        }
+        
+        if (length >= mLength) {
+            length = mLength;
+        }
 
-            if (length <= mLength) {
-                System.arraycopy(mData, mOffset, bytes, offset, length);
-                amt += length;
-                if ((mLength -= length) <= 0) {
-                    mData = null;
-                    mWriteCondition.signal();
-                } else {
-                    mOffset += length;
-                }
-                break;
-            }
-
-            System.arraycopy(mData, mOffset, bytes, offset, mLength);
-            amt += mLength;
-            offset += mLength;
-            length -= mLength;
+        System.arraycopy(mData, mOffset, bytes, offset, length);
+        amt += length;
+        if ((mLength -= length) <= 0) {
             mData = null;
             mWriteCondition.signal();
+        } else {
+            mOffset += length;
         }
 
         return amt;

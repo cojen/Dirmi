@@ -19,10 +19,11 @@ package dirmi.io;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 
-import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -89,7 +90,7 @@ public class Multiplexer implements Connector {
         this(master, DEFAULT_BUFFER_SIZE, DEFAULT_BUFFER_SIZE);
     }
 
-    public Multiplexer(Connection master, int inputBufferSize, int outputBufferSize)
+    public Multiplexer(final Connection master, int inputBufferSize, int outputBufferSize)
         throws IOException
     {
         mMaster = master;
@@ -108,45 +109,76 @@ public class Multiplexer implements Connector {
         mInputBufferSize = inputBufferSize;
         mOutputBufferSize = outputBufferSize;
 
+        long ourRnd = new SecureRandom().nextLong();
+
         // Write magic number, followed by initial receive window and random
         // number.
 
-        DataOutputStream dout = new DataOutputStream
-            (new BufferedOutputStream(master.getOutputStream(), 12));
-
-        SecureRandom secureRandom = new SecureRandom();
-        int ourRnd = secureRandom.nextInt();
+        ByteArrayOutputStream bout = new ByteArrayOutputStream(16);
+        DataOutputStream dout = new DataOutputStream(bout);
 
         dout.writeInt(MAGIC_NUMBER);
         dout.writeInt(inputBufferSize);
-        dout.writeInt(ourRnd);
+        dout.writeLong(ourRnd);
         dout.flush();
 
-        DataInputStream din = new DataInputStream(master.getInputStream());
-        int magic = din.readInt();
-        if (magic != MAGIC_NUMBER) {
-            throw new IOException("Unknown magic number: " + magic);
-        }
-        mReceiveWindow = din.readInt();
-        int theirRnd = din.readInt();
+        final byte[] bytesToSend = bout.toByteArray();
 
-        // The random numbers determine whether our connection ids are even or
-        // odd. If both numbers are the same, try again.
+        // Write the initial message in a separate thread, in case the master
+        // connection's send buffer is too small. We'd otherwise deadlock.
+        class Writer extends Thread {
+            private final Thread mReader;
+            volatile IOException mEx;
 
-        if (ourRnd == theirRnd) {
-            ourRnd = secureRandom.nextInt();
-            dout.writeInt(ourRnd);
-            dout.flush();
-            theirRnd = din.readInt();
-            if (ourRnd == theirRnd) {
-                // What??? Again? What are the odds?
-                throw new IOException("Negotiation failure");
+            Writer() {
+                mReader = Thread.currentThread();
+            }
+
+            public void run() {
+                try {
+                    master.getOutputStream().write(bytesToSend);
+                    master.getOutputStream().flush();
+                } catch (IOException e) {
+                    mEx = e;
+                    mReader.interrupt();
+                }
             }
         }
 
-        mNextId = ourRnd < theirRnd ? 0 : 1;
+        Writer writer = new Writer();
+        writer.start();
 
-        mReadBuffer = new byte[Math.max(DEFAULT_BUFFER_SIZE, inputBufferSize * 2)];
+        try {
+            DataInputStream din = new DataInputStream(master.getInputStream());
+            int magic = din.readInt();
+            if (magic != MAGIC_NUMBER) {
+                throw new IOException("Unknown magic number: " + magic);
+            }
+            mReceiveWindow = din.readInt();
+            long theirRnd = din.readLong();
+            
+            // The random numbers determine whether our connection ids are even or odd.
+            
+            if (ourRnd == theirRnd) {
+                // What are the odds?
+                throw new IOException("Negotiation failure");
+            }
+            
+            mNextId = ourRnd < theirRnd ? 0 : 1;
+            
+            mReadBuffer = new byte[Math.max(DEFAULT_BUFFER_SIZE, inputBufferSize * 2)];
+        } catch (InterruptedIOException e) {
+            if (writer.mEx != null) {
+                throw writer.mEx;
+            }
+            throw e;
+        } finally {
+            try {
+                writer.join();
+            } catch (InterruptedException e) {
+                // Don't care.
+            }
+        }
     }
 
     public Connection connect() throws IOException {
@@ -291,6 +323,8 @@ public class Multiplexer implements Connector {
                     }
                 }
             }
+        } catch (InterruptedIOException e) {
+            throw e;
         } catch (IOException e) {
             mMaster = null;
             disconnectAll();
@@ -422,6 +456,8 @@ public class Multiplexer implements Connector {
 
                 out.flush();
             }
+        } catch (InterruptedIOException e) {
+            throw e;
         } catch (IOException e) {
             mMaster = null;
             disconnectAll();
@@ -457,6 +493,8 @@ public class Multiplexer implements Connector {
                 }
                 out.flush();
             }
+        } catch (InterruptedIOException e) {
+            throw e;
         } catch (IOException e) {
             mMaster = null;
             disconnectAll();
@@ -495,6 +533,8 @@ public class Multiplexer implements Connector {
                 out.write(buffer, 0, 4);
                 out.flush();
             }
+        } catch (InterruptedIOException e) {
+            throw e;
         } catch (IOException e) {
             mMaster = null;
             disconnectAll();

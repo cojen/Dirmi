@@ -118,6 +118,25 @@ public class PipedInputStream extends InputStream {
         }
     }
 
+    public String toString() {
+        String superStr = superToString();
+
+        mLock.lock();
+        try {
+            if (mPout == null) {
+                return superStr.concat(" (unconnected)");
+            } else {
+                return superStr + " connected to " + mPout.superToString();
+            }
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    String superToString() {
+        return super.toString();
+    }
+
     Lock setOutput(PipedOutputStream pout) throws IOException {
         mLock.lock();
         try {
