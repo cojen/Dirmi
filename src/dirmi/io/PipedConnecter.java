@@ -32,10 +32,10 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-public class PipedConnector implements Connector {
+public class PipedConnecter implements Connecter {
     private final BlockingQueue<Con> mAcceptQueue;
 
-    public PipedConnector() {
+    public PipedConnecter() {
         mAcceptQueue = new SynchronousQueue<Con>();
     }
 

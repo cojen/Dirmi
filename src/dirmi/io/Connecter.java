@@ -23,7 +23,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface Connector {
+public interface Connecter {
     /**
      * Called by client to establish a new connection.
      *

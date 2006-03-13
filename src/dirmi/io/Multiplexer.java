@@ -41,7 +41,7 @@ import cojen.util.IntHashMap;
  *
  * @author Brian S O'Neill
  */
-public class Multiplexer implements Connector {
+public class Multiplexer implements Connecter {
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_BUFFER_SIZE = 4000;
