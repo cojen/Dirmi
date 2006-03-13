@@ -40,6 +40,7 @@ public class PipedOutputStream extends OutputStream {
     private final Condition mWriteCondition;
 
     private PipedInputStream mPin;
+    private boolean mEverConnected;
 
     private byte[] mData;
     private int mOffset;
@@ -57,7 +58,7 @@ public class PipedOutputStream extends OutputStream {
         mLock = pin.setOutput(this);
         mReadCondition = mLock.newCondition();
         mWriteCondition = mLock.newCondition();
-        mPin = pin;
+        setInput(pin);
     }
 
     public void write(int b) throws IOException {
@@ -256,7 +257,11 @@ public class PipedOutputStream extends OutputStream {
             if (mPin != null) {
                 throw new IOException("Already connected");
             }
+            if (mEverConnected) {
+                throw new IOException("Closed");
+            }
             mPin = pin;
+            mEverConnected = true;
         } finally {
             mLock.unlock();
         }
@@ -266,6 +271,9 @@ public class PipedOutputStream extends OutputStream {
     // Caller must hold mLock.
     private void checkConnected() throws IOException {
         if (mPin == null) {
+            if (mEverConnected) {
+                throw new IOException("Closed");
+            }
             throw new IOException("Not connected");
         }
     }

@@ -35,6 +35,7 @@ public class PipedInputStream extends InputStream {
     private final Lock mLock;
 
     private PipedOutputStream mPout;
+    private boolean mEverConnected;
 
     public PipedInputStream() {
         mLock = new ReentrantLock();
@@ -42,7 +43,7 @@ public class PipedInputStream extends InputStream {
 
     public PipedInputStream(PipedOutputStream pout) throws IOException {
         mLock = pout.setInput(this);
-        mPout = pout;
+        setOutput(pout);
     }
 
     public int read() throws IOException {
@@ -50,9 +51,7 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.read();
         } catch (NullPointerException e) {
-            if (mPout == null) {
-                throw new IOException("Not connected");
-            }
+            checkConnected();
             throw e;
         } finally {
             mLock.unlock();
@@ -68,9 +67,7 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.read(bytes, offset, length);
         } catch (NullPointerException e) {
-            if (mPout == null) {
-                throw new IOException("Not connected");
-            }
+            checkConnected();
             throw e;
         } finally {
             mLock.unlock();
@@ -82,9 +79,7 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.skip(n);
         } catch (NullPointerException e) {
-            if (mPout == null) {
-                throw new IOException("Not connected");
-            }
+            checkConnected();
             throw e;
         } finally {
             mLock.unlock();
@@ -96,9 +91,7 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.available();
         } catch (NullPointerException e) {
-            if (mPout == null) {
-                throw new IOException("Not connected");
-            }
+            checkConnected();
             throw e;
         } finally {
             mLock.unlock();
@@ -143,10 +136,24 @@ public class PipedInputStream extends InputStream {
             if (mPout != null) {
                 throw new IOException("Already connected");
             }
+            if (mEverConnected) {
+                throw new IOException("Closed");
+            }
             mPout = pout;
+            mEverConnected = true;
         } finally {
             mLock.unlock();
         }
         return mLock;
+    }
+
+    // Caller must hold mLock.
+    private void checkConnected() throws IOException {
+        if (mPout == null) {
+            if (mEverConnected) {
+                throw new IOException("Closed");
+            }
+            throw new IOException("Not connected");
+        }
     }
 }

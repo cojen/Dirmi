@@ -52,6 +52,10 @@ final class MultiplexConnection implements Connection {
         mOut.close();
     }
 
+    public String toString() {
+        return super.toString() + " (id=" + mId + ')';
+    }
+
     void disconnect() throws IOException {
         Multiplexer mux = mMux;
         mMux = null;
@@ -64,7 +68,7 @@ final class MultiplexConnection implements Connection {
 
     void checkClosed() throws IOException {
         if (mMux == null) {
-            throw new IOException("Connection closed");
+            throw new IOException("Connection closed (id=" + mId + ')');
         }
     }
 
@@ -323,7 +327,7 @@ final class MultiplexConnection implements Connection {
             while (offset < end) {
                 Multiplexer mux = mMux;
                 if (mux == null) {
-                    throw new IOException("Connection closed");
+                    throw new IOException("Connection closed (id=" + mId + ')');
                 }
                 int window;
                 try {

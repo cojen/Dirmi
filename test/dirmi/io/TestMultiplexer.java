@@ -23,6 +23,10 @@ import java.io.OutputStream;
 
 import java.util.Random;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
@@ -32,7 +36,8 @@ import junit.framework.TestSuite;
  * @author Brian S O'Neill
  */
 public class TestMultiplexer extends TestCase {
-    private static final int STREAM_TEST_COUNT = 100000;
+    private static final int STREAM_TEST_COUNT = 10000;
+    private static final int STREAM_SHORT_TEST_COUNT = 100;
 
     public static void main(String[] args) {
         junit.textui.TestRunner.run(suite());
@@ -45,7 +50,6 @@ public class TestMultiplexer extends TestCase {
     private Connection mServerCon;
     private Connection mClientCon;
     private String mThreadName;
-    volatile boolean mTestRunning;
 
     public TestMultiplexer(String name) {
         super(name);
@@ -60,7 +64,7 @@ public class TestMultiplexer extends TestCase {
                 try {
                     mServerCon = connector.accept();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    e.printStackTrace(System.out);
                     fail();
                 }
             }
@@ -68,8 +72,6 @@ public class TestMultiplexer extends TestCase {
         t.start();
         mClientCon = connector.connect();
         t.join();
-
-        mTestRunning = true;
     }
 
     protected void tearDown() throws Exception {
@@ -79,51 +81,123 @@ public class TestMultiplexer extends TestCase {
         mClientCon = null;
 
         Thread.currentThread().setName(mThreadName);
-        mTestRunning = false;
     }
 
     public void testBasic() throws Exception {
-        Thread remote = new Thread() {
+        final AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
+        acceptQueue.start();
+
+        new Thread() {
+            {
+                setName("Remote");
+            }
+
             public void run() {
                 try {
-                    Connector connector = new Multiplexer(mServerCon);
-                    Connection con = connector.accept();
+                    Connection con = acceptQueue.getConnection();
                     int c = con.getInputStream().read();
                     assertEquals('Q', c);
                     con.getOutputStream().write('A');
                     con.close();
-                    connector.accept();
                 } catch (IOException e) {
-                    if (mTestRunning) {
-                        e.printStackTrace();
-                        fail();
-                    }
+                    e.printStackTrace(System.out);
+                    fail();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    e.printStackTrace(System.out);
                     fail();
                 }
             }
-        };
-        remote.start();
+        }.start();
 
         Connector connector = new Multiplexer(mClientCon);
-        Thread acceptor = new DummyAcceptor(connector);
-        acceptor.start();
+        Thread dummyAcceptor = new DummyAcceptor(connector);
+        dummyAcceptor.start();
 
-        Connection con = connector.connect();
-        OutputStream out = con.getOutputStream();
-        out.write('Q');
-        out.flush();
+        final Connection con = connector.connect();
+
+        new Thread() {
+            {
+                setName("Writer");
+            }
+
+            public void run() {
+                try {
+                    OutputStream out = con.getOutputStream();
+                    out.write('Q');
+                    out.flush();
+                } catch (IOException e) {
+                    e.printStackTrace(System.out);
+                    fail();
+                } catch (Exception e) {
+                    e.printStackTrace(System.out);
+                    fail();
+                }
+            }
+        }.start();
+
         int c = con.getInputStream().read();
         assertEquals('A', c);
 
-        mTestRunning = false;
-
-        remote.interrupt();
-        acceptor.interrupt();
+        dummyAcceptor.interrupt();
+        acceptQueue.interrupt();
     }
 
     public void testStream() throws Exception {
+        AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
+        acceptQueue.start();
+
+        Connector clientConnector = new Multiplexer(mClientCon);
+        Thread dummyAcceptor = new DummyAcceptor(clientConnector);
+        dummyAcceptor.start();
+
+        testStream(acceptQueue, clientConnector, STREAM_TEST_COUNT);
+
+        dummyAcceptor.interrupt();
+        acceptQueue.interrupt();
+    }
+
+    public void testMultipleStreams() throws Exception {
+        final AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
+        acceptQueue.start();
+
+        final Connector clientConnector = new Multiplexer(mClientCon);
+        Thread dummyAcceptor = new DummyAcceptor(clientConnector);
+        dummyAcceptor.start();
+
+        int totalThreads = STREAM_TEST_COUNT / STREAM_SHORT_TEST_COUNT;
+        
+        // Limit the amount of active threads.
+        final int permits = 10;
+        final Semaphore sem = new Semaphore(permits);
+
+        for (int i=0; i<totalThreads; i++) {
+            sem.acquire();
+            new Thread() {
+                public void run() {
+                    try {
+                        testStream(acceptQueue, clientConnector, STREAM_SHORT_TEST_COUNT);
+                    } catch (Exception e) {
+                        e.printStackTrace(System.out);
+                        fail();
+                    } finally {
+                        sem.release();
+                    }
+                }
+            }.start();
+        }
+
+        // Wait for all threads to finish.
+        sem.acquire(permits);
+
+        dummyAcceptor.interrupt();
+        acceptQueue.interrupt();
+    }
+
+    private void testStream(final AcceptQueue acceptQueue,
+                            final Connector clientConnector,
+                            final int testCount)
+        throws Exception
+    {
         // Exercises a single multiplexed connection by sending random data,
         // echoing it back logicaly complimented, and checking if data is
         // correct. In addition, the chunk sizes of the data read or written is
@@ -139,12 +213,9 @@ public class TestMultiplexer extends TestCase {
                 Random rnd = new Random(674582214);
                 byte[] bytes = new byte[10000];
 
-                Thread acceptor = null;
+                Connection con = null;
                 try {
-                    Connector connector = new Multiplexer(mServerCon);
-                    Connection con = connector.accept();
-                    acceptor = new DummyAcceptor(connector);
-                    acceptor.start();
+                    con = acceptQueue.getConnection();
 
                     // Everything read is echoed back, complimented.
                     while (true) {
@@ -172,30 +243,20 @@ public class TestMultiplexer extends TestCase {
                         con.getOutputStream().flush();
                     }
                 } catch (IOException e) {
-                    if (mTestRunning) {
-                        e.printStackTrace();
-                        fail();
-                    }
+                    handleException(e);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    e.printStackTrace(System.out);
                     fail();
-                } finally {
-                    if (acceptor != null) {
-                        acceptor.interrupt();
-                    }
+                } catch (Throwable e) {
+                    e.printStackTrace(System.out);
+                    fail();
                 }
             }
         };
         remote.start();
 
         final int rndSeed = 424342239;
-        Thread.currentThread().setName("Local");
-
-        Connector connector = new Multiplexer(mClientCon);
-        Thread acceptor = new DummyAcceptor(connector);
-        acceptor.start();
-
-        final Connection con = connector.connect();
+        final Connection con = clientConnector.connect();
 
         // Write random numbers, and read them back, ensuring the result is correct.
 
@@ -211,7 +272,7 @@ public class TestMultiplexer extends TestCase {
                 byte[] readBytes = new byte[10000];
 
                 try {
-                    for (int q=0; q<STREAM_TEST_COUNT; q++) {
+                    for (int q=0; q<testCount; q++) {
                         if (rnd.nextInt(100) < 1) {
                             // Read one byte.
                             int b = (byte) rnd.nextInt();
@@ -250,19 +311,19 @@ public class TestMultiplexer extends TestCase {
                         }
                     }
                 } catch (IOException e) {
-                    if (mTestRunning) {
-                        e.printStackTrace();
-                        fail();
-                    }
+                    e.printStackTrace(System.out);
+                    fail();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    e.printStackTrace(System.out);
                     fail();
                 }
-
             }
         };
 
         reader.start();
+
+        String originalName = Thread.currentThread().getName();
+        Thread.currentThread().setName("Local Writer");
 
         // This thread writes the random data. Its random number generator is
         // sync'd with the reader.
@@ -271,7 +332,7 @@ public class TestMultiplexer extends TestCase {
 
         byte[] sentBytes = new byte[10000];
 
-        for (int q=0; q<STREAM_TEST_COUNT; q++) {
+        for (int q=0; q<testCount; q++) {
             if (rnd.nextInt(100) < 1) {
                 // Write one byte.
                 int b = (byte) rnd.nextInt();
@@ -298,11 +359,17 @@ public class TestMultiplexer extends TestCase {
         }
 
         reader.join();
+        con.close();
+    }
 
-        mTestRunning = false;
-
-        acceptor.interrupt();
-        remote.interrupt();
+    void handleException(IOException e) {
+        String message = e.getMessage();
+        if (message != null && message.toLowerCase().contains("close")) {
+            //
+        } else {
+            e.printStackTrace(System.out);
+            fail();
+        }
     }
 
     private class DummyAcceptor extends Thread {
@@ -310,7 +377,7 @@ public class TestMultiplexer extends TestCase {
 
         DummyAcceptor(Connector connector) {
             mConnector = connector;
-            setName(Thread.currentThread().getName() + " Acceptor");
+            setName("Dummy Acceptor");
         }
 
         public void run() {
@@ -322,13 +389,45 @@ public class TestMultiplexer extends TestCase {
                         con.close();
                     }
                 }
+            } catch (InterruptedIOException e) {
+                //
             } catch (IOException e) {
-                if (mTestRunning) {
-                    e.printStackTrace();
-                    fail();
-                }
+                handleException(e);
             } catch (Exception e) {
-                e.printStackTrace();
+                e.printStackTrace(System.out);
+                fail();
+            }
+        }
+    }
+
+    private class AcceptQueue extends Thread {
+        private final Connection mMasterCon;
+        private final BlockingQueue<Connection> mQueue;
+
+        private Connector mConnector;
+
+        AcceptQueue(Connection masterCon) {
+            mMasterCon = masterCon;
+            mQueue = new LinkedBlockingQueue<Connection>();
+            setName("Accept Queue");
+        }
+
+        public Connection getConnection() throws InterruptedException {
+            return mQueue.take();
+        }
+
+        public void run() {
+            try {
+                mConnector = new Multiplexer(mMasterCon);
+                while (true) {
+                    mQueue.put(mConnector.accept());
+                }
+            } catch (InterruptedIOException e) {
+                //
+            } catch (IOException e) {
+                handleException(e);
+            } catch (Exception e) {
+                e.printStackTrace(System.out);
                 fail();
             }
         }
