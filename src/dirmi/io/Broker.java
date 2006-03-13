@@ -16,25 +16,19 @@
 
 package dirmi.io;
 
-import java.io.IOException;
-
 /**
- * Factory for client-side created {@link Connection}s.
+ * Supports accepting connections and making new connections.
  *
  * @author Brian S O'Neill
  */
-public interface Connecter {
+public interface Broker {
     /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection
+     * Returns a Connecter for creating new client-side connections.
      */
-    Connection connect() throws IOException;
+    Connecter connecter();
 
     /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection, or null if timed out
+     * Returns an Accepter for accepting new server-side connections.
      */
-    Connection connect(int timeoutMillis) throws IOException;
+    Accepter accepter();
 }

@@ -28,18 +28,18 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Establishes {@link Connection}s between threads. To establish a connection,
- * a thread must call accept, and another must call connect.
+ * one thread must call Accepter.accept, and another must call Connector.connect.
  *
  * @author Brian S O'Neill
  */
-public class PipedConnecter implements Connecter {
+public class PipedBroker extends AbstractBroker {
     private final BlockingQueue<Con> mAcceptQueue;
 
-    public PipedConnecter() {
+    public PipedBroker() {
         mAcceptQueue = new SynchronousQueue<Con>();
     }
 
-    public Connection connect() throws IOException {
+    protected Connection connect() throws IOException {
         Con con = new Con();
         try {
             mAcceptQueue.put(new Con(con));
@@ -49,7 +49,7 @@ public class PipedConnecter implements Connecter {
         return con;
     }
 
-    public Connection connect(int timeoutMillis) throws IOException {
+    protected Connection connect(int timeoutMillis) throws IOException {
         Con con = new Con();
         try {
             if (!mAcceptQueue.offer(new Con(con), timeoutMillis, TimeUnit.MILLISECONDS)) {
@@ -61,7 +61,7 @@ public class PipedConnecter implements Connecter {
         return con;
     }
 
-    public Connection accept() throws IOException {
+    protected Connection accept() throws IOException {
         try {
             return mAcceptQueue.take();
         } catch (InterruptedException e) {
@@ -69,7 +69,7 @@ public class PipedConnecter implements Connecter {
         }
     }
 
-    public Connection accept(int timeoutMillis) throws IOException {
+    protected Connection accept(int timeoutMillis) throws IOException {
         try {
             return mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {

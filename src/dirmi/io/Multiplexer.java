@@ -37,11 +37,11 @@ import cojen.util.IntHashMap;
 /**
  * Multiplexer allows new connections to be established over a single master
  * connection. Opening a new connection never blocks. At least one thread must be
- * calling accept at all times in order for the Multiplexer to work.
+ * calling the Accepter's accept at all times in order for the Multiplexer to work.
  *
  * @author Brian S O'Neill
  */
-public class Multiplexer implements Connecter {
+public class Multiplexer extends AbstractBroker {
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_BUFFER_SIZE = 4000;
@@ -181,7 +181,7 @@ public class Multiplexer implements Connecter {
         }
     }
 
-    public Connection connect() throws IOException {
+    protected Connection connect() throws IOException {
         checkClosed();
         synchronized (mConnections) {
             int id;
@@ -198,17 +198,17 @@ public class Multiplexer implements Connecter {
         }
     }
 
-    public Connection connect(int timeoutMillis) throws IOException {
+    protected Connection connect(int timeoutMillis) throws IOException {
         return connect();
     }
 
-    public Connection accept() throws IOException {
+    protected Connection accept() throws IOException {
         Connection con;
         while ((con = pump()) == null) {}
         return con;
     }
 
-    public Connection accept(int timeoutMillis) throws IOException {
+    protected Connection accept(int timeoutMillis) throws IOException {
         if (timeoutMillis <= 0) {
             return pump();
         }
