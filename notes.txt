@@ -12,3 +12,13 @@ Ideas for dirmi:
   annotation is @Object, which creates a new Object stream.
 - Perhaps session ID is passed to handler too? To keep things separate?
 - Can use @Asynchronous annotation for methods that return void and declare no exceptions.
+
+- Define @Idempotent annotation for method. If connection restored, this method
+  can be re-executed automatically. When connection lost, remote objects might
+  lose their lease and get collected. If remote object was obtained via an
+  @Idempotent method, then remote object can be obtained again. To support
+  this, the remote object needs to remember what object, method, and parameters
+  were invoked to get itself. The root remote object is implicitly idempotent,
+  and it can be restored without calling an @Idempotent method. If remote
+  object was not obtained from an @Idempotent method (or it is not the root)
+  then it cannot be restored and an exception must be thrown.
