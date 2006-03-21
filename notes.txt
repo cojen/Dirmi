@@ -22,3 +22,10 @@ Ideas for dirmi:
   and it can be restored without calling an @Idempotent method. If remote
   object was not obtained from an @Idempotent method (or it is not the root)
   then it cannot be restored and an exception must be thrown.
+
+- Define some mechanism to "dispose" a remote object rather than relying on
+  exclusively on garbage collection. Server side objects can implement
+  Unreferenced in standard RMI be notified when all clients are no longer using
+  an object. How can dispose be worked in? A method in DisposableRemote? The
+  server-side implementation will have to implement this method too, but with
+  what? Leave it empty?
