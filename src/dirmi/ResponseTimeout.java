@@ -20,7 +20,7 @@ import java.lang.annotation.*;
 
 /**
  * Specify the maximum time to wait for a remote method to respond. If it fails
- * to responsd in time, a {@link ResponseTimeoutException} is thrown and the
+ * to respond in time, a {@link ResponseTimeoutException} is thrown and the
  * thread running the remote operation is interrupted, in an attempt to stop
  * it. A method that lacks a ResponseTimeout annotation potentially waits
  * forever to respond.
