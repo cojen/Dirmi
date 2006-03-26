@@ -36,12 +36,25 @@ import cojen.util.IntHashMap;
  * connection. Opening a new connection never blocks. At least one thread must be
  * calling the Accepter's accept at all times in order for the Multiplexer to work.
  *
+ * <p>Establishing new connections is relatively cheap, as is closing
+ * connections. The buffers used by connections start small and grow as needed,
+ * making them efficient for sending small commands over short-lived
+ * connections.
+ *
+ * <p>A simple request reply operation can be implemented as opening a
+ * connection and writing a message. The server responds by writing a response
+ * and immediately closing the connection. For small messages, the whole
+ * operation requires only one network round trip. If the response is a
+ * variable length, then the length should be encoded so that the client need
+ * not catch the IOException when the connection is closed.
+ *
  * @author Brian S O'Neill
  */
 public class Multiplexer extends AbstractBroker {
     private static final int MAGIC_NUMBER = 0x17524959;
 
-    private static final int DEFAULT_BUFFER_SIZE = 4000;
+    private static final int DEFAULT_MIN_BUFFER_SIZE = 64;
+    private static final int DEFAULT_MAX_BUFFER_SIZE = 4096;
 
     static final int CLOSE   = 0 << 30;
     static final int RECEIVE = 1 << 30;
@@ -70,8 +83,8 @@ public class Multiplexer extends AbstractBroker {
     private final IntHashMap mConnections;
     private int mNextId;
 
-    final int mInputBufferSize;
-    final int mOutputBufferSize;
+    final int mMinBufferSize;
+    final int mMaxBufferSize;
     final int mReceiveWindow;
 
     private final byte[] mReadBuffer;
@@ -84,10 +97,10 @@ public class Multiplexer extends AbstractBroker {
     public Multiplexer(Connection master)
         throws IOException
     {
-        this(master, DEFAULT_BUFFER_SIZE, DEFAULT_BUFFER_SIZE);
+        this(master, DEFAULT_MIN_BUFFER_SIZE, DEFAULT_MAX_BUFFER_SIZE);
     }
 
-    public Multiplexer(final Connection master, int inputBufferSize, int outputBufferSize)
+    public Multiplexer(final Connection master, int minBufferSize, int maxBufferSize)
         throws IOException
     {
         if (master == null) {
@@ -97,18 +110,24 @@ public class Multiplexer extends AbstractBroker {
         mMaster = master;
         mConnections = new IntHashMap();
 
-        if (inputBufferSize <= 0) {
+        if (minBufferSize <= 0) {
             throw new IllegalArgumentException
-                ("Input buffer size must be greater than zero: " + inputBufferSize);
+                ("Minimum buffer size must be greater than zero: " + minBufferSize);
         }
 
-        if (outputBufferSize <= 0) {
+        if (maxBufferSize <= 0) {
             throw new IllegalArgumentException
-                ("Output buffer size must be greater than zero: " + outputBufferSize);
+                ("Maximum buffer size must be greater than zero: " + maxBufferSize);
         }
 
-        mInputBufferSize = inputBufferSize;
-        mOutputBufferSize = outputBufferSize;
+        if (minBufferSize > maxBufferSize) {
+            throw new IllegalArgumentException
+                ("Minimum buffer size must be smaller than maximum: " +
+                 minBufferSize + " > " + maxBufferSize);
+        }
+
+        mMinBufferSize = minBufferSize;
+        mMaxBufferSize = maxBufferSize;
 
         long ourRnd = new SecureRandom().nextLong();
 
@@ -119,7 +138,7 @@ public class Multiplexer extends AbstractBroker {
         DataOutputStream dout = new DataOutputStream(bout);
 
         dout.writeInt(MAGIC_NUMBER);
-        dout.writeInt(inputBufferSize);
+        dout.writeInt(maxBufferSize);
         dout.writeLong(ourRnd);
         dout.flush();
 
@@ -167,7 +186,7 @@ public class Multiplexer extends AbstractBroker {
             
             mNextId = ourRnd < theirRnd ? 0 : 1;
             
-            mReadBuffer = new byte[Math.max(DEFAULT_BUFFER_SIZE, inputBufferSize * 2)];
+            mReadBuffer = new byte[Math.max(DEFAULT_MAX_BUFFER_SIZE, maxBufferSize * 2)];
         } catch (InterruptedIOException e) {
             if (writer.mEx != null) {
                 throw writer.mEx;
@@ -253,13 +272,9 @@ public class Multiplexer extends AbstractBroker {
                     MultiplexConnection con;
                     synchronized (mConnections) {
                         con = (MultiplexConnection) mConnections.get(id);
-                        if (con == null) {
-                            if (command == OPEN) {
-                                con = new MultiplexConnection(this, id, true);
-                                mConnections.put(id, con);
-                            } else {
-                                con = null;
-                            }
+                        if (con == null && command == OPEN) {
+                            con = new MultiplexConnection(this, id, true);
+                            mConnections.put(id, con);
                         }
                     }
                     int length = readUnsignedShort(in) + 1;

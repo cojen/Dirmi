@@ -37,7 +37,7 @@ import junit.framework.TestSuite;
  */
 public class TestMultiplexer extends TestCase {
     private static final int STREAM_TEST_COUNT = 10000;
-    private static final int STREAM_SHORT_TEST_COUNT = 100;
+    private static final int STREAM_SHORT_TEST_COUNT = 200;
 
     public static void main(String[] args) {
         junit.textui.TestRunner.run(suite());
@@ -150,7 +150,23 @@ public class TestMultiplexer extends TestCase {
         Thread dummyAccepter = new DummyAccepter(localBroker);
         dummyAccepter.start();
 
-        testStream(acceptQueue, localBroker, STREAM_TEST_COUNT);
+        testStream(acceptQueue, localBroker, STREAM_TEST_COUNT, 5);
+
+        dummyAccepter.interrupt();
+        acceptQueue.interrupt();
+    }
+
+    public void testStream2() throws Exception {
+        // Same as testStream, but with more one-byte reads/writes.
+
+        AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
+        acceptQueue.start();
+
+        Broker localBroker = new Multiplexer(mClientCon);
+        Thread dummyAccepter = new DummyAccepter(localBroker);
+        dummyAccepter.start();
+
+        testStream(acceptQueue, localBroker, STREAM_TEST_COUNT, 100);
 
         dummyAccepter.interrupt();
         acceptQueue.interrupt();
@@ -170,12 +186,15 @@ public class TestMultiplexer extends TestCase {
         final int permits = 10;
         final Semaphore sem = new Semaphore(permits);
 
+        final Random rnd = new Random(555555555555L);
+
         for (int i=0; i<totalThreads; i++) {
             sem.acquire();
             new Thread() {
                 public void run() {
                     try {
-                        testStream(acceptQueue, localBroker, STREAM_SHORT_TEST_COUNT);
+                        int oneByteProb = rnd.nextInt(100);
+                        testStream(acceptQueue, localBroker, STREAM_SHORT_TEST_COUNT, oneByteProb);
                     } catch (Exception e) {
                         e.printStackTrace(System.out);
                         fail();
@@ -195,7 +214,8 @@ public class TestMultiplexer extends TestCase {
 
     private void testStream(final AcceptQueue acceptQueue,
                             final Broker localBroker,
-                            final int testCount)
+                            final int testCount,
+                            final int oneByteProb)
         throws Exception
     {
         // Exercises a single multiplexed connection by sending random data,
@@ -268,6 +288,8 @@ public class TestMultiplexer extends TestCase {
 
             public void run() {
                 Random rnd = new Random(rndSeed);
+                Random rnd2 = new Random(232123457777L);
+
                 byte[] sentBytes = new byte[10000];
                 byte[] readBytes = new byte[10000];
 
@@ -277,7 +299,7 @@ public class TestMultiplexer extends TestCase {
                             // Read one byte.
                             int b = (byte) rnd.nextInt();
                             int c = con.getInputStream().read();
-                            assertTrue(~b == c);
+                            assertTrue(((~b) & 0xff) == c);
                         } else {
                             // Read a chunk.
                             int size = rnd.nextInt(10000);
@@ -294,7 +316,19 @@ public class TestMultiplexer extends TestCase {
                                 sentBytes[offset + i] = (byte) rnd.nextInt();
                             }
                             while (true) {
-                                int amt = con.getInputStream().read(readBytes, offset, length);
+                                int amt;
+                                if (length > 0 && rnd2.nextInt() < oneByteProb) {
+                                    // Read one byte at a time
+                                    int b = con.getInputStream().read();
+                                    if (b < 0) {
+                                        amt = 0;
+                                    } else {
+                                        readBytes[offset] = (byte) b;
+                                        amt = 1;
+                                    }
+                                } else {
+                                    amt = con.getInputStream().read(readBytes, offset, length);
+                                }
                                 if (length > 0) {
                                     assertTrue(amt > 0);
                                 }
@@ -329,6 +363,7 @@ public class TestMultiplexer extends TestCase {
         // sync'd with the reader.
 
         Random rnd = new Random(rndSeed);
+        Random rnd2 = new Random(34238211111L);
 
         byte[] sentBytes = new byte[10000];
 
@@ -337,7 +372,6 @@ public class TestMultiplexer extends TestCase {
                 // Write one byte.
                 int b = (byte) rnd.nextInt();
                 con.getOutputStream().write(b);
-                con.getOutputStream().flush();
             } else {
                 // Write a chunk.
                 int size = rnd.nextInt(10000);
@@ -353,9 +387,16 @@ public class TestMultiplexer extends TestCase {
                 for (int i=0; i<length; i++) {
                     sentBytes[offset + i] = (byte) rnd.nextInt();
                 }
-                con.getOutputStream().write(sentBytes, offset, length);
-                con.getOutputStream().flush();
+                if (rnd2.nextInt(100) < oneByteProb) {
+                    // Write one byte at a time
+                    for (int k=0; k<length; k++) {
+                        con.getOutputStream().write(sentBytes[offset + k]);
+                    }
+                } else {
+                    con.getOutputStream().write(sentBytes, offset, length);
+                }
             }
+            con.getOutputStream().flush();
         }
 
         reader.join();
