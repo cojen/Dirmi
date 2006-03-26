@@ -16,9 +16,6 @@
 
 package dirmi.io;
 
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -93,6 +90,10 @@ public class Multiplexer extends AbstractBroker {
     public Multiplexer(final Connection master, int inputBufferSize, int outputBufferSize)
         throws IOException
     {
+        if (master == null) {
+            throw new IllegalArgumentException("Master connection is null");
+        }
+
         mMaster = master;
         mConnections = new IntHashMap();
 
@@ -193,7 +194,7 @@ public class Multiplexer extends AbstractBroker {
             } while (mConnections.containsKey(id));
             
             MultiplexConnection con = new MultiplexConnection(this, id, false);
-            mConnections.put(id, new WeakReference<MultiplexConnection>(con));
+            mConnections.put(id, con);
             return con;
         }
     }
@@ -242,13 +243,7 @@ public class Multiplexer extends AbstractBroker {
                 if (command == RECEIVE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef =
-                            (Reference<MultiplexConnection>) mConnections.get(id);
-                        if (conRef == null) {
-                            con = null;
-                        } else {
-                            con = conRef.get();
-                        }
+                        con = (MultiplexConnection) mConnections.get(id);
                     }
                     int receiveWindow = readUnsignedShort(in) + 1;
                     if (con != null) {
@@ -257,12 +252,11 @@ public class Multiplexer extends AbstractBroker {
                 } else if (command == SEND || command == OPEN) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef =
-                            (Reference<MultiplexConnection>) mConnections.get(id);
-                        if (conRef == null || (con = conRef.get()) == null) {
+                        con = (MultiplexConnection) mConnections.get(id);
+                        if (con == null) {
                             if (command == OPEN) {
                                 con = new MultiplexConnection(this, id, true);
-                                mConnections.put(id, new WeakReference<MultiplexConnection>(con));
+                                mConnections.put(id, con);
                             } else {
                                 con = null;
                             }
@@ -310,13 +304,7 @@ public class Multiplexer extends AbstractBroker {
                 } else if (command == CLOSE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        Reference<MultiplexConnection> conRef =
-                            (Reference<MultiplexConnection>) mConnections.remove(id);
-                        if (conRef == null) {
-                            con = null;
-                        } else {
-                            con = conRef.get();
-                        }
+                        con = (MultiplexConnection) mConnections.remove(id);
                     }
                     if (con != null) {
                         con.disconnect();
@@ -548,19 +536,16 @@ public class Multiplexer extends AbstractBroker {
     }
 
     private void disconnectAll() {
-        Collection<Reference<MultiplexConnection>> connections;
+        Collection<MultiplexConnection> connections;
         synchronized (mConnections) {
-            connections = new ArrayList<Reference<MultiplexConnection>>(mConnections.values());
+            connections = new ArrayList<MultiplexConnection>(mConnections.values());
             mConnections.clear();
         }
-        for (Reference<MultiplexConnection> conRef : connections) {
-            MultiplexConnection con = conRef.get();
-            if (con != null) {
-                try {
-                    con.disconnect();
-                } catch (IOException e) {
-                    // Don't care, but not expected to happen.
-                }
+        for (MultiplexConnection con : connections) {
+            try {
+                con.disconnect();
+            } catch (IOException e) {
+                // Don't care, but not expected to happen.
             }
         }
     }
