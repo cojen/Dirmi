@@ -21,7 +21,7 @@ package dirmi.io;
  *
  * @author Brian S O'Neill
  */
-public interface RemoteBroker extends Broker {
+public interface RemoteBroker {
     /**
      * Returns a Connecter for creating new client-side connections.
      */

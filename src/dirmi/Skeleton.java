@@ -14,27 +14,24 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.rmi.RemoteException;
+
+import dirmi.io.Connection;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
+public interface Skeleton {
     /**
-     * Called by server to block waiting for a new connection request from client.
+     * Invoke method in RemoteServer instance. Method may throw any kind of
+     * exception, not just RemoteException.
      *
-     * @return new connection
+     * @param methodID ID of method in remote server
+     * @param con Connection for reading arguments and writing response.
      */
-    RemoteConnection accept() throws IOException;
-
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
-     */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    void invoke(short methodID, Connection con) throws RemoteException;
 }

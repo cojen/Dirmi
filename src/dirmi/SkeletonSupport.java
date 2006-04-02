@@ -14,27 +14,18 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.rmi.NoSuchObjectException;
+import java.rmi.Remote;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection
-     */
-    RemoteConnection accept() throws IOException;
+public interface SkeletonSupport {
+    Remote getObject(int objectID) throws NoSuchObjectException;
 
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
-     */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    int getObjectID(Remote object) throws NoSuchObjectException;
 }

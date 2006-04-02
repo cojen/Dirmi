@@ -14,27 +14,21 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.lang.reflect.Method;
+
+import java.rmi.Remote;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection
-     */
-    RemoteConnection accept() throws IOException;
+public interface RemoteClass<R extends Remote> {
+    Class<R> getRemoteType();
 
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
-     */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    Method getMethod(short methodID) throws NoSuchMethodException;
+
+    short getMethodID(Method method) throws NoSuchMethodException;
 }

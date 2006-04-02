@@ -14,27 +14,27 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.rmi.Remote;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
+public class StubFactoryGenerator<R extends Remote> {
     /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection
+     * @param remoteClass
+     * @throws IllegalArgumentException if remote is null or malformed
      */
-    RemoteConnection accept() throws IOException;
+    public StubFactory<R> getStubFactory(RemoteClass<R> remoteClass)
+        throws IllegalArgumentException
+    {
+        // TODO
+        return null;
+    }
 
-    /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
-     */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    private StubFactoryGenerator() {
+    }
 }

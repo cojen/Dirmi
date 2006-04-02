@@ -16,6 +16,7 @@
 
 package dirmi.io;
 
+import java.io.Closeable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
@@ -24,7 +25,7 @@ import java.rmi.RemoteException;
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Connection {
+public interface RemoteConnection extends Closeable {
     /**
      * Blocks until peer writes a remote object.
      *
@@ -44,7 +45,7 @@ public interface RemoteConnection extends Connection {
      * Dispose an object that was read or written, rendering it unusable for
      * future remote calls. If objects are not disposed, they are ineligible
      * for garbage collection. Usually objects need not be explicitly disposed,
-     * since the local and remote garbage collectors so do automatically.
+     * since the local and remote garbage collectors do so automatically.
      *
      * @return true if object disposed, false if object was already disposed or is unknown
      */

@@ -14,27 +14,29 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.rmi.Remote;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
+public interface SkeletonFactory<R extends Remote> {
     /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection
+     * @return remote type supported by this skeleton factory
      */
-    RemoteConnection accept() throws IOException;
+    RemoteClass<R> getRemoteClass();
 
     /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
+     * @return class that implements Skeleton
      */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    Class<? extends Skeleton> getSkeletonClass();
+
+    /**
+     * @param remoteServer server implementation of Remote object
+     * @param support for accessing other Remote objects
+     */
+    Skeleton createSkeleton(R remoteServer, SkeletonSupport support);
 }

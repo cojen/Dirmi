@@ -23,7 +23,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnecter extends Connecter {
+public interface RemoteConnecter {
     /**
      * Called by client to establish a new connection.
      *
