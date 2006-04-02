@@ -18,6 +18,8 @@ package dirmi;
 
 import java.rmi.Remote;
 
+import dirmi.info.RemoteInfo;
+
 /**
  * 
  *
@@ -25,10 +27,10 @@ import java.rmi.Remote;
  */
 public class StubFactoryGenerator<R extends Remote> {
     /**
-     * @param remoteClass
+     * @param remoteInfo
      * @throws IllegalArgumentException if remote is null or malformed
      */
-    public StubFactory<R> getStubFactory(RemoteClass<R> remoteClass)
+    public StubFactory<R> getStubFactory(RemoteInfo remoteInfo)
         throws IllegalArgumentException
     {
         // TODO

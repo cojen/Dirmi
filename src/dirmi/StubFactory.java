@@ -19,6 +19,8 @@ package dirmi;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import dirmi.info.RemoteInfo;
+
 /**
  * 
  *
@@ -28,7 +30,7 @@ public interface StubFactory<R extends Remote> {
     /**
      * @return remote type supported by this stub factory
      */
-    RemoteClass<R> getRemoteClass();
+    RemoteInfo getRemoteInfo();
 
     /**
      * @return class that implements stub

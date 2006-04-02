@@ -18,6 +18,8 @@ package dirmi;
 
 import java.rmi.Remote;
 
+import dirmi.info.RemoteInfo;
+
 /**
  * 
  *
@@ -27,7 +29,7 @@ public interface SkeletonFactory<R extends Remote> {
     /**
      * @return remote type supported by this skeleton factory
      */
-    RemoteClass<R> getRemoteClass();
+    RemoteInfo getRemoteInfo();
 
     /**
      * @return class that implements Skeleton

@@ -35,10 +35,10 @@ public interface RemoteMethod extends Serializable {
     String getName();
 
     /**
-     * Returns an identifer which uniquely identifies this method within the
+     * Returns a number which uniquely identifies this method within the
      * scope of the remote interface.
      */
-    int getMethodID();
+    short getMethodID();
 
     /**
      * Returns the return type of this method, which is null if void.

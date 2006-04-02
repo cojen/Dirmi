@@ -32,6 +32,7 @@ import java.lang.reflect.Modifier;
 
 import cojen.classfile.MethodDesc;
 import cojen.classfile.TypeDesc;
+import cojen.util.IntHashMap;
 import cojen.util.WeakCanonicalSet;
 import cojen.util.WeakIdentityMap;
 
@@ -93,7 +94,7 @@ public class RemoteIntrospector {
 
             // FIXME: capture ResponseTimeout
 
-            int methodID = 0;
+            short methodID = 0;
             for (Method m : remote.getMethods()) {
                 if (!m.getDeclaringClass().isInterface()) {
                     continue;
@@ -183,6 +184,8 @@ public class RemoteIntrospector {
         private final String mName;
         private final Set<RMethod> mMethods;
 
+        private transient IntHashMap mMethodMap;
+
         RInfo(int id, String name, Set<RMethod> methods) {
             mID = id;
             mName = name;
@@ -199,6 +202,21 @@ public class RemoteIntrospector {
 
         public Set<? extends RemoteMethod> getRemoteMethods() {
             return mMethods;
+        }
+
+        public RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException {
+            if (mMethodMap == null) {
+                IntHashMap methodMap = new IntHashMap();
+                for (RMethod method : mMethods) {
+                    methodMap.put(method.getMethodID(), method);
+                }
+                mMethodMap = methodMap;
+            }
+            RemoteMethod method = (RemoteMethod) mMethodMap.get(methodID);
+            if (method == null) {
+                throw new NoSuchMethodException("methodID: " + methodID);
+            }
+            return method;
         }
 
         @Override
@@ -240,7 +258,7 @@ public class RemoteIntrospector {
     private static class RMethod implements RemoteMethod {
         private static final long serialVersionUID = 1L;
 
-        private final int mID;
+        private final short mID;
         private final String mName;
         private RemoteParameter mReturnType;
         private List<RemoteParameter> mParameterTypes;
@@ -252,7 +270,7 @@ public class RemoteIntrospector {
 
         private transient Method mMethod;
 
-        RMethod(int id, Method m) {
+        RMethod(short id, Method m) {
             mID = id;
             mName = m.getName();
 
@@ -322,7 +340,7 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public int getMethodID() {
+        public short getMethodID() {
             return mID;
         }
 

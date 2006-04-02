@@ -36,7 +36,7 @@ public interface RemoteParameter extends Serializable {
     RemoteInfo getRemoteInfoType();
 
     /**
-     * If parameter is serialzied, then call this method to get the type. If
+     * If parameter is serialized, then call this method to get the type. If
      * null is returned, then parameter is not serialized.
      */
     Class<?> getSerializedType();

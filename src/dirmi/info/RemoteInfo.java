@@ -32,7 +32,7 @@ public interface RemoteInfo extends Serializable {
     String getName();
 
     /**
-     * Returns an identifer which uniquely identifies the remote interface.
+     * Returns a number which uniquely identifies the remote interface.
      */
     int getRemoteID();
 
@@ -40,4 +40,6 @@ public interface RemoteInfo extends Serializable {
      * Returns all remote methods in an unmodifiable set.
      */
     Set<? extends RemoteMethod> getRemoteMethods();
+
+    RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException;
 }
