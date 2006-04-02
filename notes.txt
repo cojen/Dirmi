@@ -29,3 +29,32 @@ Ideas for dirmi:
   an object. How can dispose be worked in? A method in DisposableRemote? The
   server-side implementation will have to implement this method too, but with
   what? Leave it empty?
+
+ObjectRegistry:
+
+- supports both local and remote objects
+
+- Needs to communicate to other side when local objects are registered for the
+  first time. Also need to communicate method ids for first use. This is sent
+  via list method names, sync mode, and signatures.
+
+- Local objects are registered, and skeletons created. Invoke a method on the
+  registry, passing an object id, method id, and InputStream. If non-async,
+  pass an OutputStream too. Skeletons can be looked up by object id.
+
+- Remote objects are registered with object id and method ids, and stubs
+  created. The stub looks like a normal object, and streaming is hidden. Write
+  object id, method id (2 bytes), and additional arguments. If async,
+  close. Else flush and read. Caller closes stream when it is done with
+  response.
+
+- Class id record can be sent once. With it is class name, and count of
+  methods. Each method record contains id, name, signature, exceptions, and
+  sync mode. Method ids are unique only for a given class. They are sequental,
+  starting with zero. Sender maps class to id. Receiver maps id to class (and
+  more). When class record is received, define stub.
+
+- Reserve object id zero for core PrincipalRemoteBroker. Several method ids are
+  reserved for its use as well.
+
+- Each accepted connection by server gets assigned a new (or pooled) thread.
