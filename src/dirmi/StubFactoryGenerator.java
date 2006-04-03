@@ -27,10 +27,12 @@ import dirmi.info.RemoteInfo;
  */
 public class StubFactoryGenerator<R extends Remote> {
     /**
-     * @param remoteInfo
+     * @param type
+     * @param remoteInfo remote type as supported by remote server
      * @throws IllegalArgumentException if remote is null or malformed
      */
-    public StubFactory<R> getStubFactory(RemoteInfo remoteInfo)
+    public static <R extends Remote> StubFactory<R> getStubFactory(Class<R> type,
+                                                                   RemoteInfo remoteInfo)
         throws IllegalArgumentException
     {
         // TODO

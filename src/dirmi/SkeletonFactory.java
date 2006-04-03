@@ -27,9 +27,9 @@ import dirmi.info.RemoteInfo;
  */
 public interface SkeletonFactory<R extends Remote> {
     /**
-     * @return remote type supported by this skeleton factory
+     * @return type supported by this skeleton factory
      */
-    RemoteInfo getRemoteInfo();
+    Class<R> getRemoteType();
 
     /**
      * @return class that implements Skeleton

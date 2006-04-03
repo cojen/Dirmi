@@ -30,7 +30,7 @@ public interface StubFactory<R extends Remote> {
     /**
      * @return remote type supported by this stub factory
      */
-    RemoteInfo getRemoteInfo();
+    Class<R> getRemoteType();
 
     /**
      * @return class that implements stub

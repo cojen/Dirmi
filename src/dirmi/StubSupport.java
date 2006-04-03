@@ -21,6 +21,8 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import dirmi.io.Connection;
+import dirmi.io.RemoteInput;
+import dirmi.io.RemoteOutput;
 
 /**
  * 
@@ -42,6 +44,10 @@ public interface StubSupport {
     Remote getObject(int objectID) throws NoSuchObjectException;
 
     int getObjectID(Remote object) throws NoSuchObjectException;
+
+    RemoteInput createRemoteInput(Connection con) throws RemoteException;
+
+    RemoteOutput createRemoteOutput(Connection con) throws RemoteException;
 
     void dispose(int objectID) throws RemoteException;
 }

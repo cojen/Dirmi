@@ -16,7 +16,7 @@
 
 package dirmi;
 
-import java.rmi.RemoteException;
+import java.io.IOException;
 
 import dirmi.io.Connection;
 
@@ -27,11 +27,12 @@ import dirmi.io.Connection;
  */
 public interface Skeleton {
     /**
-     * Invoke method in RemoteServer instance. Method may throw any kind of
-     * exception, not just RemoteException.
+     * Invoke method in RemoteServer instance. Any exception thrown from the
+     * invoked method is written to the connection.
      *
      * @param methodID ID of method in remote server
      * @param con Connection for reading arguments and writing response.
+     * @throws IOException if thrown from connection
      */
-    void invoke(short methodID, Connection con) throws RemoteException;
+    void invoke(short methodID, Connection con) throws IOException;
 }
