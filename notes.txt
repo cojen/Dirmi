@@ -30,6 +30,11 @@ Ideas for dirmi:
   server-side implementation will have to implement this method too, but with
   what? Leave it empty?
 
+- RemoteStub needs to be serializable. Any Remote object refs need to be
+  written with object id. Upon deserialization, convert object ids back.
+
+- Support @Marshalled annotation for parameters. Automatically uses MarshalledObject.
+
 ObjectRegistry:
 
 - supports both local and remote objects
