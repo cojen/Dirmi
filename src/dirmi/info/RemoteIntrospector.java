@@ -282,7 +282,7 @@ public class RemoteIntrospector {
             if (returnType == null) {
                 mReturnType = null;
             } else {
-                mReturnType = RParameter.make(null, returnType);
+                mReturnType = RParameter.makeTemp(returnType);
             }
 
             Class<?>[] paramsTypes = m.getParameterTypes();
@@ -291,7 +291,7 @@ public class RemoteIntrospector {
             } else {
                 mParameterTypes = new ArrayList<RemoteParameter>(paramsTypes.length);
                 for (Class<?> paramType : paramsTypes) {
-                    mParameterTypes.add(RParameter.make(null, paramType));
+                    mParameterTypes.add(RParameter.makeTemp(paramType));
                 }
             }
 
@@ -301,7 +301,7 @@ public class RemoteIntrospector {
             } else {
                 Set<RemoteParameter> set = new LinkedHashSet<RemoteParameter>();
                 for (Class<?> exceptionType : exceptionTypes) {
-                    set.add(RParameter.make(null, exceptionType));
+                    set.add(RParameter.makeTemp(exceptionType));
                 }
                 mExceptionTypes = Collections.unmodifiableSet(set);
             }
@@ -521,7 +521,10 @@ public class RemoteIntrospector {
             if (mReturnType != null) {
                 Class<?> type = mReturnType.getSerializedType();
                 if (Remote.class.isAssignableFrom(type)) {
-                    mReturnType = RParameter.make(examine((Class<Remote>) type), null);
+                    mReturnType = RParameter.make
+                        (examine((Class<Remote>) type), mReturnType.getRemoteDimensions(), null);
+                } else {
+                    mReturnType = RParameter.make(null, 0, type);
                 }
             }
 
@@ -532,7 +535,10 @@ public class RemoteIntrospector {
                     Class<?> type = param.getSerializedType();
                     if (Remote.class.isAssignableFrom(type)) {
                         mParameterTypes.set
-                            (i, RParameter.make(examine((Class<Remote>) type), null));
+                            (i, RParameter.make
+                             (examine((Class<Remote>) type), param.getRemoteDimensions(), null));
+                    } else {
+                        mParameterTypes.set(i, RParameter.make(null, 0, type));
                     }
                 }
                 mParameterTypes = Collections.unmodifiableList(mParameterTypes);
@@ -551,26 +557,48 @@ public class RemoteIntrospector {
     private static class RParameter implements RemoteParameter {
         private static final long serialVersionUID = 1L;
 
-        static RParameter make(RemoteInfo remoteInfoType, Class<?> serializedType) {
+        static RParameter makeTemp(Class<?> serializedType) {
+            if (serializedType == void.class) {
+                serializedType = null;
+            }
+            if (serializedType == null) {
+                return null;
+            }
+            int dimensions = 0;
+            while (serializedType.isArray()) {
+                dimensions++;
+                serializedType = serializedType.getComponentType();
+            }
+            return intern(new RParameter(null, dimensions, serializedType));
+        }
+
+        static RParameter make(RemoteInfo remoteInfoType,
+                               int dimensions, Class<?> serializedType) {
             if (serializedType == void.class) {
                 serializedType = null;
             }
             if (remoteInfoType == null && serializedType == null) {
                 return null;
             }
-            return intern(new RParameter(remoteInfoType, serializedType));
+            return intern(new RParameter(remoteInfoType, dimensions, serializedType));
         }
 
         private final RemoteInfo mRemoteInfoType;
+        private final int mDimensions;
         private final Class<?> mSerializedType;
 
-        private RParameter(RemoteInfo remoteInfoType, Class<?> serializedType) {
+        private RParameter(RemoteInfo remoteInfoType, int dimensions, Class<?> serializedType) {
             mRemoteInfoType = remoteInfoType;
+            mDimensions = dimensions;
             mSerializedType = serializedType;
         }
 
         public boolean isRemote() {
             return mRemoteInfoType != null;
+        }
+
+        public int getRemoteDimensions() {
+            return mDimensions;
         }
 
         public RemoteInfo getRemoteInfoType() {

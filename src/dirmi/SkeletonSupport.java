@@ -16,26 +16,11 @@
 
 package dirmi;
 
-import java.io.IOException;
-
-import java.rmi.NoSuchObjectException;
-import java.rmi.Remote;
-
-import dirmi.io.Connection;
-import dirmi.io.RemoteInput;
-import dirmi.io.RemoteOutput;
-
 /**
  * 
  *
  * @author Brian S O'Neill
+ * @see SkeletonFactory
  */
-public interface SkeletonSupport {
-    Remote getObject(int objectID) throws NoSuchObjectException;
-
-    int getObjectID(Remote object) throws NoSuchObjectException;
-
-    RemoteInput createRemoteInput(Connection con) throws IOException;
-
-    RemoteOutput createRemoteOutput(Connection con) throws IOException;
+public interface SkeletonSupport extends RemoteSupport {
 }

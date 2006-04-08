@@ -16,26 +16,16 @@
 
 package dirmi;
 
-import java.rmi.RemoteException;
-
-import dirmi.io.Connection;
-
 /**
- * 
+ * If an exception is thrown from a skeleton-invoked method which is
+ * asynchronous, it cannot write the exception to the connection. Instead it
+ * wraps the exception in an AsynchronousInvocationException for the server to
+ * log.
  *
  * @author Brian S O'Neill
- * @see StubFactory
  */
-public interface StubSupport extends RemoteSupport {
-    /**
-     * @param objectID ID of remote object to invoke
-     * @param methodID ID of method in remote object
-     * @return Connection for writing arguments and reading response. If call
-     * is synchronous, output is flushed after arguments are written, and then
-     * connection is read from. If call is asynchronous, connection is closed
-     * after arguments are written.
-     */
-    Connection invoke(int objectID, short methodID) throws RemoteException;
-
-    void dispose(int objectID) throws RemoteException;
+public class AsynchronousInvocationException extends Exception {
+    public AsynchronousInvocationException(Throwable cause) {
+        super(cause);
+    }
 }

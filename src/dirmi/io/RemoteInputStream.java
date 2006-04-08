@@ -74,6 +74,9 @@ public class RemoteInputStream implements RemoteInput {
         return Double.longBitsToDouble(readLong());
     }
 
+    // TODO: Remove custom object reading methods. Annotations can control
+    // custom object reading instead.
+
     public boolean readBooleanObj() throws IOException {
         int v = mIn.read();
         return v == RemoteOutputStream.NULL ? null : (v == RemoteOutputStream.TRUE);

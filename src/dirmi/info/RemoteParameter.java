@@ -30,6 +30,12 @@ public interface RemoteParameter extends Serializable {
     boolean isRemote();
 
     /**
+     * If parameter is an array of remotes, call this method to get the
+     * dimensions. If zero is returned, then remote parameter is not an array.
+     */
+    int getRemoteDimensions();
+
+    /**
      * If parameter is remote, then call this method to get RemoteInfo. If null
      * is returned, then parameter is not remote.
      */

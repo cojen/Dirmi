@@ -89,6 +89,9 @@ public class RemoteOutputStream implements RemoteOutput {
         mOut.write(v == null ? NULL : (v ? TRUE : FALSE));
     }
 
+    // TODO: Remove custom object writing methods. Annotations can control
+    // custom object writing instead.
+
     public void write(Byte v) throws IOException {
         OutputStream out = mOut;
         if (v == null) {

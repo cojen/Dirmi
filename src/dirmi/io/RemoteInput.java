@@ -43,6 +43,7 @@ public interface RemoteInput extends Closeable {
 
     double readDouble() throws IOException;
 
+    /*
     boolean readBooleanObj() throws IOException;
 
     Byte readByteObj() throws IOException;
@@ -60,6 +61,7 @@ public interface RemoteInput extends Closeable {
     Double readDoubleObj() throws IOException;
 
     String readString() throws IOException;
+    */
 
     Object readObject() throws IOException, ClassNotFoundException;
 

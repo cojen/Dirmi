@@ -18,6 +18,8 @@ package dirmi;
 
 import java.io.IOException;
 
+import java.rmi.NoSuchObjectException;
+
 import dirmi.io.Connection;
 
 /**
@@ -28,11 +30,24 @@ import dirmi.io.Connection;
 public interface Skeleton {
     /**
      * Invoke method in RemoteServer instance. Any exception thrown from the
-     * invoked method is written to the connection.
+     * invoked method is written to the connection, unless method is
+     * asynchronous. Any other exception thrown from this method indicates a
+     * communication failure, and so the connection should be closed.
      *
      * @param methodID ID of method in remote server
      * @param con Connection for reading arguments and writing response.
      * @throws IOException if thrown from connection
+     * @throws NoSuchMethodException if method is unknown
+     * @throws NoSuchObjectException if remote parameter refers to an unknown object
+     * @throws ClassNotFoundException if unmarshalling an object parameter
+     * refers to an unknown class
+     * @throws AsynchronousInvocationException if method is asynchronous and
+     * throws an exception
      */
-    void invoke(short methodID, Connection con) throws IOException;
+    void invoke(short methodID, Connection con)
+        throws IOException,
+               NoSuchMethodException,
+               NoSuchObjectException,
+               ClassNotFoundException,
+               AsynchronousInvocationException;
 }

@@ -42,6 +42,7 @@ public interface RemoteOutput extends Flushable, Closeable {
 
     void write(double v) throws IOException;
 
+    /*
     void write(Boolean v) throws IOException;
 
     void write(Byte v) throws IOException;
@@ -60,9 +61,11 @@ public interface RemoteOutput extends Flushable, Closeable {
 
     void write(String str) throws IOException;
 
+    void writeNull() throws IOException;
+    */
+
     /**
-     * Write serialized object. This method should not be called if object is a
-     * wrapped primitive, String, or an array of these types.
+     * Write serialized object.
      */
     void write(Object obj) throws IOException;
 
@@ -70,8 +73,6 @@ public interface RemoteOutput extends Flushable, Closeable {
      * Write length in variable amount of bytes.
      */
     void writeLength(int length) throws IOException;
-
-    void writeNull() throws IOException;
 
     /**
      * Writes OK marker, indicating method completed with no exceptions.
