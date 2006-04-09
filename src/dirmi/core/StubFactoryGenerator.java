@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
 import java.io.IOException;
 
@@ -40,6 +40,8 @@ import cojen.classfile.TypeDesc;
 import cojen.util.ClassInjector;
 import cojen.util.KeyFactory;
 import cojen.util.SoftValuedHashMap;
+
+import dirmi.UnimplementedMethodException;
 
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;

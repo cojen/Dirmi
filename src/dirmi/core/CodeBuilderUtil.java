@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
 import java.rmi.Remote;
 

@@ -14,31 +14,13 @@
  *  limitations under the License.
  */
 
-package dirmi;
-
-import java.rmi.Remote;
-
-import dirmi.info.RemoteInfo;
+package dirmi.core;
 
 /**
  * 
  *
  * @author Brian S O'Neill
+ * @see SkeletonFactory
  */
-public interface SkeletonFactory<R extends Remote> {
-    /**
-     * @return type supported by this skeleton factory
-     */
-    Class<R> getRemoteType();
-
-    /**
-     * @return class that implements Skeleton
-     */
-    Class<? extends Skeleton> getSkeletonClass();
-
-    /**
-     * @param remoteServer server implementation of Remote object
-     * @param support for accessing other Remote objects
-     */
-    Skeleton createSkeleton(R remoteServer, SkeletonSupport support);
+public interface SkeletonSupport extends RemoteSupport {
 }

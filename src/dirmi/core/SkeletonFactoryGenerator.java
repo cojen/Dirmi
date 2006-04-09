@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -35,6 +35,8 @@ import cojen.classfile.TypeDesc;
 
 import cojen.util.ClassInjector;
 import cojen.util.SoftValuedHashMap;
+
+import dirmi.AsynchronousInvocationException;
 
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;

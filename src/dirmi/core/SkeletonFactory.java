@@ -14,28 +14,31 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
-import java.rmi.RemoteException;
+import java.rmi.Remote;
 
-import dirmi.io.Connection;
+import dirmi.info.RemoteInfo;
 
 /**
  * 
  *
  * @author Brian S O'Neill
- * @see StubFactory
  */
-public interface StubSupport extends RemoteSupport {
+public interface SkeletonFactory<R extends Remote> {
     /**
-     * @param objectID ID of remote object to invoke
-     * @param methodID ID of method in remote object
-     * @return Connection for writing arguments and reading response. If call
-     * is synchronous, output is flushed after arguments are written, and then
-     * connection is read from. If call is asynchronous, connection is closed
-     * after arguments are written.
+     * @return type supported by this skeleton factory
      */
-    Connection invoke(int objectID, short methodID) throws RemoteException;
+    Class<R> getRemoteType();
 
-    void dispose(int objectID) throws RemoteException;
+    /**
+     * @return class that implements Skeleton
+     */
+    Class<? extends Skeleton> getSkeletonClass();
+
+    /**
+     * @param remoteServer server implementation of Remote object
+     * @param support for accessing other Remote objects
+     */
+    Skeleton createSkeleton(R remoteServer, SkeletonSupport support);
 }

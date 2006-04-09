@@ -14,11 +14,13 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
 import java.io.IOException;
 
 import java.rmi.NoSuchObjectException;
+
+import dirmi.AsynchronousInvocationException;
 
 import dirmi.io.Connection;
 
