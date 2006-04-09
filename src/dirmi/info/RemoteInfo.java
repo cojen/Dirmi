@@ -41,5 +41,16 @@ public interface RemoteInfo extends Serializable {
      */
     Set<? extends RemoteMethod> getRemoteMethods();
 
+    /**
+     * Returns all remote methods by the given name in an unmodifiable set. If
+     * no matches, set is empty.
+     *
+     * @param name method name to query
+     */
+    Set<? extends RemoteMethod> getRemoteMethods(String name);
+
+    RemoteMethod getRemoteMethod(String name, RemoteParameter... params)
+        throws NoSuchMethodException;
+
     RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException;
 }

@@ -62,7 +62,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
     /**
      * @param type
-     * @throws IllegalArgumentException if remote is null or malformed
+     * @throws IllegalArgumentException if type is null or malformed
      */
     public static <R extends Remote> SkeletonFactory<R> getSkeletonFactory(Class<R> type)
         throws IllegalArgumentException
@@ -88,8 +88,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     private SkeletonFactory<R> generateFactory() {
         Class<? extends Skeleton> skeletonClass = generateSkeleton();
         try {
-            return new Factory<R>
-                (mType, skeletonClass.getConstructor(mType, SkeletonSupport.class));
+            return new Factory<R>(mType, skeletonClass);
         } catch (NoSuchMethodException e) {
             NoSuchMethodError nsme = new NoSuchMethodError();
             nsme.initCause(e);
@@ -212,28 +211,24 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b.storeLocal(remoteInVar);
 
                 for (RemoteParameter paramType : paramTypes) {
-                    readParam(b, paramType, skeletonSupportVar, remoteInVar);
+                    CodeBuilderUtil.readParam(b, paramType, skeletonSupportVar, remoteInVar);
                 }
             }
 
-            TypeDesc returnTypeDesc = getTypeDesc(method.getReturnType());
+            TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
 
             {
                 tryStarts[i] = b.createLabel().setLocation();
-                TypeDesc[] params = new TypeDesc[paramTypes.size()];
-                for (int j=0; j<params.length; j++) {
-                    params[j] = getTypeDesc(paramTypes.get(j));
-                }
-
-                b.invokeInterface(remoteType, method.getName(), returnTypeDesc, params);
+                TypeDesc[] params = CodeBuilderUtil.getTypeDescs(paramTypes);
+                b.invokeInterface(remoteType, method.getName(), returnDesc, params);
                 tryEnds[i] = b.createLabel().setLocation();
             }
 
             // Write response and close connection.
 
             if (method.isAsynchronous()) {
-                if (returnTypeDesc != null) {
-                    if (returnTypeDesc.isDoubleWord()) {
+                if (returnDesc != null) {
+                    if (returnDesc.isDoubleWord()) {
                         b.pop2();
                     } else {
                         b.pop();
@@ -248,14 +243,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 LocalVariable remoteOutVar = b.createLocalVariable(null, remoteOutType);
                 b.storeLocal(remoteOutVar);
 
-                if (returnTypeDesc == TypeDesc.BOOLEAN) {
+                if (returnDesc == TypeDesc.BOOLEAN) {
                     b.loadLocal(remoteOutVar);
                     b.swap();
                     b.invokeInterface(remoteOutType, "writeOk", null,
                                       new TypeDesc[] {TypeDesc.BOOLEAN});
                 } else {
-                    if (returnTypeDesc != null) {
-                        writeParam(b, method.getReturnType(), skeletonSupportVar, remoteOutVar);
+                    if (returnDesc != null) {
+                        CodeBuilderUtil.writeParam
+                            (b, method.getReturnType(), skeletonSupportVar, remoteOutVar);
                     }
                     b.loadLocal(remoteOutVar);
                     b.invokeInterface(remoteOutType, "writeOk", null, null);
@@ -323,156 +319,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         return ci.defineClass(cf);
     }
 
-    /**
-     * Generates code to read a parameter from a RemoteInput, leaving it on the
-     * stack. RemoteSupport is used for processing Remote parameters. Generated
-     * code may throw an IOException, NoSuchObjectException, or
-     * ClassNotFoundException.
-     *
-     * @param paramType type of parameter to read
-     * @param remoteSupportVar variable which references a RemoteSupport instance
-     * @param remoteInVar variable which references a RemoteInput instance
-     */
-    private void readParam(CodeBuilder b,
-                           RemoteParameter paramType,
-                           LocalVariable remoteSupportVar,
-                           LocalVariable remoteInVar)
-    {
-        if (paramType.isRemote()) {
-            readRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                            remoteSupportVar, remoteInVar);
-            return;
-        }
-
-        TypeDesc type = TypeDesc.forClass(paramType.getSerializedType());
-
-        if (type.isPrimitive()) {
-            String typeName = type.getFullName();
-            typeName = Character.toUpperCase(typeName.charAt(0)) + typeName.substring(1);
-            String methodName = "read" + typeName;
-            b.loadLocal(remoteInVar);
-            b.invokeInterface(remoteInVar.getType(), methodName, type, null);
-            return;
-        }
-
-        // Read ordinary serialized object.
-        b.loadLocal(remoteInVar);
-        b.invokeInterface(remoteInVar.getType(), "readObject", TypeDesc.OBJECT, null);
-        b.checkCast(type);
-    }
-
-    private void readRemoteParam(CodeBuilder b,
-                                 int dimensions, RemoteInfo info,
-                                 LocalVariable remoteSupportVar,
-                                 LocalVariable remoteInVar)
-    {
-        if (dimensions <= 0) {
-            b.loadLocal(remoteSupportVar);
-            b.loadLocal(remoteInVar);
-            b.invokeInterface(remoteInVar.getType(), "readInt", TypeDesc.INT, null);
-            b.invokeInterface(remoteSupportVar.getType(), "getObject",
-                              TypeDesc.forClass(Remote.class),
-                              new TypeDesc[] {TypeDesc.INT});
-            b.checkCast(TypeDesc.forClass(info.getName()));
-            return;
-        }
-
-        /* TODO: support arrays of remotes using regular object serialization?
-        b.loadLocal(remoteInVar);
-        b.invokeInterface(remoteInVar.getType(), "readLength", TypeDesc.INT, null);
-
-        do {
-            if (dimensions > 0) {
-            }
-            
-            dimensions--;
-        } while (dimensions > 0);
-        */
-    }
-
-    /**
-     * Generates code to write a parameter to a RemoteOutput.  RemoteSupport is
-     * used for processing Remote parameters. Generated code may throw an
-     * IOException.
-     *
-     * @param paramType type of parameter to write
-     * @param remoteSupportVar variable which references a RemoteSupport instance
-     * @param remoteOutVar variable which references a RemoteOutput instance
-     */
-    private void writeParam(CodeBuilder b,
-                            RemoteParameter paramType,
-                            LocalVariable remoteSupportVar,
-                            LocalVariable remoteOutVar)
-    {
-        if (paramType.isRemote()) {
-            writeRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                             remoteSupportVar, remoteOutVar);
-            return;
-        }
-
-        TypeDesc type = TypeDesc.forClass(paramType.getSerializedType());
-
-        if (type.isPrimitive()) {
-            b.loadLocal(remoteOutVar);
-            b.swap();
-            b.invokeInterface(remoteOutVar.getType(), "write", null, new TypeDesc[] {type});
-            return;
-        }
-
-        // Write ordinary serialized object.
-        b.loadLocal(remoteOutVar);
-        b.swap();
-        b.invokeInterface(remoteOutVar.getType(), "write", null, new TypeDesc[] {TypeDesc.OBJECT});
-    }
-
-    private void writeRemoteParam(CodeBuilder b,
-                                  int dimensions, RemoteInfo info,
-                                  LocalVariable remoteSupportVar,
-                                  LocalVariable remoteOutVar)
-    {
-        if (dimensions <= 0) {
-            LocalVariable remoteVar = b.createLocalVariable(null, TypeDesc.forClass(Remote.class));
-            b.storeLocal(remoteVar);
-
-            b.loadLocal(remoteOutVar);
-            b.loadLocal(remoteSupportVar);
-            b.loadLocal(remoteVar);
-            b.invokeInterface(remoteSupportVar.getType(), "getObjectID",
-                              TypeDesc.INT,
-                              new TypeDesc[] {remoteVar.getType()});
-            b.invokeInterface(remoteOutVar.getType(), "write",
-                              null, new TypeDesc[] {TypeDesc.INT});
-            return;
-        }
-
-        // TODO: support arrays of remotes using regular object serialization?
-    }
-
-    private TypeDesc getTypeDesc(RemoteParameter param) {
-        if (param == null) {
-            return null;
-        }
-        if (!param.isRemote()) {
-            return TypeDesc.forClass(param.getSerializedType());
-        } 
-        TypeDesc type = TypeDesc.forClass(param.getRemoteInfoType().getName());
-        int dimensions = param.getRemoteDimensions();
-        while (--dimensions >= 0) {
-            type = type.toArrayType();
-        }
-        return type;
-    }
-
     private static class Factory<R extends Remote> implements SkeletonFactory<R> {
         private final Class<R> mType;
         private final Constructor<? extends Skeleton> mSkeletonCtor;
 
-        /**
-         * @param skeletonCtor (Remote remoteServer, SkeletonSupport support)
-         */
-        Factory(Class<R> type, Constructor<? extends Skeleton> skeletonCtor) {
+        Factory(Class<R> type, Class<? extends Skeleton> skeletonClass)
+            throws NoSuchMethodException
+        {
             mType = type;
-            mSkeletonCtor = skeletonCtor;
+            mSkeletonCtor = skeletonClass.getConstructor(type, SkeletonSupport.class);
         }
 
         public Class<R> getRemoteType() {

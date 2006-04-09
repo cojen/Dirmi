@@ -21,6 +21,7 @@ import java.rmi.RemoteException;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -184,6 +185,7 @@ public class RemoteIntrospector {
         private final String mName;
         private final Set<RMethod> mMethods;
 
+        private transient Map<String, Set<RMethod>> mMethodsByName;
         private transient IntHashMap mMethodMap;
 
         RInfo(int id, String name, Set<RMethod> methods) {
@@ -202,6 +204,54 @@ public class RemoteIntrospector {
 
         public Set<? extends RemoteMethod> getRemoteMethods() {
             return mMethods;
+        }
+
+        public Set<? extends RemoteMethod> getRemoteMethods(String name) {
+            if (mMethodsByName == null) {
+                Map<String, Set<RMethod>> methodsByName = new HashMap<String, Set<RMethod>>();
+
+                for (RMethod method : mMethods) {
+                    String methodName = method.getName();
+                    Set<RMethod> set = methodsByName.get(methodName);
+                    if (set == null) {
+                        set = new LinkedHashSet<RMethod>();
+                        methodsByName.put(methodName, set);
+                    }
+                    set.add(method);
+                }
+
+                // Pass through again, making sure each contained set is unmodifiable.
+                for (Map.Entry<String, Set<RMethod>> entry : methodsByName.entrySet()) {
+                    entry.setValue(Collections.unmodifiableSet(entry.getValue()));
+                }
+
+                mMethodsByName = methodsByName;
+            }
+
+            Set<? extends RemoteMethod> methods = mMethodsByName.get(name);
+            if (methods == null) {
+                methods = Collections.emptySet();
+            }
+            return methods;
+        }
+
+        public RemoteMethod getRemoteMethod(String name, RemoteParameter... params)
+            throws NoSuchMethodException
+        {
+            int paramsLength = params == null ? 0 : params.length;
+            search:
+            for (RemoteMethod method : getRemoteMethods(name)) {
+                List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
+                if (paramTypes.size() == paramsLength) {
+                    for (int i=0; i<paramsLength; i++) {
+                        if (!paramTypes.get(i).equals(params[i])) {
+                            continue search;
+                        }
+                    }
+                    return method;
+                }
+            }
+            throw new NoSuchMethodException(name);
         }
 
         public RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException {
@@ -533,11 +583,19 @@ public class RemoteIntrospector {
                 for (int i=0; i<size; i++) {
                     RemoteParameter param = mParameterTypes.get(i);
                     Class<?> type = param.getSerializedType();
+                    int dimensions = param.getRemoteDimensions();
                     if (Remote.class.isAssignableFrom(type)) {
                         mParameterTypes.set
                             (i, RParameter.make
-                             (examine((Class<Remote>) type), param.getRemoteDimensions(), null));
+                             (examine((Class<Remote>) type), dimensions, null));
                     } else {
+                        if (dimensions > 0) {
+                            TypeDesc desc = TypeDesc.forClass(type);
+                            while (--dimensions >= 0) {
+                                desc = desc.toArrayType();
+                            }
+                            type = desc.toClass();
+                        }
                         mParameterTypes.set(i, RParameter.make(null, 0, type));
                     }
                 }
@@ -612,7 +670,7 @@ public class RemoteIntrospector {
         @Override
         public int hashCode() {
             if (mRemoteInfoType != null) {
-                return mRemoteInfoType.hashCode();
+                return mRemoteInfoType.hashCode() + mDimensions;
             }
             if (mSerializedType != null) {
                 return mSerializedType.hashCode();
@@ -629,6 +687,7 @@ public class RemoteIntrospector {
                 RParameter other = (RParameter) obj;
                 return ((mRemoteInfoType == null) ? (other.mRemoteInfoType == null) :
                         (mRemoteInfoType.equals(other.mRemoteInfoType))) &&
+                    (mDimensions == other.mDimensions) &&
                     ((mSerializedType == null) ? (other.mSerializedType == null) :
                      (mSerializedType.equals(other.mSerializedType)));
             }

@@ -25,6 +25,8 @@ package dirmi;
  * @author Brian S O'Neill
  */
 public class AsynchronousInvocationException extends Exception {
+    private static final long serialVersionUID = 1;
+
     public AsynchronousInvocationException(Throwable cause) {
         super(cause);
     }
