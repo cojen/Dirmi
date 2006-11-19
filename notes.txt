@@ -63,3 +63,28 @@ ObjectRegistry:
   reserved for its use as well.
 
 - Each accepted connection by server gets assigned a new (or pooled) thread.
+
+
+Object identifiers:
+
+- Should they be UUIDs? Can short local IDs suffice? If not UUIDs, then remote
+  object being passed around will always get a longer and longer path. If UUID,
+  when remote object reaches originating node, stub path is broken.
+
+- If UUIDs, stubs have same UUID as real object. This simplifies design
+  somewhat. When converting UUID back to object, table is looked up. This might
+  result in stub or real object. It does not matter.
+
+- UUIDs also make it possible to deserialize stubs, making it possible to find
+  the support object. If it can't find it, then what? Fail. Server is
+  responsible for writing info for new classes and remote objects via separate
+  connection. Server waits for ack to prevent race condition. Write object id
+  and class id. If client doesn't know what class is, also write RemoteInfo for
+  class. Always remember what objects client has until client calls dispose.
+
+- Other strategy is to request classes on demand. For object de-serialization,
+  this requires a thread local instance to RMI engine. Better, just cast
+  ObjectInput to special object that allows access to connection.
+
+- Should stub just implement Externalizable, making it compatible with object
+  stream? Should remote streams simply extend object streams?
