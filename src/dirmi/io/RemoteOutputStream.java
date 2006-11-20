@@ -16,10 +16,12 @@
 
 package dirmi.io;
 
+import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,15 +30,16 @@ import java.util.List;
  * 
  *
  * @author Brian S O'Neill
+ * @see RemoteInputStream
  */
 public class RemoteOutputStream implements RemoteOutput {
-    static final byte NULL = -1;
-    static final byte NOT_NULL = 1;
-    static final byte FALSE = 2;
-    static final byte TRUE = 3;
-    static final byte OK_FALSE = 4;
-    static final byte OK_TRUE = 5;
-    static final byte NOT_OK = 6;
+    static final byte FALSE = 0;
+    static final byte TRUE = 1;
+    static final byte OK_FALSE = 2;
+    static final byte OK_TRUE = 3;
+    static final byte NOT_OK = 4;
+    static final byte NULL = 5;
+    static final byte NOT_NULL = 6;
 
     private volatile OutputStream mOut;
 
@@ -44,27 +47,39 @@ public class RemoteOutputStream implements RemoteOutput {
         mOut = out;
     }
 
-    public void write(boolean v) throws IOException {
+    public void write(int b) throws IOException {
+        mOut.write(b);
+    }
+
+    public void write(byte[] b) throws IOException {
+        mOut.write(b);
+    }
+
+    public void write(byte[] b, int offset, int length) throws IOException {
+        mOut.write(b, offset, length);
+    }
+
+    public void writeBoolean(boolean v) throws IOException {
         mOut.write(v ? TRUE : FALSE);
     }
 
-    public void write(byte v) throws IOException {
+    public void writeByte(int v) throws IOException {
         mOut.write(v);
     }
 
-    public void write(short v) throws IOException {
+    public void writeShort(int v) throws IOException {
         OutputStream out = mOut;
         out.write(v >> 8);
         out.write(v);
     }
 
-    public void write(char v) throws IOException {
+    public void writeChar(int v) throws IOException {
         OutputStream out = mOut;
         out.write(v >> 8);
         out.write(v);
     }
 
-    public void write(int v) throws IOException {
+    public void writeInt(int v) throws IOException {
         OutputStream out = mOut;
         out.write(v >> 24);
         out.write(v >> 16);
@@ -72,98 +87,87 @@ public class RemoteOutputStream implements RemoteOutput {
         out.write(v);
     }
 
-    public void write(long v) throws IOException {
-        write((int) v >> 32);
-        write((int) v);
+    public void writeLong(long v) throws IOException {
+        writeInt((int) v >> 32);
+        writeInt((int) v);
     }
 
-    public void write(float v) throws IOException {
-        write(Float.floatToRawIntBits(v));
+    public void writeFloat(float v) throws IOException {
+        writeInt(Float.floatToRawIntBits(v));
     }
 
-    public void write(double v) throws IOException {
-        write(Double.doubleToRawLongBits(v));
+    public void writeDouble(double v) throws IOException {
+        writeLong(Double.doubleToRawLongBits(v));
     }
 
-    public void write(Boolean v) throws IOException {
-        mOut.write(v == null ? NULL : (v ? TRUE : FALSE));
-    }
-
-    // TODO: Remove custom object writing methods. Annotations can control
-    // custom object writing instead.
-
-    public void write(Byte v) throws IOException {
+    public void writeBytes(String s) throws IOException {
+        int length = s.length();
         OutputStream out = mOut;
-        if (v == null) {
-            out.write(NULL);
-        } else {
-            out.write(NOT_NULL);
-            out.write(v.intValue());
+        for (int i=0; i<length; i++) {
+            out.write(s.charAt(i));
         }
     }
 
-    public void write(Short v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.shortValue());
+    public void writeChars(String s) throws IOException {
+        int length = s.length();
+        OutputStream out = mOut;
+        for (int i=0; i<length; i++) {
+            int c = s.charAt(i);
+            out.write(c >> 8);
+            out.write(c);
         }
     }
 
-    public void write(Character v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.charValue());
+    public void writeUTF(String s) throws IOException {
+        int length = s.length();
+
+        int utflen = 0;
+        for (int i=0; i<length; i++) {
+            int c = s.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007F)) {
+                utflen++;
+            } else if (c > 0x07FF) {
+                utflen += 3;
+            } else {
+                utflen += 2;
+            }
+        }
+
+        if (utflen > 65535) {
+            throw new UTFDataFormatException("encoded string too long: " + utflen + " bytes");
+        }
+
+        OutputStream out = mOut;
+
+        out.write(utflen >> 8);
+        out.write(utflen);
+
+        for (int i=0; i<length; i++) {
+            int c = s.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007f)) {
+                out.write(c);
+            } else if (c > 0x07ff) {
+                out.write(0xe0 | ((c >> 12) & 0x0f));
+                out.write(0x80 | ((c >> 6) & 0x3f));
+                out.write(0x80 | (c & 0x3f));
+            } else {
+                out.write(0xc0 | ((c >> 6) & 0x1f));
+                out.write(0x80 | (c & 0x3f));
+            }
         }
     }
 
-    public void write(Integer v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.intValue());
-        }
-    }
-
-    public void write(Long v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.longValue());
-        }
-    }
-
-    public void write(Float v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.floatValue());
-        }
-    }
-
-    public void write(Double v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            mOut.write(NOT_NULL);
-            write(v.doubleValue());
-        }
-    }
-
-    public void write(String str) throws IOException {
+    /**
+     * @param str string of any length or null
+     */
+    public void writeString(String str) throws IOException {
         if (str == null) {
             mOut.write(NULL);
         }
 
         int length = str.length();
 
-        writeLength(length);
+        writeVarUnsignedInt(length);
 
         // Strings are encoded in a fashion similar to UTF-8, in that ASCII
         // characters are written in one byte. This encoding is more efficient
@@ -196,7 +200,92 @@ public class RemoteOutputStream implements RemoteOutput {
         }
     }
 
-    public void write(Object obj) throws IOException {
+    private void writeVarUnsignedInt(int v) throws IOException {
+        OutputStream out = mOut;
+        if (v < (1 << 7)) {
+            out.write(v);
+        } else if (v < (1 << 14)) {
+            out.write((v >> 8) | 0x80);
+            out.write(v);
+        } else if (v < (1 << 21)) {
+            out.write((v >> 16) | 0xc0);
+            out.write(v >> 8);
+            out.write(v);
+        } else if (v < (1 << 28)) {
+            out.write((v >> 24) | 0xe0);
+            out.write(v >> 16);
+            out.write(v >> 8);
+            out.write(v);
+        } else {
+            out.write(0xf0);
+            out.write(v >> 24);
+            out.write(v >> 16);
+            out.write(v >> 8);
+            out.write(v);
+        }
+    }
+
+    public void writeBooleanObj(Boolean v) throws IOException {
+        mOut.write(v == null ? NULL : (v ? TRUE : FALSE));
+    }
+
+    public void writeByteObj(Byte v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeByte(v);
+        }
+    }
+
+    public void writeShortObj(Short v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeShort(v);
+        }
+    }
+
+    public void writeCharObj(Character v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeChar(v);
+        }
+    }
+
+    public void writeIntObj(Integer v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeInt(v);
+        }
+    }
+
+    public void writeLongObj(Long v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeLong(v);
+        }
+    }
+
+    public void writeFloatObj(Float v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeFloat(v);
+        }
+    }
+
+    public void writeDoubleObj(Double v) throws IOException {
+        if (v == null) {
+            mOut.write(NULL);
+        } else {
+            writeDouble(v);
+        }
+    }
+
+    public void writeObject(Object obj) throws IOException {
         getObjectOutput().writeObject(obj);
     }
 
@@ -205,35 +294,6 @@ public class RemoteOutputStream implements RemoteOutput {
             mOut = new ObjectOutputStream(mOut);
         }
         return (ObjectOutput) mOut;
-    }
-
-    public void writeLength(int length) throws IOException {
-        OutputStream out = mOut;
-        if (length < 128) {
-            out.write(length);
-        } else if (length < 16384) {
-            out.write((length >> 8) | 0x80);
-            out.write(length);
-        } else if (length < 2097152) {
-            out.write((length >> 16) | 0xc0);
-            out.write(length >> 8);
-            out.write(length);
-        } else if (length < 268435456) {
-            out.write((length >> 24) | 0xe0);
-            out.write(length >> 16);
-            out.write(length >> 8);
-            out.write(length);
-        } else {
-            out.write(0xf0);
-            out.write(length >> 24);
-            out.write(length >> 16);
-            out.write(length >> 8);
-            out.write(length);
-        }
-    }
-
-    public void writeNull() throws IOException {
-        mOut.write(NULL);
     }
 
     public void writeOk() throws IOException {
@@ -260,7 +320,7 @@ public class RemoteOutputStream implements RemoteOutput {
         // Element zero is root cause.
         collectChain(chain, t);
 
-        writeLength(chain.size());
+        writeVarUnsignedInt(chain.size());
 
         ObjectOutput out = getObjectOutput();
 

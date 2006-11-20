@@ -52,5 +52,5 @@ public interface RemoteInfo extends Serializable {
     RemoteMethod getRemoteMethod(String name, RemoteParameter... params)
         throws NoSuchMethodException;
 
-    RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException;
+    RemoteMethod getRemoteMethod(int methodID) throws NoSuchMethodException;
 }

@@ -29,7 +29,7 @@ import java.util.Collection;
 
 import java.security.SecureRandom;
 
-import cojen.util.IntHashMap;
+import org.cojen.util.IntHashMap;
 
 /**
  * Multiplexer allows new connections to be established over a single master
@@ -94,12 +94,20 @@ public class Multiplexer extends AbstractBroker {
     // Buffer for sending close and receive commands.
     private final byte[] mWriteBuffer = new byte[6];
 
+    /**
+     * @param master single connection which the multiplexor operates on
+     */
     public Multiplexer(Connection master)
         throws IOException
     {
         this(master, DEFAULT_MIN_BUFFER_SIZE, DEFAULT_MAX_BUFFER_SIZE);
     }
 
+    /**
+     * @param master single connection which the multiplexor operates on
+     * @param minBufferSize minumum size (in bytes) for connection buffers
+     * @param maxBufferSize maximum size (in bytes) for connection buffers
+     */
     public Multiplexer(final Connection master, int minBufferSize, int maxBufferSize)
         throws IOException
     {

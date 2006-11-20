@@ -18,57 +18,41 @@ package dirmi.io;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.ObjectInput;
 
 import java.rmi.RemoteException;
 
 /**
- * 
  *
  * @author Brian S O'Neill
+ * @see RemoteOutput
  */
-public interface RemoteInput extends Closeable {
-    boolean readBoolean() throws IOException;
+public interface RemoteInput extends ObjectInput, Closeable {
+    /**
+     * Reads the length and of contents the String from a packed format similar
+     * to UTF-8.
+     */
+    String readString() throws IOException;
 
-    byte readByte() throws IOException;
-
-    short readShort() throws IOException;
-
-    char readChar() throws IOException;
-
-    int readInt() throws IOException;
-
-    long readLong() throws IOException;
-
-    float readFloat() throws IOException;
-
-    double readDouble() throws IOException;
-
-    /*
-    boolean readBooleanObj() throws IOException;
+    Boolean readBooleanObj() throws IOException;
 
     Byte readByteObj() throws IOException;
 
+    Integer readUnsignedByteObj() throws IOException;
+
     Short readShortObj() throws IOException;
 
-    Character readCharacterObj() throws IOException;
+    Integer readUnsignedShortObj() throws IOException;
 
-    Integer readIntegerObj() throws IOException;
+    Character readCharObj() throws IOException;
+
+    Integer readIntObj() throws IOException;
 
     Long readLongObj() throws IOException;
 
     Float readFloatObj() throws IOException;
 
     Double readDoubleObj() throws IOException;
-
-    String readString() throws IOException;
-    */
-
-    Object readObject() throws IOException, ClassNotFoundException;
-
-    /**
-     * Reads length value or null.
-     */
-    Integer readLength() throws IOException;
 
     /**
      * Reads OK return marker or throws exception originating from remote
@@ -81,7 +65,7 @@ public interface RemoteInput extends Closeable {
      * instead, with as much useful information as possible, including server
      * stack trace.
      *
-     * @return boolean return value, if applicable
+     * @return boolean return value, or false if not applicable
      */
     boolean readOk() throws RemoteException, Throwable;
 }

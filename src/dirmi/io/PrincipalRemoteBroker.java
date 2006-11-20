@@ -16,8 +16,6 @@
 
 package dirmi.io;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -25,7 +23,7 @@ import java.io.OutputStream;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import cojen.util.IntHashMap;
+import org.cojen.util.IntHashMap;
 
 /**
  * 
@@ -100,33 +98,32 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         con.getOutputStream().write(REASON_INITIATE);
         con.getOutputStream().flush();
 
-        DataInputStream din = new DataInputStream(con.getInputStream());
-        int conId = din.readInt();
+        RemoteInputStream rin = new RemoteInputStream(con.getInputStream());
+        int conId = rin.readInt();
 
         Connection remoteObjCon = mBroker.connecter().connect();
         {
-            DataOutputStream dout = new DataOutputStream(remoteObjCon.getOutputStream());
-            dout.writeByte(REASON_REMOTE_OBJECTS);
-            dout.writeInt(conId);
-            dout.flush();
+            RemoteOutputStream rout = new RemoteOutputStream(remoteObjCon.getOutputStream());
+            rout.writeByte(REASON_REMOTE_OBJECTS);
+            rout.writeInt(conId);
+            rout.flush();
         }
 
         Connection leaseRenewalCon = mBroker.connecter().connect();
         {
-            DataOutputStream dout = new DataOutputStream(leaseRenewalCon.getOutputStream());
-            dout.writeByte(REASON_LEASE_RENEWAL);
-            dout.writeInt(conId);
-            dout.flush();
+            RemoteOutputStream rout = new RemoteOutputStream(leaseRenewalCon.getOutputStream());
+            rout.writeByte(REASON_LEASE_RENEWAL);
+            rout.writeInt(conId);
+            rout.flush();
         }
 
         return new ConImpl(conId, remoteObjCon, leaseRenewalCon);
     }
 
     private RemoteConnection accepted(Connection con) throws IOException {
-        DataInputStream din = new DataInputStream(con.getInputStream());
-        DataOutputStream dout = new DataOutputStream(con.getOutputStream());
+        RemoteInputStream rin = new RemoteInputStream(con.getInputStream());
 
-        byte reason = din.readByte();
+        byte reason = rin.readByte();
         ConImpl conImpl = null;
 
         if (reason == REASON_INITIATE) {
@@ -138,10 +135,11 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
                 conImpl = new ConImpl(conId);
                 mConnections.put(conId, conImpl);
             }
-            dout.writeInt(conId);
-            dout.flush();
+            RemoteOutputStream rout = new RemoteOutputStream(con.getOutputStream());
+            rout.writeInt(conId);
+            rout.flush();
         } else if (reason == REASON_REMOTE_OBJECTS) {
-            int conId = din.readInt();
+            int conId = rin.readInt();
             synchronized (mConnections) {
                 conImpl = (ConImpl) mConnections.get(conId);
             }
@@ -149,7 +147,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
                 conImpl.mRemoteObjCon = con;
             }
         } else if (reason == REASON_LEASE_RENEWAL) {
-            int conId = din.readInt();
+            int conId = rin.readInt();
             synchronized (mConnections) {
                 conImpl = (ConImpl) mConnections.get(conId);
             }
@@ -190,13 +188,32 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
             }
         }
 
-        public Remote readRemote() throws RemoteException {
+        public InputStream getInputStream() throws IOException {
             // TODO
             return null;
         }
 
-        public void writeRemote(Remote remote) throws RemoteException {
+        public OutputStream getOutputStream() throws IOException {
             // TODO
+            return null;
+        }
+
+        public RemoteInput getRemoteInput() throws IOException {
+            // TODO
+            return null;
+        }
+
+        public RemoteOutput getRemoteOutput() throws IOException {
+            // TODO
+            return null;
+        }
+
+        public RemoteConnecter connecter() {
+            return PrincipalRemoteBroker.this.connecter();
+        }
+
+        public RemoteAccepter accepter() {
+            return PrincipalRemoteBroker.this.accepter();
         }
 
         public boolean dispose(Remote remote) throws RemoteException {

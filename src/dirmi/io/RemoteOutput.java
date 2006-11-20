@@ -17,62 +17,74 @@
 package dirmi.io;
 
 import java.io.Closeable;
+import java.io.Externalizable;
 import java.io.Flushable;
 import java.io.IOException;
+import java.io.ObjectOutput;
 
 /**
- * 
  *
  * @author Brian S O'Neill
+ * @see RemoteInput
  */
-public interface RemoteOutput extends Flushable, Closeable {
-    void write(boolean v) throws IOException;
-
-    void write(byte v) throws IOException;
-
-    void write(short v) throws IOException;
-
-    void write(char v) throws IOException;
-
-    void write(int v) throws IOException;
-
-    void write(long v) throws IOException;
-
-    void write(float v) throws IOException;
-
-    void write(double v) throws IOException;
-
-    /*
-    void write(Boolean v) throws IOException;
-
-    void write(Byte v) throws IOException;
-
-    void write(Short v) throws IOException;
-
-    void write(Character v) throws IOException;
-
-    void write(Integer v) throws IOException;
-
-    void write(Long v) throws IOException;
-
-    void write(Float v) throws IOException;
-
-    void write(Double v) throws IOException;
-
-    void write(String str) throws IOException;
-
-    void writeNull() throws IOException;
-    */
+public interface RemoteOutput extends ObjectOutput, Flushable, Closeable {
+    /**
+     * Writes the raw float bits as a 32-bit integer.
+     */
+    void writeFloat(float v) throws IOException;
 
     /**
-     * Write serialized object.
+     * Writes the raw double bits as a 64-bit integer.
      */
-    void write(Object obj) throws IOException;
+    void writeDouble(double v) throws IOException;
 
     /**
-     * Write length in variable amount of bytes.
+     * Writes the length and contents of the String in a packed format similar
+     * to UTF-8.
+     *
+     * @param str string of any length or null
      */
-    void writeLength(int length) throws IOException;
+    void writeString(String str) throws IOException;
+
+    /**
+     * Writes an unshared Boolean object.
+     */
+    void writeBooleanObj(Boolean v) throws IOException;
+
+    /**
+     * Writes an unshared Byte object.
+     */
+    void writeByteObj(Byte v) throws IOException;
+
+    /**
+     * Writes an unshared Short object.
+     */
+    void writeShortObj(Short v) throws IOException;
+
+    /**
+     * Writes an unshared Character object.
+     */
+    void writeCharObj(Character v) throws IOException;
+
+    /**
+     * Writes an unshared Integer object.
+     */
+    void writeIntObj(Integer v) throws IOException;
+
+    /**
+     * Writes an unshared Long object.
+     */
+    void writeLongObj(Long v) throws IOException;
+
+    /**
+     * Writes an unshared Float object.
+     */
+    void writeFloatObj(Float v) throws IOException;
+
+    /**
+     * Writes an unshared Double object.
+     */
+    void writeDoubleObj(Double v) throws IOException;
 
     /**
      * Writes OK marker, indicating method completed with no exceptions.

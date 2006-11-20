@@ -19,11 +19,11 @@ package dirmi.io;
 import java.io.IOException;
 
 /**
- * 
+ * Factory for client-side created {@link RemoteConnection}s.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnecter {
+public interface RemoteConnecter extends Connecter {
     /**
      * Called by client to establish a new connection.
      *

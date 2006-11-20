@@ -38,7 +38,7 @@ public interface RemoteMethod extends Serializable {
      * Returns a number which uniquely identifies this method within the
      * scope of the remote interface.
      */
-    short getMethodID();
+    int getMethodID();
 
     /**
      * Returns the return type of this method, which is null if void.

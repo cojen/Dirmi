@@ -16,30 +16,23 @@
 
 package dirmi.io;
 
-import java.io.Closeable;
+import java.io.IOException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**
- * 
+ * Basic interface for a bidirectional remote I/O connection.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Closeable {
-    /**
-     * Blocks until peer writes a remote object.
-     *
-     * @return remote object, which is either a stub or an existing local object
-     */
-    Remote readRemote() throws RemoteException;
+public interface RemoteConnection extends Connection, RemoteBroker {
+    RemoteInput getRemoteInput() throws IOException;
 
-    /**
-     * Send an object to the remote peer. If peer is not reading remote
-     * objects, then this call may block.
-     *
-     * @param remote remote object to write, which may be locally created or a stub
-     */
-    void writeRemote(Remote remote) throws RemoteException;
+    RemoteOutput getRemoteOutput() throws IOException;
+
+    // FIXME: add method to create identifier for any object (identifier is Externalizable)
+    // FIXME: add method to get object from identifier
+    // FIXME: dispose should work on any kind of identified object
 
     /**
      * Dispose an object that was read or written, rendering it unusable for

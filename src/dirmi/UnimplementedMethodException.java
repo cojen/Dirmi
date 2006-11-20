@@ -20,7 +20,7 @@ import java.lang.reflect.Method;
 
 import java.rmi.RemoteException;
 
-import cojen.classfile.MethodDesc;
+import org.cojen.classfile.MethodDesc;
 
 /**
  * Thrown when a remote method has not been implemented by the remote

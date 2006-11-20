@@ -46,7 +46,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(short methodID, Connection con)
+    void invoke(int methodID, Connection con)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

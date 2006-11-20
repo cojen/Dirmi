@@ -16,21 +16,25 @@
 
 package dirmi.io;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.InputStream;
 import java.io.StreamCorruptedException;
+import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**
  * 
  *
  * @author Brian S O'Neill
+ * @see RemoteOutputStream
  */
 public class RemoteInputStream implements RemoteInput {
     private volatile InputStream mIn;
@@ -39,27 +43,99 @@ public class RemoteInputStream implements RemoteInput {
         mIn = in;
     }
 
+    public void readFully(byte b[]) throws IOException {
+        readFully(b, 0, b.length);
+    }
+
+    public void readFully(byte b[], int offset, int length) throws IOException {
+        if (length < 0) {
+            throw new IndexOutOfBoundsException();
+        }
+        int n = 0;
+        InputStream in = mIn;
+        while (n < length) {
+            int count = in.read(b, offset + n, length - n);
+            if (count < 0) {
+                throw new EOFException();
+            }
+            n += count;
+        }
+    }
+
+    public int skipBytes(int n) throws IOException {
+        int total = 0;
+        int cur = 0;
+        InputStream in = mIn;
+        while ((total < n) && ((cur = (int) in.skip(n - total)) > 0)) {
+            total += cur;
+        }
+        return total;
+    }
+
     public boolean readBoolean() throws IOException {
-        return mIn.read() == RemoteOutputStream.TRUE;
+        int b = mIn.read();
+        if (b < 0) {
+            throw new EOFException();
+        }
+        return b != RemoteOutputStream.FALSE;
     }
 
     public byte readByte() throws IOException {
-        return (byte) mIn.read();
+        int b = mIn.read();
+        if (b < 0) {
+            throw new EOFException();
+        }
+        return (byte) b;
+    }
+
+    public int readUnsignedByte() throws IOException {
+        int b = mIn.read();
+        if (b < 0) {
+            throw new EOFException();
+        }
+        return b;
     }
 
     public short readShort() throws IOException {
         InputStream in = mIn;
-        return (short) ((in.read() << 8) | in.read());
+        int b1 = in.read();
+        int b2 = in.read();
+        if ((b1 | b2) < 0) {
+            throw new EOFException();
+        }
+        return (short) ((b1 << 8) | b2);
+    }
+
+    public int readUnsignedShort() throws IOException {
+        InputStream in = mIn;
+        int b1 = in.read();
+        int b2 = in.read();
+        if ((b1 | b2) < 0) {
+            throw new EOFException();
+        }
+        return (b1 << 8) | b2;
     }
 
     public char readChar() throws IOException {
         InputStream in = mIn;
-        return (char) ((in.read() << 8) | in.read());
+        int b1 = in.read();
+        int b2 = in.read();
+        if ((b1 | b2) < 0) {
+            throw new EOFException();
+        }
+        return (char) ((b1 << 8) | b2);
     }
 
     public int readInt() throws IOException {
         InputStream in = mIn;
-        return (in.read() << 24) | (in.read() << 16) | (in.read() << 8) | in.read();
+        int b1 = in.read();
+        int b2 = in.read();
+        int b3 = in.read();
+        int b4 = in.read();
+        if ((b1 | b2 | b3 | b4) < 0) {
+            throw new EOFException();
+        }
+        return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
     }
 
     public long readLong() throws IOException {
@@ -74,67 +150,80 @@ public class RemoteInputStream implements RemoteInput {
         return Double.longBitsToDouble(readLong());
     }
 
-    // TODO: Remove custom object reading methods. Annotations can control
-    // custom object reading instead.
-
-    public boolean readBooleanObj() throws IOException {
-        int v = mIn.read();
-        return v == RemoteOutputStream.NULL ? null : (v == RemoteOutputStream.TRUE);
+    /**
+     * @throws UnsupportedOperationException always
+     */
+    @Deprecated
+    public String readLine() {
+        throw new UnsupportedOperationException();
     }
 
-    public Byte readByteObj() throws IOException {
-        InputStream in = mIn;
-        int v = in.read();
-        if (v == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return (byte) in.read();
-    }
+    public String readUTF() throws IOException {
+        int utflen = readUnsignedShort();
+        byte[] bytearr = new byte[utflen];
+        char[] chararr = new char[utflen];
 
-    public Short readShortObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readShort();
-    }
+        int c, char2, char3;
+        int count = 0;
+        int chararr_count = 0;
 
-    public Character readCharacterObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readChar();
-    }
+        readFully(bytearr, 0, utflen);
 
-    public Integer readIntegerObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
+        while (count < utflen) {
+            c = (int) bytearr[count] & 0xff;      
+            if (c > 127) {
+                break;
+            }
+            count++;
+            chararr[chararr_count++] = (char) c;
         }
-        return readInt();
-    }
 
-    public Long readLongObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
+        while (count < utflen) {
+            c = (int) bytearr[count] & 0xff;
+            switch (c >> 4) {
+            case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
+                /* 0xxxxxxx*/
+                count++;
+                chararr[chararr_count++] = (char) c;
+                break;
+            case 12: case 13:
+                /* 110x xxxx   10xx xxxx*/
+                count += 2;
+                if (count > utflen) {
+                    throw new UTFDataFormatException("malformed input: partial character at end");
+                }
+                char2 = (int) bytearr[count-1];
+                if ((char2 & 0xC0) != 0x80) {
+                    throw new UTFDataFormatException("malformed input around byte " + count); 
+                }
+                chararr[chararr_count++] = (char) (((c & 0x1F) << 6) | (char2 & 0x3F));  
+                break;
+            case 14:
+                /* 1110 xxxx  10xx xxxx  10xx xxxx */
+                count += 3;
+                if (count > utflen) {
+                    throw new UTFDataFormatException("malformed input: partial character at end");
+                }
+                char2 = (int) bytearr[count-2];
+                char3 = (int) bytearr[count-1];
+                if (((char2 & 0xC0) != 0x80) || ((char3 & 0xC0) != 0x80)) {
+                    throw new UTFDataFormatException("malformed input around byte " + (count - 1));
+                }
+                chararr[chararr_count++] = (char)(((c     & 0x0F) << 12) |
+                                                  ((char2 & 0x3F) << 6)  |
+                                                  ((char3 & 0x3F) << 0));
+                break;
+            default:
+                /* 10xx xxxx,  1111 xxxx */
+                throw new UTFDataFormatException("malformed input around byte " + count);
+            }
         }
-        return readLong();
-    }
 
-    public Float readFloatObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readFloat();
-    }
-
-    public Double readDoubleObj() throws IOException {
-        if (mIn.read() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readDouble();
+        return new String(chararr, 0, chararr_count);
     }
 
     public String readString() throws IOException {
-        Integer lengthObj = readLength();
+        Integer lengthObj = readVarUnsignedInteger();
         if (lengthObj == null) {
             return null;
         }
@@ -149,40 +238,144 @@ public class RemoteInputStream implements RemoteInput {
 
         InputStream in = mIn;
         while (offset < length) {
-            int c = mIn.read();
-            switch (c >> 5) {
+            int b1 = in.read();
+            switch (b1 >> 5) {
             case 0: case 1: case 2: case 3:
                 // 0xxxxxxx
-                value[offset++] = (char)c;
+                value[offset++] = (char) b1;
                 break;
             case 4: case 5:
                 // 10xxxxxx xxxxxxxx
-                value[offset++] = (char)(((c & 0x3f) << 8) | in.read());
+                int b2 = in.read();
+                if (b2 < 0) {
+                    throw new EOFException();
+                }
+                value[offset++] = (char) (((b1 & 0x3f) << 8) | b2);
                 break;
             case 6:
                 // 110xxxxx xxxxxxxx xxxxxxxx
-                c = ((c & 0x1f) << 16) | (in.read() << 8) | in.read();
+                b2 = in.read();
+                int b3 = in.read();
+                if ((b2 | b3) < 0) {
+                    throw new EOFException();
+                }
+                int c = ((b1 & 0x1f) << 16) | (b2 << 8) | b3;
                 if (c >= 0x10000) {
                     // Split into surrogate pair.
                     c -= 0x10000;
-                    value[offset++] = (char)(0xd800 | ((c >> 10) & 0x3ff));
-                    value[offset++] = (char)(0xdc00 | (c & 0x3ff));
+                    value[offset++] = (char) (0xd800 | ((c >> 10) & 0x3ff));
+                    value[offset++] = (char) (0xdc00 | (c & 0x3ff));
                 } else {
-                    value[offset++] = (char)c;
+                    value[offset++] = (char) c;
                 }
                 break;
             default:
                 // 111xxxxx
                 // Illegal.
-                throw new StreamCorruptedException();
+                if (b1 < 0) {
+                    throw new EOFException();
+                } else {
+                    throw new StreamCorruptedException();
+                }
             }
         }
 
         return new String(value);
     }
 
+    public Boolean readBooleanObj() throws IOException {
+        int b = mIn.read();
+        if (b < 0) {
+            throw new EOFException();
+        }
+        return (b == RemoteOutputStream.NULL) ? null : (b != RemoteOutputStream.FALSE);
+    }
+
+    public Byte readByteObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readByte();
+    }
+
+    public Integer readUnsignedByteObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readUnsignedByte();
+    }
+
+    public Short readShortObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readShort();
+    }
+
+    public Integer readUnsignedShortObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readUnsignedShort();
+    }
+
+    public Character readCharObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readChar();
+    }
+
+    public Integer readIntObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readInt();
+    }
+
+    public Long readLongObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readLong();
+    }
+
+    public Float readFloatObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readFloat();
+    }
+
+    public Double readDoubleObj() throws IOException {
+        if (readByte() == RemoteOutputStream.NULL) {
+            return null;
+        }
+        return readDouble();
+    }
+
     public Object readObject() throws IOException, ClassNotFoundException {
         return getObjectInput().readObject();
+    }
+
+    public int read() throws IOException {
+        return mIn.read();
+    }
+
+    public int read(byte[] b) throws IOException {
+        return mIn.read(b);
+    }
+
+    public int read(byte[] b, int offset, int length) throws IOException {
+        return mIn.read(b, offset, length);
+    }
+
+    public long skip(long n) throws IOException {
+        return mIn.skip(n);
+    }
+
+    public int available() throws IOException {
+        return mIn.available();
     }
 
     private ObjectInput getObjectInput() throws IOException {
@@ -192,22 +385,44 @@ public class RemoteInputStream implements RemoteInput {
         return (ObjectInput) mIn;
     }
 
-    public Integer readLength() throws IOException {
+    private Integer readVarUnsignedInteger() throws IOException {
         InputStream in = mIn;
-        int v = in.read();
-        if (v >= 0xf8) {
-            return null;
-        } else if (v <= 0x7f) {
-            return v;
-        } else if (v <= 0xbf) {
-            return ((v & 0x3f) << 8) | in.read();
-        } else if (v <= 0xdf) {
-            return ((v & 0x1f) << 16) | (in.read() << 8) | in.read();
-        } else if (v <= 0xef) {
-            return ((v & 0x0f) << 24) | (in.read() << 16) | (in.read() << 8) | in.read();
-        } else {
-            return (in.read() << 24) | (in.read() << 16) | (in.read() << 8) | in.read();
+        int b1 = in.read();
+        if (b1 < 0) {
+            throw new EOFException();
         }
+        if (b1 == RemoteOutputStream.NULL) {
+            return null;
+        }
+        if (b1 <= 0x7f) {
+            return b1;
+        }
+        int b2 = in.read();
+        if (b2 < 0) {
+            throw new EOFException();
+        }
+        if (b1 <= 0xbf) {
+            return ((b1 & 0x3f) << 8) | b2;
+        }
+        int b3 = in.read();
+        if (b3 < 0) {
+            throw new EOFException();
+        }
+        if (b1 <= 0xdf) {
+            return ((b1 & 0x1f) << 16) | (b2 << 8) | b3;
+        }
+        int b4 = in.read();
+        if (b4 < 0) {
+            throw new EOFException();
+        }
+        if (b1 <= 0xef) {
+            return ((b1 & 0x0f) << 24) | (b2 << 16) | (b3 << 8) | b4;
+        }
+        int b5 = in.read();
+        if (b5 < 0) {
+            throw new EOFException();
+        }
+        return (b2 << 24) | (b3 << 16) | (b4 << 8) | b5;
     }
 
     public boolean readOk() throws RemoteException, Throwable {
@@ -219,7 +434,7 @@ public class RemoteInputStream implements RemoteInput {
                 return v == RemoteOutputStream.OK_TRUE;
             }
 
-            int chainLength = readLength();
+            int chainLength = readVarUnsignedInteger();
             // Element zero is root cause.
             chain = new ArrayList<ThrowableInfo>(chainLength);
 

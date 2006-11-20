@@ -38,10 +38,9 @@ public interface StubFactory<R extends Remote> {
     Class<? extends R> getStubClass();
 
     /**
-     * @param objectID ID of remote object
      * @param support for invoking remote methods
      */
-    R createStub(int objectID, StubSupport support);
+    R createStub(StubSupport support);
 
     /**
      * @return true if given object is known to be a stub

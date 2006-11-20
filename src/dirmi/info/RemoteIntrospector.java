@@ -31,11 +31,11 @@ import java.util.Set;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-import cojen.classfile.MethodDesc;
-import cojen.classfile.TypeDesc;
-import cojen.util.IntHashMap;
-import cojen.util.WeakCanonicalSet;
-import cojen.util.WeakIdentityMap;
+import org.cojen.classfile.MethodDesc;
+import org.cojen.classfile.TypeDesc;
+import org.cojen.util.IntHashMap;
+import org.cojen.util.WeakCanonicalSet;
+import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
 import dirmi.Idempotent;
@@ -95,7 +95,7 @@ public class RemoteIntrospector {
 
             // FIXME: capture ResponseTimeout
 
-            short methodID = 0;
+            int methodID = 0;
             for (Method m : remote.getMethods()) {
                 if (!m.getDeclaringClass().isInterface()) {
                     continue;
@@ -254,7 +254,7 @@ public class RemoteIntrospector {
             throw new NoSuchMethodException(name);
         }
 
-        public RemoteMethod getRemoteMethod(short methodID) throws NoSuchMethodException {
+        public RemoteMethod getRemoteMethod(int methodID) throws NoSuchMethodException {
             if (mMethodMap == null) {
                 IntHashMap methodMap = new IntHashMap();
                 for (RMethod method : mMethods) {
@@ -308,7 +308,7 @@ public class RemoteIntrospector {
     private static class RMethod implements RemoteMethod {
         private static final long serialVersionUID = 1L;
 
-        private final short mID;
+        private final int mID;
         private final String mName;
         private RemoteParameter mReturnType;
         private List<RemoteParameter> mParameterTypes;
@@ -320,7 +320,7 @@ public class RemoteIntrospector {
 
         private transient Method mMethod;
 
-        RMethod(short id, Method m) {
+        RMethod(int id, Method m) {
             mID = id;
             mName = m.getName();
 
@@ -390,7 +390,7 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public short getMethodID() {
+        public int getMethodID() {
             return mID;
         }
 

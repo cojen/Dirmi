@@ -17,18 +17,18 @@
 package dirmi.io;
 
 /**
- * 
+ * Supports accepting connections and making new connections.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteBroker {
+public interface RemoteBroker extends Broker {
     /**
-     * Returns a Connecter for creating new client-side connections.
+     * Returns a RemoteConnecter for creating new client-side connections.
      */
     RemoteConnecter connecter();
 
     /**
-     * Returns an Accepter for accepting new server-side connections.
+     * Returns an RemoteAccepter for accepting new server-side connections.
      */
     RemoteAccepter accepter();
 }

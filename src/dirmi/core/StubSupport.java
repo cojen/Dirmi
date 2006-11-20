@@ -28,14 +28,13 @@ import dirmi.io.Connection;
  */
 public interface StubSupport extends RemoteSupport {
     /**
-     * @param objectID ID of remote object to invoke
      * @param methodID ID of method in remote object
      * @return Connection for writing arguments and reading response. If call
      * is synchronous, output is flushed after arguments are written, and then
      * connection is read from. If call is asynchronous, connection is closed
      * after arguments are written.
      */
-    Connection invoke(int objectID, short methodID) throws RemoteException;
+    Connection invoke(int methodID) throws RemoteException;
 
-    void dispose(int objectID) throws RemoteException;
+    void dispose() throws RemoteException;
 }

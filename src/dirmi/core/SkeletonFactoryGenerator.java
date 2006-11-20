@@ -25,16 +25,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import cojen.classfile.ClassFile;
-import cojen.classfile.CodeBuilder;
-import cojen.classfile.Label;
-import cojen.classfile.LocalVariable;
-import cojen.classfile.MethodInfo;
-import cojen.classfile.Modifiers;
-import cojen.classfile.TypeDesc;
+import org.cojen.classfile.ClassFile;
+import org.cojen.classfile.CodeBuilder;
+import org.cojen.classfile.Label;
+import org.cojen.classfile.LocalVariable;
+import org.cojen.classfile.MethodInfo;
+import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.TypeDesc;
 
-import cojen.util.ClassInjector;
-import cojen.util.SoftValuedHashMap;
+import org.cojen.util.ClassInjector;
+import org.cojen.util.SoftValuedHashMap;
 
 import dirmi.AsynchronousInvocationException;
 
@@ -144,7 +144,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
-                                     new TypeDesc[] {TypeDesc.SHORT, connectionType});
+                                     new TypeDesc[] {TypeDesc.INT, connectionType});
         CodeBuilder b = new CodeBuilder(mi);
 
         Set<? extends RemoteMethod> methods = mInfo.getRemoteMethods();
@@ -213,7 +213,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b.storeLocal(remoteInVar);
 
                 for (RemoteParameter paramType : paramTypes) {
-                    CodeBuilderUtil.readParam(b, paramType, skeletonSupportVar, remoteInVar);
+                    CodeBuilderUtil.readParam(b, paramType, remoteInVar);
                 }
             }
 
@@ -252,8 +252,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                       new TypeDesc[] {TypeDesc.BOOLEAN});
                 } else {
                     if (returnDesc != null) {
-                        CodeBuilderUtil.writeParam
-                            (b, method.getReturnType(), skeletonSupportVar, remoteOutVar);
+                        CodeBuilderUtil.writeParam(b, method.getReturnType(), remoteOutVar);
                     }
                     b.loadLocal(remoteOutVar);
                     b.invokeInterface(remoteOutType, "writeOk", null, null);

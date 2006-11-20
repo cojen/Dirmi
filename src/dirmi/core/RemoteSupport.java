@@ -18,9 +18,6 @@ package dirmi.core;
 
 import java.io.IOException;
 
-import java.rmi.NoSuchObjectException;
-import java.rmi.Remote;
-
 import dirmi.io.Connection;
 import dirmi.io.RemoteInput;
 import dirmi.io.RemoteOutput;
@@ -31,10 +28,6 @@ import dirmi.io.RemoteOutput;
  * @author Brian S O'Neill
  */
 public interface RemoteSupport {
-    Remote getObject(int objectID) throws NoSuchObjectException;
-
-    int getObjectID(Remote object) throws NoSuchObjectException;
-
     RemoteInput createRemoteInput(Connection con) throws IOException;
 
     RemoteOutput createRemoteOutput(Connection con) throws IOException;

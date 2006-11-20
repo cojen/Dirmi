@@ -20,9 +20,9 @@ import java.rmi.Remote;
 
 import java.util.Collection;
 
-import cojen.classfile.CodeBuilder;
-import cojen.classfile.LocalVariable;
-import cojen.classfile.TypeDesc;
+import org.cojen.classfile.CodeBuilder;
+import org.cojen.classfile.LocalVariable;
+import org.cojen.classfile.TypeDesc;
 
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteParameter;
@@ -40,17 +40,15 @@ class CodeBuilderUtil {
      * ClassNotFoundException.
      *
      * @param paramType type of parameter to read
-     * @param remoteSupportVar variable which references a RemoteSupport instance
      * @param remoteInVar variable which references a RemoteInput instance
      */
     static void readParam(CodeBuilder b,
                           RemoteParameter paramType,
-                          LocalVariable remoteSupportVar,
                           LocalVariable remoteInVar)
     {
         if (paramType.isRemote()) {
             readRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                            remoteSupportVar, remoteInVar);
+                            remoteInVar);
             return;
         }
 
@@ -73,16 +71,12 @@ class CodeBuilderUtil {
 
     private static void readRemoteParam(CodeBuilder b,
                                         int dimensions, RemoteInfo info,
-                                        LocalVariable remoteSupportVar,
                                         LocalVariable remoteInVar)
     {
         if (dimensions <= 0) {
-            b.loadLocal(remoteSupportVar);
             b.loadLocal(remoteInVar);
-            b.invokeInterface(remoteInVar.getType(), "readInt", TypeDesc.INT, null);
-            b.invokeInterface(remoteSupportVar.getType(), "getObject",
-                              TypeDesc.forClass(Remote.class),
-                              new TypeDesc[] {TypeDesc.INT});
+            b.invokeInterface(remoteInVar.getType(), "readRemote",
+                              TypeDesc.forClass(Remote.class), null);
             b.checkCast(TypeDesc.forClass(info.getName()));
             return;
         }
@@ -106,17 +100,15 @@ class CodeBuilderUtil {
      * IOException.
      *
      * @param paramType type of parameter to write
-     * @param remoteSupportVar variable which references a RemoteSupport instance
      * @param remoteOutVar variable which references a RemoteOutput instance
      */
     static void writeParam(CodeBuilder b,
                            RemoteParameter paramType,
-                           LocalVariable remoteSupportVar,
                            LocalVariable remoteOutVar)
     {
         if (paramType.isRemote()) {
             writeRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                             remoteSupportVar, remoteOutVar);
+                             remoteOutVar);
             return;
         }
 
@@ -137,21 +129,13 @@ class CodeBuilderUtil {
 
     private static void writeRemoteParam(CodeBuilder b,
                                          int dimensions, RemoteInfo info,
-                                         LocalVariable remoteSupportVar,
                                          LocalVariable remoteOutVar)
     {
         if (dimensions <= 0) {
-            LocalVariable remoteVar = b.createLocalVariable(null, TypeDesc.forClass(Remote.class));
-            b.storeLocal(remoteVar);
-
             b.loadLocal(remoteOutVar);
-            b.loadLocal(remoteSupportVar);
-            b.loadLocal(remoteVar);
-            b.invokeInterface(remoteSupportVar.getType(), "getObjectID",
-                              TypeDesc.INT,
-                              new TypeDesc[] {remoteVar.getType()});
-            b.invokeInterface(remoteOutVar.getType(), "write",
-                              null, new TypeDesc[] {TypeDesc.INT});
+            b.swap();
+            b.invokeInterface(remoteOutVar.getType(), "write", null,
+                              new TypeDesc[] {TypeDesc.forClass(Remote.class)});
             return;
         }
 

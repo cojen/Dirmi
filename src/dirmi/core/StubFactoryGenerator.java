@@ -29,17 +29,17 @@ import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Map;
 
-import cojen.classfile.ClassFile;
-import cojen.classfile.CodeBuilder;
-import cojen.classfile.Label;
-import cojen.classfile.LocalVariable;
-import cojen.classfile.MethodInfo;
-import cojen.classfile.Modifiers;
-import cojen.classfile.TypeDesc;
+import org.cojen.classfile.ClassFile;
+import org.cojen.classfile.CodeBuilder;
+import org.cojen.classfile.Label;
+import org.cojen.classfile.LocalVariable;
+import org.cojen.classfile.MethodInfo;
+import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.TypeDesc;
 
-import cojen.util.ClassInjector;
-import cojen.util.KeyFactory;
-import cojen.util.SoftValuedHashMap;
+import org.cojen.util.ClassInjector;
+import org.cojen.util.KeyFactory;
+import org.cojen.util.SoftValuedHashMap;
 
 import dirmi.UnimplementedMethodException;
 
@@ -59,7 +59,6 @@ import dirmi.io.RemoteOutput;
  * @author Brian S O'Neill
  */
 public class StubFactoryGenerator<R extends Remote> {
-    private static final String REMOTE_ID_FIELD_NAME = "remoteID";
     private static final String STUB_SUPPORT_FIELD_NAME = "support";
 
     // Method name ends with '$' so as not to conflict with user method.
@@ -141,7 +140,6 @@ public class StubFactoryGenerator<R extends Remote> {
 
         // Add fields
         {
-            cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_ID_FIELD_NAME, TypeDesc.INT);
             cf.addField(Modifiers.PRIVATE.toVolatile(true).toTransient(true),
                         STUB_SUPPORT_FIELD_NAME, stubSupportType);
         }
@@ -149,7 +147,7 @@ public class StubFactoryGenerator<R extends Remote> {
         // Add constructor
         {
             MethodInfo mi = cf.addConstructor
-                (Modifiers.PUBLIC, new TypeDesc[] {TypeDesc.INT, stubSupportType});
+                (Modifiers.PUBLIC, new TypeDesc[] {stubSupportType});
 
             CodeBuilder b = new CodeBuilder(mi);
 
@@ -158,9 +156,6 @@ public class StubFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadLocal(b.getParameter(0));
-            b.storeField(REMOTE_ID_FIELD_NAME, TypeDesc.INT);
-            b.loadThis();
-            b.loadLocal(b.getParameter(1));
             b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
 
             b.returnVoid();
@@ -182,9 +177,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-            b.loadThis();
-            b.loadField(REMOTE_ID_FIELD_NAME, TypeDesc.INT);
-            b.invokeInterface(stubSupportType, "dispose", null, new TypeDesc[] {TypeDesc.INT});
+            b.invokeInterface(stubSupportType, "dispose", null, null);
 
             b.loadThis();
             b.loadNull();
@@ -237,11 +230,9 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Create connection for invoking remote method.
             b.loadLocal(stubSupportVar);
-            b.loadThis();
-            b.loadField(REMOTE_ID_FIELD_NAME, TypeDesc.INT);
             b.loadConstant(method.getMethodID());
             b.invokeInterface(stubSupportType, "invoke", connectionType,
-                              new TypeDesc[] {TypeDesc.INT, TypeDesc.SHORT});
+                              new TypeDesc[] {TypeDesc.INT});
             LocalVariable conVar = b.createLocalVariable(null, connectionType);
             b.storeLocal(conVar);
 
@@ -257,7 +248,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
                     b.loadLocal(b.getParameter(i++));
-                    CodeBuilderUtil.writeParam(b, paramType, stubSupportVar, remoteOutVar);
+                    CodeBuilderUtil.writeParam(b, paramType, remoteOutVar);
                 }
             }
 
@@ -308,8 +299,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 if (returnDesc != TypeDesc.BOOLEAN) {
                     b.pop();
                     if (returnDesc != null) {
-                        CodeBuilderUtil.readParam
-                            (b, method.getReturnType(), stubSupportVar, remoteInVar);
+                        CodeBuilderUtil.readParam(b, method.getReturnType(), remoteInVar);
                     }
                 }
 
@@ -401,7 +391,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
         Factory(Class<R> type, Class<? extends R> stubClass) throws NoSuchMethodException {
             mType = type;
-            mStubCtor = stubClass.getConstructor(int.class, StubSupport.class);
+            mStubCtor = stubClass.getConstructor(StubSupport.class);
             mDisposeMethod = stubClass.getMethod(DISPOSE_METHOD_NAME, (Class[]) null);
         }
 
@@ -413,10 +403,10 @@ public class StubFactoryGenerator<R extends Remote> {
             return mStubCtor.getDeclaringClass();
         }
 
-        public R createStub(int objectID, StubSupport support) {
+        public R createStub(StubSupport support) {
             Throwable error;
             try {
-                return mStubCtor.newInstance(objectID, support);
+                return mStubCtor.newInstance(support);
             } catch (InstantiationException e) {
                 error = e;
             } catch (IllegalAccessException e) {

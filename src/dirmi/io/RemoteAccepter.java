@@ -19,11 +19,11 @@ package dirmi.io;
 import java.io.IOException;
 
 /**
- * 
+ * Factory for server-side accepted {@link RemoteConnection}s.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter {
+public interface RemoteAccepter extends Accepter {
     /**
      * Called by server to block waiting for a new connection request from client.
      *
