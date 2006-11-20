@@ -18,7 +18,7 @@ package dirmi.core;
 
 import java.rmi.RemoteException;
 
-import dirmi.io.Connection;
+import dirmi.io.RemoteConnection;
 
 /**
  * 
@@ -26,15 +26,15 @@ import dirmi.io.Connection;
  * @author Brian S O'Neill
  * @see StubFactory
  */
-public interface StubSupport extends RemoteSupport {
+public interface StubSupport {
     /**
      * @param methodID ID of method in remote object
-     * @return Connection for writing arguments and reading response. If call
+     * @return RemoteConnection for writing arguments and reading response. If call
      * is synchronous, output is flushed after arguments are written, and then
      * connection is read from. If call is asynchronous, connection is closed
      * after arguments are written.
      */
-    Connection invoke(int methodID) throws RemoteException;
+    RemoteConnection invoke(Identifier methodID) throws RemoteException;
 
     void dispose() throws RemoteException;
 }

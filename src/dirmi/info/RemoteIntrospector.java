@@ -33,23 +33,25 @@ import java.lang.reflect.Modifier;
 
 import org.cojen.classfile.MethodDesc;
 import org.cojen.classfile.TypeDesc;
-import org.cojen.util.IntHashMap;
 import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
 import dirmi.Idempotent;
 
+import dirmi.core.Identifier;
+
 /**
- * 
+ * Supports examination of Remote types, returning all metadata associated
+ * with it. As part of the examination, all annotations are gathered up. All
+ * examined data is cached, so repeat examinations are fast, unless the
+ * examination failed.
  *
  * @author Brian S O'Neill
  */
 public class RemoteIntrospector {
     private static final Map<Class<?>, RInfo> cInfoCache;
     private static final WeakCanonicalSet cParameterCache;
-
-    private static int cRemoteIdSequence;
 
     static {
         cInfoCache = new WeakIdentityMap();
@@ -95,7 +97,6 @@ public class RemoteIntrospector {
 
             // FIXME: capture ResponseTimeout
 
-            int methodID = 0;
             for (Method m : remote.getMethods()) {
                 if (!m.getDeclaringClass().isInterface()) {
                     continue;
@@ -114,7 +115,7 @@ public class RemoteIntrospector {
                 }
 
                 if (!methodMap.containsKey(key)) {
-                    methodMap.put(key, new RMethod(++methodID, m));
+                    methodMap.put(key, new RMethod(m));
                     continue;
                 }
 
@@ -158,8 +159,7 @@ public class RemoteIntrospector {
 
             // FIXME: check asynchronous: no response timeout
 
-            info = new RInfo(++cRemoteIdSequence, remote.getName(),
-                             new LinkedHashSet<RMethod>(methodMap.values()));
+            info = new RInfo(remote.getName(), new LinkedHashSet<RMethod>(methodMap.values()));
             cInfoCache.put(remote, info);
 
             // Now that RInfo is in the cache, call resolve to check remote
@@ -181,15 +181,15 @@ public class RemoteIntrospector {
     private static class RInfo implements RemoteInfo {
         private static final long serialVersionUID = 1L;
 
-        private final int mID;
+        private final Identifier mID;
         private final String mName;
         private final Set<RMethod> mMethods;
 
         private transient Map<String, Set<RMethod>> mMethodsByName;
-        private transient IntHashMap mMethodMap;
+        private transient Map<Identifier, RemoteMethod> mMethodMap;
 
-        RInfo(int id, String name, Set<RMethod> methods) {
-            mID = id;
+        RInfo(String name, Set<RMethod> methods) {
+            mID = Identifier.identify(this);
             mName = name;
             mMethods = Collections.unmodifiableSet(methods);
         }
@@ -198,7 +198,7 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public int getRemoteID() {
+        public Identifier getRemoteID() {
             return mID;
         }
 
@@ -254,9 +254,9 @@ public class RemoteIntrospector {
             throw new NoSuchMethodException(name);
         }
 
-        public RemoteMethod getRemoteMethod(int methodID) throws NoSuchMethodException {
+        public RemoteMethod getRemoteMethod(Identifier methodID) throws NoSuchMethodException {
             if (mMethodMap == null) {
-                IntHashMap methodMap = new IntHashMap();
+                Map methodMap = new HashMap();
                 for (RMethod method : mMethods) {
                     methodMap.put(method.getMethodID(), method);
                 }
@@ -271,7 +271,7 @@ public class RemoteIntrospector {
 
         @Override
         public int hashCode() {
-            return mName.hashCode() + mID;
+            return mName.hashCode() + mID.hashCode();
         }
 
         @Override
@@ -308,7 +308,7 @@ public class RemoteIntrospector {
     private static class RMethod implements RemoteMethod {
         private static final long serialVersionUID = 1L;
 
-        private final int mID;
+        private final Identifier mID;
         private final String mName;
         private RemoteParameter mReturnType;
         private List<RemoteParameter> mParameterTypes;
@@ -320,7 +320,14 @@ public class RemoteIntrospector {
 
         private transient Method mMethod;
 
-        RMethod(int id, Method m) {
+        RMethod(Method m) {
+            this(null, m);
+        }
+
+        RMethod(Identifier id, Method m) {
+            if (id == null) {
+                id = Identifier.identify(this);
+            }
             mID = id;
             mName = m.getName();
 
@@ -390,7 +397,7 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public int getMethodID() {
+        public Identifier getMethodID() {
             return mID;
         }
 
@@ -426,7 +433,7 @@ public class RemoteIntrospector {
 
         @Override
         public int hashCode() {
-            return mName.hashCode() + mID;
+            return mName.hashCode() + mID.hashCode();
         }
 
         @Override

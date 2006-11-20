@@ -22,7 +22,7 @@ import java.rmi.NoSuchObjectException;
 
 import dirmi.AsynchronousInvocationException;
 
-import dirmi.io.Connection;
+import dirmi.io.RemoteConnection;
 
 /**
  * 
@@ -37,7 +37,7 @@ public interface Skeleton {
      * communication failure, and so the connection should be closed.
      *
      * @param methodID ID of method in remote server
-     * @param con Connection for reading arguments and writing response.
+     * @param con RemoteConnection for reading arguments and writing response.
      * @throws IOException if thrown from connection
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
@@ -46,7 +46,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(int methodID, Connection con)
+    void invoke(Identifier methodID, RemoteConnection con)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

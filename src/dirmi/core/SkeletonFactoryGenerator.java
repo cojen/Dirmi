@@ -54,7 +54,6 @@ import dirmi.io.RemoteOutput;
  */
 public class SkeletonFactoryGenerator<R extends Remote> {
     private static final String REMOTE_FIELD_NAME = "remote";
-    private static final String SKELETON_SUPPORT_FIELD_NAME = "support";
 
     private static final Map<Class<?>, SkeletonFactory<?>> cCache;
 
@@ -109,7 +108,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         cf.setTarget("1.5");
 
         final TypeDesc remoteType = TypeDesc.forClass(mType);
-        final TypeDesc skeletonSupportType = TypeDesc.forClass(SkeletonSupport.class);
         final TypeDesc connectionType = TypeDesc.forClass(Connection.class);
         final TypeDesc remoteInType = TypeDesc.forClass(RemoteInput.class);
         final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutput.class);
@@ -118,14 +116,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add fields
         {
             cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_FIELD_NAME, remoteType);
-            cf.addField(Modifiers.PRIVATE.toFinal(true),
-                        SKELETON_SUPPORT_FIELD_NAME, skeletonSupportType);
         }
 
         // Add constructor
         {
             MethodInfo mi = cf.addConstructor
-                (Modifiers.PUBLIC, new TypeDesc[] {remoteType, skeletonSupportType});
+                (Modifiers.PUBLIC, new TypeDesc[] {remoteType});
 
             CodeBuilder b = new CodeBuilder(mi);
 
@@ -135,9 +131,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadThis();
             b.loadLocal(b.getParameter(0));
             b.storeField(REMOTE_FIELD_NAME, remoteType);
-            b.loadThis();
-            b.loadLocal(b.getParameter(1));
-            b.storeField(SKELETON_SUPPORT_FIELD_NAME, skeletonSupportType);
 
             b.returnVoid();
         }
@@ -155,18 +148,13 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         int i = 0;
         for (RemoteMethod method : methods) {
-            cases[i] = method.getMethodID();
+            // FIXME cases[i] = method.getMethodID();
             switchLabels[i] = b.createLabel();
             i++;
         }
 
         LocalVariable methodIDVar = b.getParameter(0);
         LocalVariable conVar = b.getParameter(1);
-
-        LocalVariable skeletonSupportVar = b.createLocalVariable(null, skeletonSupportType);
-        b.loadThis();
-        b.loadField(SKELETON_SUPPORT_FIELD_NAME, skeletonSupportType);
-        b.storeLocal(skeletonSupportVar);
 
         // Each case operates on the remote server first, so put it on the stack early.
         b.loadThis();
@@ -205,6 +193,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
             if (paramTypes.size() != 0) {
                 // Read parameters onto stack.
+                // FIXME
+                /*
                 b.loadLocal(skeletonSupportVar);
                 b.loadLocal(conVar);
                 b.invokeInterface(skeletonSupportType, "createRemoteInput",
@@ -215,6 +205,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 for (RemoteParameter paramType : paramTypes) {
                     CodeBuilderUtil.readParam(b, paramType, remoteInVar);
                 }
+                */
             }
 
             TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
@@ -238,6 +229,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 }
                 // Assume caller has closed connection.
             } else {
+                /* FIXME
                 b.loadLocal(skeletonSupportVar);
                 b.loadLocal(conVar);
                 b.invokeInterface(skeletonSupportType, "createRemoteOutput",
@@ -260,6 +252,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 b.loadLocal(conVar);
                 b.invokeInterface(connectionType, "close", null, null);
+                */
             }
 
             b.returnVoid();
@@ -304,6 +297,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
             b.storeLocal(throwableVar);
 
+            /* FIXME
             b.loadLocal(skeletonSupportVar);
             b.loadLocal(conVar);
             b.invokeInterface(skeletonSupportType, "createRemoteOutput",
@@ -313,6 +307,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                               null, new TypeDesc[] {throwableVar.getType()});
             b.loadLocal(conVar);
             b.invokeInterface(connectionType, "close", null, null);
+            */
             
             b.returnVoid();
         }
@@ -328,7 +323,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             throws NoSuchMethodException
         {
             mType = type;
-            mSkeletonCtor = skeletonClass.getConstructor(type, SkeletonSupport.class);
+            mSkeletonCtor = skeletonClass.getConstructor(type);
         }
 
         public Class<R> getRemoteType() {
@@ -339,10 +334,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             return mSkeletonCtor.getDeclaringClass();
         }
 
-        public Skeleton createSkeleton(R remoteServer, SkeletonSupport support) {
+        public Skeleton createSkeleton(R remoteServer) {
             Throwable error;
             try {
-                return mSkeletonCtor.newInstance(remoteServer, support);
+                return mSkeletonCtor.newInstance(remoteServer);
             } catch (InstantiationException e) {
                 error = e;
             } catch (IllegalAccessException e) {

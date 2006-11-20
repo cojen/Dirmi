@@ -23,6 +23,8 @@ import java.util.Set;
 import dirmi.Asynchronous;
 import dirmi.Idempotent;
 
+import dirmi.core.Identifier;
+
 /**
  * 
  *
@@ -35,10 +37,9 @@ public interface RemoteMethod extends Serializable {
     String getName();
 
     /**
-     * Returns a number which uniquely identifies this method within the
-     * scope of the remote interface.
+     * Returns a unique identifier for this method.
      */
-    int getMethodID();
+    Identifier getMethodID();
 
     /**
      * Returns the return type of this method, which is null if void.

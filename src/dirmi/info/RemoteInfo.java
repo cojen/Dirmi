@@ -19,6 +19,8 @@ package dirmi.info;
 import java.io.Serializable;
 import java.util.Set;
 
+import dirmi.core.Identifier;
+
 /**
  * 
  *
@@ -32,9 +34,9 @@ public interface RemoteInfo extends Serializable {
     String getName();
 
     /**
-     * Returns a number which uniquely identifies the remote interface.
+     * Returns a unique identifier for the remote interface.
      */
-    int getRemoteID();
+    Identifier getRemoteID();
 
     /**
      * Returns all remote methods in an unmodifiable set.
@@ -52,5 +54,5 @@ public interface RemoteInfo extends Serializable {
     RemoteMethod getRemoteMethod(String name, RemoteParameter... params)
         throws NoSuchMethodException;
 
-    RemoteMethod getRemoteMethod(int methodID) throws NoSuchMethodException;
+    RemoteMethod getRemoteMethod(Identifier methodID) throws NoSuchMethodException;
 }

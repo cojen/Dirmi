@@ -38,7 +38,6 @@ public interface SkeletonFactory<R extends Remote> {
 
     /**
      * @param remoteServer server implementation of Remote object
-     * @param support for accessing other Remote objects
      */
-    Skeleton createSkeleton(R remoteServer, SkeletonSupport support);
+    Skeleton createSkeleton(R remoteServer);
 }
