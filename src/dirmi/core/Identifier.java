@@ -52,7 +52,8 @@ public class Identifier implements Comparable<Identifier> {
     }
 
     /**
-     * Returns a new or existing unique identifier for the given object.
+     * Returns a new or existing unique identifier for the given object. If
+     * new, the given object is automatically registered with the identifier.
      *
      * @throws IllegalArgumentException if object is null
      */
@@ -63,7 +64,7 @@ public class Identifier implements Comparable<Identifier> {
         Identifier id = cObjectsToIdentifiers.get(obj);
         if (id == null) {
             do {
-                id = new Identifier(cRandom.nextLong(), cRandom.nextLong());
+                id = new Identifier(cRandom.nextLong());
             } while (cIdentifiersToObjects.containsKey(id));
             id = (Identifier) cIdentifiers.put(id);
             cObjectsToIdentifiers.put(obj, id);
@@ -72,10 +73,13 @@ public class Identifier implements Comparable<Identifier> {
         return id;
     }
 
+    /**
+     * Returns a deserialized identifier, which may or may not have an object
+     * registered with it.
+     */
     public static Identifier read(DataInput in) throws IOException {
-        long high = in.readLong();
-        long low = in.readLong();
-        Identifier id = new Identifier(high, low);
+        long bits = in.readLong();
+        Identifier id = new Identifier(bits);
         return canonicalIdentifier(id);
     }
 
@@ -97,12 +101,10 @@ public class Identifier implements Comparable<Identifier> {
         return cIdentifiersToObjects.get(id);
     }
 
-    private final long mHighID;
-    private final long mLowID;
+    private final long mBits;
 
-    private Identifier(long high, long low) {
-        mHighID = high;
-        mLowID = low;
+    private Identifier(long bits) {
+        mBits = bits;
     }
 
     /**
@@ -141,13 +143,12 @@ public class Identifier implements Comparable<Identifier> {
     }
 
     public void write(DataOutput out) throws IOException {
-        out.writeLong(mHighID);
-        out.writeLong(mLowID);
+        out.writeLong(mBits);
     }
 
     @Override
     public int hashCode() {
-        return (int) ((mHighID ^ (mHighID >>> 32)) ^ (mLowID ^ (mHighID >>> 32)));
+        return (int) (mBits ^ (mBits >>> 32));
     }
 
     @Override
@@ -157,19 +158,17 @@ public class Identifier implements Comparable<Identifier> {
         }
         if (obj instanceof Identifier) {
             Identifier other = (Identifier) obj;
-            return mHighID == other.mHighID && mLowID == other.mLowID;
+            return mBits == other.mBits;
         }
         return false;
     }
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder("Identifier: 00000000000000000000000000000000");
+        StringBuilder b = new StringBuilder("Identifier: 0000000000000000");
         int end = b.length();
-        String high = Long.toHexString(mHighID);
-        b.replace(end - 16 - high.length(), end - 16, high);
-        String low = Long.toHexString(mLowID);
-        b.replace(end - low.length(), end, low);
+        String bits = Long.toHexString(mBits);
+        b.replace(end - bits.length(), end, bits);
         return b.toString();
     }
 
@@ -177,23 +176,13 @@ public class Identifier implements Comparable<Identifier> {
      * Lexigraphically compares two identifiers.
      */
     public int compareTo(Identifier id) {
-	if (this == id) {
-	    return 0;
-	}
-	int result = compareLong(mHighID >>> 32, id.mHighID >>> 32);
-	if (result == 0) {
-	    result = compareLong((int) mHighID, (int) id.mHighID);
-	    if (result == 0) {
-		result = compareLong(mLowID >>> 32, id.mLowID >>> 32);
-		if (result == 0) {
-		    result = compareLong((int) mLowID, (int) id.mLowID);
-		}
-	    }
-	}
-	return result;
-    }
-
-    private int compareLong(long a, long b) {
-	return a < b ? -1 : (a > b ? 1 : 0);
+        if (this != id) {
+            if (mBits < id.mBits) {
+                return -1;
+            } else if (mBits > id.mBits) {
+                return 1;
+            }
+        }
+        return 0;
     }
 }
