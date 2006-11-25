@@ -36,7 +36,7 @@ import java.rmi.RemoteException;
  * @author Brian S O'Neill
  * @see RemoteOutputStream
  */
-public class RemoteInputStream implements RemoteInput {
+public class RemoteInputStream extends InputStream implements RemoteInput {
     private volatile InputStream mIn;
 
     public RemoteInputStream(InputStream in) {

@@ -32,7 +32,7 @@ import java.util.List;
  * @author Brian S O'Neill
  * @see RemoteInputStream
  */
-public class RemoteOutputStream implements RemoteOutput {
+public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     static final byte FALSE = 0;
     static final byte TRUE = 1;
     static final byte OK_FALSE = 2;
