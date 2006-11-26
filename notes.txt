@@ -33,7 +33,12 @@ Ideas for dirmi:
 - RemoteStub needs to be serializable. Any Remote object refs need to be
   written with object id. Upon deserialization, convert object ids back.
 
-- Support @Marshalled annotation for parameters. Automatically uses MarshalledObject.
+- Define @Marshalled annotation for method. This provides MarshalledObject
+  class loading behavior for all objects passed through method. Instead of a
+  URL and separate server for class transfer, class data is trasferred over
+  remote connection. Both client and server side of Remote interface must have
+  @Marshalled annotation in order for this to function. For added protection,
+  marshalling is off by default on client and server.
 
 ObjectRegistry:
 
