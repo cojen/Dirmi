@@ -20,27 +20,22 @@ import java.io.IOException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import dirmi.core.Identifier;
+
 /**
  * Basic interface for a bidirectional remote I/O connection.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Connection, RemoteBroker {
-    RemoteInput getRemoteInput() throws IOException;
+public interface RemoteConnection extends Connection {
+    RemoteInputStream getInputStream() throws IOException;
 
-    RemoteOutput getRemoteOutput() throws IOException;
-
-    // FIXME: add method to create identifier for any object (identifier is Externalizable)
-    // FIXME: add method to get object from identifier
-    // FIXME: dispose should work on any kind of identified object
+    RemoteOutputStream getOutputStream() throws IOException;
 
     /**
-     * Dispose an object that was read or written, rendering it unusable for
-     * future remote calls. If objects are not disposed, they are ineligible
-     * for garbage collection. Usually objects need not be explicitly disposed,
-     * since the local and remote garbage collectors do so automatically.
-     *
-     * @return true if object disposed, false if object was already disposed or is unknown
+     * Dispose a remotely identified object, rendering it unusable for future
+     * remote calls. Usually objects need not be explicitly disposed, since the
+     * local and remote garbage collectors do so automatically.
      */
-    boolean dispose(Remote remote) throws RemoteException;
+    void dispose(Identifier id) throws RemoteException;
 }

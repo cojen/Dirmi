@@ -21,9 +21,10 @@ import java.rmi.Remote;
 import dirmi.info.RemoteInfo;
 
 /**
- * 
+ * Produces new {@link Skeleton} instances for server-side Remote objects.
  *
  * @author Brian S O'Neill
+ * @see SkeletonFactoryGenerator
  */
 public interface SkeletonFactory<R extends Remote> {
     /**

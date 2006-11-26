@@ -22,9 +22,12 @@ import java.rmi.RemoteException;
 import dirmi.info.RemoteInfo;
 
 /**
- * 
+ * Produces new Stub instances for client-side Remote objects. A Stub instance
+ * marshalls requests to a remote {@link Skeleton} which in turn calls the real
+ * method. Any response is marshalled back for the Stub to decode.
  *
  * @author Brian S O'Neill
+ * @see StubFactoryGenerator
  */
 public interface StubFactory<R extends Remote> {
     /**
@@ -47,9 +50,5 @@ public interface StubFactory<R extends Remote> {
      */
     boolean isStub(R stub);
 
-    /**
-     * @return true if stub disposed, false if stub was already
-     * disposed or is unknown
-     */
-    boolean dispose(R stub) throws RemoteException;
+    void dispose(R stub) throws RemoteException;
 }

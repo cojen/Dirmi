@@ -25,6 +25,13 @@ import java.io.Serializable;
  */
 public interface RemoteParameter extends Serializable {
     /**
+     * Returns true if parameter does not need to be serialized such that it
+     * can be back referenced. If parameter is an array, elements of array must
+     * be sharable.
+     */
+    boolean isUnshared();
+
+    /**
      * Returns true if parameter is remote, false if serialized.
      */
     boolean isRemote();

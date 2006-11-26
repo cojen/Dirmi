@@ -32,27 +32,17 @@ public interface RemoteInput extends ObjectInput, Closeable {
      * Reads the length and of contents the String from a packed format similar
      * to UTF-8.
      */
-    String readString() throws IOException;
+    String readUnsharedString() throws IOException;
 
-    Boolean readBooleanObj() throws IOException;
+    /**
+     * Reads an unshared Serializable or Remote object.
+     */
+    Object readUnshared() throws IOException, ClassNotFoundException;
 
-    Byte readByteObj() throws IOException;
-
-    Integer readUnsignedByteObj() throws IOException;
-
-    Short readShortObj() throws IOException;
-
-    Integer readUnsignedShortObj() throws IOException;
-
-    Character readCharObj() throws IOException;
-
-    Integer readIntObj() throws IOException;
-
-    Long readLongObj() throws IOException;
-
-    Float readFloatObj() throws IOException;
-
-    Double readDoubleObj() throws IOException;
+    /**
+     * Reads a sharable Serializable or Remote object.
+     */
+    Object readObject() throws IOException, ClassNotFoundException;
 
     /**
      * Reads OK return marker or throws exception originating from remote

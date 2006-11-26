@@ -31,7 +31,7 @@ import org.cojen.util.WeakIdentityMap;
 import org.cojen.util.WeakValuedHashMap;
 
 /**
- * Object which uniquely identifies an object. All Identifier instances
+ * Object which uniquely identifies another object. All Identifier instances
  * themselves are identity comparable.
  *
  * @author Brian S O'Neill
@@ -165,7 +165,7 @@ public class Identifier implements Comparable<Identifier> {
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder("Identifier: 0000000000000000");
+        StringBuilder b = new StringBuilder("0000000000000000");
         int end = b.length();
         String bits = Long.toHexString(mBits);
         b.replace(end - bits.length(), end, bits);

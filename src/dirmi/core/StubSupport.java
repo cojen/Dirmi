@@ -21,20 +21,25 @@ import java.rmi.RemoteException;
 import dirmi.io.RemoteConnection;
 
 /**
- * 
+ * Object passed to a Stub instance in order for it to actually communicate
+ * with a remote object.
  *
  * @author Brian S O'Neill
  * @see StubFactory
  */
 public interface StubSupport {
     /**
-     * @param methodID ID of method in remote object
-     * @return RemoteConnection for writing arguments and reading response. If call
-     * is synchronous, output is flushed after arguments are written, and then
-     * connection is read from. If call is asynchronous, connection is closed
-     * after arguments are written.
+     * @return RemoteConnection for writing method identifier and arguments,
+     * and for reading response. If call is synchronous, output is flushed
+     * after arguments are written, and then connection is read from. If call
+     * is asynchronous, connection is closed after arguments are written.
      */
-    RemoteConnection invoke(Identifier methodID) throws RemoteException;
+    RemoteConnection invoke() throws RemoteException;
 
+    /**
+     * Dispose remotely identified object, rendering it unusable for future
+     * remote calls. Usually objects need not be explicitly disposed, since the
+     * local and remote garbage collectors do so automatically.
+     */
     void dispose() throws RemoteException;
 }

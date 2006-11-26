@@ -25,6 +25,8 @@ import java.rmi.RemoteException;
 
 import org.cojen.util.IntHashMap;
 
+import dirmi.core.Identifier;
+
 /**
  * 
  *
@@ -52,7 +54,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         mConnections = new IntHashMap();
     }
 
-    /* TODO
+    /* FIXME
 
     RemoteConnection weakly registers itself with a timer, to fire off lease
     renewals. Lease renewal rate is half the lease duration.
@@ -90,6 +92,9 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         }
     }
 
+    /**
+     * @param con initiating connection, which is closed as a side-effect
+     */
     private RemoteConnection connected(Connection con) throws IOException {
         // The initial connection is used for user input/output streams on the
         // RemoteConnection. Acquire two more connections, one for read/write
@@ -98,8 +103,14 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         con.getOutputStream().write(REASON_INITIATE);
         con.getOutputStream().flush();
 
-        RemoteInputStream rin = new RemoteInputStream(con.getInputStream());
-        int conId = rin.readInt();
+        int conId;
+        {
+            RemoteInputStream rin = new RemoteInputStream(con.getInputStream());
+            conId = rin.readInt();
+        }
+
+        // Got the connection ID, so initiating connection no longer needed.
+        con.close();
 
         Connection remoteObjCon = mBroker.connecter().connect();
         {
@@ -120,6 +131,10 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         return new ConImpl(conId, remoteObjCon, leaseRenewalCon);
     }
 
+    /**
+     * @param con initiating connection, which is closed as a side-effect
+     * @return ready RemoteConnection or null if none
+     */
     private RemoteConnection accepted(Connection con) throws IOException {
         RemoteInputStream rin = new RemoteInputStream(con.getInputStream());
 
@@ -144,7 +159,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
                 conImpl = (ConImpl) mConnections.get(conId);
             }
             if (conImpl != null) {
-                conImpl.mRemoteObjCon = con;
+                conImpl.setRemoteObjectConnection(con);
             }
         } else if (reason == REASON_LEASE_RENEWAL) {
             int conId = rin.readInt();
@@ -152,7 +167,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
                 conImpl = (ConImpl) mConnections.get(conId);
             }
             if (conImpl != null) {
-                conImpl.mLeaseRenewalCon = con;
+                conImpl.setLeaseRenewalConnection(con);
             }
         }
 
@@ -166,21 +181,27 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
     }
 
     private class ConImpl implements RemoteConnection {
-        final int mConId;
-        Connection mRemoteObjCon;
-        Connection mLeaseRenewalCon;
+        private final int mConId;
+        private Connection mRemoteObjCon;
+        private Connection mLeaseRenewalCon;
+
+        private RemoteInputStream mRemoteIn;
+        private RemoteOutputStream mRemoteOut;
 
         ConImpl(int conId) {
             mConId = conId;
         }
 
-        ConImpl(int conId, Connection remoteObjCon, Connection leaseRenewalCon) {
+        ConImpl(int conId, Connection remoteObjCon, Connection leaseRenewalCon)
+            throws IOException
+        {
             mConId = conId;
-            mRemoteObjCon = remoteObjCon;
-            mLeaseRenewalCon = leaseRenewalCon;
+            setRemoteObjectConnection(remoteObjCon);
+            setLeaseRenewalConnection(leaseRenewalCon);
         }
 
         public void close() throws IOException {
+            mConnections.remove(mConId);
             try {
                 mLeaseRenewalCon.close();
             } finally {
@@ -188,39 +209,27 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
             }
         }
 
-        public InputStream getInputStream() throws IOException {
-            // TODO
-            return null;
+        public RemoteInputStream getInputStream() throws IOException {
+            return mRemoteIn;
         }
 
-        public OutputStream getOutputStream() throws IOException {
-            // TODO
-            return null;
+        public RemoteOutputStream getOutputStream() throws IOException {
+            return mRemoteOut;
         }
 
-        public RemoteInput getRemoteInput() throws IOException {
-            // TODO
-            return null;
+        public void dispose(Identifier id) throws RemoteException {
+            // FIXME: cancel lease
+            // FIXME: implement
         }
 
-        public RemoteOutput getRemoteOutput() throws IOException {
-            // TODO
-            return null;
+        void setRemoteObjectConnection(Connection con) throws IOException {
+            mRemoteObjCon = con;
+            mRemoteIn = new RemoteInputStream(con.getInputStream());
+            mRemoteOut = new RemoteOutputStream(con.getOutputStream());
         }
 
-        public RemoteConnecter connecter() {
-            return PrincipalRemoteBroker.this.connecter();
-        }
-
-        public RemoteAccepter accepter() {
-            return PrincipalRemoteBroker.this.accepter();
-        }
-
-        public boolean dispose(Remote remote) throws RemoteException {
-            // TODO: cancel lease
-
-            // TODO
-            return false;
+        void setLeaseRenewalConnection(Connection con) {
+            mLeaseRenewalCon = con;
         }
 
         boolean isReady() {

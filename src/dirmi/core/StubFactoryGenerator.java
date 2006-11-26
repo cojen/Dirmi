@@ -16,6 +16,7 @@
 
 package dirmi.core;
 
+import java.io.DataOutput;
 import java.io.IOException;
 
 import java.lang.reflect.Constructor;
@@ -51,20 +52,18 @@ import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
 
 import dirmi.io.RemoteConnection;
-import dirmi.io.RemoteInput;
-import dirmi.io.RemoteOutput;
+import dirmi.io.RemoteInputStream;
+import dirmi.io.RemoteOutputStream;
 
 /**
- * 
+ * Generates {@link StubFactory} instances for any given Remote type.
  *
  * @author Brian S O'Neill
  */
 public class StubFactoryGenerator<R extends Remote> {
     private static final String STUB_SUPPORT_FIELD_NAME = "support";
-    private static final String METHOD_ID_FIELD_PREFIX = "method_";
 
     // Method name ends with '$' so as not to conflict with user method.
-    private static final String INIT_METHOD_NAME = "init$";
     private static final String DISPOSE_METHOD_NAME = "dispose$";
 
     private static final Map<Object, StubFactory<?>> cCache;
@@ -110,18 +109,8 @@ public class StubFactoryGenerator<R extends Remote> {
     private StubFactory<R> generateFactory() {
         Class<? extends R> stubClass = generateStub();
 
-        // Prepare identifiers for init method.
-        Identifier[] ids = new Identifier[mRemoteInfo.getRemoteMethods().size()];
-        int methodOrdinal = -1;
-        for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
-            methodOrdinal++;
-            ids[methodOrdinal] = method.getMethodID();
-        }
-
         try {
-            // Call static method to initialize method identifiers.
-            stubClass.getMethod(INIT_METHOD_NAME, Identifier[].class).invoke(null, (Object) ids);
-
+            CodeBuilderUtil.invokeMethodIDInitMethod(stubClass, mRemoteInfo);
             return new Factory<R>(mType, stubClass);
         } catch (IllegalAccessException e) {
             throw new Error(e);
@@ -146,11 +135,10 @@ public class StubFactoryGenerator<R extends Remote> {
 
         final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
-        final TypeDesc identifierArrayType = identifierType.toArrayType();
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
         final TypeDesc remoteConnectionType = TypeDesc.forClass(RemoteConnection.class);
-        final TypeDesc remoteInType = TypeDesc.forClass(RemoteInput.class);
-        final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutput.class);
+        final TypeDesc remoteInType = TypeDesc.forClass(RemoteInputStream.class);
+        final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutputStream.class);
         final TypeDesc classType = TypeDesc.forClass(Class.class);
         final TypeDesc methodType = TypeDesc.forClass(Method.class);
         final TypeDesc noSuchObjectExType = TypeDesc.forClass(NoSuchObjectException.class);
@@ -162,48 +150,11 @@ public class StubFactoryGenerator<R extends Remote> {
             cf.addField(Modifiers.PRIVATE.toVolatile(true).toTransient(true),
                         STUB_SUPPORT_FIELD_NAME, stubSupportType);
 
-            int methodOrdinal = -1;
-            for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
-                methodOrdinal++;
-                cf.addField(Modifiers.PRIVATE.toStatic(true),
-                            METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-            }
+            CodeBuilderUtil.addMethodIDFields(cf, mRemoteInfo);
         }
 
         // Add static method to assign identifiers.
-        {
-            MethodInfo mi = cf.addMethod
-                (Modifiers.PUBLIC.toStatic(true), INIT_METHOD_NAME,
-                 null, new TypeDesc[] {identifierArrayType});
-
-            CodeBuilder b = new CodeBuilder(mi);
-
-            int methodOrdinal = -1;
-            for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
-                methodOrdinal++;
-
-                if (methodOrdinal == 0) {
-                    // Crude check to ensure init is called at most once.
-                    b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-                    Label doInit = b.createLabel();
-                    b.ifNullBranch(doInit, true);
-
-                    b.newObject(TypeDesc.forClass(IllegalStateException.class));
-                    b.dup();
-                    b.invokeConstructor(TypeDesc.forClass(IllegalStateException.class), null);
-                    b.throwObject();
-
-                    doInit.setLocation();
-                }
-
-                b.loadLocal(b.getParameter(0));
-                b.loadConstant(methodOrdinal);
-                b.loadFromArray(identifierType);
-                b.storeStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-            }
-
-            b.returnVoid();
-        }
+        CodeBuilderUtil.addMethodIDInitMethod(cf, mRemoteInfo);
 
         // Add constructor
         {
@@ -224,8 +175,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
         // Add dispose method.
         {
-            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, DISPOSE_METHOD_NAME,
-                                         TypeDesc.BOOLEAN, null);
+            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, DISPOSE_METHOD_NAME, null, null);
             mi.setModifiers(mi.getModifiers().toSynchronized(true));
             mi.addException(remoteExType);
 
@@ -233,22 +183,20 @@ public class StubFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            LocalVariable supportVar = b.createLocalVariable(null, stubSupportType);
+            b.storeLocal(supportVar);
+            b.loadLocal(supportVar);
             Label alreadyDisposed = b.createLabel();
             b.ifNullBranch(alreadyDisposed, true);
 
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadLocal(supportVar);
             b.invokeInterface(stubSupportType, "dispose", null, null);
-
             b.loadThis();
             b.loadNull();
             b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-            b.loadConstant(true);
-            b.returnValue(TypeDesc.BOOLEAN);
 
             alreadyDisposed.setLocation();
-            b.loadConstant(false);
-            b.returnValue(TypeDesc.BOOLEAN);
+            b.returnVoid();
         }
 
         // Implement all methods provided by server, including ones not defined
@@ -294,33 +242,32 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Create connection for invoking remote method.
             b.loadLocal(stubSupportVar);
-            b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-            b.invokeInterface(stubSupportType, "invoke", remoteConnectionType,
-                              new TypeDesc[] {identifierType});
+            b.invokeInterface(stubSupportType, "invoke", remoteConnectionType, null);
             LocalVariable conVar = b.createLocalVariable(null, remoteConnectionType);
             b.storeLocal(conVar);
 
+            // Write method identifier to connection.
+            b.loadLocal(conVar);
+            b.invokeInterface(remoteConnectionType, "getOutputStream", remoteOutType, null);
+            LocalVariable remoteOutVar = b.createLocalVariable(null, remoteOutType);
+            b.storeLocal(remoteOutVar);
+
+            CodeBuilderUtil.loadMethodID(b, methodOrdinal);
+            b.loadLocal(remoteOutVar);
+            b.invokeVirtual(identifierType, "write", null,
+                            new TypeDesc[] {TypeDesc.forClass(DataOutput.class)});
+
             if (paramDescs.length > 0) {
-                // TODO: Determine if no object parameters are shared. If same
-                // object type is used more than once, then it might be shared.
-                // In that case, always use object writing methods, which
-                // forces the use of ObjectOutputStream.
-
                 // Write parameters to connection.
-                b.loadLocal(conVar);
-                b.invokeInterface(remoteConnectionType, "getRemoteOutput", remoteOutType, null);
-                LocalVariable remoteOutVar = b.createLocalVariable(null, remoteOutType);
-                b.storeLocal(remoteOutVar);
-
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
-                    b.loadLocal(b.getParameter(i++));
-                    CodeBuilderUtil.writeParam(b, paramType, remoteOutVar);
+                    CodeBuilderUtil.writeParam(b, paramType, remoteOutVar, b.getParameter(i));
+                    i++;
                 }
             }
 
-            b.loadLocal(conVar);
             if (method.isAsynchronous()) {
+                b.loadLocal(conVar);
                 b.invokeInterface(remoteConnectionType, "close", null, null);
                 if (returnDesc != null) {
                     // Asynchronous method should not have a return value, but
@@ -350,16 +297,17 @@ public class StubFactoryGenerator<R extends Remote> {
                     }
                 }
             } else {
-                b.invokeInterface(remoteConnectionType, "flush", null, null);
+                b.loadLocal(remoteOutVar);
+                b.invokeVirtual(remoteOutType, "flush", null, null);
                 
                 // Read response.
                 b.loadLocal(conVar);
-                b.invokeInterface(remoteConnectionType, "getRemoteInput", remoteInType, null);
+                b.invokeInterface(remoteConnectionType, "getInputStream", remoteInType, null);
                 LocalVariable remoteInVar = b.createLocalVariable(null, remoteInType);
                 b.storeLocal(remoteInVar);
 
                 b.loadLocal(remoteInVar);
-                b.invokeInterface(remoteInType, "readOk", TypeDesc.BOOLEAN, null);
+                b.invokeVirtual(remoteInType, "readOk", TypeDesc.BOOLEAN, null);
 
                 if (returnDesc != TypeDesc.BOOLEAN) {
                     b.pop();
@@ -488,9 +436,9 @@ public class StubFactoryGenerator<R extends Remote> {
             return stub != null && getStubClass().isInstance(stub);
         }
 
-        public boolean dispose(R stub) throws RemoteException {
+        public void dispose(R stub) throws RemoteException {
             try {
-                return (Boolean) mDisposeMethod.invoke(stub, (Object[]) null);
+                mDisposeMethod.invoke(stub, (Object[]) null);
             } catch (IllegalArgumentException e) {
                 // Assume R is not a valid stub
             } catch (IllegalAccessException e) {
@@ -508,7 +456,6 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
                 throw new RemoteException(cause.getMessage(), cause);
             }
-            return false;
         }
     }
 }

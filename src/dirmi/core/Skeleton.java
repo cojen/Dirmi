@@ -25,19 +25,22 @@ import dirmi.AsynchronousInvocationException;
 import dirmi.io.RemoteConnection;
 
 /**
- * 
+ * A Skeleton instance wraps a server-side Remote object, unmarshalls client
+ * requests, and invokes server-side methods. Any response is marshalled back
+ * to the client.
  *
  * @author Brian S O'Neill
+ * @see SkeletonFactory
  */
 public interface Skeleton {
     /**
-     * Invoke method in RemoteServer instance. Any exception thrown from the
+     * Invoke method in server-side instance. Any exception thrown from the
      * invoked method is written to the connection, unless method is
      * asynchronous. Any other exception thrown from this method indicates a
      * communication failure, and so the connection should be closed.
      *
-     * @param methodID ID of method in remote server
-     * @param con RemoteConnection for reading arguments and writing response.
+     * @param con RemoteConnection for reading method identifier and arguments,
+     * and for writing response.
      * @throws IOException if thrown from connection
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
@@ -46,7 +49,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(Identifier methodID, RemoteConnection con)
+    void invoke(RemoteConnection con)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

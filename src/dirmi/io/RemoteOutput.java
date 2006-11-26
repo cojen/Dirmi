@@ -44,47 +44,17 @@ public interface RemoteOutput extends ObjectOutput, Flushable, Closeable {
      *
      * @param str string of any length or null
      */
-    void writeString(String str) throws IOException;
+    void writeUnsharedString(String str) throws IOException;
 
     /**
-     * Writes an unshared Boolean object.
+     * Writes an unshared Serializable or Remote object.
      */
-    void writeBooleanObj(Boolean v) throws IOException;
+    void writeUnshared(Object obj) throws IOException;
 
     /**
-     * Writes an unshared Byte object.
+     * Writes a sharable Serializable or Remote object.
      */
-    void writeByteObj(Byte v) throws IOException;
-
-    /**
-     * Writes an unshared Short object.
-     */
-    void writeShortObj(Short v) throws IOException;
-
-    /**
-     * Writes an unshared Character object.
-     */
-    void writeCharObj(Character v) throws IOException;
-
-    /**
-     * Writes an unshared Integer object.
-     */
-    void writeIntObj(Integer v) throws IOException;
-
-    /**
-     * Writes an unshared Long object.
-     */
-    void writeLongObj(Long v) throws IOException;
-
-    /**
-     * Writes an unshared Float object.
-     */
-    void writeFloatObj(Float v) throws IOException;
-
-    /**
-     * Writes an unshared Double object.
-     */
-    void writeDoubleObj(Double v) throws IOException;
+    void writeObject(Object obj) throws IOException;
 
     /**
      * Writes OK marker, indicating method completed with no exceptions.

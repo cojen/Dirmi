@@ -42,9 +42,23 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     static final byte NOT_NULL = 6;
 
     private volatile OutputStream mOut;
+    private final String mLocalAddress;
 
+    /**
+     * @param out stream to wrap
+     */
     public RemoteOutputStream(OutputStream out) {
         mOut = out;
+        mLocalAddress = null;
+    }
+
+    /**
+     * @param out stream to wrap
+     * @param localAddress optional local address to stitch into stack traces sent to client.
+     */
+    public RemoteOutputStream(OutputStream out, String localAddress) {
+        mOut = out;
+        mLocalAddress = localAddress;
     }
 
     public void write(int b) throws IOException {
@@ -88,7 +102,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     }
 
     public void writeLong(long v) throws IOException {
-        writeInt((int) v >> 32);
+        writeInt((int) (v >> 32));
         writeInt((int) v);
     }
 
@@ -160,7 +174,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     /**
      * @param str string of any length or null
      */
-    public void writeString(String str) throws IOException {
+    public void writeUnsharedString(String str) throws IOException {
         if (str == null) {
             mOut.write(NULL);
         }
@@ -225,75 +239,19 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
         }
     }
 
-    public void writeBooleanObj(Boolean v) throws IOException {
-        mOut.write(v == null ? NULL : (v ? TRUE : FALSE));
-    }
-
-    public void writeByteObj(Byte v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeByte(v);
-        }
-    }
-
-    public void writeShortObj(Short v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeShort(v);
-        }
-    }
-
-    public void writeCharObj(Character v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeChar(v);
-        }
-    }
-
-    public void writeIntObj(Integer v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeInt(v);
-        }
-    }
-
-    public void writeLongObj(Long v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeLong(v);
-        }
-    }
-
-    public void writeFloatObj(Float v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeFloat(v);
-        }
-    }
-
-    public void writeDoubleObj(Double v) throws IOException {
-        if (v == null) {
-            mOut.write(NULL);
-        } else {
-            writeDouble(v);
-        }
+    public void writeUnshared(Object obj) throws IOException {
+        getObjectOutputStream().writeUnshared(obj);
     }
 
     public void writeObject(Object obj) throws IOException {
-        getObjectOutput().writeObject(obj);
+        getObjectOutputStream().writeObject(obj);
     }
 
-    private ObjectOutput getObjectOutput() throws IOException {
-        if (!(mOut instanceof ObjectOutput)) {
+    private ObjectOutputStream getObjectOutputStream() throws IOException {
+        if (!(mOut instanceof ObjectOutputStream)) {
             mOut = new ObjectOutputStream(mOut);
         }
-        return (ObjectOutput) mOut;
+        return (ObjectOutputStream) mOut;
     }
 
     public void writeOk() throws IOException {
@@ -320,9 +278,10 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
         // Element zero is root cause.
         collectChain(chain, t);
 
-        writeVarUnsignedInt(chain.size());
+        ObjectOutput out = getObjectOutputStream();
+        out.writeObject(mLocalAddress);
 
-        ObjectOutput out = getObjectOutput();
+        writeVarUnsignedInt(chain.size());
 
         for (int i=0; i<chain.size(); i++) {
             Throwable sub = chain.get(i);
@@ -334,8 +293,16 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
         // Ensure caller gets something before we try to serialize the whole Throwable.
         out.flush();
 
-        // Write the Throwable in all its glory.
-        out.writeObject(t);
+        try {
+            // Write the Throwable in all its glory.
+            out.writeObject(t);
+        } finally {
+            try {
+                out.close();
+            } catch (IOException e) {
+                // Don't care.
+            }
+        }
     }
 
     private void collectChain(List<Throwable> chain, Throwable t) {

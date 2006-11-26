@@ -38,9 +38,23 @@ import java.rmi.RemoteException;
  */
 public class RemoteInputStream extends InputStream implements RemoteInput {
     private volatile InputStream mIn;
+    private final String mRemoteAddress;
 
+    /**
+     * @param in stream to wrap
+     */
     public RemoteInputStream(InputStream in) {
         mIn = in;
+        mRemoteAddress = null;
+    }
+
+    /**
+     * @param in stream to wrap
+     * @param remoteAddress optional remote address to stitch into stack traces from server.
+     */
+    public RemoteInputStream(InputStream in, String remoteAddress) {
+        mIn = in;
+        mRemoteAddress = remoteAddress;
     }
 
     public void readFully(byte b[]) throws IOException {
@@ -222,7 +236,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         return new String(chararr, 0, chararr_count);
     }
 
-    public String readString() throws IOException {
+    public String readUnsharedString() throws IOException {
         Integer lengthObj = readVarUnsignedInteger();
         if (lengthObj == null) {
             return null;
@@ -283,79 +297,12 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         return new String(value);
     }
 
-    public Boolean readBooleanObj() throws IOException {
-        int b = mIn.read();
-        if (b < 0) {
-            throw new EOFException();
-        }
-        return (b == RemoteOutputStream.NULL) ? null : (b != RemoteOutputStream.FALSE);
-    }
-
-    public Byte readByteObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readByte();
-    }
-
-    public Integer readUnsignedByteObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readUnsignedByte();
-    }
-
-    public Short readShortObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readShort();
-    }
-
-    public Integer readUnsignedShortObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readUnsignedShort();
-    }
-
-    public Character readCharObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readChar();
-    }
-
-    public Integer readIntObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readInt();
-    }
-
-    public Long readLongObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readLong();
-    }
-
-    public Float readFloatObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readFloat();
-    }
-
-    public Double readDoubleObj() throws IOException {
-        if (readByte() == RemoteOutputStream.NULL) {
-            return null;
-        }
-        return readDouble();
+    public Object readUnshared() throws IOException, ClassNotFoundException {
+        return getObjectInputStream().readUnshared();
     }
 
     public Object readObject() throws IOException, ClassNotFoundException {
-        return getObjectInput().readObject();
+        return getObjectInputStream().readObject();
     }
 
     public int read() throws IOException {
@@ -378,11 +325,11 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         return mIn.available();
     }
 
-    private ObjectInput getObjectInput() throws IOException {
-        if (!(mIn instanceof ObjectInput)) {
+    private ObjectInputStream getObjectInputStream() throws IOException {
+        if (!(mIn instanceof ObjectInputStream)) {
             mIn = new ObjectInputStream(mIn);
         }
-        return (ObjectInput) mIn;
+        return (ObjectInputStream) mIn;
     }
 
     private Integer readVarUnsignedInteger() throws IOException {
@@ -427,6 +374,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
 
     public boolean readOk() throws RemoteException, Throwable {
         List<ThrowableInfo> chain = null;
+        String serverLocalAddress = null;
         Throwable t;
         try {
             int v = mIn.read();
@@ -434,11 +382,12 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
                 return v == RemoteOutputStream.OK_TRUE;
             }
 
+            ObjectInput in = getObjectInputStream();
+            serverLocalAddress = (String) in.readObject();
+
             int chainLength = readVarUnsignedInteger();
             // Element zero is root cause.
             chain = new ArrayList<ThrowableInfo>(chainLength);
-
-            ObjectInput in = getObjectInput();
 
             for (int i=0; i<chainLength; i++) {
                 chain.add(new ThrowableInfo(in));
@@ -475,12 +424,30 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
             localTraceLength--;
             localTraceOffest++;
         }
+
+        // Add some fake traces in the middle which clearly indicate that a
+        // method was invoked remotely. Also include any addresses.
+        StackTraceElement[] mid = null;
+        if (mRemoteAddress == null && serverLocalAddress == null) {
+            mid = new StackTraceElement[] {
+                new StackTraceElement("Remote Method Invocation", "", null, -1)
+            };
+        } else {
+            mid = new StackTraceElement[] {
+                new StackTraceElement
+                ("Remote Method Invocation", "server", serverLocalAddress, -1),
+                new StackTraceElement
+                ("Remote Method Invocation", "client", mRemoteAddress, -1)
+            };
+        }
+
         if (localTraceLength >= 1) {
             StackTraceElement[] combined;
-            combined = new StackTraceElement[remoteTrace.length + localTraceLength];
+            combined = new StackTraceElement[remoteTrace.length + mid.length + localTraceLength];
             System.arraycopy(remoteTrace, 0, combined, 0, remoteTrace.length);
+            System.arraycopy(mid, 0, combined, remoteTrace.length, mid.length);
             System.arraycopy(localTrace, localTraceOffest,
-                             combined, remoteTrace.length, localTraceLength);
+                             combined, remoteTrace.length + mid.length, localTraceLength);
             t.setStackTrace(combined);
         }
 

@@ -16,15 +16,22 @@
 
 package dirmi.core;
 
+import java.lang.reflect.InvocationTargetException;
+
 import java.rmi.Remote;
 
 import java.util.Collection;
 
+import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
+import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
+import org.cojen.classfile.MethodInfo;
+import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
 import dirmi.info.RemoteInfo;
+import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
 
 /**
@@ -33,113 +40,98 @@ import dirmi.info.RemoteParameter;
  * @author Brian S O'Neill
  */
 class CodeBuilderUtil {
+    static final String METHOD_ID_FIELD_PREFIX = "method_";
+
+    // Method name ends with '$' so as not to conflict with user method.
+    static final String INIT_METHOD_NAME = "init$";
+
     /**
-     * Generates code to read a parameter from a RemoteInput, leaving it on the
-     * stack. RemoteSupport is used for processing Remote parameters. Generated
-     * code may throw an IOException, NoSuchObjectException, or
-     * ClassNotFoundException.
+     * Generates code to read a parameter from a RemoteInput, cast it, and
+     * leave it on the stack. Generated code may throw an IOException,
+     * NoSuchObjectException, or ClassNotFoundException.
      *
-     * @param paramType type of parameter to read
+     * @param param type of parameter to read
      * @param remoteInVar variable which references a RemoteInput instance
      */
     static void readParam(CodeBuilder b,
-                          RemoteParameter paramType,
+                          RemoteParameter param,
                           LocalVariable remoteInVar)
     {
-        if (paramType.isRemote()) {
-            readRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                            remoteInVar);
-            return;
-        }
+        TypeDesc type = getTypeDesc(param);
 
-        TypeDesc type = TypeDesc.forClass(paramType.getSerializedType());
+        String methodName;
+        TypeDesc methodType;
+        TypeDesc castType;
 
         if (type.isPrimitive()) {
-            String typeName = type.getFullName();
-            typeName = Character.toUpperCase(typeName.charAt(0)) + typeName.substring(1);
-            String methodName = "read" + typeName;
-            b.loadLocal(remoteInVar);
-            b.invokeInterface(remoteInVar.getType(), methodName, type, null);
-            return;
-        }
-
-        // Read ordinary serialized object.
-        b.loadLocal(remoteInVar);
-        b.invokeInterface(remoteInVar.getType(), "readObject", TypeDesc.OBJECT, null);
-        b.checkCast(type);
-    }
-
-    private static void readRemoteParam(CodeBuilder b,
-                                        int dimensions, RemoteInfo info,
-                                        LocalVariable remoteInVar)
-    {
-        if (dimensions <= 0) {
-            b.loadLocal(remoteInVar);
-            b.invokeInterface(remoteInVar.getType(), "readRemote",
-                              TypeDesc.forClass(Remote.class), null);
-            b.checkCast(TypeDesc.forClass(info.getName()));
-            return;
-        }
-
-        /* TODO: support arrays of remotes using regular object serialization?
-        b.loadLocal(remoteInVar);
-        b.invokeInterface(remoteInVar.getType(), "readLength", TypeDesc.INT, null);
-
-        do {
-            if (dimensions > 0) {
+            methodName = type.getRootName();
+            methodName = "read" +
+                Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
+            methodType = type;
+            castType = null;
+        } else if (param.isUnshared()) {
+            if (TypeDesc.STRING == type) {
+                methodName = "readUnsharedString";
+                methodType = type;
+                castType = null;
+            } else {
+                methodName = "readUnshared";
+                methodType = TypeDesc.OBJECT;
+                castType = type;
             }
-            
-            dimensions--;
-        } while (dimensions > 0);
-        */
+        } else {
+            methodName = "readObject";
+            methodType = TypeDesc.OBJECT;
+            castType = type;
+        }
+
+        b.loadLocal(remoteInVar);
+        b.invokeVirtual(remoteInVar.getType(), methodName, methodType, null);
+
+        if (castType != null && castType != TypeDesc.OBJECT) {
+            b.checkCast(type);
+        }
     }
 
     /**
-     * Generates code to write a parameter to a RemoteOutput.  RemoteSupport is
-     * used for processing Remote parameters. Generated code may throw an
-     * IOException.
+     * Generates code to write a parameter to a RemoteOutput. Generated code
+     * may throw an IOException.
      *
-     * @param paramType type of parameter to write
+     * @param param type of parameter to write
      * @param remoteOutVar variable which references a RemoteOutput instance
+     * @param paramVar variable which references parameter value
      */
     static void writeParam(CodeBuilder b,
-                           RemoteParameter paramType,
-                           LocalVariable remoteOutVar)
+                           RemoteParameter param,
+                           LocalVariable remoteOutVar,
+                           LocalVariable paramVar)
     {
-        if (paramType.isRemote()) {
-            writeRemoteParam(b, paramType.getRemoteDimensions(), paramType.getRemoteInfoType(),
-                             remoteOutVar);
-            return;
-        }
+        TypeDesc type = getTypeDesc(param);
 
-        TypeDesc type = TypeDesc.forClass(paramType.getSerializedType());
+        String methodName;
+        TypeDesc methodType;
 
         if (type.isPrimitive()) {
-            b.loadLocal(remoteOutVar);
-            b.swap();
-            b.invokeInterface(remoteOutVar.getType(), "write", null, new TypeDesc[] {type});
-            return;
+            methodName = type.getRootName();
+            methodName = "write" +
+                Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
+            methodType = type;
+        } else if (param.isUnshared()) {
+            if (TypeDesc.STRING == type) {
+                methodName = "writeUnsharedString";
+                methodType = type;
+            } else {
+                methodName = "writeUnshared";
+                methodType = TypeDesc.OBJECT;
+            }
+        } else {
+            methodName = "writeObject";
+            methodType = TypeDesc.OBJECT;
         }
 
-        // Write ordinary serialized object.
         b.loadLocal(remoteOutVar);
-        b.swap();
-        b.invokeInterface(remoteOutVar.getType(), "write", null, new TypeDesc[] {TypeDesc.OBJECT});
-    }
-
-    private static void writeRemoteParam(CodeBuilder b,
-                                         int dimensions, RemoteInfo info,
-                                         LocalVariable remoteOutVar)
-    {
-        if (dimensions <= 0) {
-            b.loadLocal(remoteOutVar);
-            b.swap();
-            b.invokeInterface(remoteOutVar.getType(), "write", null,
-                              new TypeDesc[] {TypeDesc.forClass(Remote.class)});
-            return;
-        }
-
-        // TODO: support arrays of remotes using regular object serialization?
+        b.loadLocal(paramVar);
+        b.invokeVirtual(remoteOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
     }
 
     static TypeDesc getTypeDesc(RemoteParameter param) {
@@ -164,5 +156,72 @@ class CodeBuilderUtil {
             paramDescs[j++] = getTypeDesc(param);
         }
         return paramDescs;
+    }
+
+    static void addMethodIDFields(ClassFile cf, RemoteInfo info) {
+        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
+        int methodOrdinal = -1;
+        for (RemoteMethod method : info.getRemoteMethods()) {
+            methodOrdinal++;
+            cf.addField(Modifiers.PRIVATE.toStatic(true),
+                        METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
+        }
+    }
+
+    static void loadMethodID(CodeBuilder b, int methodOrdinal) {
+        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
+        b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
+    }
+
+    static void addMethodIDInitMethod(ClassFile cf, RemoteInfo info) {
+        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
+        final TypeDesc identifierArrayType = identifierType.toArrayType();
+
+        MethodInfo mi = cf.addMethod
+            (Modifiers.PUBLIC.toStatic(true), INIT_METHOD_NAME,
+             null, new TypeDesc[] {identifierArrayType});
+
+        CodeBuilder b = new CodeBuilder(mi);
+
+        int methodOrdinal = -1;
+        for (RemoteMethod method : info.getRemoteMethods()) {
+            methodOrdinal++;
+
+            if (methodOrdinal == 0) {
+                // Crude check to ensure init is called at most once.
+                b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
+                Label doInit = b.createLabel();
+                b.ifNullBranch(doInit, true);
+
+                b.newObject(TypeDesc.forClass(IllegalStateException.class));
+                b.dup();
+                b.invokeConstructor(TypeDesc.forClass(IllegalStateException.class), null);
+                b.throwObject();
+
+                doInit.setLocation();
+            }
+
+            b.loadLocal(b.getParameter(0));
+            b.loadConstant(methodOrdinal);
+            b.loadFromArray(identifierType);
+            b.storeStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
+        }
+
+        b.returnVoid();
+    }
+
+    static void invokeMethodIDInitMethod(Class clazz, RemoteInfo info)
+        throws NoSuchMethodException, IllegalAccessException, InvocationTargetException
+    {
+        // Prepare identifiers for init method.
+        Identifier[] ids = new Identifier[info.getRemoteMethods().size()];
+        int methodOrdinal = -1;
+        for (RemoteMethod method : info.getRemoteMethods()) {
+            methodOrdinal++;
+            ids[methodOrdinal] = method.getMethodID();
+        }
+
+        // Call static method to initialize method identifiers.
+        clazz.getMethod(INIT_METHOD_NAME, Identifier[].class).invoke(null, (Object) ids);
     }
 }
