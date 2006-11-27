@@ -14,9 +14,11 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi.core;
 
 import java.io.IOException;
+
+import dirmi.io.Connecter;
 
 /**
  * Factory for client-side created {@link RemoteConnection}s.

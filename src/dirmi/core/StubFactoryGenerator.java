@@ -51,10 +51,6 @@ import dirmi.info.RemoteIntrospector;
 import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
 
-import dirmi.io.RemoteConnection;
-import dirmi.io.RemoteInputStream;
-import dirmi.io.RemoteOutputStream;
-
 /**
  * Generates {@link StubFactory} instances for any given Remote type.
  *

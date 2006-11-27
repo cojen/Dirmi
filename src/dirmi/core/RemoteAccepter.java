@@ -14,28 +14,29 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi.core;
 
 import java.io.IOException;
-import java.rmi.Remote;
-import java.rmi.RemoteException;
 
-import dirmi.core.Identifier;
+import dirmi.io.Accepter;
 
 /**
- * Basic interface for a bidirectional remote I/O connection.
+ * Factory for server-side accepted {@link RemoteConnection}s.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Connection {
-    RemoteInputStream getInputStream() throws IOException;
-
-    RemoteOutputStream getOutputStream() throws IOException;
+public interface RemoteAccepter extends Accepter {
+    /**
+     * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection
+     */
+    RemoteConnection accept() throws IOException;
 
     /**
-     * Dispose a remotely identified object, rendering it unusable for future
-     * remote calls. Usually objects need not be explicitly disposed, since the
-     * local and remote garbage collectors do so automatically.
+     * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection, or null if timed out
      */
-    void dispose(Identifier id) throws RemoteException;
+    RemoteConnection accept(int timeoutMillis) throws IOException;
 }

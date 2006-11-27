@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi.core;
 
 import java.io.Closeable;
 import java.io.IOException;

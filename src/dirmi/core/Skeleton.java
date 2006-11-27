@@ -22,8 +22,6 @@ import java.rmi.NoSuchObjectException;
 
 import dirmi.AsynchronousInvocationException;
 
-import dirmi.io.RemoteConnection;
-
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client
  * requests, and invokes server-side methods. Any response is marshalled back

@@ -14,27 +14,23 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi.core;
 
-import java.io.IOException;
+import dirmi.io.Broker;
 
 /**
- * Factory for server-side accepted {@link RemoteConnection}s.
+ * Supports accepting connections and making new connections.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteAccepter extends Accepter {
+public interface RemoteBroker extends Broker {
     /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection
+     * Returns a RemoteConnecter for creating new client-side connections.
      */
-    RemoteConnection accept() throws IOException;
+    RemoteConnecter connecter();
 
     /**
-     * Called by server to block waiting for a new connection request from client.
-     *
-     * @return new connection, or null if timed out
+     * Returns an RemoteAccepter for accepting new server-side connections.
      */
-    RemoteConnection accept(int timeoutMillis) throws IOException;
+    RemoteAccepter accepter();
 }

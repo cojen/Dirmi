@@ -18,8 +18,6 @@ package dirmi.core;
 
 import java.rmi.RemoteException;
 
-import dirmi.io.RemoteConnection;
-
 /**
  * Object passed to a Stub instance in order for it to actually communicate
  * with a remote object.

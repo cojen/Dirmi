@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi.core;
 
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -36,10 +36,11 @@ import java.util.concurrent.TimeUnit;
 import dirmi.Asynchronous;
 import dirmi.AsynchronousInvocationException;
 
-import dirmi.core.Identifier;
-import dirmi.core.Skeleton;
-
 import dirmi.info.RemoteInfo;
+
+import dirmi.io.Broker;
+import dirmi.io.Connection;
+import dirmi.io.Multiplexer;
 
 /**
  * Principal implementation of a RemoteBroker. At least one thread must be
