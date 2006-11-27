@@ -33,8 +33,25 @@ public interface StubSupport {
      * and for reading response. If call is synchronous, output is flushed
      * after arguments are written, and then connection is read from. If call
      * is asynchronous, connection is closed after arguments are written.
+     *
+     * @throws java.rmi.NoSuchObjectException of support has been disposed
      */
     RemoteConnection invoke() throws RemoteException;
+
+    /**
+     * Returns a hashCode implementation for the Stub.
+     */
+    int stubHashCode();
+
+    /**
+     * Returns a partial equals implementation for the Stub.
+     */
+    boolean stubEquals(StubSupport support);
+
+    /**
+     * Returns a partial toString implementation for the Stub.
+     */
+    String stubToString();
 
     /**
      * Dispose remotely identified object, rendering it unusable for future

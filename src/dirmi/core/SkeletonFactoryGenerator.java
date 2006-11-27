@@ -66,6 +66,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     /**
+     * Returns a new or cached SkeletonFactory.
+     *
      * @param type
      * @throws IllegalArgumentException if type is null or malformed
      */

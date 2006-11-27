@@ -327,7 +327,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
 
     private ObjectInputStream getObjectInputStream() throws IOException {
         if (!(mIn instanceof ObjectInputStream)) {
-            mIn = new ObjectInputStream(mIn);
+            mIn = createObjectInputStream(mIn);
         }
         return (ObjectInputStream) mIn;
     }
@@ -479,6 +479,13 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
 
     public void close() throws IOException {
         mIn.close();
+    }
+
+    /**
+     * Override this method to return a subclassed ObjectInputStream.
+     */
+    protected ObjectInputStream createObjectInputStream(InputStream in) throws IOException {
+        return new ObjectInputStream(in);
     }
 
     private static class ThrowableInfo {

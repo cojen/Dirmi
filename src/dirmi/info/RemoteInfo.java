@@ -36,7 +36,7 @@ public interface RemoteInfo extends Serializable {
     /**
      * Returns a unique identifier for the remote interface.
      */
-    Identifier getRemoteID();
+    Identifier getInfoID();
 
     /**
      * Returns all remote methods in an unmodifiable set.

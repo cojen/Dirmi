@@ -23,7 +23,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 
 /**
- * 
+ * Basic connection implementation that wraps two streams or a socket.
  *
  * @author Brian S O'Neill
  */

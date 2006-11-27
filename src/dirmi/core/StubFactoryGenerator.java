@@ -73,6 +73,8 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     /**
+     * Returns a new or cached StubFactory.
+     *
      * @param type
      * @param remoteInfo remote type as supported by remote server
      * @throws IllegalArgumentException if type is null or malformed
@@ -141,13 +143,12 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutputStream.class);
         final TypeDesc classType = TypeDesc.forClass(Class.class);
         final TypeDesc methodType = TypeDesc.forClass(Method.class);
-        final TypeDesc noSuchObjectExType = TypeDesc.forClass(NoSuchObjectException.class);
         final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
 
         // Add fields
         {
-            cf.addField(Modifiers.PRIVATE.toVolatile(true).toTransient(true),
+            cf.addField(Modifiers.PRIVATE.toFinal(true),
                         STUB_SUPPORT_FIELD_NAME, stubSupportType);
 
             CodeBuilderUtil.addMethodIDFields(cf, mRemoteInfo);
@@ -176,26 +177,14 @@ public class StubFactoryGenerator<R extends Remote> {
         // Add dispose method.
         {
             MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, DISPOSE_METHOD_NAME, null, null);
-            mi.setModifiers(mi.getModifiers().toSynchronized(true));
+            mi.setModifiers(mi.getModifiers());
             mi.addException(remoteExType);
 
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-            LocalVariable supportVar = b.createLocalVariable(null, stubSupportType);
-            b.storeLocal(supportVar);
-            b.loadLocal(supportVar);
-            Label alreadyDisposed = b.createLabel();
-            b.ifNullBranch(alreadyDisposed, true);
-
-            b.loadLocal(supportVar);
             b.invokeInterface(stubSupportType, "dispose", null, null);
-            b.loadThis();
-            b.loadNull();
-            b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-
-            alreadyDisposed.setLocation();
             b.returnVoid();
         }
 
@@ -220,28 +209,11 @@ public class StubFactoryGenerator<R extends Remote> {
 
             CodeBuilder b = new CodeBuilder(mi);
 
-            LocalVariable stubSupportVar = b.createLocalVariable(null, stubSupportType);
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-            b.storeLocal(stubSupportVar);
-
-            b.loadLocal(stubSupportVar);
-            Label notDisposed = b.createLabel();
-            b.ifNullBranch(notDisposed, false);
-
-            // Stub has been disposed, so throw NoSuchObjectException.
-            b.newObject(noSuchObjectExType);
-            b.dup();
-            b.loadConstant("Remote object disposed");
-            b.invokeConstructor(noSuchObjectExType, new TypeDesc[] {TypeDesc.STRING});
-            b.throwObject();
-
-            notDisposed.setLocation();
-
             Label tryStart = b.createLabel().setLocation();
 
             // Create connection for invoking remote method.
-            b.loadLocal(stubSupportVar);
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "invoke", remoteConnectionType, null);
             LocalVariable conVar = b.createLocalVariable(null, remoteConnectionType);
             b.storeLocal(conVar);
@@ -392,6 +364,68 @@ public class StubFactoryGenerator<R extends Remote> {
                             new TypeDesc[] {TypeDesc.STRING, classType.toArrayType()});
             b.invokeConstructor(unimplementedExType, new TypeDesc[] {methodType});
             b.throwObject();
+        }
+
+        // Override Object.hashCode method to delegate to support.
+        {
+            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "hashCode", TypeDesc.INT, null);
+            CodeBuilder b = new CodeBuilder(mi);
+
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.invokeInterface(stubSupportType, "stubHashCode", TypeDesc.INT, null);
+            b.returnValue(TypeDesc.INT);
+        }
+
+        // Override Object.equals method to delegate to support.
+        {
+            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "equals", TypeDesc.BOOLEAN,
+                                         new TypeDesc[] {TypeDesc.OBJECT});
+            CodeBuilder b = new CodeBuilder(mi);
+
+            b.loadThis();
+            b.loadLocal(b.getParameter(0));
+            Label notIdentical = b.createLabel();
+            b.ifEqualBranch(notIdentical, false);
+            b.loadConstant(true);
+            b.returnValue(TypeDesc.BOOLEAN);
+
+            notIdentical.setLocation();
+
+            b.loadLocal(b.getParameter(0));
+            b.instanceOf(cf.getType());
+            Label notInstance = b.createLabel();
+            b.ifZeroComparisonBranch(notInstance, "==");
+
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadLocal(b.getParameter(0));
+            b.checkCast(cf.getType());
+            b.loadField(cf.getType(), STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.invokeInterface(stubSupportType, "stubEquals", TypeDesc.BOOLEAN,
+                              new TypeDesc[] {stubSupportType});
+            b.returnValue(TypeDesc.BOOLEAN);
+
+            notInstance.setLocation();
+            b.loadConstant(false);
+            b.returnValue(TypeDesc.BOOLEAN);
+        }
+
+        // Override Object.toString method to delegate to support.
+        {
+            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "toString", TypeDesc.STRING, null);
+            CodeBuilder b = new CodeBuilder(mi);
+
+            b.loadConstant(mLocalInfo.getName() + '@');
+
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.invokeInterface(stubSupportType, "stubToString", TypeDesc.STRING, null);
+
+            b.invokeVirtual(TypeDesc.STRING, "concat", TypeDesc.STRING,
+                            new TypeDesc[] {TypeDesc.STRING});
+
+            b.returnValue(TypeDesc.STRING);
         }
 
         return ci.defineClass(cf);

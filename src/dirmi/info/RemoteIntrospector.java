@@ -198,7 +198,7 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public Identifier getRemoteID() {
+        public Identifier getInfoID() {
             return mID;
         }
 

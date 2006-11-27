@@ -249,7 +249,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
 
     private ObjectOutputStream getObjectOutputStream() throws IOException {
         if (!(mOut instanceof ObjectOutputStream)) {
-            mOut = new ObjectOutputStream(mOut);
+            mOut = createObjectOutputStream(mOut);
         }
         return (ObjectOutputStream) mOut;
     }
@@ -320,4 +320,12 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     public void close() throws IOException {
         mOut.close();
     }
+
+    /**
+     * Override this method to return a subclassed ObjectOutputStream.
+     */
+    protected ObjectOutputStream createObjectOutputStream(OutputStream out) throws IOException {
+        return new ObjectOutputStream(out);
+    }
+
 }

@@ -19,7 +19,8 @@ package dirmi.io;
 import java.io.IOException;
 
 /**
- * 
+ * Provides implementations of {@link Connecter} and {@link Accepter} which
+ * delegate to protected methods of this class.
  *
  * @author Brian S O'Neill
  */

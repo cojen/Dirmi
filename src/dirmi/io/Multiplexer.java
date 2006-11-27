@@ -33,8 +33,9 @@ import org.cojen.util.IntHashMap;
 
 /**
  * Multiplexer allows new connections to be established over a single master
- * connection. Opening a new connection never blocks. At least one thread must be
- * calling the Accepter's accept at all times in order for the Multiplexer to work.
+ * connection. Opening a new connection never blocks. At least one thread must
+ * be calling the Accepter's accept method at all times in order for the
+ * Multiplexer to work.
  *
  * <p>Establishing new connections is relatively cheap, as is closing
  * connections. The buffers used by connections start small and grow as needed,
@@ -95,7 +96,7 @@ public class Multiplexer extends AbstractBroker {
     private final byte[] mWriteBuffer = new byte[6];
 
     /**
-     * @param master single connection which the multiplexor operates on
+     * @param master single connection which the multiplexer operates on
      */
     public Multiplexer(Connection master)
         throws IOException
@@ -104,7 +105,7 @@ public class Multiplexer extends AbstractBroker {
     }
 
     /**
-     * @param master single connection which the multiplexor operates on
+     * @param master single connection which the multiplexer operates on
      * @param minBufferSize minumum size (in bytes) for connection buffers
      * @param maxBufferSize maximum size (in bytes) for connection buffers
      */
