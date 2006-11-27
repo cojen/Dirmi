@@ -275,6 +275,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeLocal(remoteInVar);
 
                 b.loadLocal(remoteInVar);
+                // TODO: Convert undeclared throwable to UndeclaredThrowableException?
                 b.invokeVirtual(remoteInType, "readOk", TypeDesc.BOOLEAN, null);
 
                 if (returnDesc != TypeDesc.BOOLEAN) {
