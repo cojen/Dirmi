@@ -30,6 +30,11 @@ Ideas for dirmi:
   server-side implementation will have to implement this method too, but with
   what? Leave it empty?
 
+- Define a mechanism to invoke any remote method asynchronously and return a
+  Future. Perhaps this is just a RemoteFuture that's passed in as a parameter?
+
+- Support batch requests somehow.
+
 - RemoteStub needs to be serializable. Any Remote object refs need to be
   written with object id. Upon deserialization, convert object ids back.
 
