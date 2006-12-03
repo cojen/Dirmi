@@ -325,6 +325,7 @@ public class StubFactoryGenerator<R extends Remote> {
             try {
                 RemoteParameter[] paramTypes = new RemoteParameter[paramList.size()];
                 paramList.toArray(paramTypes);
+                // FIXME: check return type
                 mRemoteInfo.getRemoteMethod(method.getName(), paramTypes);
                 // Method has been implemented.
                 continue;

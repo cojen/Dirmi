@@ -50,16 +50,64 @@ import dirmi.core.Identifier;
  * @author Brian S O'Neill
  */
 public class RemoteIntrospector {
+    private static final Map<Class<?>, Class<?>> cInterfaceCache;
     private static final Map<Class<?>, RInfo> cInfoCache;
     private static final WeakCanonicalSet cParameterCache;
 
     static {
+        cInterfaceCache = new WeakIdentityMap();
         cInfoCache = new WeakIdentityMap();
         cParameterCache = new WeakCanonicalSet();
     }
 
     static RParameter intern(RParameter param) {
         return (RParameter) cParameterCache.put(param);
+    }
+
+    /**
+     * Returns the Remote interface implemented by the given Remote object.
+     *
+     * @param remoteObj remote object to examine
+     * @throws IllegalArgumentException if remote is null
+     */
+    public static <R extends Remote> Class<? extends Remote> getRemoteType(R remoteObj)
+        throws IllegalArgumentException
+    {
+        if (remoteObj == null) {
+            throw new IllegalArgumentException("Remote object must not be null");
+        }
+
+        Class clazz = remoteObj.getClass();
+
+        synchronized (cInterfaceCache) {
+            Class theOne = cInterfaceCache.get(clazz);
+            if (theOne != null) {
+                return theOne;
+            }
+
+            // Only consider the one that implements Remote.
+
+            for (Class iface : clazz.getInterfaces()) {
+                if (Modifier.isPublic(iface.getModifiers()) &&
+                    Remote.class.isAssignableFrom(iface))
+                {
+                    if (theOne != null) {
+                        throw new IllegalArgumentException
+                            ("At most one Remote interface may be directly implemented: " +
+                             clazz.getName());
+                    }
+                    theOne = iface;
+                }
+            }
+
+            if (theOne == null) {
+                throw new IllegalArgumentException
+                    ("No Remote types directly implemented: " + clazz.getName());
+            }
+
+            cInterfaceCache.put(clazz, theOne);
+            return theOne;
+        }
     }
 
     /**
@@ -244,7 +292,7 @@ public class RemoteIntrospector {
                 List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
                 if (paramTypes.size() == paramsLength) {
                     for (int i=0; i<paramsLength; i++) {
-                        if (!paramTypes.get(i).equals(params[i])) {
+                        if (!paramTypes.get(i).equalTypes(params[i])) {
                             continue search;
                         }
                     }
@@ -720,6 +768,17 @@ public class RemoteIntrospector {
             return mSerializedType;
         }
 
+        public boolean equalTypes(RemoteParameter other) {
+            if (this == other) {
+                return true;
+            }
+            return ((getRemoteInfoType() == null) ? (other.getRemoteInfoType() == null) :
+                    (getRemoteInfoType().getName().equals(other.getRemoteInfoType().getName()))) &&
+                (getRemoteDimensions() == other.getRemoteDimensions()) &&
+                ((getSerializedType() == null) ? (other.getSerializedType() == null) :
+                 (getSerializedType().getName().equals(other.getSerializedType().getName())));
+        }
+
         @Override
         public int hashCode() {
             if (mRemoteInfoType != null) {
@@ -764,10 +823,6 @@ public class RemoteIntrospector {
                 return this;
             }
             return intern(new RParameter(mRemoteInfoType, mDimensions, mSerializedType, unshared));
-        }
-
-        Object readResolve() throws java.io.ObjectStreamException {
-            return intern(this);
         }
     }
 }

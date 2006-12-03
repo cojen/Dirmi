@@ -53,4 +53,6 @@ public interface RemoteParameter extends Serializable {
      * null is returned, then parameter is not serialized.
      */
     Class<?> getSerializedType();
+
+    boolean equalTypes(RemoteParameter other);
 }
