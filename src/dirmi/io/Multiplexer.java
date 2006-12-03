@@ -17,6 +17,7 @@
 package dirmi.io;
 
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
@@ -51,7 +52,7 @@ import org.cojen.util.IntHashMap;
  *
  * @author Brian S O'Neill
  */
-public class Multiplexer extends AbstractBroker {
+public class Multiplexer extends AbstractBroker implements Closeable {
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_MIN_BUFFER_SIZE = 64;
@@ -208,6 +209,10 @@ public class Multiplexer extends AbstractBroker {
                 // Don't care.
             }
         }
+    }
+
+    public void close() throws IOException {
+        mMaster.close();
     }
 
     protected Connection connect() throws IOException {
