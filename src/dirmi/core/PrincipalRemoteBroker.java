@@ -16,27 +16,38 @@
 
 package dirmi.core;
 
+import java.io.Closeable;
+import java.io.Externalizable;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.io.ObjectStreamClass;
 import java.io.OutputStream;
+import java.io.WriteAbortedException;
 
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import java.util.Map;
-
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+
+import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
 import dirmi.AsynchronousInvocationException;
+import dirmi.NoSuchClassException;
 
 import dirmi.info.RemoteInfo;
+import dirmi.info.RemoteIntrospector;
 
 import dirmi.io.Broker;
 import dirmi.io.Connection;
@@ -44,82 +55,99 @@ import dirmi.io.Multiplexer;
 
 /**
  * Principal implementation of a RemoteBroker. At least one thread must be
- * calling the Accepter's accept method at all times in order for accept
- * exceptions to be propagated.
+ * calling the Accepter's accept method at all times in order for the
+ * RemoteBroker to work.
  *
  * @author Brian S O'Neill
  */
-public class PrincipalRemoteBroker extends AbstractRemoteBroker {
+public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Closeable {
+    /**
+     * Returns a ThreadFactory which produces daemon threads whose name begins
+     * with "RemoteBroker".
+     */
+    public static ThreadFactory newRemoteBrokerThreadFactory() {
+        return new RemoteBrokerThreadFactory();
+    }
+
     //private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 60000;
 
-    final Executor mExecutor;
     final Broker mBroker;
+    final Executor mExecutor;
+
+    final ConcurrentMap<Identifier, Skeleton> mSkeletons;
+    // FIXME: Need some what of decrementing these out when skeletons are disposed
+    final ConcurrentMap<Class, AtomicInteger> mSkeletonTypeCounts;
+
+    // FIXME: Use PhantomReferences to automatically dispose stubs.
 
     // Identifies our PrincipalRemoteBroker instance.
     final Identifier mLocalID;
     // Identifies remote PrincipalRemoteBroker instance.
     final Identifier mRemoteID;
 
-    final BlockingQueue<RemoteConnection> mAcceptQueue;
-
-    final Map<Identifier, Skeleton> mSkeletons;
+    // Remote Admin object.
+    final Hidden.Admin mRemoteAdmin;
 
     /**
-     * @param executor used to execute remote methods
      * @param master single connection which is multiplexed
      */
-    public PrincipalRemoteBroker(Executor executor, Connection master) throws IOException {
-        this(executor, new Multiplexer(master));
+    public PrincipalRemoteBroker(Connection master) throws IOException {
+        this(new Multiplexer(master),
+             Executors.newCachedThreadPool(newRemoteBrokerThreadFactory()));
     }
 
     /**
+     * @param master single connection which is multiplexed
      * @param executor used to execute remote methods
-     * @param broker connection broker must always connect to same remote server
      */
-    public PrincipalRemoteBroker(Executor executor, Broker broker) throws IOException {
-        this(executor, broker, new SynchronousQueue<RemoteConnection>());
+    public PrincipalRemoteBroker(Connection master, Executor executor) throws IOException {
+        this(new Multiplexer(master), executor);
     }
 
     /**
-     * @param executor used to execute remote methods
      * @param broker connection broker must always connect to same remote server
-     * @param queue accept queue
+     * @param executor used to execute remote methods
      */
-    public PrincipalRemoteBroker(Executor executor, Broker broker,
-                                 BlockingQueue<RemoteConnection> queue)
-        throws IOException
-    {
-        if (executor == null) {
-            throw new IllegalArgumentException("Executor is null");
-        }
+    public PrincipalRemoteBroker(Broker broker, Executor executor) throws IOException {
         if (broker == null) {
             throw new IllegalArgumentException("Broker is null");
         }
-        if (queue == null) {
-            throw new IllegalArgumentException("Queue is null");
+        if (executor == null) {
+            throw new IllegalArgumentException("Executor is null");
         }
 
-        mExecutor = executor;
         mBroker = broker;
-        mAcceptQueue = queue;
+        mExecutor = executor;
+
+        mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
+        mSkeletonTypeCounts = new ConcurrentHashMap<Class, AtomicInteger>();
 
         mLocalID = Identifier.identify(this);
 
-        // Transmit our identifier. Do so in a separate thread because remote
-        // side cannot accept our connection until it sends its identifier. This
-        // strategy avoids instant deadlock.
-        class SendID implements Runnable {
+        // Transmit our admin information. Do so in a separate thread because
+        // remote side cannot accept our connection until it sends its
+        // identifier. This strategy avoids instant deadlock.
+        class SendAdmin implements Runnable {
             IOException error;
             boolean done;
 
             public synchronized void run() {
+                RemoteOutputStream out = null;
                 try {
-                    Connection con = mBroker.connecter().connect();
-                    RemoteOutputStream out = new RemoteOutputStream(con.getOutputStream());
+                    RemoteConnection remoteCon = new RemoteCon(mBroker.connecter().connect());
+                    out = remoteCon.getOutputStream();
                     mLocalID.write(out);
+                    out.writeObject(new AdminImpl());
                     out.close();
                 } catch (IOException e) {
                     error = e;
+                    if (out != null) {
+                        try {
+                            out.close();
+                        } catch (IOException e2) {
+                            // Don't care.
+                        }
+                    }
                 } finally {
                     done = true;
                     notify();
@@ -140,22 +168,29 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
             }
         }
 
-        SendID sendID = new SendID();
-        executor.execute(sendID);
+        SendAdmin sendAdmin = new SendAdmin();
+        executor.execute(sendAdmin);
 
         // Accept connection and get remote identifier.
-        Connection con = mBroker.accepter().accept();
-        RemoteInputStream in = new RemoteInputStream(con.getInputStream());
+        RemoteConnection remoteCon = new RemoteCon(mBroker.accepter().accept());
+        RemoteInputStream in = remoteCon.getInputStream();
         mRemoteID = Identifier.read(in);
+        try {
+            mRemoteAdmin = (Hidden.Admin) in.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new IOException(e);
+        }
         in.close();
 
         // Wait for our identifier to send.
-        sendID.waitUntilDone();
+        sendAdmin.waitUntilDone();
+    }
 
-        mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
-
-        // Fire up the initial accept thread.
-        executor.execute(new AcceptThread());
+    public void close() throws IOException {
+        // FIXME: Send mLocalID as disposed
+        if (mBroker instanceof Closeable) {
+            ((Closeable) mBroker).close();
+        }
     }
 
     protected RemoteConnection connect() throws IOException {
@@ -176,111 +211,86 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
     }
 
     protected RemoteConnection accept() throws IOException {
-        try {
-            RemoteConnection con = mAcceptQueue.take();
-            if (con instanceof BrokenCon) {
-                // Forces exception to be thrown.
-                con.close();
-            }
-            return con;
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
-        }
+        RemoteConnection remoteCon;
+        do {
+            remoteCon = accepted(mBroker.accepter().accept());
+        } while (remoteCon == null);
+        return remoteCon;
     }
 
     protected RemoteConnection accept(int timeoutMillis) throws IOException {
-        try {
-            RemoteConnection con = mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
-            if (con instanceof BrokenCon) {
-                // Forces exception to be thrown.
-                con.close();
-            }
-            return con;
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
-        }
+        RemoteConnection remoteCon;
+        do {
+            remoteCon = accepted(mBroker.accepter().accept(timeoutMillis));
+        } while (remoteCon == null);
+        return remoteCon;
     }
 
-    private class AcceptThread implements Runnable {
+    /**
+     * @return null if connection invoked a remote method
+     */
+    private RemoteCon accepted(Connection con) throws IOException {
+        RemoteCon remoteCon = new RemoteCon(con);
+
+        // Decide if connection is to be used for invoking method or to be
+        // returned to accepter.
+
+        RemoteInputStream in = remoteCon.getInputStream();
+        Identifier id = Identifier.read(in);
+
+        if (id.equals(mLocalID)) {
+            // Magic ID to indicate connection is for accepter.
+            return remoteCon;
+        }
+
+        // Find a Skeleton to invoke.
+        Skeleton skeleton = mSkeletons.get(id);
+
+        if (skeleton == null) {
+            Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
+            remoteCon.getOutputStream().writeThrowable(t);
+            remoteCon.close();
+        } else {
+            // Invoke method in a separate thread.
+            mExecutor.execute(new MethodInvoker(remoteCon, skeleton));
+        }
+
+        return null;
+    }
+
+    private static class MethodInvoker implements Runnable {
+        private final RemoteConnection mRemoteCon;
+        private final Skeleton mSkeleton;
+
+        MethodInvoker(RemoteConnection remoteCon, Skeleton skeleton) {
+            mRemoteCon = remoteCon;
+            mSkeleton = skeleton;
+        }
+
         public void run() {
-            Connection con;
-            try {
-                while (true) {
-                    try {
-                        con = mBroker.accepter().accept();
-                        break;
-                    } catch (IOException e) {
-                        try {
-                            mAcceptQueue.put(new BrokenCon(e));
-                        } catch (InterruptedException e2) {
-                            // Don't care.
-                        } 
-                    }
-                }
-            } finally {
-                // Spawn a replacement.
-                mExecutor.execute(new AcceptThread());
-            }
+            Throwable throwable;
 
             try {
-                RemoteCon remoteCon = new RemoteCon(con);
-
-                // Decide if connection is to be used for invoking method or to
-                // be passed to accept queue.
-
-                RemoteInputStream in = remoteCon.getInputStream();
-                Identifier id = Identifier.read(in);
-
-                if (id.equals(mLocalID)) {
-                    // Magic ID to indicate connection is for accept queue.
-                    try {
-                        mAcceptQueue.put(remoteCon);
-                    } catch (InterruptedException e) {
-                        try {
-                            remoteCon.close();
-                        } catch (IOException e2) {
-                            // Don't care.
-                        }
-                    }
-                } else {
-                    // Find a Skeleton to invoke.
-                    Skeleton skeleton = mSkeletons.get(id);
-
-                    Throwable throwable = null;
-                    if (skeleton == null) {
-                        throwable = new NoSuchObjectException
-                            ("Server cannot find remote object: " + id);
-                    } else {
-                        try {
-                            skeleton.invoke(remoteCon);
-                        } catch (NoSuchMethodException e) {
-                            throwable = e;
-                        } catch (NoSuchObjectException e) {
-                            throwable = e;
-                        } catch (ClassNotFoundException e) {
-                            throwable = e;
-                        } catch (AsynchronousInvocationException e) {
-                            Thread t = Thread.currentThread();
-                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
-                        }
-                    }
-
-                    if (throwable != null) {
-                        remoteCon.getOutputStream().writeThrowable(throwable);
-                        remoteCon.close();
-                    }
+                try {
+                    mSkeleton.invoke(mRemoteCon);
+                    return;
+                } catch (NoSuchMethodException e) {
+                    throwable = e;
+                } catch (NoSuchObjectException e) {
+                    throwable = e;
+                } catch (ClassNotFoundException e) {
+                    throwable = e;
+                } catch (AsynchronousInvocationException e) {
+                    Thread t = Thread.currentThread();
+                    t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                    return;
                 }
+
+                mRemoteCon.getOutputStream().writeThrowable(throwable);
+                mRemoteCon.close();
             } catch (IOException e) {
-                try {
-                    con.close();
-                } catch (IOException e2) {
-                    // Don't care.
-                }
-                try {
-                    mAcceptQueue.put(new BrokenCon(e));
-                } catch (InterruptedException e2) {
-                    // Don't care.
-                } 
+                Thread t = Thread.currentThread();
+                t.getUncaughtExceptionHandler().uncaughtException(t, e);
             }
         }
     }
@@ -292,9 +302,25 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
 
         RemoteCon(Connection con) throws IOException {
             mCon = con;
-            // FIXME: Use stream subclasses and supply address string.
-            mRemoteIn = new RemoteInputStream(con.getInputStream());
-            mRemoteOut = new RemoteOutputStream(con.getOutputStream());
+            // FIXME: Supply address string.
+            mRemoteIn = new RemoteInputStream(con.getInputStream()) {
+                @Override
+                protected ObjectInputStream createObjectInputStream(InputStream in)
+                    throws IOException
+                {
+                    return new ResolvingObjectInputStream(in);
+                }
+            };
+
+            // FIXME: Supply address string.
+            mRemoteOut = new RemoteOutputStream(con.getOutputStream()) {
+                @Override
+                protected ObjectOutputStream createObjectOutputStream(OutputStream out)
+                    throws IOException
+                {
+                    return new ReplacingObjectOutputStream(out);
+                }
+            };
         }
 
         public void close() throws IOException {
@@ -315,29 +341,213 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
         }
     }
 
-    /**
-     * Used to pass an IOException along.
-     */
-    private static class BrokenCon implements RemoteConnection {
-        private final IOException mException;
-
-        BrokenCon(IOException exception) {
-            mException = exception;
+    private class ResolvingObjectInputStream extends ObjectInputStream {
+        ResolvingObjectInputStream(InputStream out) throws IOException {
+            super(out);
+            enableResolveObject(true);
         }
 
-        public void close() throws IOException {
-            throw mException;
+        @Override
+        protected Class<?> resolveClass(ObjectStreamClass desc)
+            throws IOException, ClassNotFoundException
+        {
+            // FIXME: Need configurable ClassLoader.
+            // FIXME: Try to load class from server.
+            return super.resolveClass(desc);
         }
 
-        public RemoteInputStream getInputStream() throws IOException {
-            throw mException;
+        @Override
+        protected Object resolveObject(Object obj) throws IOException {
+            if (obj instanceof MarshalledRemote) {
+                MarshalledRemote mr = (MarshalledRemote) obj;
+
+                Identifier objID = mr.mObjID;
+                Remote remote = (Remote) objID.tryRetrieve();
+                // FIXME: Confirm type ID.
+
+                if (remote == null) {
+                    Identifier typeID = mr.mTypeID;
+                    StubFactory factory = (StubFactory) typeID.tryRetrieve();
+
+                    if (factory == null) {
+                        RemoteInfo info = mr.mInfo;
+                        if (info == null) {
+                            info = mRemoteAdmin.getRemoteInfo(typeID);
+                        }
+
+                        Class type;
+                        try {
+                            // FIXME: Use resolveClass.
+                            type = Class.forName(info.getName());
+                        } catch (ClassNotFoundException e) {
+                            LogFactory.getLog(RemoteBroker.class)
+                                .warn("Remote interface not found", e);
+                            type = Remote.class;
+                        }
+
+                        factory = StubFactoryGenerator.getStubFactory(type, info);
+                        factory = (StubFactory) typeID.register(factory);
+                    }
+
+                    remote = factory.createStub(new SupportImpl(objID));
+                    remote = (Remote) objID.register(remote);
+                }
+
+                obj = remote;
+            }
+
+            return obj;
+        }
+    }
+
+    private class ReplacingObjectOutputStream extends ObjectOutputStream {
+        ReplacingObjectOutputStream(OutputStream out) throws IOException {
+            super(out);
+            enableReplaceObject(true);
         }
 
-        public RemoteOutputStream getOutputStream() throws IOException {
-            throw mException;
+        @Override
+        protected Object replaceObject(Object obj) throws IOException {
+            if (obj instanceof Remote) {
+                Remote remote = (Remote) obj;
+
+                // FIXME: Treat stubs differently.
+
+                Class remoteType;
+                try {
+                    remoteType = RemoteIntrospector.getRemoteType(remote);
+                } catch (IllegalArgumentException e) {
+                    throw new WriteAbortedException("Malformed Remote object", e);
+                }
+
+                Identifier objID = Identifier.identify(remote);
+                Identifier typeID = Identifier.identify(remoteType);
+                RemoteInfo info = null;
+
+                Skeleton skeleton = mSkeletons.get(objID);
+                if (skeleton == null) {
+                    AtomicInteger count = new AtomicInteger(0);
+                    AtomicInteger oldCount = mSkeletonTypeCounts.putIfAbsent(remoteType, count);
+
+                    if (oldCount != null) {
+                        count = oldCount;
+                    }
+
+                    if (count.getAndAdd(1) == 0) {
+                        // Send info for first use of remote type. If not sent,
+                        // client will request it anyhow, so this is an
+                        // optimization to avoid an extra round trip.
+                        try {
+                            info = RemoteIntrospector.examine(remoteType);
+                        } catch (IllegalArgumentException e) {
+                            throw new WriteAbortedException("Malformed Remote object", e);
+                        }
+                    }
+
+                    SkeletonFactory factory =
+                        SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+
+                    skeleton = factory.createSkeleton(remote);
+                    mSkeletons.putIfAbsent(objID, skeleton);
+                }
+
+                obj = new MarshalledRemote(objID, typeID, info);
+            }
+
+            return obj;
+        }
+    }
+
+    private class SupportImpl implements StubSupport {
+        private final Identifier mObjID;
+
+        SupportImpl(Identifier id) {
+            mObjID = id;
         }
 
-        public void dispose(Identifier id) {
+        public RemoteConnection invoke() throws RemoteException {
+            try {
+                RemoteConnection con = new RemoteCon(mBroker.connecter().connect());
+                mObjID.write(con.getOutputStream());
+                return con;
+            } catch (RemoteException e) {
+                throw e;
+            } catch (IOException e) {
+                throw new RemoteException(e.getMessage(), e);
+            }
+        }
+
+        public int stubHashCode() {
+            return mObjID.hashCode();
+        }
+
+        public boolean stubEquals(StubSupport support) {
+            if (this == support) {
+                return true;
+            }
+            if (support instanceof SupportImpl) {
+                return mObjID.equals(((SupportImpl) support).mObjID);
+            }
+            return false;
+        }
+
+        public String stubToString() {
+            return mObjID.toString();
+        }
+
+        public void dispose() throws RemoteException {
+            // FIXME
+        }
+    }
+
+    private static class MarshalledRemote implements Externalizable {
+        Identifier mObjID;
+        Identifier mTypeID;
+        RemoteInfo mInfo;
+
+        public MarshalledRemote() {
+        }
+
+        MarshalledRemote(Identifier objID, Identifier typeID, RemoteInfo info) {
+            mObjID = objID;
+            mTypeID = typeID;
+            mInfo = info;
+        }
+
+        public void writeExternal(ObjectOutput out) throws IOException {
+            mObjID.write(out);
+            mTypeID.write(out);
+            out.writeObject(mInfo);
+        }
+
+        public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+            mObjID = Identifier.read(in);
+            mTypeID = Identifier.read(in);
+            mInfo = (RemoteInfo) in.readObject();
+        }
+    }
+
+    private static class RemoteBrokerThreadFactory implements ThreadFactory {
+        static final AtomicInteger mPoolNumber = new AtomicInteger(1);
+        final ThreadGroup mGroup;
+        final AtomicInteger mThreadNumber = new AtomicInteger(1);
+        final String mNamePrefix;
+
+        RemoteBrokerThreadFactory() {
+            SecurityManager s = System.getSecurityManager();
+            mGroup = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+            mNamePrefix = "RemoteBroker-" + mPoolNumber.getAndIncrement() + "-worker-";
+        }
+
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(mGroup, r, mNamePrefix + mThreadNumber.getAndIncrement(), 0);
+            if (!t.isDaemon()) {
+                t.setDaemon(true);
+            }
+            if (t.getPriority() != Thread.NORM_PRIORITY) {
+                t.setPriority(Thread.NORM_PRIORITY);
+            }
+            return t;
         }
     }
 
@@ -360,6 +570,26 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker {
              * @return maximum milliseconds to wait before sending next heartbeat
              */
             long heartbeat() throws RemoteException;
+        }
+    }
+
+    private class AdminImpl implements Hidden.Admin {
+        public RemoteInfo getRemoteInfo(Identifier id) throws NoSuchClassException {
+            Class remoteType = (Class) id.tryRetrieve();
+            if (remoteType == null) {
+                throw new NoSuchClassException("No Class found for id: " + id);
+            }
+            return RemoteIntrospector.examine(remoteType);
+        }
+
+        @Asynchronous
+        public void disposed(Identifier id) {
+            // FIXME
+        }
+
+        public long heartbeat() {
+            // FIXME
+            return 0;
         }
     }
 }
