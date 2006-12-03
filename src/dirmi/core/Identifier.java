@@ -19,6 +19,7 @@ package dirmi.core;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
 
 import java.rmi.NoSuchObjectException;
 
@@ -36,7 +37,7 @@ import org.cojen.util.WeakValuedHashMap;
  *
  * @author Brian S O'Neill
  */
-public class Identifier implements Comparable<Identifier> {
+public class Identifier implements Serializable, Comparable<Identifier> {
     private static final SecureRandom cRandom;
     private static final WeakCanonicalSet cIdentifiers;
 
@@ -87,14 +88,17 @@ public class Identifier implements Comparable<Identifier> {
         return (Identifier) cIdentifiers.put(id);
     }
 
-    private synchronized static void register(Identifier id, Object obj) {
+    private synchronized static Object register(Identifier id, Object obj) {
+        if (obj == null) {
+            throw new IllegalArgumentException("Registered object cannot be null");
+        }
         Object existing = cIdentifiersToObjects.get(id);
         if (existing != null) {
-            throw new IllegalStateException
-                ("An object is already registered: " + id + " -> " + existing);
+            return existing;
         }
         cObjectsToIdentifiers.put(obj, id);
         cIdentifiersToObjects.put(id, obj);
+        return obj;
     }
 
     private synchronized static Object tryRetrieve(Identifier id) {
@@ -133,13 +137,14 @@ public class Identifier implements Comparable<Identifier> {
     /**
      * Register the given object with this identifier. Registered objects are
      * not strongly referenced, and so they may be garbage collected unless
-     * referenced elsewhere.
+     * referenced elsewhere. Only one object may be registered with the
+     * identifier, and attempting to register another object has no effect.
      *
-     * @throws IllegalStateException if an object is already registered with
-     * this identifier
+     * @return registered object, never null
+     * @throws IllegalArgumentException if given object is null
      */
-    public void register(Object obj) {
-        register(this, obj);
+    public Object register(Object obj) throws IllegalArgumentException {
+        return register(this, obj);
     }
 
     public void write(DataOutput out) throws IOException {
@@ -184,5 +189,9 @@ public class Identifier implements Comparable<Identifier> {
             }
         }
         return 0;
+    }
+
+    private Object readResolve() throws java.io.ObjectStreamException {
+        return canonicalIdentifier(this);
     }
 }
