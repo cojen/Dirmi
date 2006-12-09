@@ -25,8 +25,7 @@ import java.lang.annotation.*;
  * layer is backed up.
  *
  * <p>An asynchronous method must return void, and it may not declare any
- * exceptions other than {@link java.rmi.RemoteException}. An asynchronous method
- * cannot have a {@link ResponseTimeout} defined, as it is meaningless.
+ * exceptions other than {@link java.rmi.RemoteException}.
  *
  * @author Brian S O'Neill
  */

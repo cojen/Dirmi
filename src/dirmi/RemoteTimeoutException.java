@@ -22,7 +22,6 @@ import java.rmi.RemoteException;
  * Thrown when a remote method has not responded in time.
  *
  * @author Brian S O'Neill
- * @see ResponseTimeout
  */
 public class RemoteTimeoutException extends RemoteException {
     private static final long serialVersionUID = 1;

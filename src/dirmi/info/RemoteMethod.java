@@ -69,10 +69,4 @@ public interface RemoteMethod extends Serializable {
      * @see Idempotent
      */
     boolean isIdempotent();
-
-    /**
-     * Returns the maximum amount of time to wait for a response from this
-     * method. If negative, don't time out.
-     */
-    long getResponseTimeoutMillis();
 }

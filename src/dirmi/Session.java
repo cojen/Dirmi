@@ -28,6 +28,13 @@ import java.rmi.RemoteException;
  */
 public abstract class Session implements Closeable {
     /**
+     * Set the timeout for all remote operations on this Session.
+     *
+     * @param millis timeout value; use negative value for infinite timeout
+     */
+    public abstract void setTimeoutMillis(int millis);
+
+    /**
      * Sends a Remote object to the other side of the Session, which must be
      * calling receive in order to receive it.
      *
@@ -36,29 +43,10 @@ public abstract class Session implements Closeable {
     public abstract void send(Remote remote) throws RemoteException;
 
     /**
-     * Sends a Remote object to the other side of the Session, which must be
-     * calling receive in order to receive it.
-     *
-     * @param timeoutMillis maximum milliseconds to wait writing object before
-     * throwing a RemoteTimeoutException.
-     * @throws IllegalArgumentException if remote is null
-     */
-    public abstract void send(Remote remote, int timeoutMillis) throws RemoteException;
-
-    /**
      * Receives a Remote object, blocking until send is called on the other
      * side of the Session.
      */
     public abstract Remote receive() throws RemoteException;
-
-    /**
-     * Receives a Remote object, blocking until send is called on the other
-     * side of the Session.
-     *
-     * @param timeoutMillis maximum milliseconds to wait reading object before
-     * throwing a RemoteTimeoutException.
-     */
-    public abstract Remote receive(int timeoutMillis) throws RemoteException;
 
     /**
      * Dispose a Remote object, rendering it unusable for future remote
@@ -68,15 +56,4 @@ public abstract class Session implements Closeable {
      * @throws IllegalArgumentException if remote is null
      */
     public abstract void dispose(Remote object) throws RemoteException;
-
-    /**
-     * Dispose a Remote object, rendering it unusable for future remote
-     * calls. Usually objects need not be explicitly disposed, since the local
-     * and remote garbage collectors do so automatically.
-     *
-     * @param timeoutMillis maximum milliseconds to wait disposing object before
-     * throwing a RemoteTimeoutException.
-     * @throws IllegalArgumentException if remote is null
-     */
-    public abstract void dispose(Remote object, int timeoutMillis) throws RemoteException;
 }

@@ -143,8 +143,6 @@ public class RemoteIntrospector {
 
             Map<String, RMethod> methodMap = new LinkedHashMap<String, RMethod>();
 
-            // FIXME: capture ResponseTimeout
-
             for (Method m : remote.getMethods()) {
                 if (!m.getDeclaringClass().isInterface()) {
                     continue;
@@ -364,7 +362,6 @@ public class RemoteIntrospector {
 
         private final boolean mAsynchronous;
         private final boolean mIdempotent;
-        private final long mResponseTimeout;
 
         private transient Method mMethod;
 
@@ -413,8 +410,6 @@ public class RemoteIntrospector {
 
             mAsynchronous = m.getAnnotation(Asynchronous.class) != null;
             mIdempotent = m.getAnnotation(Idempotent.class) != null;
-            // FIXME: capture ResponseTimeout
-            mResponseTimeout = -1;
 
             // Hang on to this until resolve is called.
             mMethod = m;
@@ -429,7 +424,6 @@ public class RemoteIntrospector {
 
             mAsynchronous = existing.mAsynchronous;
             mIdempotent = existing.mIdempotent;
-            mResponseTimeout = existing.mResponseTimeout;
 
             mMethod = existing.mMethod;
         }
@@ -475,10 +469,6 @@ public class RemoteIntrospector {
             return mIdempotent;
         }
 
-        public long getResponseTimeoutMillis() {
-            return mResponseTimeout;
-        }
-
         @Override
         public int hashCode() {
             return mName.hashCode() + mID.hashCode();
@@ -495,8 +485,7 @@ public class RemoteIntrospector {
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
                     (mAsynchronous == other.mAsynchronous) &&
-                    (mIdempotent == other.mIdempotent) &&
-                    (mResponseTimeout == other.mResponseTimeout);
+                    (mIdempotent == other.mIdempotent);
             }
             return false;
         }
@@ -579,13 +568,6 @@ public class RemoteIntrospector {
                 // This is user error.
                 throw new IllegalArgumentException
                     ("Inherited methods conflict in use of @Asynchronous annotation: " +
-                     methodDesc() + " and " + other.methodDesc());
-            }
-
-            if (mResponseTimeout != other.mResponseTimeout) {
-                // This is user error.
-                throw new IllegalArgumentException
-                    ("Inherited methods conflict in use of @ResponseTimeout annotation: " +
                      methodDesc() + " and " + other.methodDesc());
             }
 

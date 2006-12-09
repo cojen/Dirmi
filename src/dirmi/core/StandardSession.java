@@ -78,6 +78,7 @@ public class StandardSession extends Session {
         return new SessionThreadFactory();
     }
 
+    private static final int DEFAULT_TIMEOUT_MILLIS = -1;
     private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 60000;
 
     final Broker mBroker;
@@ -93,16 +94,13 @@ public class StandardSession extends Session {
 
     final ReferenceQueue<Remote> mStubQueue;
 
-    // Identifies our session instance.
-    final Identifier mLocalID;
-    // Identifies remote session instance.
-    final Identifier mRemoteID;
-
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
 
     // Instant (in millis) for next expected heartbeat. If not received, session closes.
     volatile long mNextExpectedHeartbeat;
+
+    volatile int mTimeoutMillis = DEFAULT_TIMEOUT_MILLIS;
 
     volatile boolean mClosing;
 
@@ -158,8 +156,6 @@ public class StandardSession extends Session {
 
         mStubQueue = new ReferenceQueue<Remote>();
 
-        mLocalID = Identifier.identify(this);
-
         // Transmit our admin information. Do so in a separate thread because
         // remote side cannot accept our connection until it sends its
         // identifier. This strategy avoids instant deadlock.
@@ -172,7 +168,6 @@ public class StandardSession extends Session {
                 try {
                     RemoteConnection remoteCon = new RemoteCon(mBroker.connecter().connect());
                     out = remoteCon.getOutputStream();
-                    mLocalID.write(out);
                     out.writeObject(new AdminImpl());
                     out.close();
                 } catch (IOException e) {
@@ -210,7 +205,6 @@ public class StandardSession extends Session {
         // Accept connection and get remote identifier.
         RemoteConnection remoteCon = new RemoteCon(mBroker.accepter().accept());
         RemoteInputStream in = remoteCon.getInputStream();
-        mRemoteID = Identifier.read(in);
         try {
             mRemoteAdmin = (Hidden.Admin) in.readObject();
         } catch (ClassNotFoundException e) {
@@ -255,63 +249,26 @@ public class StandardSession extends Session {
         }
     }
 
+    public void setTimeoutMillis(int millis) {
+        mTimeoutMillis = millis;
+    }
+
     public void send(Remote remote) throws RemoteException {
-        send(remote, 0, false);
-    }
-
-    public void send(Remote remote, int timeoutMillis) throws RemoteException {
-        send(remote, timeoutMillis, true);
-    }
-
-    private void send(Remote remote, int timeoutMillis, boolean timeout) throws RemoteException {
         if (remote == null) {
             throw new IllegalArgumentException();
         }
-
-        try {
-            Connection con;
-            if (timeout) {
-                con = mBroker.connecter().connect(timeoutMillis);
-            } else {
-                con = mBroker.connecter().connect();
-            }
-
-            if (con == null) {
-                throw new RemoteTimeoutException();
-            }
-
-            RemoteConnection remoteCon = new RemoteCon(con);
-            RemoteOutputStream out = remoteCon.getOutputStream();
-
-            // Write remote session ID to indicate that this connection is not
-            // to be used for invoking a remote method.
-            mRemoteID.write(out);
-
-            out.writeObject(remote);
-            out.close();
-            remoteCon.close();
-        } catch (RemoteException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new RemoteException("Unable to send", e);
-        }
+        mRemoteAdmin.enqueueRemote(remote);
     }
 
     public Remote receive() throws RemoteException {
-        return receive(0, false);
-    }
-
-    public Remote receive(int timeoutMillis) throws RemoteException {
-        return receive(timeoutMillis, true);
-    }
-
-    private Remote receive(int timeoutMillis, boolean timeout) throws RemoteException {
         Remote remote;
         try {
-            if (timeout) {
-                remote = mQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
-            } else {
+            int timeoutMillis = mTimeoutMillis;
+
+            if (timeoutMillis < 0) {
                 remote = mQueue.take();
+            } else {
+                remote = mQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
             throw new RemoteException("Receive interrupted", e);
@@ -331,10 +288,6 @@ public class StandardSession extends Session {
     }
 
     public void dispose(Remote object) throws RemoteException {
-        // FIXME
-    }
-
-    public void dispose(Remote object, int timeoutMillis) throws RemoteException {
         // FIXME
     }
 
@@ -372,6 +325,9 @@ public class StandardSession extends Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
+            @Asynchronous
+            void enqueueRemote(Remote remote) throws RemoteException;
+
             /**
              * Returns RemoteInfo object from server.
              */
@@ -462,19 +418,6 @@ public class StandardSession extends Session {
 
                 RemoteInputStream in = remoteCon.getInputStream();
                 Identifier id = Identifier.read(in);
-
-                if (id.equals(mLocalID)) {
-                    // Magic ID to indicate connection is for received remove object.
-                    try {
-                        Remote remote = (Remote) in.readObject();
-                        mQueue.put(remote);
-                    } catch (InterruptedException e) {
-                        mLog.error("Unable to enqueue received remote object", e);
-                    } catch (ClassNotFoundException e) {
-                        mLog.error("Unable to receive remote object", e);
-                    }
-                    return;
-                }
 
                 // Find a Skeleton to invoke.
                 final Skeleton skeleton = mSkeletons.get(id);
@@ -692,7 +635,15 @@ public class StandardSession extends Session {
                 throw new NoSuchObjectException("Remote object disposed");
             }
             try {
-                RemoteConnection con = new RemoteCon(mBroker.connecter().connect());
+                int timeoutMillis = mTimeoutMillis;
+
+                RemoteConnection con;
+                if (timeoutMillis < 0) {
+                    con = new RemoteCon(mBroker.connecter().connect());
+                } else {
+                    con = new RemoteCon(mBroker.connecter().connect(timeoutMillis));
+                }
+
                 mObjID.write(con.getOutputStream());
                 return con;
             } catch (RemoteException e) {
@@ -727,6 +678,14 @@ public class StandardSession extends Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
+        public void enqueueRemote(Remote remote) {
+            try {
+                mQueue.put(remote);
+            } catch (InterruptedException e) {
+                mLog.error("Unable to enqueue received remote object", e);
+            }
+        }
+
         public RemoteInfo getRemoteInfo(Identifier id) throws NoSuchClassException {
             Class remoteType = (Class) id.tryRetrieve();
             if (remoteType == null) {
