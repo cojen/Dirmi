@@ -44,11 +44,4 @@ public interface StubFactory<R extends Remote> {
      * @param support for invoking remote methods
      */
     R createStub(StubSupport support);
-
-    /**
-     * @return true if given object is known to be a stub
-     */
-    boolean isStub(R stub);
-
-    void dispose(R stub) throws RemoteException;
 }

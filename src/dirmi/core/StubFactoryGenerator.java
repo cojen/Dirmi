@@ -59,9 +59,6 @@ import dirmi.info.RemoteParameter;
 public class StubFactoryGenerator<R extends Remote> {
     private static final String STUB_SUPPORT_FIELD_NAME = "support";
 
-    // Method name ends with '$' so as not to conflict with user method.
-    private static final String DISPOSE_METHOD_NAME = "dispose$";
-
     private static final Map<Object, StubFactory<?>> cCache;
 
     static {
@@ -167,20 +164,6 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(b.getParameter(0));
             b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
 
-            b.returnVoid();
-        }
-
-        // Add dispose method.
-        {
-            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, DISPOSE_METHOD_NAME, null, null);
-            mi.setModifiers(mi.getModifiers());
-            mi.addException(remoteExType);
-
-            CodeBuilder b = new CodeBuilder(mi);
-
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "dispose", null, null);
             b.returnVoid();
         }
 
@@ -431,12 +414,10 @@ public class StubFactoryGenerator<R extends Remote> {
     private static class Factory<R extends Remote> implements StubFactory<R> {
         private final Class<R> mType;
         private final Constructor<? extends R> mStubCtor;
-        private final Method mDisposeMethod;
 
         Factory(Class<R> type, Class<? extends R> stubClass) throws NoSuchMethodException {
             mType = type;
             mStubCtor = stubClass.getConstructor(StubSupport.class);
-            mDisposeMethod = stubClass.getMethod(DISPOSE_METHOD_NAME, (Class[]) null);
         }
 
         public Class<R> getRemoteType() {
@@ -461,32 +442,6 @@ public class StubFactoryGenerator<R extends Remote> {
             InternalError ie = new InternalError();
             ie.initCause(error);
             throw ie;
-        }
-
-        public boolean isStub(R stub) {
-            return stub != null && getStubClass().isInstance(stub);
-        }
-
-        public void dispose(R stub) throws RemoteException {
-            try {
-                mDisposeMethod.invoke(stub, (Object[]) null);
-            } catch (IllegalArgumentException e) {
-                // Assume R is not a valid stub
-            } catch (IllegalAccessException e) {
-                // Should not happen
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                }
-                if (cause instanceof Error) {
-                    throw (Error) cause;
-                }
-                if (cause instanceof RemoteException) {
-                    throw (RemoteException) cause;
-                }
-                throw new RemoteException(cause.getMessage(), cause);
-            }
         }
     }
 }

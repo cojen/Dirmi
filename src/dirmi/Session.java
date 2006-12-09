@@ -36,7 +36,7 @@ public abstract class Session implements Closeable {
 
     /**
      * Sends a Remote object to the other side of the Session, which must be
-     * calling receive in order to receive it.
+     * calling receive.
      *
      * @throws IllegalArgumentException if remote is null
      */

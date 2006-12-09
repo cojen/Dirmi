@@ -50,11 +50,4 @@ public interface StubSupport {
      * Returns a partial toString implementation for the Stub.
      */
     String stubToString();
-
-    /**
-     * Dispose remotely identified object, rendering it unusable for future
-     * remote calls. Usually objects need not be explicitly disposed, since the
-     * local and remote garbage collectors do so automatically.
-     */
-    void dispose() throws RemoteException;
 }

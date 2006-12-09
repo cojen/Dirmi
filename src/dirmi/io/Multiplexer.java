@@ -80,7 +80,9 @@ public class Multiplexer extends AbstractBroker implements Closeable {
 
     static final int SEND_HEADER_SIZE = 6;
 
-    volatile Connection mMaster;
+    private volatile Connection mMaster;
+    final String mLocalAddress;
+    final String mRemoteAddress;
 
     private final IntHashMap mConnections;
     private int mNextId;
@@ -118,6 +120,9 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         }
 
         mMaster = master;
+        mLocalAddress = master.getLocalAddressString();
+        mRemoteAddress = master.getRemoteAddressString();
+
         mConnections = new IntHashMap();
 
         if (minBufferSize <= 0) {
@@ -226,7 +231,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
                 }
             } while (mConnections.containsKey(id));
             
-            MultiplexConnection con = new MultiplexConnection(this, id, false);
+            MultiplexConnection con = new MultiplexConnection
+                (this, id, false, mLocalAddress, mRemoteAddress);
             mConnections.put(id, con);
             return con;
         }
@@ -287,7 +293,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
                     synchronized (mConnections) {
                         con = (MultiplexConnection) mConnections.get(id);
                         if (con == null && command == OPEN) {
-                            con = new MultiplexConnection(this, id, true);
+                            con = new MultiplexConnection
+                                (this, id, true, mLocalAddress, mRemoteAddress);
                             mConnections.put(id, con);
                         }
                     }

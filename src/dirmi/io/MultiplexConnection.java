@@ -33,11 +33,18 @@ final class MultiplexConnection implements Connection {
     final Input mIn;
     final Output mOut;
 
-    MultiplexConnection(Multiplexer mux, int id, boolean opened) {
+    final String mLocalAddress;
+    final String mRemoteAddress;
+
+    MultiplexConnection(Multiplexer mux, int id, boolean opened,
+                        String localAddress, String remoteAddress)
+    {
         mMux = mux;
         mId = id;
         mIn = new Input(mux.mMinBufferSize);
         mOut = new Output(mux.mReceiveWindow, mux.mMinBufferSize, mux.mMaxBufferSize, opened);
+        mLocalAddress = localAddress;
+        mRemoteAddress = remoteAddress;
     }
 
     public InputStream getInputStream() {
@@ -49,13 +56,11 @@ final class MultiplexConnection implements Connection {
     }
 
     public String getLocalAddressString() {
-        Connection master = mMux.mMaster;
-        return appendId(master == null ? null : master.getLocalAddressString());
+        return mLocalAddress;
     }
 
     public String getRemoteAddressString() {
-        Connection master = mMux.mMaster;
-        return appendId(master == null ? null : master.getRemoteAddressString());
+        return mRemoteAddress;
     }
 
     private String appendId(String address) {

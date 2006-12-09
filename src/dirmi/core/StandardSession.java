@@ -287,7 +287,36 @@ public class StandardSession extends Session {
     }
 
     public void dispose(Remote object) throws RemoteException {
-        // FIXME
+        Identifier id = Identifier.identify(object);
+        if (dispose(id)) {
+            mRemoteAdmin.disposed(id);
+        }
+    }
+
+    /**
+     * @return true if remote side should be notified
+     */
+    boolean dispose(Identifier id) {
+        boolean doNotify = false;
+
+        Skeleton skeleton = mSkeletons.remove(id);
+        if (skeleton != null) {
+            Remote remote = skeleton.getRemoteObject();
+            Class remoteType = RemoteIntrospector.getRemoteType(remote);
+            AtomicInteger count = mSkeletonTypeCounts.get(remoteType);
+            if (count != null && count.decrementAndGet() <= 0) {
+                mSkeletonTypeCounts.remove(remoteType, count);
+            }
+            doNotify = true;
+        }
+
+        StubRef ref = mStubs.remove(id);
+        if (ref != null) {
+            ref.getStubSupport().dispose();
+            doNotify = true;
+        }
+
+        return doNotify;
     }
 
     void heartbeatReceived() {
@@ -354,11 +383,15 @@ public class StandardSession extends Session {
     }
 
     private static class StubRef extends PhantomReference<Remote> {
-        final Identifier mObjID;
+        private final StubSupportImpl mStubSupport;
 
-        StubRef(Remote stub, ReferenceQueue<? super Remote> queue, Identifier objID) {
+        StubRef(Remote stub, ReferenceQueue<? super Remote> queue, StubSupportImpl support) {
             super(stub, queue);
-            mObjID = objID;
+            mStubSupport = support;
+        }
+
+        StubSupportImpl getStubSupport() {
+            return mStubSupport;
         }
     }
 
@@ -550,10 +583,11 @@ public class StandardSession extends Session {
                         factory = (StubFactory) typeID.register(factory);
                     }
 
-                    remote = factory.createStub(new StubSupportImpl(objID));
+                    StubSupportImpl support = new StubSupportImpl(objID);
+                    remote = factory.createStub(support);
                     remote = (Remote) objID.register(remote);
 
-                    mStubs.put(objID, new StubRef(remote, mStubQueue, objID));
+                    mStubs.put(objID, new StubRef(remote, mStubQueue, support));
                 }
 
                 obj = remote;
@@ -670,9 +704,12 @@ public class StandardSession extends Session {
             return mObjID.toString();
         }
 
-        public void dispose() throws RemoteException {
+        void dispose() {
             mDisposed = true;
-            mRemoteAdmin.disposed(mObjID);
+        }
+
+        Identifier getObjectID() {
+            return mObjID;
         }
     }
 
@@ -694,19 +731,7 @@ public class StandardSession extends Session {
         }
 
         public void disposed(Identifier id) {
-            System.out.println("Disposed: " + id);
-            Skeleton skeleton = mSkeletons.remove(id);
-            if (skeleton != null) {
-                System.out.println("Skeleton disposed: " + skeleton);
-                Remote remote = skeleton.getRemoteObject();
-                Class remoteType = RemoteIntrospector.getRemoteType(remote);
-                AtomicInteger count = mSkeletonTypeCounts.get(remoteType);
-                System.out.println("Count: " + count);
-                if (count != null && count.decrementAndGet() <= 0) {
-                    System.out.println("Removed count");
-                    mSkeletonTypeCounts.remove(remoteType, count);
-                }
-            }
+            dispose(id);
         }
 
         public void closed() {
