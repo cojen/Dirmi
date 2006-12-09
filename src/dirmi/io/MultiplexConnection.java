@@ -48,6 +48,22 @@ final class MultiplexConnection implements Connection {
         return mOut;
     }
 
+    public String getLocalAddressString() {
+        return appendId(mMux.mMaster.getLocalAddressString());
+    }
+
+    public String getRemoteAddressString() {
+        return appendId(mMux.mMaster.getRemoteAddressString());
+    }
+
+    private String appendId(String address) {
+        if (address == null) {
+            return String.valueOf(mId);
+        } else {
+            return address + ':' + mId;
+        }
+    }
+
     public void close() throws IOException {
         mOut.close();
     }

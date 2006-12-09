@@ -29,6 +29,9 @@ import java.io.ObjectStreamClass;
 import java.io.OutputStream;
 import java.io.WriteAbortedException;
 
+import java.lang.ref.PhantomReference;
+import java.lang.ref.ReferenceQueue;
+
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
@@ -69,16 +72,17 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
         return new RemoteBrokerThreadFactory();
     }
 
-    //private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 60000;
+    private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 60000;
 
     final Broker mBroker;
     final Executor mExecutor;
 
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
-    // FIXME: Need some what of decrementing these out when skeletons are disposed
     final ConcurrentMap<Class, AtomicInteger> mSkeletonTypeCounts;
 
-    // FIXME: Use PhantomReferences to automatically dispose stubs.
+    final ConcurrentMap<Identifier, StubRef> mStubs;
+
+    final ReferenceQueue<Remote> mStubQueue;
 
     // Identifies our PrincipalRemoteBroker instance.
     final Identifier mLocalID;
@@ -87,6 +91,9 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
+
+    // Instant (in millis) for next expected heartbeat. If not received, broker closes.
+    volatile long mNextExpectedHeartbeat;
 
     /**
      * @param master single connection which is multiplexed
@@ -121,6 +128,10 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
         mSkeletonTypeCounts = new ConcurrentHashMap<Class, AtomicInteger>();
+
+        mStubs = new ConcurrentHashMap<Identifier, StubRef>();
+
+        mStubQueue = new ReferenceQueue<Remote>();
 
         mLocalID = Identifier.identify(this);
 
@@ -184,12 +195,20 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
         // Wait for our identifier to send.
         sendAdmin.waitUntilDone();
+
+        // FIXME: Start ReferenceQueue thread, which also heartbeats.
     }
 
     public void close() throws IOException {
-        // FIXME: Send mLocalID as disposed
-        if (mBroker instanceof Closeable) {
-            ((Closeable) mBroker).close();
+        try {
+            mRemoteAdmin.closed();
+            if (mBroker instanceof Closeable) {
+                ((Closeable) mBroker).close();
+            }
+        } finally {
+            mSkeletons.clear();
+            mSkeletonTypeCounts.clear();
+            mStubs.clear();
         }
     }
 
@@ -258,6 +277,10 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
         return null;
     }
 
+    void heartbeatReceived() {
+        mNextExpectedHeartbeat = System.currentTimeMillis() + DEFAULT_HEARTBEAT_DELAY_MILLIS;
+    }
+
     private static class MethodInvoker implements Runnable {
         private final RemoteConnection mRemoteCon;
         private final Skeleton mSkeleton;
@@ -302,8 +325,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
         RemoteCon(Connection con) throws IOException {
             mCon = con;
-            // FIXME: Supply address string.
-            mRemoteIn = new RemoteInputStream(con.getInputStream()) {
+            mRemoteIn = new RemoteInputStream(con.getInputStream(), getRemoteAddressString()) {
                 @Override
                 protected ObjectInputStream createObjectInputStream(InputStream in)
                     throws IOException
@@ -312,8 +334,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
                 }
             };
 
-            // FIXME: Supply address string.
-            mRemoteOut = new RemoteOutputStream(con.getOutputStream()) {
+            mRemoteOut = new RemoteOutputStream(con.getOutputStream(), getLocalAddressString()) {
                 @Override
                 protected ObjectOutputStream createObjectOutputStream(OutputStream out)
                     throws IOException
@@ -335,9 +356,12 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
             return mRemoteOut;
         }
 
-        public void dispose(Identifier id) throws RemoteException {
-            // FIXME: cancel lease
-            // FIXME: implement
+        public String getLocalAddressString() {
+            return mCon.getLocalAddressString();
+        }
+
+        public String getRemoteAddressString() {
+            return mCon.getRemoteAddressString();
         }
     }
 
@@ -363,7 +387,6 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
                 Identifier objID = mr.mObjID;
                 Remote remote = (Remote) objID.tryRetrieve();
-                // FIXME: Confirm type ID.
 
                 if (remote == null) {
                     Identifier typeID = mr.mTypeID;
@@ -391,6 +414,8 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
                     remote = factory.createStub(new SupportImpl(objID));
                     remote = (Remote) objID.register(remote);
+
+                    mStubs.put(objID, new StubRef(remote, mStubQueue, objID));
                 }
 
                 obj = remote;
@@ -410,8 +435,7 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
         protected Object replaceObject(Object obj) throws IOException {
             if (obj instanceof Remote) {
                 Remote remote = (Remote) obj;
-
-                // FIXME: Treat stubs differently.
+                Identifier objID = Identifier.identify(remote);
 
                 Class remoteType;
                 try {
@@ -420,12 +444,12 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
                     throw new WriteAbortedException("Malformed Remote object", e);
                 }
 
-                Identifier objID = Identifier.identify(remote);
                 Identifier typeID = Identifier.identify(remoteType);
                 RemoteInfo info = null;
 
-                Skeleton skeleton = mSkeletons.get(objID);
-                if (skeleton == null) {
+                // Only send skeleton for first use of exported object.
+                Skeleton skeleton;
+                if (!mStubs.containsKey(objID) && (skeleton = mSkeletons.get(objID)) == null) {
                     AtomicInteger count = new AtomicInteger(0);
                     AtomicInteger oldCount = mSkeletonTypeCounts.putIfAbsent(remoteType, count);
 
@@ -433,13 +457,14 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
                         count = oldCount;
                     }
 
-                    if (count.getAndAdd(1) == 0) {
+                    if (count.getAndIncrement() == 0) {
                         // Send info for first use of remote type. If not sent,
                         // client will request it anyhow, so this is an
                         // optimization to avoid an extra round trip.
                         try {
                             info = RemoteIntrospector.examine(remoteType);
                         } catch (IllegalArgumentException e) {
+                            count.getAndDecrement(); // undo increment
                             throw new WriteAbortedException("Malformed Remote object", e);
                         }
                     }
@@ -460,12 +485,16 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
 
     private class SupportImpl implements StubSupport {
         private final Identifier mObjID;
+        private volatile boolean mDisposed;
 
         SupportImpl(Identifier id) {
             mObjID = id;
         }
 
         public RemoteConnection invoke() throws RemoteException {
+            if (mDisposed) {
+                throw new NoSuchObjectException("Remote object disposed");
+            }
             try {
                 RemoteConnection con = new RemoteCon(mBroker.connecter().connect());
                 mObjID.write(con.getOutputStream());
@@ -496,7 +525,8 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
         }
 
         public void dispose() throws RemoteException {
-            // FIXME
+            mDisposed = true;
+            mRemoteAdmin.disposed(mObjID);
         }
     }
 
@@ -551,6 +581,15 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
         }
     }
 
+    private static class StubRef extends PhantomReference<Remote> {
+        final Identifier mObjID;
+
+        StubRef(Remote stub, ReferenceQueue<? super Remote> queue, Identifier objID) {
+            super(stub, queue);
+            mObjID = objID;
+        }
+    }
+
     private static class Hidden {
         public static interface Admin extends Remote {
             /**
@@ -563,6 +602,12 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
              */
             @Asynchronous
             void disposed(Identifier id) throws RemoteException;
+
+            /**
+             * Notification from client when explicitly closed.
+             */
+            @Asynchronous
+            void closed() throws RemoteException;
 
             /**
              * Notification from client that it is alive.
@@ -582,14 +627,38 @@ public class PrincipalRemoteBroker extends AbstractRemoteBroker implements Close
             return RemoteIntrospector.examine(remoteType);
         }
 
-        @Asynchronous
         public void disposed(Identifier id) {
-            // FIXME
+            System.out.println("Disposed: " + id);
+            Skeleton skeleton = mSkeletons.remove(id);
+            if (skeleton != null) {
+                System.out.println("Skeleton disposed: " + skeleton);
+                Remote remote = skeleton.getRemoteObject();
+                Class remoteType = RemoteIntrospector.getRemoteType(remote);
+                AtomicInteger count = mSkeletonTypeCounts.get(remoteType);
+                System.out.println("Count: " + count);
+                if (count != null && count.decrementAndGet() <= 0) {
+                    System.out.println("Removed count");
+                    mSkeletonTypeCounts.remove(remoteType, count);
+                }
+            }
+        }
+
+        public void closed() {
+            mSkeletons.clear();
+            mSkeletonTypeCounts.clear();
+            mStubs.clear();
+            if (mBroker instanceof Closeable) {
+                try {
+                    ((Closeable) mBroker).close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
+            }
         }
 
         public long heartbeat() {
-            // FIXME
-            return 0;
+            heartbeatReceived();
+            return DEFAULT_HEARTBEAT_DELAY_MILLIS;
         }
     }
 }

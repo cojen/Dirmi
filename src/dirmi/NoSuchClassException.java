@@ -14,21 +14,23 @@
  *  limitations under the License.
  */
 
-package dirmi.core;
+package dirmi;
 
-import java.io.IOException;
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import dirmi.io.Connection;
-
 /**
- * Basic interface for a bidirectional remote I/O connection.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Connection {
-    RemoteInputStream getInputStream() throws IOException;
+public class NoSuchClassException extends RemoteException {
+    private static final long serialVersionUID = 1;
 
-    RemoteOutputStream getOutputStream() throws IOException;
+    public NoSuchClassException(String message) {
+        super(message);
+    }
+
+    public NoSuchClassException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

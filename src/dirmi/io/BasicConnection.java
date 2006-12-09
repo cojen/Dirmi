@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import java.net.Socket;
+import java.net.SocketAddress;
 
 /**
  * Basic connection implementation that wraps two streams or a socket.
@@ -31,14 +32,40 @@ public class BasicConnection implements Connection {
     private final InputStream mIn;
     private final OutputStream mOut;
 
+    private volatile String mLocalAddress;
+    private volatile String mRemoteAddress;
+
     public BasicConnection(InputStream in, OutputStream out) {
         mIn = in;
         mOut = out;
     }
 
+    public BasicConnection(InputStream in, OutputStream out,
+                           String localAddress, String remoteAddress)
+    {
+        mIn = in;
+        mOut = out;
+        mLocalAddress = localAddress;
+        mRemoteAddress = remoteAddress;
+    }
+
     public BasicConnection(Socket socket) throws IOException {
         mIn = socket.getInputStream();
         mOut = socket.getOutputStream();
+
+        {
+            SocketAddress addr = socket.getLocalSocketAddress();
+            if (addr != null) {
+                mLocalAddress = addr.toString();
+            }
+        }
+
+        {
+            SocketAddress addr = socket.getRemoteSocketAddress();
+            if (addr != null) {
+                mRemoteAddress = addr.toString();
+            }
+        }
     }
 
     public InputStream getInputStream() {
@@ -47,6 +74,14 @@ public class BasicConnection implements Connection {
 
     public OutputStream getOutputStream() {
         return mOut;
+    }
+
+    public String getLocalAddressString() {
+        return mLocalAddress;
+    }
+
+    public String getRemoteAddressString() {
+        return mRemoteAddress;
     }
 
     public void close() throws IOException {

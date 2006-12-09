@@ -19,6 +19,7 @@ package dirmi.core;
 import java.io.IOException;
 
 import java.rmi.NoSuchObjectException;
+import java.rmi.Remote;
 
 import dirmi.AsynchronousInvocationException;
 
@@ -53,4 +54,9 @@ public interface Skeleton {
                NoSuchObjectException,
                ClassNotFoundException,
                AsynchronousInvocationException;
+
+    /**
+     * Returns the Remote object wrapped by this Skeleton.
+     */
+    Remote getRemoteObject();
 }

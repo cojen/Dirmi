@@ -149,6 +149,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnVoid();
         }
 
+        // Add Remote object accessor.
+        {
+            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "getRemoteObject",
+                                         TypeDesc.forClass(Remote.class), null);
+            CodeBuilder b = new CodeBuilder(mi);
+            b.loadThis();
+            b.loadField(REMOTE_FIELD_NAME, remoteType);
+            b.returnValue(TypeDesc.OBJECT);
+        }
+
+
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
                                      new TypeDesc[] {remoteConnectionType});

@@ -80,7 +80,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
 
     static final int SEND_HEADER_SIZE = 6;
 
-    private volatile Connection mMaster;
+    volatile Connection mMaster;
 
     private final IntHashMap mConnections;
     private int mNextId;

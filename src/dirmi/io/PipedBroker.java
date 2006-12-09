@@ -99,6 +99,14 @@ public class PipedBroker extends AbstractBroker {
             return mOut;
         }
 
+        public String getLocalAddressString() {
+            return null;
+        }
+
+        public String getRemoteAddressString() {
+            return null;
+        }
+
         public void close() throws IOException {
             mOut.close();
             mIn.close();

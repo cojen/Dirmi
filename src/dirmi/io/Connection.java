@@ -30,4 +30,22 @@ public interface Connection extends Closeable {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;
+
+    /**
+     * Returns the full local address of the connection. This method should not
+     * block when called. If host name resolution may block, return a
+     * unresolved name and resolve in a background thread for later requests.
+     *
+     * @return local address or null if unknown
+     */
+    String getLocalAddressString();
+
+    /**
+     * Returns the full remote address of the connection. This method should not
+     * block when called. If host name resolution may block, return a
+     * unresolved name and resolve in a background thread for later requests.
+     *
+     * @return remote address or null if unknown
+     */
+    String getRemoteAddressString();
 }

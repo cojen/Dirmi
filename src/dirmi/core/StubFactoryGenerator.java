@@ -275,7 +275,6 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeLocal(remoteInVar);
 
                 b.loadLocal(remoteInVar);
-                // FIXME: Convert undeclared throwable to UnexpectedException.
                 b.invokeVirtual(remoteInType, "readOk", TypeDesc.BOOLEAN, null);
 
                 if (returnDesc != TypeDesc.BOOLEAN) {
