@@ -46,7 +46,6 @@ import java.util.concurrent.ThreadFactory;
 import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
-import dirmi.AsynchronousInvocationException;
 import dirmi.NoSuchClassException;
 
 import dirmi.info.RemoteInfo;

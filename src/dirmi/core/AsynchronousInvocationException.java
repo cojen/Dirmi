@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core;
 
 /**
  * If an exception is thrown from a skeleton-invoked method which is

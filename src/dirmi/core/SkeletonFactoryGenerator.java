@@ -40,8 +40,6 @@ import org.cojen.classfile.TypeDesc;
 import org.cojen.util.ClassInjector;
 import org.cojen.util.SoftValuedHashMap;
 
-import dirmi.AsynchronousInvocationException;
-
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;
 import dirmi.info.RemoteMethod;

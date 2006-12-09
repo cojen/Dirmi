@@ -52,7 +52,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
-import dirmi.AsynchronousInvocationException;
 import dirmi.NoSuchClassException;
 import dirmi.RemoteTimeoutException;
 import dirmi.Session;
