@@ -20,7 +20,7 @@ import java.lang.annotation.*;
 
 /**
  * Specify the maximum time to wait for a remote method to respond. If it fails
- * to respond in time, a {@link ResponseTimeoutException} is thrown and the
+ * to respond in time, a {@link RemoteTimeoutException} is thrown and the
  * thread running the remote operation is interrupted, in an attempt to stop
  * it. A method that lacks a ResponseTimeout annotation potentially waits
  * forever to respond.
@@ -28,7 +28,7 @@ import java.lang.annotation.*;
  * <p>The timeout value may be specified in minutes, seconds, milliseconds, or
  * in any combination of these fields. The fields are summed up into a single
  * timeout value. If no fields are specified, the timeout defaults to 0, which
- * means a request is sent, but a ResponseTimeoutException is thrown everytime.
+ * means a request is sent, but a RemoteTimeoutException is thrown everytime.
  *
  * <p>A ResponseTimeout can be applied to a Remote interface as well, which in
  * turn applies to all of its declared methods. A method can override this by

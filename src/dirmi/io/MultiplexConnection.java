@@ -49,11 +49,13 @@ final class MultiplexConnection implements Connection {
     }
 
     public String getLocalAddressString() {
-        return appendId(mMux.mMaster.getLocalAddressString());
+        Connection master = mMux.mMaster;
+        return appendId(master == null ? null : master.getLocalAddressString());
     }
 
     public String getRemoteAddressString() {
-        return appendId(mMux.mMaster.getRemoteAddressString());
+        Connection master = mMux.mMaster;
+        return appendId(master == null ? null : master.getRemoteAddressString());
     }
 
     private String appendId(String address) {

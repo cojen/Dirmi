@@ -24,18 +24,18 @@ import java.rmi.RemoteException;
  * @author Brian S O'Neill
  * @see ResponseTimeout
  */
-public class ResponseTimeoutException extends RemoteException {
+public class RemoteTimeoutException extends RemoteException {
     private static final long serialVersionUID = 1;
 
-    public ResponseTimeoutException() {
+    public RemoteTimeoutException() {
         super();
     }
 
-    public ResponseTimeoutException(String message) {
+    public RemoteTimeoutException(String message) {
         super(message);
     }
 
-    public ResponseTimeoutException(String message, Throwable cause) {
+    public RemoteTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
 }
