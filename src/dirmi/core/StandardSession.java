@@ -39,15 +39,14 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -84,8 +83,6 @@ public class StandardSession extends Session {
 
     final Broker mBroker;
     final Executor mExecutor;
-
-    final BlockingQueue<Remote> mQueue;
     final Log mLog;
 
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
@@ -107,6 +104,9 @@ public class StandardSession extends Session {
 
     final Cleaner mCleaner;
 
+    BlockingQueue<Remote> mRemoteServerQueue;
+    Remote mRemoteServer;
+
     /**
      * @param master single connection which is multiplexed
      */
@@ -116,22 +116,30 @@ public class StandardSession extends Session {
 
     /**
      * @param master single connection which is multiplexed
+     * @param server optional server object to export
+     */
+    public StandardSession(Connection master, Remote server) throws IOException {
+        this(new Multiplexer(master), server, null, null);
+    }
+
+    /**
+     * @param master single connection which is multiplexed
+     * @param server optional server object to export
      * @param executor used to execute remote methods; pass null for default
      */
-    public StandardSession(Connection master, Executor executor) throws IOException {
-        this(new Multiplexer(master), executor, null, null);
+    public StandardSession(Connection master, Remote server, Executor executor)
+        throws IOException
+    {
+        this(new Multiplexer(master), server, executor, null);
     }
 
     /**
      * @param broker connection broker must always connect to same remote server
+     * @param server optional server object to export
      * @param executor used to execute remote methods; pass null for default
-     * @param queue queue for received remote objects; pass null for default
      * @param log message log; pass null for default
      */
-    public StandardSession(Broker broker,
-                           Executor executor,
-                           BlockingQueue<Remote> queue,
-                           Log log)
+    public StandardSession(Broker broker, Remote server, Executor executor, Log log)
         throws IOException
     {
         if (broker == null) {
@@ -140,16 +148,12 @@ public class StandardSession extends Session {
         if (executor == null) {
             executor = Executors.newCachedThreadPool(newSessionThreadFactory());
         }
-        if (queue == null) {
-            queue = new SynchronousQueue<Remote>();
-        }
         if (log == null) {
             log = LogFactory.getLog(Session.class);
         }
 
         mBroker = broker;
         mExecutor = executor;
-        mQueue = queue;
         mLog = log;
 
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
@@ -215,14 +219,36 @@ public class StandardSession extends Session {
         }
         in.close();
 
-        // Wait for our identifier to send.
+        // Wait for admin object to send.
         sendAdmin.waitUntilDone();
 
+        // Temporary queue for exchanging remote servers.
+        mRemoteServerQueue = new ArrayBlockingQueue<Remote>(1);
+        
         // Start stub cleaner thread, which also heartbeats.
         mExecutor.execute(mCleaner = new Cleaner());
 
         // Start first accept thread.
         mExecutor.execute(new Accepter());
+
+        // Exchange remote servers.
+        try {
+            mRemoteAdmin.setRemoteServer(server);
+
+            Remote remoteServer = mRemoteServerQueue.take();
+            if (remoteServer instanceof Null) {
+                mRemoteServer = null;
+            } else {
+                mRemoteServer = remoteServer;
+            }
+        } catch (InterruptedException e) {
+            InterruptedIOException io = new InterruptedIOException();
+            io.initCause(e);
+            throw io;
+        }
+
+        // Don't need this anymore.
+        mRemoteServerQueue = null;
     }
 
     public void close() throws IOException {
@@ -230,9 +256,6 @@ public class StandardSession extends Session {
             return;
         }
         mClosing = true;
-
-        // Enqueue special object to unblock caller of receive method.
-        mQueue.offer(new Closed());
 
         mCleaner.interrupt();
 
@@ -255,42 +278,14 @@ public class StandardSession extends Session {
         }
     }
 
+    /*
     public void setTimeoutMillis(int millis) {
         mTimeoutMillis = millis;
     }
+    */
 
-    public void send(Remote remote) throws RemoteException {
-        if (remote == null) {
-            throw new IllegalArgumentException();
-        }
-        mRemoteAdmin.enqueueRemote(remote);
-    }
-
-    public Remote receive() throws RemoteException {
-        Remote remote;
-        try {
-            int timeoutMillis = mTimeoutMillis;
-
-            if (timeoutMillis < 0) {
-                remote = mQueue.take();
-            } else {
-                remote = mQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
-            }
-        } catch (InterruptedException e) {
-            throw new RemoteException("Receive interrupted", e);
-        }
-
-        if (remote == null) {
-            throw new RemoteTimeoutException();
-        }
-
-        if (remote instanceof Closed) {
-            // Enqueue again for future callers.
-            mQueue.offer(remote);
-            throw new RemoteException("Session is closed");
-        }
-
-        return remote;
+    public Remote getRemoteServer() {
+        return mRemoteServer;
     }
 
     public void dispose(Remote object) throws RemoteException {
@@ -330,8 +325,8 @@ public class StandardSession extends Session {
         mNextExpectedHeartbeat = System.currentTimeMillis() + DEFAULT_HEARTBEAT_DELAY_MILLIS;
     }
 
-    // Special object to put into receive queue when session is closed.
-    private static class Closed implements Remote {}
+    // Allow null to be placed into blocking queue.
+    private static class Null implements Remote {}
 
     private static class SessionThreadFactory implements ThreadFactory {
         static final AtomicInteger mPoolNumber = new AtomicInteger(1);
@@ -360,11 +355,7 @@ public class StandardSession extends Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
-            /**
-             * Enqueues a remote object and blocks if receiver is not
-             * receiving.
-             */
-            void enqueueRemote(Remote remote) throws RemoteException;
+            void setRemoteServer(Remote remote) throws RemoteException, InterruptedException;
 
             /**
              * Returns RemoteInfo object from server.
@@ -845,11 +836,11 @@ public class StandardSession extends Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public void enqueueRemote(Remote remote) {
-            try {
-                mQueue.put(remote);
-            } catch (InterruptedException e) {
-                mLog.error("Unable to enqueue received remote object", e);
+        public void setRemoteServer(Remote server) throws InterruptedException {
+            if (server == null) {
+                mRemoteServerQueue.put(new Null());
+            } else {
+                mRemoteServerQueue.put(server);
             }
         }
 

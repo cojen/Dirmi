@@ -35,18 +35,11 @@ public abstract class Session implements Closeable {
     //public abstract void setTimeoutMillis(int millis);
 
     /**
-     * Sends a Remote object to the other side of the Session, which must be
-     * calling receive.
+     * Returns the main remote server object, which may be null.
      *
-     * @throws IllegalArgumentException if remote is null
+     * @return main remote server object, or null 
      */
-    public abstract void send(Remote remote) throws RemoteException;
-
-    /**
-     * Receives a Remote object, blocking until send is called on the other
-     * side of the Session.
-     */
-    public abstract Remote receive() throws RemoteException;
+    public abstract Remote getRemoteServer();
 
     /**
      * Dispose a Remote object, rendering it unusable for future remote
