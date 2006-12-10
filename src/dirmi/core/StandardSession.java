@@ -30,6 +30,7 @@ import java.io.OutputStream;
 import java.io.WriteAbortedException;
 
 import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 import java.rmi.NoSuchObjectException;
@@ -78,7 +79,8 @@ public class StandardSession extends Session {
     }
 
     private static final int DEFAULT_TIMEOUT_MILLIS = -1;
-    private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 60000;
+    private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
+    private static final int DISPOSED_BATCH_SIZE = 100;
 
     final Broker mBroker;
     final Executor mExecutor;
@@ -102,6 +104,8 @@ public class StandardSession extends Session {
     volatile int mTimeoutMillis = DEFAULT_TIMEOUT_MILLIS;
 
     volatile boolean mClosing;
+
+    final Cleaner mCleaner;
 
     /**
      * @param master single connection which is multiplexed
@@ -214,10 +218,11 @@ public class StandardSession extends Session {
         // Wait for our identifier to send.
         sendAdmin.waitUntilDone();
 
-        // Start accept loop.
-        mExecutor.execute(new Accepter());
+        // Start stub cleaner thread, which also heartbeats.
+        mExecutor.execute(mCleaner = new Cleaner());
 
-        // FIXME: Start ReferenceQueue thread, which also heartbeats.
+        // Start first accept thread.
+        mExecutor.execute(new Accepter());
     }
 
     public void close() throws IOException {
@@ -228,6 +233,8 @@ public class StandardSession extends Session {
 
         // Enqueue special object to unblock caller of receive method.
         mQueue.offer(new Closed());
+
+        mCleaner.interrupt();
 
         if (mExecutor instanceof ExecutorService) {
             try {
@@ -353,7 +360,10 @@ public class StandardSession extends Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
-            @Asynchronous
+            /**
+             * Enqueues a remote object and blocks if receiver is not
+             * receiving.
+             */
             void enqueueRemote(Remote remote) throws RemoteException;
 
             /**
@@ -364,8 +374,15 @@ public class StandardSession extends Session {
             /**
              * Notification from client when it has disposed of an identified object.
              */
-            @Asynchronous
-            void disposed(Identifier id) throws RemoteException;
+            void disposed(Identifier ids) throws RemoteException;
+
+            /**
+             * Notification from client when it has disposed of a batch of
+             * identified objects. Sending synchronous batches is preferred
+             * over sending asynchronous disposed notification because it
+             * limits the server thread growth.
+             */
+            void disposedBatch(Identifier[] batch) throws RemoteException;
 
             /**
              * Notification from client when explicitly closed.
@@ -375,10 +392,9 @@ public class StandardSession extends Session {
 
             /**
              * Notification from client that it is alive.
-             *
-             * @return maximum milliseconds to wait before sending next heartbeat
              */
-            long heartbeat() throws RemoteException;
+            @Asynchronous
+            void heartbeat() throws RemoteException;
         }
     }
 
@@ -393,9 +409,15 @@ public class StandardSession extends Session {
         StubSupportImpl getStubSupport() {
             return mStubSupport;
         }
+
+        Identifier getObjectID() {
+            return mStubSupport.getObjectID();
+        }
     }
 
     private static class MarshalledRemote implements Externalizable {
+        private static final long serialVersionUID = 1;
+
         Identifier mObjID;
         Identifier mTypeID;
         RemoteInfo mInfo;
@@ -419,6 +441,115 @@ public class StandardSession extends Session {
             mObjID = Identifier.read(in);
             mTypeID = Identifier.read(in);
             mInfo = (RemoteInfo) in.readObject();
+        }
+    }
+
+    private class Cleaner implements Runnable {
+        private volatile Thread mThread;
+        private volatile boolean mInterruptable;
+
+        public void run() {
+            mThread = Thread.currentThread();
+
+            long heartbeatDelay = DEFAULT_HEARTBEAT_DELAY_MILLIS / 2;
+            heartbeatReceived();
+
+            Identifier[] batch = new Identifier[DISPOSED_BATCH_SIZE];
+
+            try {
+                while (!mClosing) {
+                    Reference<? extends Remote> ref;
+                    try {
+                        mInterruptable = true;
+                        ref = mStubQueue.remove(heartbeatDelay);
+                    } finally {
+                        mInterruptable = false;
+                    }
+
+                    if (!mClosing) {
+                        long now = System.currentTimeMillis();
+                        if (now > mNextExpectedHeartbeat) {
+                            // Didn't get a heartbeat from peer, so close session.
+                            mLog.error("No heartbeat received; closing session");
+                            try {
+                                close();
+                            } catch (IOException e) {
+                                // Don't care.
+                            }
+                            return;
+                        }
+
+                        // Send our heartbeat to peer.
+                        try {
+                            mRemoteAdmin.heartbeat();
+                        } catch (RemoteException e) {
+                            if (!mClosing) {
+                                mLog.error("Unable to send heartbeat", e);
+                            }
+                        }
+                    }
+
+                    if (ref == null) {
+                        continue;
+                    }
+
+                    {
+                        int i = 0;
+                        do {
+                            if (ref instanceof StubRef) {
+                                Identifier id = ((StubRef) ref).getObjectID();
+                                mStubs.remove(id);
+                                batch[i++] = id;
+                                if (i >= DISPOSED_BATCH_SIZE) {
+                                    sendDisposedBatch(batch, i);
+                                    i = 0;
+                                }
+                            }
+                        } while ((ref = mStubQueue.poll()) != null);
+
+                        sendDisposedBatch(batch, i);
+                        java.util.Arrays.fill(batch, null);
+                    }
+                }
+            } catch (InterruptedException e) {
+                // Assuming we're a pooled thread, clear the flag to prevent
+                // problems when this thread gets reused.
+                mThread.interrupted();
+                if (!mClosing) {
+                    mLog.error("Stub cleaner interrupted", e);
+                }
+            }
+        }
+
+        void interrupt() {
+            // This implementation has race conditions which can cause the
+            // cleaner to not receive the interrupt when it should. This isn't
+            // terribly harmful however, as it just causes the cleaner to not
+            // exit as promptly.
+            if (mInterruptable) {
+                Thread t = mThread;
+                if (t != null) {
+                    t.interrupt();
+                }
+            }
+        }
+
+        private void sendDisposedBatch(Identifier[] batch, int size) {
+            if (size <= 0 || mClosing) {
+                return;
+            }
+            if (size < batch.length) {
+                Identifier[] copy = new Identifier[size];
+                System.arraycopy(batch, 0, copy, 0, size);
+                batch = copy;
+            }
+            try {
+                mRemoteAdmin.disposedBatch(batch);
+            } catch (RemoteException e) {
+                if (!mClosing) {
+                    mLog.error("Unable notify remote object disposed", e);
+                }
+            }
         }
     }
 
@@ -734,6 +865,15 @@ public class StandardSession extends Session {
             dispose(id);
         }
 
+        public void disposedBatch(Identifier[] batch) {
+            // Peer might not be sending heartbeats while diposing batches, but
+            // it certainly alive if its calling us.
+            heartbeat();
+            for (Identifier id : batch) {
+                dispose(id);
+            }
+        }
+
         public void closed() {
             mSkeletons.clear();
             mSkeletonTypeCounts.clear();
@@ -747,9 +887,8 @@ public class StandardSession extends Session {
             }
         }
 
-        public long heartbeat() {
+        public void heartbeat() {
             heartbeatReceived();
-            return DEFAULT_HEARTBEAT_DELAY_MILLIS;
         }
     }
 }

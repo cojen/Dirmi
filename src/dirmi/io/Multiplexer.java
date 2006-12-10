@@ -217,7 +217,10 @@ public class Multiplexer extends AbstractBroker implements Closeable {
     }
 
     public void close() throws IOException {
-        mMaster.close();
+        Connection master = mMaster;
+        if (master != null) {
+            master.close();
+        }
     }
 
     protected Connection connect() throws IOException {

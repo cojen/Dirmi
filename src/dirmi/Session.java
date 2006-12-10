@@ -32,7 +32,7 @@ public abstract class Session implements Closeable {
      *
      * @param millis timeout value; use negative value for infinite timeout
      */
-    public abstract void setTimeoutMillis(int millis);
+    //public abstract void setTimeoutMillis(int millis);
 
     /**
      * Sends a Remote object to the other side of the Session, which must be
