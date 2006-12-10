@@ -46,6 +46,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 
 import org.apache.commons.logging.Log;
@@ -215,7 +216,9 @@ public class StandardSession extends Session {
         try {
             mRemoteAdmin = (Hidden.Admin) in.readObject();
         } catch (ClassNotFoundException e) {
-            throw new IOException(e);
+            IOException io = new IOException();
+            io.initCause(e);
+            throw io;
         }
         in.close();
 
@@ -224,12 +227,24 @@ public class StandardSession extends Session {
 
         // Temporary queue for exchanging remote servers.
         mRemoteServerQueue = new ArrayBlockingQueue<Object>(1);
-        
-        // Start stub cleaner thread, which also heartbeats.
-        mExecutor.execute(mCleaner = new Cleaner());
 
-        // Start first accept thread.
-        mExecutor.execute(new Accepter());
+        // Don't start cleaner until after exchange of remote servers.
+        // Otherwise, it might hog a thread too soon and deadlock construction.
+        mCleaner = new Cleaner();
+
+        try {
+            // Start first accept thread.
+            mExecutor.execute(new Accepter());
+        } catch (RejectedExecutionException e) {
+            try {
+                close();
+            } catch (IOException e2) {
+                // Don't care.
+            }
+            IOException io = new IOException("Unable to start accept thread");
+            io.initCause(e);
+            throw io;
+        }
 
         // Exchange remote servers.
         try {
@@ -249,6 +264,20 @@ public class StandardSession extends Session {
 
         // Don't need this anymore.
         mRemoteServerQueue = null;
+
+        try {
+            // Start stub cleaner thread, which also heartbeats.
+            mExecutor.execute(mCleaner);
+        } catch (RejectedExecutionException e) {
+            try {
+                close();
+            } catch (IOException e2) {
+                // Don't care.
+            }
+            IOException io = new IOException("Unable to start heartbeat thread");
+            io.initCause(e);
+            throw io;
+        }
     }
 
     public void close() throws IOException {
@@ -261,7 +290,7 @@ public class StandardSession extends Session {
 
         if (mExecutor instanceof ExecutorService) {
             try {
-                ((ExecutorService) mExecutor).shutdown();
+                ((ExecutorService) mExecutor).shutdownNow();
             } catch (SecurityException e) {
             }
         }
@@ -487,8 +516,9 @@ public class StandardSession extends Session {
                     {
                         int i = 0;
                         do {
-                            if (ref instanceof StubRef) {
-                                Identifier id = ((StubRef) ref).getObjectID();
+                            // Stupid Object casts to workaround compiler bug.
+                            if (((Object) ref) instanceof StubRef) {
+                                Identifier id = ((StubRef) ((Object) ref)).getObjectID();
                                 mStubs.remove(id);
                                 batch[i++] = id;
                                 if (i >= DISPOSED_BATCH_SIZE) {
@@ -546,69 +576,78 @@ public class StandardSession extends Session {
 
     private class Accepter implements Runnable {
         public void run() {
-            Connection con;
-            try {
-                con = mBroker.accepter().accept();
-            } catch (IOException e) {
-                if (!mClosing) {
-                    mLog.error("Failure accepting connection; closing session", e);
-                    try {
-                        close();
-                    } catch (IOException e2) {
-                        // Don't care.
+            boolean spawned;
+            do {
+                Connection con;
+                try {
+                    con = mBroker.accepter().accept();
+                } catch (IOException e) {
+                    if (!mClosing) {
+                        mLog.error("Failure accepting connection; closing session", e);
+                        try {
+                            close();
+                        } catch (IOException e2) {
+                            // Don't care.
+                        }
                     }
-                }
-                return;
-            }
-
-            // Spawn a replacement accepter.
-            mExecutor.execute(new Accepter());
-
-            try {
-                final RemoteConnection remoteCon = new RemoteCon(con);
-
-                // Decide if connection is to be used for invoking method or to
-                // receive an incoming remote object.
-
-                RemoteInputStream in = remoteCon.getInputStream();
-                Identifier id = Identifier.read(in);
-
-                // Find a Skeleton to invoke.
-                final Skeleton skeleton = mSkeletons.get(id);
-
-                if (skeleton == null) {
-                    Throwable t = new NoSuchObjectException
-                        ("Server cannot find remote object: " + id);
-                    remoteCon.getOutputStream().writeThrowable(t);
-                    remoteCon.close();
                     return;
                 }
 
-                Throwable throwable;
+                // Spawn a replacement accepter.
+                try {
+                    mExecutor.execute(new Accepter());
+                    spawned = true;
+                } catch (RejectedExecutionException e) {
+                    mLog.warn("Unable to spawn replacement accept thread; will loop back", e);
+                    spawned = false;
+                }
 
                 try {
-                    skeleton.invoke(remoteCon);
-                    return;
-                } catch (NoSuchMethodException e) {
-                    throwable = e;
-                } catch (NoSuchObjectException e) {
-                    throwable = e;
-                } catch (ClassNotFoundException e) {
-                    throwable = e;
-                } catch (AsynchronousInvocationException e) {
-                    Throwable cause = e.getCause();
-                    if (cause == null) {
-                        cause = e;
-                    }
-                    mLog.error("Unhandled exception in asynchronous server method", cause);
-                    return;
-                }
+                    final RemoteConnection remoteCon = new RemoteCon(con);
 
-                remoteCon.getOutputStream().writeThrowable(throwable);
-                remoteCon.close();
-            } catch (IOException e) {
-                mLog.error("Failure processing accepted connection", e);
-            }
+                    // Decide if connection is to be used for invoking method or to
+                    // receive an incoming remote object.
+
+                    RemoteInputStream in = remoteCon.getInputStream();
+                    Identifier id = Identifier.read(in);
+
+                    // Find a Skeleton to invoke.
+                    final Skeleton skeleton = mSkeletons.get(id);
+
+                    if (skeleton == null) {
+                        Throwable t = new NoSuchObjectException
+                            ("Server cannot find remote object: " + id);
+                        remoteCon.getOutputStream().writeThrowable(t);
+                        remoteCon.close();
+                        return;
+                    }
+
+                    Throwable throwable;
+
+                    try {
+                        skeleton.invoke(remoteCon);
+                        return;
+                    } catch (NoSuchMethodException e) {
+                        throwable = e;
+                    } catch (NoSuchObjectException e) {
+                        throwable = e;
+                    } catch (ClassNotFoundException e) {
+                        throwable = e;
+                    } catch (AsynchronousInvocationException e) {
+                        Throwable cause = e.getCause();
+                        if (cause == null) {
+                            cause = e;
+                        }
+                        mLog.error("Unhandled exception in asynchronous server method", cause);
+                        return;
+                    }
+
+                    remoteCon.getOutputStream().writeThrowable(throwable);
+                    remoteCon.close();
+                } catch (IOException e) {
+                    mLog.error("Failure processing accepted connection", e);
+                }
+            } while (!spawned);
         }
     }
 
