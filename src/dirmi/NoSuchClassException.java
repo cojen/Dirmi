@@ -19,7 +19,8 @@ package dirmi;
 import java.rmi.RemoteException;
 
 /**
- * 
+ * Thrown when a client is requesting information about a class that is unknown
+ * to the server.
  *
  * @author Brian S O'Neill
  */

@@ -22,24 +22,17 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**
- * 
+ * Remote Method Invocation Session.
  *
  * @author Brian S O'Neill
  */
 public abstract class Session implements Closeable {
     /**
-     * Set the timeout for all remote operations on this Session.
-     *
-     * @param millis timeout value; use negative value for infinite timeout
-     */
-    //public abstract void setTimeoutMillis(int millis);
-
-    /**
      * Returns the main remote server object, which may be null.
      *
      * @return main remote server object, or null 
      */
-    public abstract Remote getRemoteServer();
+    public abstract Object getRemoteServer();
 
     /**
      * Dispose a Remote object, rendering it unusable for future remote

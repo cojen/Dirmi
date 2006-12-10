@@ -104,8 +104,8 @@ public class StandardSession extends Session {
 
     final Cleaner mCleaner;
 
-    BlockingQueue<Remote> mRemoteServerQueue;
-    Remote mRemoteServer;
+    BlockingQueue<Object> mRemoteServerQueue;
+    Object mRemoteServer;
 
     /**
      * @param master single connection which is multiplexed
@@ -118,7 +118,7 @@ public class StandardSession extends Session {
      * @param master single connection which is multiplexed
      * @param server optional server object to export
      */
-    public StandardSession(Connection master, Remote server) throws IOException {
+    public StandardSession(Connection master, Object server) throws IOException {
         this(new Multiplexer(master), server, null, null);
     }
 
@@ -127,7 +127,7 @@ public class StandardSession extends Session {
      * @param server optional server object to export
      * @param executor used to execute remote methods; pass null for default
      */
-    public StandardSession(Connection master, Remote server, Executor executor)
+    public StandardSession(Connection master, Object server, Executor executor)
         throws IOException
     {
         this(new Multiplexer(master), server, executor, null);
@@ -139,7 +139,7 @@ public class StandardSession extends Session {
      * @param executor used to execute remote methods; pass null for default
      * @param log message log; pass null for default
      */
-    public StandardSession(Broker broker, Remote server, Executor executor, Log log)
+    public StandardSession(Broker broker, Object server, Executor executor, Log log)
         throws IOException
     {
         if (broker == null) {
@@ -223,7 +223,7 @@ public class StandardSession extends Session {
         sendAdmin.waitUntilDone();
 
         // Temporary queue for exchanging remote servers.
-        mRemoteServerQueue = new ArrayBlockingQueue<Remote>(1);
+        mRemoteServerQueue = new ArrayBlockingQueue<Object>(1);
         
         // Start stub cleaner thread, which also heartbeats.
         mExecutor.execute(mCleaner = new Cleaner());
@@ -235,7 +235,7 @@ public class StandardSession extends Session {
         try {
             mRemoteAdmin.setRemoteServer(server);
 
-            Remote remoteServer = mRemoteServerQueue.take();
+            Object remoteServer = mRemoteServerQueue.take();
             if (remoteServer instanceof Null) {
                 mRemoteServer = null;
             } else {
@@ -284,7 +284,7 @@ public class StandardSession extends Session {
     }
     */
 
-    public Remote getRemoteServer() {
+    public Object getRemoteServer() {
         return mRemoteServer;
     }
 
@@ -326,7 +326,7 @@ public class StandardSession extends Session {
     }
 
     // Allow null to be placed into blocking queue.
-    private static class Null implements Remote {}
+    private static class Null {}
 
     private static class SessionThreadFactory implements ThreadFactory {
         static final AtomicInteger mPoolNumber = new AtomicInteger(1);
@@ -355,7 +355,7 @@ public class StandardSession extends Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
-            void setRemoteServer(Remote remote) throws RemoteException, InterruptedException;
+            void setRemoteServer(Object remote) throws RemoteException, InterruptedException;
 
             /**
              * Returns RemoteInfo object from server.
@@ -836,7 +836,7 @@ public class StandardSession extends Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public void setRemoteServer(Remote server) throws InterruptedException {
+        public void setRemoteServer(Object server) throws InterruptedException {
             if (server == null) {
                 mRemoteServerQueue.put(new Null());
             } else {
