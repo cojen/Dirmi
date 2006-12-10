@@ -25,7 +25,10 @@ import java.lang.annotation.*;
  * layer is backed up.
  *
  * <p>An asynchronous method must return void, and it may not declare any
- * exceptions other than {@link java.rmi.RemoteException}.
+ * exceptions other than {@link java.rmi.RemoteException}. Asynchronous
+ * methods should be used with caution or else they can overwhelm the server
+ * with active threads. Asynchronous methods should either run quickly or be
+ * called infrequently to prevent problems.
  *
  * @author Brian S O'Neill
  */
