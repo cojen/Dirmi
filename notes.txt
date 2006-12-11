@@ -1,9 +1,6 @@
 
 Ideas for dirmi:
 
-- Bidirectional
-- Operates on a single InputStream and OutputStream pair
-- Uses @Remote annotation on interface, method (return value), or parameter.
 - Byte and character streams supported
 - Custom annotation describes how other kinds of streams can be connected
 - How about custom annotation which can describe how anything is relayed?
@@ -11,7 +8,6 @@ Ideas for dirmi:
 - Custom annotation handler is just given a raw stream to play with. Default
   annotation is @Object, which creates a new Object stream.
 - Perhaps session ID is passed to handler too? To keep things separate?
-- Can use @Asynchronous annotation for methods that return void and declare no exceptions.
 
 - Define @Idempotent annotation for method. If connection restored, this method
   can be re-executed automatically. When connection lost, remote objects might
@@ -23,20 +19,10 @@ Ideas for dirmi:
   object was not obtained from an @Idempotent method (or it is not the root)
   then it cannot be restored and an exception must be thrown.
 
-- Define some mechanism to "dispose" a remote object rather than relying on
-  exclusively on garbage collection. Server side objects can implement
-  Unreferenced in standard RMI be notified when all clients are no longer using
-  an object. How can dispose be worked in? A method in DisposableRemote? The
-  server-side implementation will have to implement this method too, but with
-  what? Leave it empty?
-
 - Define a mechanism to invoke any remote method asynchronously and return a
   Future. Perhaps this is just a RemoteFuture that's passed in as a parameter?
 
 - Support batch requests somehow.
-
-- RemoteStub needs to be serializable. Any Remote object refs need to be
-  written with object id. Upon deserialization, convert object ids back.
 
 - Define @Marshalled annotation for method. This provides MarshalledObject
   class loading behavior for all objects passed through method. Instead of a
@@ -45,56 +31,3 @@ Ideas for dirmi:
   @Marshalled annotation in order for this to function. For added protection,
   marshalling is off by default on client and server.
 
-ObjectRegistry:
-
-- supports both local and remote objects
-
-- Needs to communicate to other side when local objects are registered for the
-  first time. Also need to communicate method ids for first use. This is sent
-  via list method names, sync mode, and signatures.
-
-- Local objects are registered, and skeletons created. Invoke a method on the
-  registry, passing an object id, method id, and InputStream. If non-async,
-  pass an OutputStream too. Skeletons can be looked up by object id.
-
-- Remote objects are registered with object id and method ids, and stubs
-  created. The stub looks like a normal object, and streaming is hidden. Write
-  object id, method id (2 bytes), and additional arguments. If async,
-  close. Else flush and read. Caller closes stream when it is done with
-  response.
-
-- Class id record can be sent once. With it is class name, and count of
-  methods. Each method record contains id, name, signature, exceptions, and
-  sync mode. Method ids are unique only for a given class. They are sequental,
-  starting with zero. Sender maps class to id. Receiver maps id to class (and
-  more). When class record is received, define stub.
-
-- Reserve object id zero for core PrincipalRemoteBroker. Several method ids are
-  reserved for its use as well.
-
-- Each accepted connection by server gets assigned a new (or pooled) thread.
-
-
-Object identifiers:
-
-- Should they be UUIDs? Can short local IDs suffice? If not UUIDs, then remote
-  object being passed around will always get a longer and longer path. If UUID,
-  when remote object reaches originating node, stub path is broken.
-
-- If UUIDs, stubs have same UUID as real object. This simplifies design
-  somewhat. When converting UUID back to object, table is looked up. This might
-  result in stub or real object. It does not matter.
-
-- UUIDs also make it possible to deserialize stubs, making it possible to find
-  the support object. If it can't find it, then what? Fail. Server is
-  responsible for writing info for new classes and remote objects via separate
-  connection. Server waits for ack to prevent race condition. Write object id
-  and class id. If client doesn't know what class is, also write RemoteInfo for
-  class. Always remember what objects client has until client calls dispose.
-
-- Other strategy is to request classes on demand. For object de-serialization,
-  this requires a thread local instance to RMI engine. Better, just cast
-  ObjectInput to special object that allows access to connection.
-
-- Should stub just implement Externalizable, making it compatible with object
-  stream? Should remote streams simply extend object streams?
