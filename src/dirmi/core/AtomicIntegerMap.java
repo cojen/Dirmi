@@ -36,6 +36,13 @@ public class AtomicIntegerMap<K> {
     }
 
     /**
+     * Clears the contents of the map.
+     */
+    public void clear() {
+	mCounts.clear();
+    }
+
+    /**
      * Gets the current value.
      *
      * @return the current value

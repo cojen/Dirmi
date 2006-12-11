@@ -87,7 +87,7 @@ public class StandardSession extends Session {
     final Log mLog;
 
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
-    final ConcurrentMap<Class, AtomicInteger> mSkeletonTypeCounts;
+    final AtomicIntegerMap<Class> mSkeletonTypeCounts;
 
     final ConcurrentMap<Identifier, StubRef> mStubs;
 
@@ -158,7 +158,7 @@ public class StandardSession extends Session {
         mLog = log;
 
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
-        mSkeletonTypeCounts = new ConcurrentHashMap<Class, AtomicInteger>();
+        mSkeletonTypeCounts = new AtomicIntegerMap<Class>();
 
         mStubs = new ConcurrentHashMap<Identifier, StubRef>();
 
@@ -334,9 +334,8 @@ public class StandardSession extends Session {
         if (skeleton != null) {
             Remote remote = skeleton.getRemoteObject();
             Class remoteType = RemoteIntrospector.getRemoteType(remote);
-            AtomicInteger count = mSkeletonTypeCounts.get(remoteType);
-            if (count != null && count.decrementAndGet() <= 0) {
-                mSkeletonTypeCounts.remove(remoteType, count);
+            if (mSkeletonTypeCounts.decrementAndGet(remoteType) < 0) {
+                mSkeletonTypeCounts.incrementAndGet(remoteType);
             }
             doNotify = true;
         }
@@ -783,21 +782,14 @@ public class StandardSession extends Session {
                 // Only send skeleton for first use of exported object.
                 Skeleton skeleton;
                 if (!mStubs.containsKey(objID) && (skeleton = mSkeletons.get(objID)) == null) {
-                    AtomicInteger count = new AtomicInteger(0);
-                    AtomicInteger oldCount = mSkeletonTypeCounts.putIfAbsent(remoteType, count);
-
-                    if (oldCount != null) {
-                        count = oldCount;
-                    }
-
-                    if (count.getAndIncrement() == 0) {
+                    if (mSkeletonTypeCounts.getAndIncrement(remoteType) == 0) {
                         // Send info for first use of remote type. If not sent,
                         // client will request it anyhow, so this is an
                         // optimization to avoid an extra round trip.
                         try {
                             info = RemoteIntrospector.examine(remoteType);
                         } catch (IllegalArgumentException e) {
-                            count.getAndDecrement(); // undo increment
+                            mSkeletonTypeCounts.getAndDecrement(remoteType); // undo increment
                             throw new WriteAbortedException("Malformed Remote object", e);
                         }
                     }
