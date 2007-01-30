@@ -37,10 +37,10 @@ TODO:
   with max time to wait before reply. Actual delay is the minimum of this value
   and local max wait time. A global scheduled executor sends these messages.
 
-- Support asynchronous messages with optional flow control specified by a "max"
-  or "permits" parameter. Server sends back hidden asynchronous messages when
-  methods have completed. Stub keeps internal count for each asynchronous
-  method via a Semaphore.
+- Support asynchronous messages with optional flow control specified by a
+  "max", "permits", or "outstanding" parameter. Server sends back hidden
+  asynchronous messages when methods have completed. Stub keeps internal count
+  for each asynchronous method via a Semaphore.
 
 - Global cleaner thread can send dispose messages asynchronously because flow
   control will limit traffic. Dispose messages need to be sent to a global
