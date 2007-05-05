@@ -25,10 +25,12 @@ import java.lang.annotation.*;
  * layer is backed up.
  *
  * <p>An asynchronous method must return void, and it may not declare any
- * exceptions other than {@link java.rmi.RemoteException}. Asynchronous
- * methods should be used with caution or else they can overwhelm the server
- * with active threads. Asynchronous methods should either run quickly or be
- * called infrequently to prevent problems.
+ * exceptions other than {@link java.rmi.RemoteException}.
+ *
+ * <p>Asynchronous methods should be used with caution or else they can
+ * overwhelm the server with active threads. Asynchronous methods should either
+ * run quickly or be called infrequently to prevent problems. Specify a permit
+ * value to limit the number of outstanding calls.
  *
  * @author Brian S O'Neill
  */
@@ -36,4 +38,20 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Asynchronous {
+    /**
+     * Specify the maximum number of outstanding asynchronous calls before the
+     * client waits for completion. This is a flow control mechanism which
+     * prevents overwhelming the server with active threads. By default, there
+     * is no limit.
+     *
+     * <p>A thread blocked waiting for a permit cannot be interrupted unless
+     * the asynchronous method declares throwing InterruptedException.
+     */
+    int permits() default -1;
+
+    /**
+     * If asynchronous call has a limited number of permits, set fair to true
+     * to guarantee first-in first-out granting of permits under contention.
+     */
+    boolean fair() default false;
 }

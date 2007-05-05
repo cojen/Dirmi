@@ -33,7 +33,7 @@ public interface Connection extends Closeable {
 
     /**
      * Returns the full local address of the connection. This method should not
-     * block when called. If host name resolution may block, return a
+     * block when called. If host name resolution may block, return an
      * unresolved name and resolve in a background thread for later requests.
      *
      * @return local address or null if unknown
@@ -42,7 +42,7 @@ public interface Connection extends Closeable {
 
     /**
      * Returns the full remote address of the connection. This method should not
-     * block when called. If host name resolution may block, return a
+     * block when called. If host name resolution may block, return an
      * unresolved name and resolve in a background thread for later requests.
      *
      * @return remote address or null if unknown

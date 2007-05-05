@@ -30,6 +30,8 @@ import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Map;
 
+import java.util.concurrent.Semaphore;
+
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
@@ -57,6 +59,7 @@ import dirmi.info.RemoteParameter;
  * @author Brian S O'Neill
  */
 public class StubFactoryGenerator<R extends Remote> {
+    private static final String COMPLETION_FIELD_PREFIX = "completion_";
     private static final String STUB_SUPPORT_FIELD_NAME = "support";
 
     private static final Map<Object, StubFactory<?>> cCache;
@@ -131,6 +134,8 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
+        final TypeDesc completionType = TypeDesc.forClass(Hidden.Completion.class);
+        final TypeDesc completionArrayType = completionType.toArrayType();
         final TypeDesc remoteConnectionType = TypeDesc.forClass(RemoteConnection.class);
         final TypeDesc remoteInType = TypeDesc.forClass(RemoteInputStream.class);
         final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutputStream.class);
@@ -164,6 +169,26 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(b.getParameter(0));
             b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
 
+            // Also define fields and assign to completion objects.
+            int methodOrdinal = -1;
+            for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
+                methodOrdinal++;
+                if (method.isAsynchronous() && method.getAsynchronousPermits() >= 0) {
+                    String fieldName = COMPLETION_FIELD_PREFIX + methodOrdinal;
+
+                    cf.addField(Modifiers.PRIVATE.toFinal(true), fieldName, completionType);
+
+                    b.loadThis();
+                    b.newObject(completionType);
+                    b.dup();
+                    b.loadConstant(method.getAsynchronousPermits());
+                    b.loadConstant(method.isAsynchronousFair());
+                    b.invokeConstructor(completionType,
+                                        new TypeDesc[] {TypeDesc.INT, TypeDesc.BOOLEAN});
+                    b.storeField(fieldName, completionType);
+                }
+            }
+
             b.returnVoid();
         }
 
@@ -181,12 +206,27 @@ public class StubFactoryGenerator<R extends Remote> {
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
 
+            boolean interruptible = false;
             TypeDesc[] exceptionDescs = CodeBuilderUtil.getTypeDescs(method.getExceptionTypes());
             for (TypeDesc desc : exceptionDescs) {
                 mi.addException(desc);
+                if (desc.toClass() == InterruptedException.class) {
+                    interruptible = true;
+                }
             }
 
             CodeBuilder b = new CodeBuilder(mi);
+
+            // Asynchronous method with limited permits must acquire semaphore.
+            if (method.isAsynchronous() && method.getAsynchronousPermits() >= 0) {
+                b.loadThis();
+                b.loadField(COMPLETION_FIELD_PREFIX + methodOrdinal, completionType);
+                if (interruptible) {
+                    b.invokeVirtual(completionType, "acquire", null, null);
+                } else {
+                    b.invokeVirtual(completionType, "acquireUninterruptibly", null, null);
+                }
+            }
 
             Label tryStart = b.createLabel().setLocation();
 
@@ -218,8 +258,19 @@ public class StubFactoryGenerator<R extends Remote> {
             }
 
             if (method.isAsynchronous()) {
+                if (method.getAsynchronousPermits() >= 0) {
+                    // Write remote AsynchronousCompletion object to be called by server.
+                    b.loadLocal(remoteOutVar);
+                    b.loadThis();
+                    b.loadField(COMPLETION_FIELD_PREFIX + methodOrdinal, completionType);
+                    b.invokeVirtual
+                        (remoteOutType, "writeObject", null, new TypeDesc[] {TypeDesc.OBJECT});
+                }
+
+                // Now close connection since no return value to read back.
                 b.loadLocal(conVar);
                 b.invokeInterface(remoteConnectionType, "close", null, null);
+
                 if (returnDesc != null) {
                     // Asynchronous method should not have a return value, but
                     // this one does for some reason. Just return 0, false, or null.
@@ -276,15 +327,26 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.returnValue(returnDesc);
             }
 
-            Label tryEnd = b.createLabel().setLocation();
+            Label tryEnd1 = b.createLabel().setLocation();
+
+            if (method.isAsynchronous() && method.getAsynchronousPermits() >= 0) {
+                // If any exception, close completion object.
+                b.exceptionHandler(tryStart, tryEnd1, null);
+                b.loadThis();
+                b.loadField(COMPLETION_FIELD_PREFIX + methodOrdinal, completionType);
+                b.invokeVirtual(completionType, "close", null, null);
+                b.throwObject();
+            }
+
+            Label tryEnd2 = b.createLabel().setLocation();
 
             // Convert any IOException to a RemoteException.
 
-            b.exceptionHandler(tryStart, tryEnd, RemoteException.class.getName());
+            b.exceptionHandler(tryStart, tryEnd2, RemoteException.class.getName());
             // RemoteException is an IOException, but leave it as-is.
             b.throwObject();
 
-            b.exceptionHandler(tryStart, tryEnd, IOException.class.getName());
+            b.exceptionHandler(tryStart, tryEnd2, IOException.class.getName());
             LocalVariable exceptionVar =
                 b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
             b.storeLocal(exceptionVar);
@@ -442,6 +504,60 @@ public class StubFactoryGenerator<R extends Remote> {
             InternalError ie = new InternalError();
             ie.initCause(error);
             throw ie;
+        }
+    }
+
+    private static class Hidden {
+        public static class Completion implements AsynchronousCompletion {
+            private volatile Semaphore mSemaphore;
+
+            public Completion(int permits, boolean fair) {
+                mSemaphore = new Semaphore(permits, fair);
+            }
+
+            // Called locally by stub.
+            public void acquire() throws InterruptedException, RemoteException {
+                Semaphore s = mSemaphore;
+                if (s != null) {
+                    s.acquire();
+                    if (mSemaphore != null) {
+                        return;
+                    }
+                }
+                throw new RemoteException("Session closed");
+            }
+
+            // Called locally by stub.
+            public void acquireUninterruptibly() throws RemoteException {
+                Semaphore s = mSemaphore;
+                if (s != null) {
+                    s.acquireUninterruptibly();
+                    if (mSemaphore != null) {
+                        return;
+                    }
+                }
+                throw new RemoteException("Session closed");
+            }
+
+            // Called remotely by server.
+            public void completed() {
+                Semaphore s = mSemaphore;
+                if (s != null) {
+                    s.release();
+                }
+            }
+
+            // Called locally by stub or session.
+            public void dispose() {
+                Semaphore s = mSemaphore;
+                mSemaphore = null;
+                if (s != null) {
+                    // Draining and releasing the max possible permits should
+                    // cause all blocked threads to resume.
+                    s.drainPermits();
+                    s.release(Integer.MAX_VALUE);
+                }
+            }
         }
     }
 }

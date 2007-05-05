@@ -29,16 +29,6 @@ import java.io.ObjectOutput;
  */
 public interface RemoteOutput extends ObjectOutput, Flushable, Closeable {
     /**
-     * Writes the raw float bits as a 32-bit integer.
-     */
-    void writeFloat(float v) throws IOException;
-
-    /**
-     * Writes the raw double bits as a 64-bit integer.
-     */
-    void writeDouble(double v) throws IOException;
-
-    /**
      * Writes the length and contents of the String in a packed format similar
      * to UTF-8.
      *

@@ -52,9 +52,4 @@ public interface Skeleton {
                NoSuchObjectException,
                ClassNotFoundException,
                AsynchronousInvocationException;
-
-    /**
-     * Returns the Remote object wrapped by this Skeleton.
-     */
-    Remote getRemoteObject();
 }

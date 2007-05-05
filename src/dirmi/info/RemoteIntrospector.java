@@ -361,6 +361,8 @@ public class RemoteIntrospector {
         private final Set<RemoteParameter> mExceptionTypes;
 
         private final boolean mAsynchronous;
+        private final int mAsynchronousPermits;
+        private final boolean mAsynchronousFair;
         private final boolean mIdempotent;
 
         private transient Method mMethod;
@@ -408,7 +410,17 @@ public class RemoteIntrospector {
                 mExceptionTypes = Collections.unmodifiableSet(set);
             }
 
-            mAsynchronous = m.getAnnotation(Asynchronous.class) != null;
+            Asynchronous ann = m.getAnnotation(Asynchronous.class);
+            if (ann == null) {
+                mAsynchronous = false;
+                mAsynchronousPermits = -1;
+                mAsynchronousFair = false;
+            } else {
+                mAsynchronous = true;
+                mAsynchronousPermits = ann.permits();
+                mAsynchronousFair = ann.fair();
+            }
+
             mIdempotent = m.getAnnotation(Idempotent.class) != null;
 
             // Hang on to this until resolve is called.
@@ -423,6 +435,8 @@ public class RemoteIntrospector {
             mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
 
             mAsynchronous = existing.mAsynchronous;
+            mAsynchronousPermits = existing.mAsynchronousPermits;
+            mAsynchronousFair = existing.mAsynchronousFair;
             mIdempotent = existing.mIdempotent;
 
             mMethod = existing.mMethod;
@@ -465,6 +479,14 @@ public class RemoteIntrospector {
             return mAsynchronous;
         }
 
+        public int getAsynchronousPermits() {
+            return mAsynchronousPermits;
+        }
+
+        public boolean isAsynchronousFair() {
+            return mAsynchronousFair;
+        }
+
         public boolean isIdempotent() {
             return mIdempotent;
         }
@@ -485,6 +507,8 @@ public class RemoteIntrospector {
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
                     (mAsynchronous == other.mAsynchronous) &&
+                    (mAsynchronousPermits == other.mAsynchronousPermits) &&
+                    (mAsynchronousFair == other.mAsynchronousFair) &&
                     (mIdempotent == other.mIdempotent);
             }
             return false;

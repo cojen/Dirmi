@@ -80,18 +80,26 @@ public class StandardSession extends Session {
 
     private static final int DEFAULT_TIMEOUT_MILLIS = -1;
     private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
-    private static final int DISPOSED_BATCH_SIZE = 100;
 
     final Broker mBroker;
     final Executor mExecutor;
     final Log mLog;
 
+    // Strong references to Skeletons. Skeletons are created as needed and can
+    // be recreated as well. This map just provides quick concurrent access to
+    // sharable Skeleton instances.
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
+
+    // FIXME: Change or chuck this map
     final AtomicIntegerMap<Class> mSkeletonTypeCounts;
 
-    final ConcurrentMap<Identifier, StubRef> mStubs;
+    // Strong references to PhantomReferences to Stubs. PhantomReferences need
+    // to be strongly reachable or else they will be reclaimed sooner than the
+    // referent becomes unreachable. When the referent Stub becomes
+    // unreachable, its entry in this map must be removed to reclaim memory.
+    final ConcurrentMap<Identifier, StubRef> mStubRefs;
 
-    final ReferenceQueue<Remote> mStubQueue;
+    final ReferenceQueue<Remote> mRefQueue;
 
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
@@ -160,9 +168,9 @@ public class StandardSession extends Session {
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
         mSkeletonTypeCounts = new AtomicIntegerMap<Class>();
 
-        mStubs = new ConcurrentHashMap<Identifier, StubRef>();
+        mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
 
-        mStubQueue = new ReferenceQueue<Remote>();
+        mRefQueue = new ReferenceQueue<Remote>();
 
         // Transmit our admin information. Do so in a separate thread because
         // remote side cannot accept our connection until it sends its
@@ -303,7 +311,7 @@ public class StandardSession extends Session {
         } finally {
             mSkeletons.clear();
             mSkeletonTypeCounts.clear();
-            mStubs.clear();
+            mStubRefs.clear();
         }
     }
 
@@ -332,15 +340,19 @@ public class StandardSession extends Session {
 
         Skeleton skeleton = mSkeletons.remove(id);
         if (skeleton != null) {
-            Remote remote = skeleton.getRemoteObject();
-            Class remoteType = RemoteIntrospector.getRemoteType(remote);
-            if (mSkeletonTypeCounts.decrementAndGet(remoteType) < 0) {
-                mSkeletonTypeCounts.incrementAndGet(remoteType);
+            /* FIXME: don't use ref counts for Skeleton type.
+            Object remote = id.tryRetrieve();
+            if (remote != null && remote instanceof Remote) {
+                Class remoteType = RemoteIntrospector.getRemoteType((Remote) remote);
+                if (mSkeletonTypeCounts.decrementAndGet(remoteType) < 0) {
+                    mSkeletonTypeCounts.incrementAndGet(remoteType);
+                }
             }
+            */
             doNotify = true;
         }
 
-        StubRef ref = mStubs.remove(id);
+        StubRef ref = mStubRefs.remove(id);
         if (ref != null) {
             ref.getStubSupport().dispose();
             doNotify = true;
@@ -377,43 +389,6 @@ public class StandardSession extends Session {
                 t.setPriority(Thread.NORM_PRIORITY);
             }
             return t;
-        }
-    }
-
-    private static class Hidden {
-        // Remote interface must be public, but hide it in a private class.
-        public static interface Admin extends Remote {
-            void setRemoteServer(Object remote) throws RemoteException, InterruptedException;
-
-            /**
-             * Returns RemoteInfo object from server.
-             */
-            RemoteInfo getRemoteInfo(Identifier id) throws RemoteException;
-
-            /**
-             * Notification from client when it has disposed of an identified object.
-             */
-            void disposed(Identifier ids) throws RemoteException;
-
-            /**
-             * Notification from client when it has disposed of a batch of
-             * identified objects. Sending synchronous batches is preferred
-             * over sending asynchronous disposed notification because it
-             * limits the server thread growth.
-             */
-            void disposedBatch(Identifier[] batch) throws RemoteException;
-
-            /**
-             * Notification from client when explicitly closed.
-             */
-            @Asynchronous
-            void closed() throws RemoteException;
-
-            /**
-             * Notification from client that it is alive.
-             */
-            @Asynchronous
-            void heartbeat() throws RemoteException;
         }
     }
 
@@ -463,6 +438,75 @@ public class StandardSession extends Session {
         }
     }
 
+    private static class Hidden {
+        // Remote interface must be public, but hide it in a private class.
+        public static interface Admin extends Remote {
+            void setRemoteServer(Object remote) throws RemoteException, InterruptedException;
+
+            /**
+             * Returns RemoteInfo object from server.
+             */
+            RemoteInfo getRemoteInfo(Identifier id) throws RemoteException;
+
+            /**
+             * Notification from client when it has disposed of an identified object.
+             */
+            @Asynchronous(permits=2)
+            void disposed(Identifier id) throws RemoteException;
+
+            /**
+             * Notification from client when explicitly closed.
+             */
+            @Asynchronous
+            void closed() throws RemoteException;
+
+            /**
+             * Notification from client that it is alive.
+             */
+            @Asynchronous
+            void heartbeat() throws RemoteException;
+        }
+    }
+
+    private class AdminImpl implements Hidden.Admin {
+        public void setRemoteServer(Object server) throws InterruptedException {
+            if (server == null) {
+                mRemoteServerQueue.put(new Null());
+            } else {
+                mRemoteServerQueue.put(server);
+            }
+        }
+
+        public RemoteInfo getRemoteInfo(Identifier id) throws NoSuchClassException {
+            Class remoteType = (Class) id.tryRetrieve();
+            if (remoteType == null) {
+                throw new NoSuchClassException("No Class found for id: " + id);
+            }
+            return RemoteIntrospector.examine(remoteType);
+        }
+
+        public void disposed(Identifier id) {
+            dispose(id);
+        }
+
+        public void closed() {
+            mSkeletons.clear();
+            mSkeletonTypeCounts.clear();
+            mStubRefs.clear();
+            if (mBroker instanceof Closeable) {
+                try {
+                    ((Closeable) mBroker).close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
+            }
+        }
+
+        public void heartbeat() {
+            heartbeatReceived();
+        }
+    }
+
     private class Cleaner implements Runnable {
         private volatile Thread mThread;
         private volatile boolean mInterruptable;
@@ -473,14 +517,12 @@ public class StandardSession extends Session {
             long heartbeatDelay = DEFAULT_HEARTBEAT_DELAY_MILLIS / 2;
             heartbeatReceived();
 
-            Identifier[] batch = new Identifier[DISPOSED_BATCH_SIZE];
-
             try {
                 while (!mClosing) {
                     Reference<? extends Remote> ref;
                     try {
                         mInterruptable = true;
-                        ref = mStubQueue.remove(heartbeatDelay);
+                        ref = mRefQueue.remove(heartbeatDelay);
                     } finally {
                         mInterruptable = false;
                     }
@@ -512,24 +554,22 @@ public class StandardSession extends Session {
                         continue;
                     }
 
-                    {
-                        int i = 0;
-                        do {
-                            // Stupid Object casts to workaround compiler bug.
-                            if (((Object) ref) instanceof StubRef) {
-                                Identifier id = ((StubRef) ((Object) ref)).getObjectID();
-                                mStubs.remove(id);
-                                batch[i++] = id;
-                                if (i >= DISPOSED_BATCH_SIZE) {
-                                    sendDisposedBatch(batch, i);
-                                    i = 0;
+                    do {
+                        // Stupid Object casts to workaround compiler bug.
+                        if (((Object) ref) instanceof StubRef) {
+                            Identifier id = ((StubRef) ((Object) ref)).getObjectID();
+                            mStubRefs.remove(id);
+                            if (!mClosing) {
+                                try {
+                                    mRemoteAdmin.disposed(id);
+                                } catch (RemoteException e) {
+                                    if (!mClosing) {
+                                        mLog.error("Unable notify remote object disposed", e);
+                                    }
                                 }
                             }
-                        } while ((ref = mStubQueue.poll()) != null);
-
-                        sendDisposedBatch(batch, i);
-                        java.util.Arrays.fill(batch, null);
-                    }
+                        }
+                    } while ((ref = mRefQueue.poll()) != null);
                 }
             } catch (InterruptedException e) {
                 // Assuming we're a pooled thread, clear the flag to prevent
@@ -550,24 +590,6 @@ public class StandardSession extends Session {
                 Thread t = mThread;
                 if (t != null) {
                     t.interrupt();
-                }
-            }
-        }
-
-        private void sendDisposedBatch(Identifier[] batch, int size) {
-            if (size <= 0 || mClosing) {
-                return;
-            }
-            if (size < batch.length) {
-                Identifier[] copy = new Identifier[size];
-                System.arraycopy(batch, 0, copy, 0, size);
-                batch = copy;
-            }
-            try {
-                mRemoteAdmin.disposedBatch(batch);
-            } catch (RemoteException e) {
-                if (!mClosing) {
-                    mLog.error("Unable notify remote object disposed", e);
                 }
             }
         }
@@ -611,14 +633,34 @@ public class StandardSession extends Session {
                     Identifier id = Identifier.read(in);
 
                     // Find a Skeleton to invoke.
-                    final Skeleton skeleton = mSkeletons.get(id);
+                    Skeleton skeleton = mSkeletons.get(id);
 
                     if (skeleton == null) {
-                        Throwable t = new NoSuchObjectException
-                            ("Server cannot find remote object: " + id);
-                        remoteCon.getOutputStream().writeThrowable(t);
-                        remoteCon.close();
-                        return;
+                        // Create the skeleton.
+                        Object obj = id.tryRetrieve();
+                        if (obj instanceof Remote) {
+                            Remote remote = (Remote) obj;
+                            Class remoteType = RemoteIntrospector.getRemoteType(remote);
+                            SkeletonFactory factory =
+                                SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                            skeleton = factory.createSkeleton(remote);
+                            Skeleton existing = mSkeletons.putIfAbsent(id, skeleton);
+                            if (existing != null) {
+                                skeleton = existing;
+                            }
+                        } else {
+                            Throwable t = new NoSuchObjectException
+                                ("Server cannot find remote object: " + id);
+                            try {
+                                remoteCon.getOutputStream().writeThrowable(t);
+                                remoteCon.close();
+                            } catch (IOException e) {
+                                mLog.error("Failure processing accepted connection. " +
+                                           "Server cannot find remote object and " +
+                                           "cannot send error to client. Object id: " + id, e);
+                            }
+                            continue;
+                        }
                     }
 
                     Throwable throwable;
@@ -638,7 +680,7 @@ public class StandardSession extends Session {
                             cause = e;
                         }
                         mLog.error("Unhandled exception in asynchronous server method", cause);
-                        return;
+                        continue;
                     }
 
                     remoteCon.getOutputStream().writeThrowable(throwable);
@@ -747,7 +789,7 @@ public class StandardSession extends Session {
                     remote = factory.createStub(support);
                     remote = (Remote) objID.register(remote);
 
-                    mStubs.put(objID, new StubRef(remote, mStubQueue, support));
+                    mStubRefs.put(objID, new StubRef(remote, mRefQueue, support));
                 }
 
                 obj = remote;
@@ -779,9 +821,9 @@ public class StandardSession extends Session {
                 Identifier typeID = Identifier.identify(remoteType);
                 RemoteInfo info = null;
 
-                // Only send skeleton for first use of exported object.
-                Skeleton skeleton;
-                if (!mStubs.containsKey(objID) && (skeleton = mSkeletons.get(objID)) == null) {
+                // FIXME: Don't use ref counting.
+                // Only send RemoteInfo for first use of exported object.
+                if (!mStubRefs.containsKey(objID) && !mSkeletons.containsKey(objID)) {
                     if (mSkeletonTypeCounts.getAndIncrement(remoteType) == 0) {
                         // Send info for first use of remote type. If not sent,
                         // client will request it anyhow, so this is an
@@ -793,12 +835,6 @@ public class StandardSession extends Session {
                             throw new WriteAbortedException("Malformed Remote object", e);
                         }
                     }
-
-                    SkeletonFactory factory =
-                        SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
-
-                    skeleton = factory.createSkeleton(remote);
-                    mSkeletons.putIfAbsent(objID, skeleton);
                 }
 
                 obj = new MarshalledRemote(objID, typeID, info);
@@ -814,6 +850,10 @@ public class StandardSession extends Session {
 
         StubSupportImpl(Identifier id) {
             mObjID = id;
+        }
+
+        public void register(AsynchronousCompletion completion) {
+            // FIXME
         }
 
         public RemoteConnection invoke() throws RemoteException {
@@ -863,54 +903,6 @@ public class StandardSession extends Session {
 
         Identifier getObjectID() {
             return mObjID;
-        }
-    }
-
-    private class AdminImpl implements Hidden.Admin {
-        public void setRemoteServer(Object server) throws InterruptedException {
-            if (server == null) {
-                mRemoteServerQueue.put(new Null());
-            } else {
-                mRemoteServerQueue.put(server);
-            }
-        }
-
-        public RemoteInfo getRemoteInfo(Identifier id) throws NoSuchClassException {
-            Class remoteType = (Class) id.tryRetrieve();
-            if (remoteType == null) {
-                throw new NoSuchClassException("No Class found for id: " + id);
-            }
-            return RemoteIntrospector.examine(remoteType);
-        }
-
-        public void disposed(Identifier id) {
-            dispose(id);
-        }
-
-        public void disposedBatch(Identifier[] batch) {
-            // Peer might not be sending heartbeats while diposing batches, but
-            // it certainly alive if its calling us.
-            heartbeat();
-            for (Identifier id : batch) {
-                dispose(id);
-            }
-        }
-
-        public void closed() {
-            mSkeletons.clear();
-            mSkeletonTypeCounts.clear();
-            mStubs.clear();
-            if (mBroker instanceof Closeable) {
-                try {
-                    ((Closeable) mBroker).close();
-                } catch (IOException e) {
-                    // Don't care.
-                }
-            }
-        }
-
-        public void heartbeat() {
-            heartbeatReceived();
         }
     }
 }

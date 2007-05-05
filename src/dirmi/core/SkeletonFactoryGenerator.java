@@ -147,17 +147,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnVoid();
         }
 
-        // Add Remote object accessor.
-        {
-            MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "getRemoteObject",
-                                         TypeDesc.forClass(Remote.class), null);
-            CodeBuilder b = new CodeBuilder(mi);
-            b.loadThis();
-            b.loadField(REMOTE_FIELD_NAME, remoteType);
-            b.returnValue(TypeDesc.OBJECT);
-        }
-
-
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
                                      new TypeDesc[] {remoteConnectionType});
@@ -264,18 +253,45 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
                 }
 
+                LocalVariable asyncCompletionVar = null;
+                if (method.isAsynchronous()) {
+                    // If limited permits, read AsynchronousCompletion object.
+                    if (method.getAsynchronousPermits() >= 0) {
+                        b.loadLocal(remoteInVar);
+                        b.invokeVirtual(remoteInVar.getType(), "readObject",
+                                        TypeDesc.OBJECT, null);
+                        asyncCompletionVar = b.createLocalVariable
+                            (null, TypeDesc.forClass(AsynchronousCompletion.class));
+                        b.checkCast(asyncCompletionVar.getType());
+                        b.storeLocal(asyncCompletionVar);
+                    }
+
+                    // Caller should have closed connection, but we should do
+                    // so also to clean up.
+                    b.loadLocal(conVar);
+                    b.invokeInterface(remoteConnectionType, "close", null, null);
+                }
+
                 TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
 
                 {
+                    // Try handler right before server side method invocation.
                     tryStarts[ordinal] = b.createLabel().setLocation();
+
+                    // Invoke the server side method.
                     TypeDesc[] params = CodeBuilderUtil.getTypeDescs(paramTypes);
                     b.invokeInterface(remoteType, method.getName(), returnDesc, params);
+
+                    // Exception handler covers server method invocation only.
                     tryEnds[ordinal] = b.createLabel().setLocation();
                 }
 
-                // Write response and close connection.
-
                 if (method.isAsynchronous()) {
+                    // For asynchronous methods, no response needs to be
+                    // written. Connection is already closed.
+
+                    // Return type should be void for asynchronous methods, but
+                    // get rid of any just in case.
                     if (returnDesc != null) {
                         if (returnDesc.isDoubleWord()) {
                             b.pop2();
@@ -283,8 +299,19 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                             b.pop();
                         }
                     }
-                    // Assume caller has closed connection.
+
+                    // Invoke AsynchronousCompletion object, if any. Any
+                    // RemoteException thrown from this method is passed to the
+                    // invoker of the Skeleton. Since it is a subclass of
+                    // IOException, it should be interpreted as a communication
+                    // failure.
+                    if (asyncCompletionVar != null) {
+                        b.loadLocal(asyncCompletionVar);
+                        b.invokeInterface(asyncCompletionVar.getType(), "completed", null, null);
+                    }
                 } else {
+                    // For synchronous method, write response and close connection.
+
                     LocalVariable retVar = null;
                     if (returnDesc != null) {
                         retVar = b.createLocalVariable(null, returnDesc);
