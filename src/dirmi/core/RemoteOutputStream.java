@@ -43,6 +43,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
 
     private volatile OutputStream mOut;
     private final String mLocalAddress;
+    private final String mRemoteAddress;
 
     /**
      * @param out stream to wrap
@@ -50,15 +51,18 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     public RemoteOutputStream(OutputStream out) {
         mOut = out;
         mLocalAddress = null;
+        mRemoteAddress = null;
     }
 
     /**
      * @param out stream to wrap
      * @param localAddress optional local address to stitch into stack traces sent to client.
+     * @param remoteAddress optional remote address to stitch into stack traces sent to client.
      */
-    public RemoteOutputStream(OutputStream out, String localAddress) {
+    public RemoteOutputStream(OutputStream out, String localAddress, String remoteAddress) {
         mOut = out;
         mLocalAddress = localAddress;
+        mRemoteAddress = remoteAddress;
     }
 
     public void write(int b) throws IOException {
@@ -280,6 +284,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
 
         ObjectOutput out = getObjectOutputStream();
         out.writeObject(mLocalAddress);
+        out.writeObject(mRemoteAddress);
 
         writeVarUnsignedInt(chain.size());
 

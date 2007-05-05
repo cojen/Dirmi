@@ -25,6 +25,7 @@ import java.io.StreamCorruptedException;
 import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import java.rmi.Remote;
@@ -38,6 +39,7 @@ import java.rmi.RemoteException;
  */
 public class RemoteInputStream extends InputStream implements RemoteInput {
     private volatile InputStream mIn;
+    private final String mLocalAddress;
     private final String mRemoteAddress;
 
     /**
@@ -45,15 +47,18 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
      */
     public RemoteInputStream(InputStream in) {
         mIn = in;
+        mLocalAddress = null;
         mRemoteAddress = null;
     }
 
     /**
      * @param in stream to wrap
+     * @param localAddress optional local address to stitch into stack traces from server.
      * @param remoteAddress optional remote address to stitch into stack traces from server.
      */
-    public RemoteInputStream(InputStream in, String remoteAddress) {
+    public RemoteInputStream(InputStream in, String localAddress, String remoteAddress) {
         mIn = in;
+        mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
     }
 
@@ -375,6 +380,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
     public boolean readOk() throws RemoteException, Throwable {
         List<ThrowableInfo> chain = null;
         String serverLocalAddress = null;
+        String serverRemoteAddress = null;
         Throwable t;
         try {
             int v = mIn.read();
@@ -384,6 +390,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
 
             ObjectInput in = getObjectInputStream();
             serverLocalAddress = (String) in.readObject();
+            serverRemoteAddress = (String) in.readObject();
 
             int chainLength = readVarUnsignedInteger();
             // Element zero is root cause.
@@ -427,20 +434,35 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
 
         // Add some fake traces in the middle which clearly indicate that a
         // method was invoked remotely. Also include any addresses.
-        StackTraceElement[] mid = null;
-        if (mRemoteAddress == null && serverLocalAddress == null) {
-            mid = new StackTraceElement[] {
-                new StackTraceElement("Remote Method Invocation", "", null, -1)
-            };
-        } else {
-            mid = new StackTraceElement[] {
-                new StackTraceElement
-                ("Remote Method Invocation", "server", serverLocalAddress, -1),
-                new StackTraceElement
-                ("Remote Method Invocation", "client", mRemoteAddress, -1)
-            };
-        }
+        StackTraceElement[] mid;
+        {
+            LinkedHashSet<String> addrSet = new LinkedHashSet<String>();
+            if (mLocalAddress != null) {
+                addrSet.add(serverLocalAddress);
+            }
+            if (mRemoteAddress != null) {
+                addrSet.add(serverRemoteAddress);
+            }
+            if (serverRemoteAddress != null) {
+                addrSet.add(mRemoteAddress);
+            }
+            if (serverLocalAddress != null) {
+                addrSet.add(mLocalAddress);
+            }
 
+            if (addrSet.size() == 0) {
+                mid = new StackTraceElement[] {
+                    new StackTraceElement("Remote Method Invocation", "", null, -1)
+                };
+            } else {
+                mid = new StackTraceElement[addrSet.size()];
+                int i = 0;
+                for (String addr : addrSet) {
+                    mid[i++] = new StackTraceElement("Remote Method Invocation", "", addr, -1);
+                }
+            }
+        }
+        
         if (localTraceLength >= 1) {
             StackTraceElement[] combined;
             combined = new StackTraceElement[remoteTrace.length + mid.length + localTraceLength];

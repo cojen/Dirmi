@@ -699,7 +699,10 @@ public class StandardSession extends Session {
 
         RemoteCon(Connection con) throws IOException {
             mCon = con;
-            mRemoteIn = new RemoteInputStream(con.getInputStream(), getRemoteAddressString()) {
+            mRemoteIn = new RemoteInputStream(con.getInputStream(),
+                                              getLocalAddressString(),
+                                              getRemoteAddressString())
+            {
                 @Override
                 protected ObjectInputStream createObjectInputStream(InputStream in)
                     throws IOException
@@ -708,7 +711,10 @@ public class StandardSession extends Session {
                 }
             };
 
-            mRemoteOut = new RemoteOutputStream(con.getOutputStream(), getLocalAddressString()) {
+            mRemoteOut = new RemoteOutputStream(con.getOutputStream(),
+                                                getLocalAddressString(),
+                                                getLocalAddressString())
+            {
                 @Override
                 protected ObjectOutputStream createObjectOutputStream(OutputStream out)
                     throws IOException
