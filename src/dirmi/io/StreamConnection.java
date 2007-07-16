@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2007 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,28 +20,25 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.net.Socket;
-import java.net.SocketAddress;
-
 /**
- * Basic connection implementation that wraps two streams or a socket.
+ * Basic connection implementation that wraps two streams.
  *
  * @author Brian S O'Neill
  */
-public class BasicConnection implements Connection {
+public class StreamConnection implements Connection {
     private final InputStream mIn;
     private final OutputStream mOut;
 
     private volatile String mLocalAddress;
     private volatile String mRemoteAddress;
 
-    public BasicConnection(InputStream in, OutputStream out) {
+    public StreamConnection(InputStream in, OutputStream out) {
         mIn = in;
         mOut = out;
     }
 
-    public BasicConnection(InputStream in, OutputStream out,
-                           String localAddress, String remoteAddress)
+    public StreamConnection(InputStream in, OutputStream out,
+                            String localAddress, String remoteAddress)
     {
         mIn = in;
         mOut = out;
@@ -49,31 +46,38 @@ public class BasicConnection implements Connection {
         mRemoteAddress = remoteAddress;
     }
 
-    public BasicConnection(Socket socket) throws IOException {
-        mIn = socket.getInputStream();
-        mOut = socket.getOutputStream();
-
-        {
-            SocketAddress addr = socket.getLocalSocketAddress();
-            if (addr != null) {
-                mLocalAddress = addr.toString();
-            }
-        }
-
-        {
-            SocketAddress addr = socket.getRemoteSocketAddress();
-            if (addr != null) {
-                mRemoteAddress = addr.toString();
-            }
-        }
-    }
-
     public InputStream getInputStream() {
         return mIn;
     }
 
+    /**
+     * Always returns -1, indicating infinite timeout.
+     */
+    public int getReadTimeout() {
+        return -1;
+    }
+
+    /**
+     * Ignored -- timeout is always infinite.
+     */
+    public void setReadTimeout(int timeoutMillis) {
+    }
+
     public OutputStream getOutputStream() {
         return mOut;
+    }
+
+    /**
+     * Always returns -1, indicating infinite timeout.
+     */
+    public int getWriteTimeout() {
+        return -1;
+    }
+
+    /**
+     * Ignored -- timeout is always infinite.
+     */
+    public void setWriteTimeout(int timeoutMillis) {
     }
 
     public String getLocalAddressString() {

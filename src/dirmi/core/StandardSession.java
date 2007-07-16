@@ -732,8 +732,24 @@ public class StandardSession extends Session {
             return mRemoteIn;
         }
 
+        public int getReadTimeout() throws IOException {
+            return mCon.getReadTimeout();
+        }
+
+        public void setReadTimeout(int timeoutMillis) throws IOException {
+            mCon.setReadTimeout(timeoutMillis);
+        }
+
         public RemoteOutputStream getOutputStream() throws IOException {
             return mRemoteOut;
+        }
+
+        public int getWriteTimeout() throws IOException {
+            return mCon.getWriteTimeout();
+        }
+
+        public void setWriteTimeout(int timeoutMillis) throws IOException {
+            mCon.setWriteTimeout(timeoutMillis);
         }
 
         public String getLocalAddressString() {

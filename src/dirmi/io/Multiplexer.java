@@ -84,7 +84,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
     final String mLocalAddress;
     final String mRemoteAddress;
 
-    private final IntHashMap mConnections;
+    private final IntHashMap<MultiplexConnection> mConnections;
     private int mNextId;
 
     final int mMinBufferSize;
@@ -123,7 +123,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         mLocalAddress = master.getLocalAddressString();
         mRemoteAddress = master.getRemoteAddressString();
 
-        mConnections = new IntHashMap();
+        mConnections = new IntHashMap<MultiplexConnection>();
 
         if (minBufferSize <= 0) {
             throw new IllegalArgumentException
@@ -285,7 +285,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
                 if (command == RECEIVE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        con = (MultiplexConnection) mConnections.get(id);
+                        con = mConnections.get(id);
                     }
                     int receiveWindow = readUnsignedShort(in) + 1;
                     if (con != null) {
@@ -294,7 +294,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
                 } else if (command == SEND || command == OPEN) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        con = (MultiplexConnection) mConnections.get(id);
+                        con = mConnections.get(id);
                         if (con == null && command == OPEN) {
                             con = new MultiplexConnection
                                 (this, id, true, mLocalAddress, mRemoteAddress);
@@ -343,7 +343,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
                 } else if (command == CLOSE) {
                     MultiplexConnection con;
                     synchronized (mConnections) {
-                        con = (MultiplexConnection) mConnections.remove(id);
+                        con = mConnections.remove(id);
                     }
                     if (con != null) {
                         con.disconnect();

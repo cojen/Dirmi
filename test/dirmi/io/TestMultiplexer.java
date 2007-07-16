@@ -83,6 +83,8 @@ public class TestMultiplexer extends TestCase {
         Thread.currentThread().setName(mThreadName);
     }
 
+    // FIXME: test timeouts
+
     public void testBasic() throws Exception {
         final AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
         acceptQueue.start();

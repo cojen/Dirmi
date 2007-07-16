@@ -39,17 +39,17 @@ import org.cojen.util.WeakValuedHashMap;
  */
 public class Identifier implements Serializable, Comparable<Identifier> {
     private static final SecureRandom cRandom;
-    private static final WeakCanonicalSet cIdentifiers;
+    private static final WeakCanonicalSet<Identifier> cIdentifiers;
 
     private static final Map<Object, Identifier> cObjectsToIdentifiers;
     private static final Map<Identifier, Object> cIdentifiersToObjects;
 
     static {
         cRandom = new SecureRandom();
-        cIdentifiers = new WeakCanonicalSet();
+        cIdentifiers = new WeakCanonicalSet<Identifier>();
 
-        cObjectsToIdentifiers = new WeakIdentityMap();
-        cIdentifiersToObjects = new WeakValuedHashMap();
+        cObjectsToIdentifiers = new WeakIdentityMap<Object, Identifier>();
+        cIdentifiersToObjects = new WeakValuedHashMap<Identifier, Object>();
     }
 
     /**
@@ -85,7 +85,7 @@ public class Identifier implements Serializable, Comparable<Identifier> {
     }
 
     private synchronized static Identifier canonicalIdentifier(Identifier id) {
-        return (Identifier) cIdentifiers.put(id);
+        return cIdentifiers.put(id);
     }
 
     private synchronized static Object register(Identifier id, Object obj) {

@@ -95,8 +95,24 @@ public class PipedBroker extends AbstractBroker {
             return mIn;
         }
 
+        public int getReadTimeout() throws IOException {
+            return mIn.getTimeout();
+        }
+
+        public void setReadTimeout(int timeoutMillis) throws IOException {
+            mIn.setTimeout(timeoutMillis);
+        }
+
         public OutputStream getOutputStream() throws IOException {
             return mOut;
+        }
+
+        public int getWriteTimeout() throws IOException {
+            return mOut.getTimeout();
+        }
+
+        public void setWriteTimeout(int timeoutMillis) throws IOException {
+            mOut.setTimeout(timeoutMillis);
         }
 
         public String getLocalAddressString() {

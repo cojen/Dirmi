@@ -21,6 +21,12 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.util.concurrent.TimeUnit;
+
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 /**
  * Connection implementation of {@link MultiplexConnection}.
  *
@@ -51,8 +57,24 @@ final class MultiplexConnection implements Connection {
         return mIn;
     }
 
+    public int getReadTimeout() throws IOException {
+        return mIn.getTimeout();
+    }
+
+    public void setReadTimeout(int timeoutMillis) throws IOException {
+        mIn.setTimeout(timeoutMillis);
+    }
+
     public OutputStream getOutputStream() {
         return mOut;
+    }
+
+    public int getWriteTimeout() throws IOException {
+        return mOut.getTimeout();
+    }
+
+    public void setWriteTimeout(int timeoutMillis) throws IOException {
+        mOut.setTimeout(timeoutMillis);
     }
 
     public String getLocalAddressString() {
@@ -96,7 +118,10 @@ final class MultiplexConnection implements Connection {
     }
 
     final class Input extends InputStream {
-        private final Object mLock = new Object();
+        private final Lock mLock;
+        private final Condition mCondition;
+
+        private long mTimeoutNanos = -1000000; // -1 millis
 
         private byte[] mBuffer;
         private int mStart;
@@ -105,13 +130,34 @@ final class MultiplexConnection implements Connection {
         private int mWindowConsumed;
 
         Input(int initialBufferSize) {
+            mLock = new ReentrantLock();
+            mCondition = mLock.newCondition();
             mBuffer = new byte[initialBufferSize];
+        }
+
+        int getTimeout() throws IOException {
+            mLock.lock();
+            try {
+                return (int) TimeUnit.NANOSECONDS.toMillis(mTimeoutNanos);
+            } finally {
+                mLock.unlock();
+            }
+        }
+
+        void setTimeout(int timeoutMillis) throws IOException {
+            mLock.lock();
+            try {
+                mTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+            } finally {
+                mLock.unlock();
+            }
         }
 
         public int read() throws IOException {
             int b;
             int received;
-            synchronized (mLock) {
+            mLock.lock();
+            try {
                 waitForAvail();
                 byte[] buffer = mBuffer;
                 b = buffer[mStart];
@@ -124,8 +170,10 @@ final class MultiplexConnection implements Connection {
                 } else {
                     mWindowConsumed = 0;
                 }
+            } finally {
+                mLock.unlock();
             }
-            // Write received outside of synchronized section to avoid deadlock.
+            // Write received outside of lock section to avoid deadlock.
             if (received > 0) {
                 Multiplexer mux;
                 if ((mux = mMux) != null) {
@@ -144,7 +192,8 @@ final class MultiplexConnection implements Connection {
                 return 0;
             }
             int received;
-            synchronized (mLock) {
+            mLock.lock();
+            try {
                 waitForAvail();
                 if (length > mAvail) {
                     length = mAvail;
@@ -166,8 +215,10 @@ final class MultiplexConnection implements Connection {
                 } else {
                     mWindowConsumed = 0;
                 }
+            } finally {
+                mLock.unlock();
             }
-            // Write received outside of synchronized section to avoid deadlock.
+            // Write received outside of lock section to avoid deadlock.
             if (received > 0) {
                 Multiplexer mux;
                 if ((mux = mMux) != null) {
@@ -178,7 +229,8 @@ final class MultiplexConnection implements Connection {
         }
 
         public long skip(long n) throws IOException {
-            synchronized (mLock) {
+            mLock.lock();
+            try {
                 long total = 0;
                 while (n > 0) {
                     waitForAvail();
@@ -197,6 +249,8 @@ final class MultiplexConnection implements Connection {
                     mAvail = 0;
                 }
                 return total;
+            } finally {
+                mLock.unlock();
             }
         }
 
@@ -204,8 +258,11 @@ final class MultiplexConnection implements Connection {
             if (mMux == null) {
                 return 0;
             }
-            synchronized (mLock) {
+            mLock.lock();
+            try {
                 return mAvail;
+            } finally {
+                mLock.unlock();
             }
         }
 
@@ -214,13 +271,17 @@ final class MultiplexConnection implements Connection {
         }
 
         void disconnectNotify() {
-            synchronized (mLock) {
-                mLock.notifyAll();
+            mLock.lock();
+            try {
+                mCondition.signalAll();
+            } finally {
+                mLock.unlock();
             }
         }
 
         void supply(byte[] bytes, int offset, int length) throws IOException {
-            synchronized (mLock) {
+            mLock.lock();
+            try {
                 byte[] buffer = mBuffer;
                 if (length > (buffer.length - mAvail)) {
                     // Expand capacity.
@@ -252,17 +313,25 @@ final class MultiplexConnection implements Connection {
                     System.arraycopy(bytes, offset + firstLength, buffer, 0, length - firstLength);
                 }
                 mAvail += length;
-                mLock.notify();
+                mCondition.signal();
+            } finally {
+                mLock.unlock();
             }
         }
 
-        // Caller must be synchronized on mLock.
+        // Caller must hold mLock.
         private void waitForAvail() throws IOException {
             if (mAvail == 0) {
                 checkClosed();
                 try {
+                    long timeoutNanos = mTimeoutNanos;
                     while (true) {
-                        mLock.wait();
+                        if (timeoutNanos < 0) {
+                            mCondition.await();
+                        } else if ((timeoutNanos = mCondition.awaitNanos(timeoutNanos)) < 0) {
+                            throw new InterruptedIOException
+                                ("Timed out after " + getTimeout() + "ms");
+                        }
                         if (mAvail == 0) {
                             checkClosed();
                         } else {
@@ -279,8 +348,11 @@ final class MultiplexConnection implements Connection {
     final class Output extends OutputStream {
         private static final int SEND_NO_FLUSH = 0, SEND_AND_FLUSH = 1, SEND_AND_CLOSE = 2;
 
-        private final Object mReceiveWindowLock = new Object();
+        private final Lock mReceiveWindowLock;
+        private final Condition mReceiveWindowCondition;
         private int mReceiveWindow;
+
+        private long mTimeoutNanos = -1000000; // -1 millis
 
         private byte[] mBuffer;
         private final int mMaxBufferSize;
@@ -288,11 +360,21 @@ final class MultiplexConnection implements Connection {
         private boolean mOpened;
 
         Output(int receiveWindow, int initialBufferSize, int maxBufferSize, boolean opened) {
+            mReceiveWindowLock = new ReentrantLock();
+            mReceiveWindowCondition = mReceiveWindowLock.newCondition();
             mReceiveWindow = receiveWindow;
             mBuffer = new byte[Multiplexer.SEND_HEADER_SIZE + initialBufferSize];
             mMaxBufferSize = Multiplexer.SEND_HEADER_SIZE + maxBufferSize;
             mEnd = Multiplexer.SEND_HEADER_SIZE;
             mOpened = opened;
+        }
+
+        synchronized int getTimeout() throws IOException {
+            return (int) TimeUnit.NANOSECONDS.toMillis(mTimeoutNanos);
+        }
+
+        synchronized void setTimeout(int timeoutMillis) throws IOException {
+            mTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         }
 
         public synchronized void write(int b) throws IOException {
@@ -378,15 +460,21 @@ final class MultiplexConnection implements Connection {
         }
 
         void disconnectNotify() {
-            synchronized (mReceiveWindowLock) {
-                mReceiveWindowLock.notifyAll();
+            mReceiveWindowLock.lock();
+            try {
+                mReceiveWindowCondition.signalAll();
+            } finally {
+                mReceiveWindowLock.unlock();
             }
         }
 
         void updateReceiveWindow(int receiveWindow) {
-            synchronized (mReceiveWindowLock) {
+            mReceiveWindowLock.lock();
+            try {
                 mReceiveWindow += receiveWindow;
-                mReceiveWindowLock.notify();
+                mReceiveWindowCondition.signal();
+            } finally {
+                mReceiveWindowLock.unlock();
             }
         }
 
@@ -401,18 +489,27 @@ final class MultiplexConnection implements Connection {
                     throw new IOException("Connection closed (id=" + mId + ')');
                 }
                 int window;
+
+                mReceiveWindowLock.lock();
                 try {
-                    synchronized (mReceiveWindowLock) {
-                        while ((window = mReceiveWindow) <= 0) {
-                            // Wait on mReceiveWindowLock instead of this, to
-                            // prevent other threads from writing to this while
-                            // flush is in progress.
-                            mReceiveWindowLock.wait();
-                            checkClosed();
+                    long timeoutNanos = mTimeoutNanos;
+                    while ((window = mReceiveWindow) <= 0) {
+                        // Wait on mReceiveWindowLock instead of this, to
+                        // prevent other threads from writing to this while
+                        // flush is in progress.
+                        if (timeoutNanos < 0) {
+                            mReceiveWindowCondition.await();
+                        } else if ((timeoutNanos =
+                                    mReceiveWindowCondition.awaitNanos(timeoutNanos)) < 0) {
+                            throw new InterruptedIOException
+                                ("Timed out after " + getTimeout() + "ms");
                         }
+                        checkClosed();
                     }
                 } catch (InterruptedException e) {
                     throw new InterruptedIOException();
+                } finally {
+                    mReceiveWindowLock.unlock();
                 }
 
                 int size = end - offset;
@@ -421,8 +518,11 @@ final class MultiplexConnection implements Connection {
                         size >= ((buffer.length - (Multiplexer.SEND_HEADER_SIZE - 1)) >> 1))
                     {
                         mux.send(mId, sendOp(), buffer, offset, size, sendMode == SEND_AND_CLOSE);
-                        synchronized (mReceiveWindowLock) {
+                        mReceiveWindowLock.lock();
+                        try {
                             mReceiveWindow -= size;
+                        } finally {
+                            mReceiveWindowLock.unlock();
                         }
                         mEnd = Multiplexer.SEND_HEADER_SIZE;
                     } else {
@@ -435,8 +535,11 @@ final class MultiplexConnection implements Connection {
                 }
 
                 mux.send(mId, sendOp(), buffer, offset, window, sendMode == SEND_AND_CLOSE);
-                synchronized (mReceiveWindowLock) {
+                mReceiveWindowLock.lock();
+                try {
                     mReceiveWindow -= window;
+                } finally {
+                    mReceiveWindowLock.unlock();
                 }
                 offset += window;
             }

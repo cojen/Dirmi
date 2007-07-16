@@ -20,6 +20,8 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.util.concurrent.TimeUnit;
+
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -38,6 +40,9 @@ public class PipedOutputStream extends OutputStream {
     private final Lock mLock;
     private final Condition mReadCondition;
     private final Condition mWriteCondition;
+
+    private long mReadTimeoutNanos  = -1000000; // -1 millis
+    private long mWriteTimeoutNanos = -1000000; // -1 millis
 
     private PipedInputStream mPin;
     private boolean mEverConnected;
@@ -61,6 +66,36 @@ public class PipedOutputStream extends OutputStream {
         setInput(pin);
     }
 
+    /**
+     * Returns the timeout for blocking write operations, in milliseconds. If
+     * timeout is negative, block timeout is infinite. When a write times out,
+     * it throws an InterruptedIOException.
+     */
+    public int getTimeout() throws IOException {
+        mLock.lock();
+        try {
+            checkConnected();
+            return (int) TimeUnit.NANOSECONDS.toMillis(mWriteTimeoutNanos);
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    /**
+     * Set the timeout for blocking write operations, in milliseconds. If
+     * timeout is negative, block timeout is infinite. When a write times out,
+     * it throws an InterruptedIOException.
+     */
+    public void setTimeout(int timeoutMillis) throws IOException {
+        mLock.lock();
+        try {
+            checkConnected();
+            mWriteTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        } finally {
+            mLock.unlock();
+        }
+    }
+
     public void write(int b) throws IOException {
         mLock.lock();
         try {
@@ -77,13 +112,7 @@ public class PipedOutputStream extends OutputStream {
 
             mReadCondition.signal();
 
-            try {
-                while (mData != null) {
-                    mWriteCondition.await();
-                }
-            } catch (InterruptedException e) {
-                throw new InterruptedIOException();
-            }
+            waitForWriteCompletion();
         } finally {
             mLock.unlock();
         }
@@ -113,15 +142,28 @@ public class PipedOutputStream extends OutputStream {
 
             mReadCondition.signal();
 
-            try {
-                while (mData != null) {
-                    mWriteCondition.await();
-                }
-            } catch (InterruptedException e) {
-                throw new InterruptedIOException();
-            }
+            waitForWriteCompletion();
         } finally {
             mLock.unlock();
+        }
+    }
+
+    // Caller must hold mLock.
+    private void waitForWriteCompletion() throws IOException {
+        try {
+            long timeoutNanos = mWriteTimeoutNanos;
+            while (mData != null) {
+                if (timeoutNanos < 0) {
+                    mWriteCondition.await();
+                } else if ((timeoutNanos = mWriteCondition.awaitNanos(timeoutNanos)) < 0) {
+                    InterruptedIOException e = new InterruptedIOException
+                        ("Timed out after " + getTimeout() + "ms");
+                    e.bytesTransferred = mLength;
+                    throw e;
+                }
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptedIOException();
         }
     }
 
@@ -158,14 +200,18 @@ public class PipedOutputStream extends OutputStream {
     }
 
     // Caller must hold mLock.
+    int getReadTimeout() {
+        return (int) TimeUnit.NANOSECONDS.toMillis(mReadTimeoutNanos);
+    }
+
+    // Caller must hold mLock.
+    void setReadTimeout(int timeoutMillis) {
+        mReadTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+    }
+
+    // Caller must hold mLock.
     int read() throws IOException {
-        try {
-            while (mData == null) {
-                mReadCondition.await();
-            }
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
-        }
+        waitForReadAvailable();
 
         int offset = mOffset;
         int b = mData[offset] & 0xff;
@@ -189,13 +235,7 @@ public class PipedOutputStream extends OutputStream {
 
         int amt = 0;
         
-        try {
-            while (mData == null) {
-                mReadCondition.await();
-            }
-        } catch (InterruptedException e) {
-            throw new InterruptedIOException();
-        }
+        waitForReadAvailable();
         
         if (length >= mLength) {
             length = mLength;
@@ -218,13 +258,7 @@ public class PipedOutputStream extends OutputStream {
         long amt = 0;
 
         while (n > 0) {
-            try {
-                while (mData == null) {
-                    mReadCondition.await();
-                }
-            } catch (InterruptedException e) {
-                throw new InterruptedIOException();
-            }
+            waitForReadAvailable();
 
             if (n <= mLength) {
                 amt += n;
@@ -244,6 +278,23 @@ public class PipedOutputStream extends OutputStream {
         }
 
         return amt;
+    }
+
+    // Caller must hold mLock.
+    private void waitForReadAvailable() throws IOException {
+        try {
+            long timeoutNanos = mReadTimeoutNanos;
+            while (mData == null) {
+                if (timeoutNanos < 0) {
+                    mReadCondition.await();
+                } else if ((timeoutNanos = mReadCondition.awaitNanos(timeoutNanos)) < 0) {
+                    throw new InterruptedIOException
+                        ("Timed out after " + getReadTimeout() + "ms");
+                }
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptedIOException();
+        }
     }
 
     // Caller must hold mLock.

@@ -56,7 +56,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     private static final Map<Class<?>, SkeletonFactory<?>> cCache;
 
     static {
-        cCache = new SoftValuedHashMap();
+        cCache = new SoftValuedHashMap<Class<?>, SkeletonFactory<?>>();
     }
 
     /**

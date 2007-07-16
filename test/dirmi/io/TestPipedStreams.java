@@ -56,6 +56,8 @@ public class TestPipedStreams extends TestCase {
         mOut.close();
     }
 
+    // FIXME: test timeouts
+
     public void testStream() throws Exception {
         final long seed = 342487102938L;
 

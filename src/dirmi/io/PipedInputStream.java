@@ -46,6 +46,40 @@ public class PipedInputStream extends InputStream {
         setOutput(pout);
     }
 
+    /**
+     * Returns the timeout for blocking read operations, in milliseconds. If
+     * timeout is negative, block timeout is infinite. When a read times out,
+     * it throws an InterruptedIOException.
+     */
+    public int getTimeout() throws IOException {
+        mLock.lock();
+        try {
+            return mPout.getReadTimeout();
+        } catch (NullPointerException e) {
+            checkConnected();
+            throw e;
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    /**
+     * Set the timeout for blocking read operations, in milliseconds. If
+     * timeout is negative, block timeout is infinite. When a read times out,
+     * it throws an InterruptedIOException.
+     */
+    public void setTimeout(int timeoutMillis) throws IOException {
+        mLock.lock();
+        try {
+            mPout.setReadTimeout(timeoutMillis);
+        } catch (NullPointerException e) {
+            checkConnected();
+            throw e;
+        } finally {
+            mLock.unlock();
+        }
+    }
+
     public int read() throws IOException {
         mLock.lock();
         try {

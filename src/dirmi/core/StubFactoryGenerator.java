@@ -65,7 +65,7 @@ public class StubFactoryGenerator<R extends Remote> {
     private static final Map<Object, StubFactory<?>> cCache;
 
     static {
-        cCache = new SoftValuedHashMap();
+        cCache = new SoftValuedHashMap<Object, StubFactory<?>>();
     }
 
     /**
