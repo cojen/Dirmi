@@ -33,6 +33,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * state. Also, a thread reading from the stream can't get into a one-second
  * polling mode.
  *
+ * <p>PipedOutputStream supports timeouts, and if an InterruptedIOException is
+ * thrown, the stream is still valid. The amount of bytes transferred before
+ * timing out is always zero. That is, a write operation which times out is
+ * never partially successful.
+ *
  * @author Brian S O'Neill
  * @see PipedInputStream
  */
@@ -156,14 +161,15 @@ public class PipedOutputStream extends OutputStream {
                 if (timeoutNanos < 0) {
                     mWriteCondition.await();
                 } else if ((timeoutNanos = mWriteCondition.awaitNanos(timeoutNanos)) < 0) {
-                    InterruptedIOException e = new InterruptedIOException
-                        ("Timed out after " + getTimeout() + "ms");
-                    e.bytesTransferred = mLength;
-                    throw e;
+                    mData = null;
+                    timeoutNanos = mWriteTimeoutNanos - timeoutNanos;
+                    throw new InterruptedIOException
+                        ("Timed out after " + TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
                 }
             }
         } catch (InterruptedException e) {
-            throw new InterruptedIOException();
+            mData = null;
+            throw new InterruptedIOException("Thread interrupted");
         }
     }
 
@@ -288,12 +294,13 @@ public class PipedOutputStream extends OutputStream {
                 if (timeoutNanos < 0) {
                     mReadCondition.await();
                 } else if ((timeoutNanos = mReadCondition.awaitNanos(timeoutNanos)) < 0) {
+                    timeoutNanos = mReadTimeoutNanos - timeoutNanos;
                     throw new InterruptedIOException
-                        ("Timed out after " + getReadTimeout() + "ms");
+                        ("Timed out after " + TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
                 }
             }
         } catch (InterruptedException e) {
-            throw new InterruptedIOException();
+            throw new InterruptedIOException("Thread interrupted");
         }
     }
 

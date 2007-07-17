@@ -50,6 +50,13 @@ import org.cojen.util.IntHashMap;
  * variable length, then the length should be encoded so that the client need
  * not catch the IOException when the connection is closed.
  *
+ * <p>Connections produced by the Multiplexer support timeouts, and if an
+ * InterruptedIOException is thrown by it, the connection is still valid. For
+ * write operations, the amount of bytes transferred before timing out can be
+ * more than zero. That is, a write operation which times out can be partially
+ * successful. Access the InterruptedIOException.bytesTransferred field to see
+ * how many bytes were transferred before the interruption.
+ *
  * @author Brian S O'Neill
  */
 public class Multiplexer extends AbstractBroker implements Closeable {

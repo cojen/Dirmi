@@ -329,8 +329,10 @@ final class MultiplexConnection implements Connection {
                         if (timeoutNanos < 0) {
                             mCondition.await();
                         } else if ((timeoutNanos = mCondition.awaitNanos(timeoutNanos)) < 0) {
+                            timeoutNanos = mTimeoutNanos - timeoutNanos;
                             throw new InterruptedIOException
-                                ("Timed out after " + getTimeout() + "ms");
+                                ("Timed out after " +
+                                 TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
                         }
                         if (mAvail == 0) {
                             checkClosed();
@@ -339,7 +341,7 @@ final class MultiplexConnection implements Connection {
                         }
                     }
                 } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
+                    throw new InterruptedIOException("Thread interrupted");
                 }
             }
         }
@@ -407,6 +409,7 @@ final class MultiplexConnection implements Connection {
             checkClosed();
             byte[] buffer = mBuffer;
             int avail = buffer.length - mEnd;
+
             if (avail < length && buffer.length < mMaxBufferSize) {
                 int newLength = buffer.length;
                 do {
@@ -423,19 +426,30 @@ final class MultiplexConnection implements Connection {
                 buffer = mBuffer = newBuffer;
                 avail = newLength - mEnd;
             }
+
+            final int originalOffset = offset;
+
             while (length > 0) {
                 if (avail >= length) {
                     System.arraycopy(bytes, offset, buffer, mEnd, length);
                     mEnd += length;
                     return;
                 }
+
                 if (avail > 0) {
                     System.arraycopy(bytes, offset, buffer, mEnd, avail);
                     mEnd += avail;
                     offset += avail;
                     length -= avail;
                 }
-                sendBuffer(SEND_NO_FLUSH);
+
+                try {
+                    sendBuffer(SEND_NO_FLUSH);
+                } catch (InterruptedIOException e) {
+                    e.bytesTransferred = offset - originalOffset;
+                    throw e;
+                }
+
                 avail = buffer.length - mEnd;
             }
         }
@@ -501,13 +515,15 @@ final class MultiplexConnection implements Connection {
                             mReceiveWindowCondition.await();
                         } else if ((timeoutNanos =
                                     mReceiveWindowCondition.awaitNanos(timeoutNanos)) < 0) {
+                            timeoutNanos = mTimeoutNanos - timeoutNanos;
                             throw new InterruptedIOException
-                                ("Timed out after " + getTimeout() + "ms");
+                                ("Timed out after " +
+                                 TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
                         }
                         checkClosed();
                     }
                 } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
+                    throw new InterruptedIOException("Thread interrupted");
                 } finally {
                     mReceiveWindowLock.unlock();
                 }

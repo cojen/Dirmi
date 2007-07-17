@@ -56,8 +56,6 @@ public class TestPipedStreams extends TestCase {
         mOut.close();
     }
 
-    // FIXME: test timeouts
-
     public void testStream() throws Exception {
         final long seed = 342487102938L;
 
@@ -151,4 +149,98 @@ public class TestPipedStreams extends TestCase {
         reader.interrupt();
         reader.join();
     }
+
+    public void testReadTimeout() throws Exception {
+        try {
+            mIn.setTimeout(0);
+            mIn.read();
+            fail();
+        } catch (InterruptedIOException e) {
+        }
+
+        long start = System.currentTimeMillis();
+        try {
+            mIn.setTimeout(1000);
+            mIn.read();
+            fail();
+        } catch (InterruptedIOException e) {
+            assertTrue(System.currentTimeMillis() - start - 1000 >= 0);
+        }
+
+        start = System.currentTimeMillis();
+        try {
+            mIn.setTimeout(500);
+            mIn.read();
+            fail();
+        } catch (InterruptedIOException e) {
+            assertTrue(System.currentTimeMillis() - start - 500 >= 0);
+        }
+
+        new Thread("writer") {
+            public void run() {
+                try {
+                    mOut.write(50);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    fail();
+                }
+            }
+        }.start();
+
+        assertEquals(50, mIn.read());
+
+        start = System.currentTimeMillis();
+        try {
+            mIn.read();
+            fail();
+        } catch (InterruptedIOException e) {
+            assertTrue(System.currentTimeMillis() - start - 500 >= 0);
+        }
+    }
+
+    public void testWriteTimeout() throws Exception {
+        try {
+            mOut.setTimeout(0);
+            mOut.write(50);
+            fail();
+        } catch (InterruptedIOException e) {
+            assertEquals(0, e.bytesTransferred);
+        }
+
+        long start = System.currentTimeMillis();
+        try {
+            mOut.setTimeout(1000);
+            mOut.write(51);
+            fail();
+        } catch (InterruptedIOException e) {
+            assertEquals(0, e.bytesTransferred);
+            assertTrue(System.currentTimeMillis() - start - 1000 >= 0);
+        }
+
+        assertEquals(0, mIn.available());
+
+        try {
+            mIn.setTimeout(0);
+            mIn.read();
+            fail();
+        } catch (InterruptedIOException e) {
+        }
+
+        new Thread("reader") {
+            public void run() {
+                try {
+                    Thread.sleep(500);
+                    assertEquals(50, mIn.read());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    fail();
+                }
+            }
+        }.start();
+        
+        start = System.currentTimeMillis();
+        mOut.write(50);
+        assertTrue(System.currentTimeMillis() - start - 500 >= 0);
+    }
+
 }
