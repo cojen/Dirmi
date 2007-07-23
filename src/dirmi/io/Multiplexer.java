@@ -226,6 +226,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
     public void close() throws IOException {
         Connection master = mMaster;
         if (master != null) {
+            mMaster = null;
+            disconnectAll();
             master.close();
         }
     }
@@ -248,7 +250,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         }
     }
 
-    protected Connection connect(int timeoutMillis) throws IOException {
+    protected Connection tryConnect(int timeoutMillis) throws IOException {
         return connect();
     }
 
@@ -258,7 +260,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         return con;
     }
 
-    protected Connection accept(int timeoutMillis) throws IOException {
+    protected Connection tryAccept(int timeoutMillis) throws IOException {
         if (timeoutMillis <= 0) {
             return pump();
         }
@@ -360,10 +362,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         } catch (InterruptedIOException e) {
             throw e;
         } catch (IOException e) {
-            mMaster = null;
-            disconnectAll();
             try {
-                master.close();
+                close();
             } catch (IOException e2) {
                 // Don't care
             }
@@ -430,6 +430,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
      *
      * @param bytes must always have enough header bytes before the offset
      * @param offset must always be at least SEND_HEADER_SIZE
+     * @param size amount of bytes to send after offset
      * @param close when true, close connection after sending
      */
     void send(int id, int op, byte[] bytes, int offset, int size, boolean close)
@@ -493,10 +494,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         } catch (InterruptedIOException e) {
             throw e;
         } catch (IOException e) {
-            mMaster = null;
-            disconnectAll();
             try {
-                master.close();
+                close();
             } catch (IOException e2) {
                 // Don't care
             }
@@ -530,10 +529,8 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         } catch (InterruptedIOException e) {
             throw e;
         } catch (IOException e) {
-            mMaster = null;
-            disconnectAll();
             try {
-                master.close();
+                close();
             } catch (IOException e2) {
                 // Don't care
             }
@@ -541,58 +538,25 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         }
     }
 
-
-    void unregister(MultiplexConnection con) throws IOException {
-        int id = con.mId;
+    /**
+     * Called by MultiplexConnection when it disconnects.
+     */
+    void unregister(MultiplexConnection con) {
         synchronized (mConnections) {
-            if (mConnections.remove(id) == null) {
-                return;
-            }
-        }
-
-        Connection master = mMaster;
-        if (master == null) {
-            return;
-        }
-
-        id |= CLOSE;
-        try {
-            OutputStream out = master.getOutputStream();
-            synchronized (out) {
-                byte[] buffer = mWriteBuffer;
-                buffer[0] = (byte)(id >> 24);
-                buffer[1] = (byte)(id >> 16);
-                buffer[2] = (byte)(id >> 8);
-                buffer[3] = (byte)id;
-                out.write(buffer, 0, 4);
-                out.flush();
-            }
-        } catch (InterruptedIOException e) {
-            throw e;
-        } catch (IOException e) {
-            mMaster = null;
-            disconnectAll();
-            try {
-                master.close();
-            } catch (IOException e2) {
-                // Don't care
-            }
-            throw e;
+            mConnections.remove(con.mId);
         }
     }
 
     private void disconnectAll() {
+        // Copy list of connections since disconnect calls back to unregister,
+        // which attempts to modify the list.
         Collection<MultiplexConnection> connections;
         synchronized (mConnections) {
             connections = new ArrayList<MultiplexConnection>(mConnections.values());
             mConnections.clear();
         }
         for (MultiplexConnection con : connections) {
-            try {
-                con.disconnect();
-            } catch (IOException e) {
-                // Don't care, but not expected to happen.
-            }
+            con.disconnect();
         }
     }
 

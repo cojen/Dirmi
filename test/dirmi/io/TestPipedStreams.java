@@ -152,7 +152,7 @@ public class TestPipedStreams extends TestCase {
 
     public void testReadTimeout() throws Exception {
         try {
-            mIn.setTimeout(0);
+            mIn.setReadTimeout(0);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -160,7 +160,7 @@ public class TestPipedStreams extends TestCase {
 
         long start = System.currentTimeMillis();
         try {
-            mIn.setTimeout(1000);
+            mIn.setReadTimeout(1000);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -169,7 +169,7 @@ public class TestPipedStreams extends TestCase {
 
         start = System.currentTimeMillis();
         try {
-            mIn.setTimeout(500);
+            mIn.setReadTimeout(500);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -200,7 +200,7 @@ public class TestPipedStreams extends TestCase {
 
     public void testWriteTimeout() throws Exception {
         try {
-            mOut.setTimeout(0);
+            mOut.setWriteTimeout(0);
             mOut.write(50);
             fail();
         } catch (InterruptedIOException e) {
@@ -209,7 +209,7 @@ public class TestPipedStreams extends TestCase {
 
         long start = System.currentTimeMillis();
         try {
-            mOut.setTimeout(1000);
+            mOut.setWriteTimeout(1000);
             mOut.write(51);
             fail();
         } catch (InterruptedIOException e) {
@@ -220,7 +220,7 @@ public class TestPipedStreams extends TestCase {
         assertEquals(0, mIn.available());
 
         try {
-            mIn.setTimeout(0);
+            mIn.setReadTimeout(0);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {

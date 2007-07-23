@@ -35,8 +35,8 @@ public abstract class AbstractBroker implements Broker {
                 return AbstractBroker.this.connect();
             }
                 
-            public Connection connect(int timeoutMillis) throws IOException {
-                return AbstractBroker.this.connect(timeoutMillis);
+            public Connection tryConnect(int timeoutMillis) throws IOException {
+                return AbstractBroker.this.tryConnect(timeoutMillis);
             }
         };
 
@@ -45,8 +45,8 @@ public abstract class AbstractBroker implements Broker {
                 return AbstractBroker.this.accept();
             }
 
-            public Connection accept(int timeoutMillis) throws IOException {
-                return AbstractBroker.this.accept(timeoutMillis);
+            public Connection tryAccept(int timeoutMillis) throws IOException {
+                return AbstractBroker.this.tryAccept(timeoutMillis);
             }
         };
     }
@@ -61,9 +61,9 @@ public abstract class AbstractBroker implements Broker {
 
     protected abstract Connection connect() throws IOException;
 
-    protected abstract Connection connect(int timeoutMillis) throws IOException;
+    protected abstract Connection tryConnect(int timeoutMillis) throws IOException;
 
     protected abstract Connection accept() throws IOException;
 
-    protected abstract Connection accept(int timeoutMillis) throws IOException;
+    protected abstract Connection tryAccept(int timeoutMillis) throws IOException;
 }

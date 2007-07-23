@@ -54,7 +54,7 @@ import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
 import dirmi.NoSuchClassException;
-import dirmi.RemoteTimeoutException;
+import dirmi.RequestTimeoutException;
 import dirmi.Session;
 
 import dirmi.info.RemoteInfo;
@@ -69,7 +69,7 @@ import dirmi.io.Multiplexer;
  *
  * @author Brian S O'Neill
  */
-public class StandardSession extends Session {
+public class StandardSession implements Session {
     /**
      * Returns a ThreadFactory which produces non-daemon threads whose name
      * begins with "Session".
@@ -78,7 +78,12 @@ public class StandardSession extends Session {
         return new SessionThreadFactory();
     }
 
-    private static final int DEFAULT_TIMEOUT_MILLIS = -1;
+    private static final int DEFAULT_SEND_REQUEST_TIMEOUT_MILLIS = 5000;
+    private static final int DEFAULT_RECEIVE_RESPONSE_TIMEOUT_MILLIS = 5000;
+
+    private static final int DEFAULT_RECEIVE_REQUEST_TIMEOUT_MILLIS = 5000;
+    private static final int DEFAULT_SEND_RESPONSE_TIMEOUT_MILLIS = 5000;
+
     private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
 
     final Broker mBroker;
@@ -107,7 +112,11 @@ public class StandardSession extends Session {
     // Instant (in millis) for next expected heartbeat. If not received, session closes.
     volatile long mNextExpectedHeartbeat;
 
-    volatile int mTimeoutMillis = DEFAULT_TIMEOUT_MILLIS;
+    volatile int mSendRequestTimeoutMillis = DEFAULT_SEND_REQUEST_TIMEOUT_MILLIS;
+    volatile int mReceiveResponseTimeoutMillis = DEFAULT_RECEIVE_RESPONSE_TIMEOUT_MILLIS;
+
+    volatile int mReceiveRequestTimeoutMillis = DEFAULT_RECEIVE_REQUEST_TIMEOUT_MILLIS;
+    volatile int mSendResponseTimeoutMillis = DEFAULT_SEND_RESPONSE_TIMEOUT_MILLIS;
 
     volatile boolean mClosing;
 
@@ -288,7 +297,7 @@ public class StandardSession extends Session {
         }
     }
 
-    public void close() throws IOException {
+    public void close() throws RemoteException {
         if (mClosing) {
             return;
         }
@@ -306,7 +315,11 @@ public class StandardSession extends Session {
         try {
             mRemoteAdmin.closed();
             if (mBroker instanceof Closeable) {
-                ((Closeable) mBroker).close();
+                try {
+                    ((Closeable) mBroker).close();
+                } catch (IOException e) {
+                    throw new RemoteException("Failed to close connection broker", e);
+                }
             }
         } finally {
             mSkeletons.clear();
@@ -315,14 +328,40 @@ public class StandardSession extends Session {
         }
     }
 
-    /*
-    public void setTimeoutMillis(int millis) {
-        mTimeoutMillis = millis;
-    }
-    */
-
     public Object getRemoteServer() {
         return mRemoteServer;
+    }
+
+    public int getSendRequestTimeout() {
+        return mSendRequestTimeoutMillis;
+    }
+
+    public void setSendRequestTimeout(int timeoutMillis) {
+        mSendRequestTimeoutMillis = timeoutMillis;
+    }
+
+    public int getReceiveResponseTimeout() {
+        return mReceiveResponseTimeoutMillis;
+    }
+
+    public void setReceiveResponseTimeout(int timeoutMillis) {
+        mReceiveResponseTimeoutMillis = timeoutMillis;
+    }
+
+    public int getReceiveRequestTimeout() {
+        return mReceiveRequestTimeoutMillis;
+    }
+
+    public void setReceiveRequestTimeout(int timeoutMillis) {
+        mReceiveRequestTimeoutMillis = timeoutMillis;
+    }
+
+    public int getSendResponseTimeout() {
+        return mSendResponseTimeoutMillis;
+    }
+
+    public void setSendResponseTimeout(int timeoutMillis) {
+        mSendResponseTimeoutMillis = timeoutMillis;
     }
 
     public void dispose(Remote object) throws RemoteException {
@@ -623,46 +662,56 @@ public class StandardSession extends Session {
                     spawned = false;
                 }
 
+                final RemoteConnection remoteCon;
+                final Identifier id;
                 try {
-                    final RemoteConnection remoteCon = new RemoteCon(con);
+                    remoteCon = new RemoteCon(con);
+
+                    remoteCon.setReadTimeout(mReceiveRequestTimeoutMillis);
+                    remoteCon.setWriteTimeout(mSendResponseTimeoutMillis);
 
                     // Decide if connection is to be used for invoking method or to
                     // receive an incoming remote object.
 
                     RemoteInputStream in = remoteCon.getInputStream();
-                    Identifier id = Identifier.read(in);
+                    id = Identifier.read(in);
+                } catch (IOException e) {
+                    mLog.error("Failure reading request", e);
+                    continue;
+                }
 
-                    // Find a Skeleton to invoke.
-                    Skeleton skeleton = mSkeletons.get(id);
+                // Find a Skeleton to invoke.
+                Skeleton skeleton = mSkeletons.get(id);
 
-                    if (skeleton == null) {
-                        // Create the skeleton.
-                        Object obj = id.tryRetrieve();
-                        if (obj instanceof Remote) {
-                            Remote remote = (Remote) obj;
-                            Class remoteType = RemoteIntrospector.getRemoteType(remote);
-                            SkeletonFactory factory =
-                                SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
-                            skeleton = factory.createSkeleton(remote);
-                            Skeleton existing = mSkeletons.putIfAbsent(id, skeleton);
-                            if (existing != null) {
-                                skeleton = existing;
-                            }
-                        } else {
-                            Throwable t = new NoSuchObjectException
-                                ("Server cannot find remote object: " + id);
-                            try {
-                                remoteCon.getOutputStream().writeThrowable(t);
-                                remoteCon.close();
-                            } catch (IOException e) {
-                                mLog.error("Failure processing accepted connection. " +
-                                           "Server cannot find remote object and " +
-                                           "cannot send error to client. Object id: " + id, e);
-                            }
-                            continue;
+                if (skeleton == null) {
+                    // Create the skeleton.
+                    Object obj = id.tryRetrieve();
+                    if (obj instanceof Remote) {
+                        Remote remote = (Remote) obj;
+                        Class remoteType = RemoteIntrospector.getRemoteType(remote);
+                        SkeletonFactory factory =
+                            SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                        skeleton = factory.createSkeleton(remote);
+                        Skeleton existing = mSkeletons.putIfAbsent(id, skeleton);
+                        if (existing != null) {
+                            skeleton = existing;
                         }
+                    } else {
+                        Throwable t = new NoSuchObjectException
+                            ("Server cannot find remote object: " + id);
+                        try {
+                            remoteCon.getOutputStream().writeThrowable(t);
+                            remoteCon.close();
+                        } catch (IOException e) {
+                            mLog.error("Failure processing request. " +
+                                       "Server cannot find remote object and " +
+                                       "cannot send error to client. Object id: " + id, e);
+                        }
+                        continue;
                     }
+                }
 
+                try {
                     Throwable throwable;
 
                     try {
@@ -686,7 +735,7 @@ public class StandardSession extends Session {
                     remoteCon.getOutputStream().writeThrowable(throwable);
                     remoteCon.close();
                 } catch (IOException e) {
-                    mLog.error("Failure processing accepted connection", e);
+                    mLog.error("Failure processing request", e);
                 }
             } while (!spawned);
         }
@@ -883,21 +932,43 @@ public class StandardSession extends Session {
                 throw new NoSuchObjectException("Remote object disposed");
             }
             try {
-                int timeoutMillis = mTimeoutMillis;
+                int requestTimeout = mSendRequestTimeoutMillis;
 
                 RemoteConnection con;
-                if (timeoutMillis < 0) {
+                if (requestTimeout < 0) {
                     con = new RemoteCon(mBroker.connecter().connect());
                 } else {
-                    con = new RemoteCon(mBroker.connecter().connect(timeoutMillis));
+                    con = new RemoteCon(mBroker.connecter().tryConnect(requestTimeout));
+                    if (con == null) {
+                        throw new RequestTimeoutException
+                            ("Unable to establish connection after " + requestTimeout + "ms");
+                    }
                 }
 
-                mObjID.write(con.getOutputStream());
+                con.setWriteTimeout(requestTimeout);
+                con.setReadTimeout(mReceiveResponseTimeoutMillis);
+
+                try {
+                    mObjID.write(con.getOutputStream());
+                } catch (IOException e) {
+                    forceConnectionClose(con);
+                    throw e;
+                }
+
                 return con;
             } catch (RemoteException e) {
                 throw e;
             } catch (IOException e) {
                 throw new RemoteException(e.getMessage(), e);
+            }
+        }
+
+        public void forceConnectionClose(RemoteConnection con) {
+            try {
+                con.setWriteTimeout(0);
+                con.close();
+            } catch (IOException e2) {
+                // Don't care.
             }
         }
 

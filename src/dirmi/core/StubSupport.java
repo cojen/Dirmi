@@ -43,6 +43,11 @@ public interface StubSupport {
     RemoteConnection invoke() throws RemoteException;
 
     /**
+     * Forcibly close connection and don't throw any exception.
+     */
+    void forceConnectionClose(RemoteConnection con);
+
+    /**
      * Returns a hashCode implementation for the Stub.
      */
     int stubHashCode();

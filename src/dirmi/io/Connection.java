@@ -26,38 +26,10 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public interface Connection extends Closeable {
+public interface Connection extends Closeable, ReadTimeout, WriteTimeout {
     InputStream getInputStream() throws IOException;
 
-    /**
-     * Returns the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a read times out,
-     * it throws an InterruptedIOException.
-     */
-    int getReadTimeout() throws IOException;
-
-    /**
-     * Set the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a read times out,
-     * it throws an InterruptedIOException.
-     */
-    void setReadTimeout(int timeoutMillis) throws IOException;
-
     OutputStream getOutputStream() throws IOException;
-
-    /**
-     * Returns the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a write times out,
-     * it throws an InterruptedIOException.
-     */
-    int getWriteTimeout() throws IOException;
-
-    /**
-     * Set the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a write times out,
-     * it throws an InterruptedIOException.
-     */
-    void setWriteTimeout(int timeoutMillis) throws IOException;
 
     /**
      * Returns the full local address of the connection. This method should not

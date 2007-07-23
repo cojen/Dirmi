@@ -17,6 +17,7 @@
 package dirmi.core;
 
 import java.io.DataOutput;
+import java.io.InterruptedIOException;
 import java.io.IOException;
 
 import java.lang.reflect.Constructor;
@@ -44,6 +45,8 @@ import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
+import dirmi.RequestTimeoutException;
+import dirmi.ResponseTimeoutException;
 import dirmi.UnimplementedMethodException;
 
 import dirmi.core.Identifier;
@@ -141,7 +144,6 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutputStream.class);
         final TypeDesc classType = TypeDesc.forClass(Class.class);
         final TypeDesc methodType = TypeDesc.forClass(Method.class);
-        final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
 
         // Add fields
@@ -228,14 +230,15 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            Label tryStart = b.createLabel().setLocation();
-
             // Create connection for invoking remote method.
             b.loadThis();
             b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "invoke", remoteConnectionType, null);
             LocalVariable conVar = b.createLocalVariable(null, remoteConnectionType);
             b.storeLocal(conVar);
+
+            Label tryStart = b.createLabel().setLocation();
+            Label writeStart = tryStart;
 
             // Write method identifier to connection.
             b.loadLocal(conVar);
@@ -257,6 +260,8 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
+            Label writeEnd;
+
             if (method.isAsynchronous()) {
                 if (method.getAsynchronousPermits() >= 0) {
                     // Write remote AsynchronousCompletion object to be called by server.
@@ -271,7 +276,11 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.loadLocal(conVar);
                 b.invokeInterface(remoteConnectionType, "close", null, null);
 
-                if (returnDesc != null) {
+                writeEnd = b.createLabel().setLocation();
+
+                if (returnDesc == null) {
+                    b.returnVoid();
+                } else {
                     // Asynchronous method should not have a return value, but
                     // this one does for some reason. Just return 0, false, or null.
                     switch (returnDesc.getTypeCode()) {
@@ -297,11 +306,16 @@ public class StubFactoryGenerator<R extends Remote> {
                         b.loadNull();
                         break;
                     }
+                    b.returnValue(returnDesc);
                 }
             } else {
                 b.loadLocal(remoteOutVar);
                 b.invokeVirtual(remoteOutType, "flush", null, null);
-                
+
+                writeEnd = b.createLabel().setLocation();
+
+                Label readStart = writeEnd;
+
                 // Read response.
                 b.loadLocal(conVar);
                 b.invokeInterface(remoteConnectionType, "getInputStream", remoteInType, null);
@@ -319,12 +333,54 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
 
                 // Assume server has closed connection.
+
+                if (returnDesc == null) {
+                    b.returnVoid();
+                } else {
+                    b.returnValue(returnDesc);
+                }
+
+                Label readEnd = b.createLabel().setLocation();
+
+                // For read, convert InterruptedIOException to ResponseTimeoutException.
+                b.exceptionHandler(readStart, readEnd, InterruptedIOException.class.getName());
+                LocalVariable exceptionVar =
+                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
+                b.storeLocal(exceptionVar);
+
+                final TypeDesc remoteExType = TypeDesc.forClass(ResponseTimeoutException.class);
+
+                b.newObject(remoteExType);
+                b.dup();
+                b.loadLocal(exceptionVar);
+                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
+                                TypeDesc.STRING, null);
+                b.loadLocal(exceptionVar);
+                b.invokeConstructor(remoteExType,
+                                    new TypeDesc[] {TypeDesc.STRING,
+                                                    TypeDesc.forClass(Throwable.class)});
+                b.throwObject();
             }
 
-            if (returnDesc == null) {
-                b.returnVoid();
-            } else {
-                b.returnValue(returnDesc);
+            // For write, convert InterruptedIOException to RequestTimeoutException.
+            {
+                b.exceptionHandler(writeStart, writeEnd, InterruptedIOException.class.getName());
+                LocalVariable exceptionVar =
+                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
+                b.storeLocal(exceptionVar);
+
+                final TypeDesc remoteExType = TypeDesc.forClass(RequestTimeoutException.class);
+
+                b.newObject(remoteExType);
+                b.dup();
+                b.loadLocal(exceptionVar);
+                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
+                                TypeDesc.STRING, null);
+                b.loadLocal(exceptionVar);
+                b.invokeConstructor(remoteExType,
+                                    new TypeDesc[] {TypeDesc.STRING,
+                                                    TypeDesc.forClass(Throwable.class)});
+                b.throwObject();
             }
 
             Label tryEnd1 = b.createLabel().setLocation();
@@ -342,24 +398,52 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Convert any IOException to a RemoteException.
 
-            b.exceptionHandler(tryStart, tryEnd2, RemoteException.class.getName());
-            // RemoteException is an IOException, but leave it as-is.
-            b.throwObject();
+            // Catch RemoteException
+            {
+                b.exceptionHandler(tryStart, tryEnd2, RemoteException.class.getName());
+                // RemoteException is an IOException, but leave it as-is.
+                b.throwObject();
+            }
 
-            b.exceptionHandler(tryStart, tryEnd2, IOException.class.getName());
-            LocalVariable exceptionVar =
-                b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
-            b.storeLocal(exceptionVar);
+            // Catch IOException
+            {
+                b.exceptionHandler(tryStart, tryEnd2, IOException.class.getName());
+                LocalVariable exceptionVar =
+                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
+                b.storeLocal(exceptionVar);
 
-            b.newObject(remoteExType);
-            b.dup();
-            b.loadLocal(exceptionVar);
-            b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
-                            TypeDesc.STRING, null);
-            b.loadLocal(exceptionVar);
-            b.invokeConstructor(remoteExType, new TypeDesc[] {TypeDesc.STRING,
-                                                              TypeDesc.forClass(Throwable.class)});
-            b.throwObject();
+                final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
+
+                b.newObject(remoteExType);
+                b.dup();
+                b.loadLocal(exceptionVar);
+                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
+                                TypeDesc.STRING, null);
+                b.loadLocal(exceptionVar);
+                b.invokeConstructor(remoteExType,
+                                    new TypeDesc[] {TypeDesc.STRING,
+                                                    TypeDesc.forClass(Throwable.class)});
+                b.throwObject();
+            }
+
+            Label tryEnd3 = b.createLabel().setLocation();
+
+            // If any exception, force connection to close.
+            {
+                b.exceptionHandler(tryStart, tryEnd3, Throwable.class.getName());
+                LocalVariable exceptionVar =
+                    b.createLocalVariable(null, TypeDesc.forClass(Throwable.class));
+                b.storeLocal(exceptionVar);
+
+                b.loadThis();
+                b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+                b.loadLocal(conVar);
+                b.invokeInterface(stubSupportType, "forceConnectionClose",
+                                  null, new TypeDesc[] {remoteConnectionType});
+
+                b.loadLocal(exceptionVar);
+                b.throwObject();
+            }
         }
 
         // Methods unimplemented by server throw UnimplementedMethodException

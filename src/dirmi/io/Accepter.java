@@ -36,5 +36,5 @@ public interface Accepter {
      *
      * @return new connection, or null if timed out
      */
-    Connection accept(int timeoutMillis) throws IOException;
+    Connection tryAccept(int timeoutMillis) throws IOException;
 }

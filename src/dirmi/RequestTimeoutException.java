@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2007 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,22 +19,22 @@ package dirmi;
 import java.rmi.RemoteException;
 
 /**
- * Thrown when a remote method has not responded in time.
+ * Thrown when a request to a remote method has timed out.
  *
  * @author Brian S O'Neill
  */
-public class RemoteTimeoutException extends RemoteException {
+public class RequestTimeoutException extends RemoteException {
     private static final long serialVersionUID = 1;
 
-    public RemoteTimeoutException() {
+    public RequestTimeoutException() {
         super();
     }
 
-    public RemoteTimeoutException(String message) {
+    public RequestTimeoutException(String message) {
         super(message);
     }
 
-    public RemoteTimeoutException(String message, Throwable cause) {
+    public RequestTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
 }

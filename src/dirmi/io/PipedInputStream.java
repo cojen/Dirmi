@@ -31,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Brian S O'Neill
  * @see PipedOutputStream
  */
-public class PipedInputStream extends InputStream {
+public class PipedInputStream extends InputStream implements ReadTimeout {
     private final Lock mLock;
 
     private PipedOutputStream mPout;
@@ -46,12 +46,7 @@ public class PipedInputStream extends InputStream {
         setOutput(pout);
     }
 
-    /**
-     * Returns the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a read times out,
-     * it throws an InterruptedIOException.
-     */
-    public int getTimeout() throws IOException {
+    public int getReadTimeout() throws IOException {
         mLock.lock();
         try {
             return mPout.getReadTimeout();
@@ -63,12 +58,7 @@ public class PipedInputStream extends InputStream {
         }
     }
 
-    /**
-     * Set the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a read times out,
-     * it throws an InterruptedIOException.
-     */
-    public void setTimeout(int timeoutMillis) throws IOException {
+    public void setReadTimeout(int timeoutMillis) throws IOException {
         mLock.lock();
         try {
             mPout.setReadTimeout(timeoutMillis);

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2007 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,22 +19,22 @@ package dirmi.io;
 import java.io.IOException;
 
 /**
- * Factory for client-side created {@link Connection}s.
+ * Defines timeout configuration for write operations.
  *
  * @author Brian S O'Neill
  */
-public interface Connecter {
+public interface WriteTimeout {
     /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection
+     * Returns the timeout for blocking write operations, in milliseconds. If
+     * timeout is negative, blocking timeout is infinite. When a write times
+     * out, it throws an InterruptedIOException.
      */
-    Connection connect() throws IOException;
+    int getWriteTimeout() throws IOException;
 
     /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection, or null if timed out
+     * Set the timeout for blocking write operations, in milliseconds. If
+     * timeout is negative, blocking timeout is infinite. When a write times
+     * out, it throws an InterruptedIOException.
      */
-    Connection tryConnect(int timeoutMillis) throws IOException;
+    void setWriteTimeout(int timeoutMillis) throws IOException;
 }

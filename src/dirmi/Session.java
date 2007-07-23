@@ -26,13 +26,74 @@ import java.rmi.RemoteException;
  *
  * @author Brian S O'Neill
  */
-public abstract class Session implements Closeable {
+public interface Session extends Closeable {
     /**
      * Returns the main remote server object, which may be null.
      *
      * @return main remote server object, or null 
      */
-    public abstract Object getRemoteServer();
+    Object getRemoteServer();
+
+    /**
+     * Returns the client-side timeout for sending method requests, in
+     * milliseconds. A negative timeout is infinite. When a request times out,
+     * it throws a {@link RequestTimeoutException}.
+     */
+    int getSendRequestTimeout();
+
+    /**
+     * Set the client-side timeout for sending method requests, in
+     * milliseconds. A negative timeout is infinite. When a request times out,
+     * it throws a {@link RequestTimeoutException}.
+     */
+    void setSendRequestTimeout(int timeoutMillis);
+
+    /**
+     * Returns the client-side timeout for receiving method responses, in
+     * milliseconds. A negative timeout is infinite. When a response times out,
+     * it throws a {@link ResponseTimeoutException}.
+     */
+    int getReceiveResponseTimeout();
+
+    /**
+     * Set the client-side timeout for receiving method responses, in
+     * milliseconds. A negative timeout is infinite. When a response times out,
+     * it throws a {@link ResponseTimeoutException}.
+     */
+    void setReceiveResponseTimeout(int timeoutMillis);
+
+    /**
+     * Returns the server-side timeout for receiving method requests, in
+     * milliseconds. A negative timeout is infinite. When receiving a request
+     * times out, a warning is logged.
+     */
+    int getReceiveRequestTimeout();
+
+    /**
+     * Set the server-side timeout for receiving method requests, in
+     * milliseconds. A negative timeout is infinite. When receiving a request
+     * times out, a warning is logged.
+     */
+    void setReceiveRequestTimeout(int timeoutMillis);
+
+    /**
+     * Returns the server-side timeout for sending method responses, in
+     * milliseconds. A negative timeout is infinite. When sending a response
+     * times out, a warning is logged.
+     */
+    int getSendResponseTimeout();
+
+    /**
+     * Set the server-side timeout for sending method responses, in
+     * milliseconds. A negative timeout is infinite. When sending a response
+     * times out, a warning is logged.
+     */
+    void setSendResponseTimeout(int timeoutMillis);
+
+    /**
+     * Closes the session.
+     */
+    void close() throws RemoteException;
 
     /**
      * Dispose a Remote object, rendering it unusable for future remote
@@ -41,5 +102,5 @@ public abstract class Session implements Closeable {
      *
      * @throws IllegalArgumentException if remote is null
      */
-    public abstract void dispose(Remote object) throws RemoteException;
+    void dispose(Remote object) throws RemoteException;
 }

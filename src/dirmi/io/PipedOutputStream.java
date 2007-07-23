@@ -41,7 +41,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Brian S O'Neill
  * @see PipedInputStream
  */
-public class PipedOutputStream extends OutputStream {
+public class PipedOutputStream extends OutputStream implements WriteTimeout {
     private final Lock mLock;
     private final Condition mReadCondition;
     private final Condition mWriteCondition;
@@ -71,12 +71,7 @@ public class PipedOutputStream extends OutputStream {
         setInput(pin);
     }
 
-    /**
-     * Returns the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a write times out,
-     * it throws an InterruptedIOException.
-     */
-    public int getTimeout() throws IOException {
+    public int getWriteTimeout() throws IOException {
         mLock.lock();
         try {
             checkConnected();
@@ -86,12 +81,7 @@ public class PipedOutputStream extends OutputStream {
         }
     }
 
-    /**
-     * Set the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, block timeout is infinite. When a write times out,
-     * it throws an InterruptedIOException.
-     */
-    public void setTimeout(int timeoutMillis) throws IOException {
+    public void setWriteTimeout(int timeoutMillis) throws IOException {
         mLock.lock();
         try {
             checkConnected();

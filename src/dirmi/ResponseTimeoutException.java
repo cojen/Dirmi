@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2007 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,27 +14,27 @@
  *  limitations under the License.
  */
 
-package dirmi.io;
+package dirmi;
 
-import java.io.IOException;
+import java.rmi.RemoteException;
 
 /**
- * Factory for client-side created {@link Connection}s.
+ * Thrown when a remote method has not responded in time.
  *
  * @author Brian S O'Neill
  */
-public interface Connecter {
-    /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection
-     */
-    Connection connect() throws IOException;
+public class ResponseTimeoutException extends RemoteException {
+    private static final long serialVersionUID = 1;
 
-    /**
-     * Called by client to establish a new connection.
-     *
-     * @return new connection, or null if timed out
-     */
-    Connection tryConnect(int timeoutMillis) throws IOException;
+    public ResponseTimeoutException() {
+        super();
+    }
+
+    public ResponseTimeoutException(String message) {
+        super(message);
+    }
+
+    public ResponseTimeoutException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

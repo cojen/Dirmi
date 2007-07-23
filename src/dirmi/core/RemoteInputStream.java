@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.StreamCorruptedException;
 import java.io.UTFDataFormatException;
 
@@ -30,6 +31,8 @@ import java.util.List;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+
+import dirmi.ResponseTimeoutException;
 
 /**
  * 
@@ -401,6 +404,10 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
             }
 
             t = (Throwable) in.readObject();
+        } catch (InterruptedIOException e) {
+            if ((t = tryReconstruct(chain)) == null) {
+                throw new ResponseTimeoutException(e.getMessage(), e);
+            }
         } catch (IOException e) {
             if ((t = tryReconstruct(chain)) == null) {
                 throw new RemoteException(e.getMessage(), e);

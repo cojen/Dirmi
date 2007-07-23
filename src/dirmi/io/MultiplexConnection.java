@@ -101,7 +101,10 @@ final class MultiplexConnection implements Connection {
         return super.toString() + " (id=" + mId + ')';
     }
 
-    void disconnect() throws IOException {
+    /**
+     * Disconnects without notifying remote peer.
+     */
+    void disconnect() {
         Multiplexer mux = mMux;
         mMux = null;
         mIn.disconnectNotify();
@@ -550,7 +553,7 @@ final class MultiplexConnection implements Connection {
                     return;
                 }
 
-                mux.send(mId, sendOp(), buffer, offset, window, sendMode == SEND_AND_CLOSE);
+                mux.send(mId, sendOp(), buffer, offset, window, false);
                 mReceiveWindowLock.lock();
                 try {
                     mReceiveWindow -= window;
@@ -561,6 +564,15 @@ final class MultiplexConnection implements Connection {
             }
 
             mEnd = Multiplexer.SEND_HEADER_SIZE;
+
+            // This point is reached if nothing was actually sent. If
+            // connection is supposed to be closed, be sure to do so.
+            if (sendMode == SEND_AND_CLOSE) {
+                Multiplexer mux = mMux;
+                if (mux != null) {
+                    mux.send(mId, sendOp(), buffer, Multiplexer.SEND_HEADER_SIZE, 0, true);
+                }
+            }
         }
 
         // Caller must be synchronized on this

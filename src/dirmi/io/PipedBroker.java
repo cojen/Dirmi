@@ -55,7 +55,7 @@ public class PipedBroker extends AbstractBroker {
         return con;
     }
 
-    protected Connection connect(int timeoutMillis) throws IOException {
+    protected Connection tryConnect(int timeoutMillis) throws IOException {
         Con con = new Con();
         try {
             if (!mAcceptQueue.offer(new Con(con), timeoutMillis, TimeUnit.MILLISECONDS)) {
@@ -75,7 +75,7 @@ public class PipedBroker extends AbstractBroker {
         }
     }
 
-    protected Connection accept(int timeoutMillis) throws IOException {
+    protected Connection tryAccept(int timeoutMillis) throws IOException {
         try {
             return mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -102,11 +102,11 @@ public class PipedBroker extends AbstractBroker {
         }
 
         public int getReadTimeout() throws IOException {
-            return mIn.getTimeout();
+            return mIn.getReadTimeout();
         }
 
         public void setReadTimeout(int timeoutMillis) throws IOException {
-            mIn.setTimeout(timeoutMillis);
+            mIn.setReadTimeout(timeoutMillis);
         }
 
         public OutputStream getOutputStream() throws IOException {
@@ -114,11 +114,11 @@ public class PipedBroker extends AbstractBroker {
         }
 
         public int getWriteTimeout() throws IOException {
-            return mOut.getTimeout();
+            return mOut.getWriteTimeout();
         }
 
         public void setWriteTimeout(int timeoutMillis) throws IOException {
-            mOut.setTimeout(timeoutMillis);
+            mOut.setWriteTimeout(timeoutMillis);
         }
 
         public String getLocalAddressString() {
