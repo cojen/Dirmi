@@ -670,11 +670,7 @@ public class StandardSession implements Session {
                     remoteCon.setReadTimeout(mReceiveRequestTimeoutMillis);
                     remoteCon.setWriteTimeout(mSendResponseTimeoutMillis);
 
-                    // Decide if connection is to be used for invoking method or to
-                    // receive an incoming remote object.
-
-                    RemoteInputStream in = remoteCon.getInputStream();
-                    id = Identifier.read(in);
+                    id = Identifier.read(remoteCon.getInputStream());
                 } catch (IOException e) {
                     mLog.error("Failure reading request", e);
                     continue;
@@ -684,31 +680,17 @@ public class StandardSession implements Session {
                 Skeleton skeleton = mSkeletons.get(id);
 
                 if (skeleton == null) {
-                    // Create the skeleton.
-                    Object obj = id.tryRetrieve();
-                    if (obj instanceof Remote) {
-                        Remote remote = (Remote) obj;
-                        Class remoteType = RemoteIntrospector.getRemoteType(remote);
-                        SkeletonFactory factory =
-                            SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
-                        skeleton = factory.createSkeleton(remote);
-                        Skeleton existing = mSkeletons.putIfAbsent(id, skeleton);
-                        if (existing != null) {
-                            skeleton = existing;
-                        }
-                    } else {
-                        Throwable t = new NoSuchObjectException
-                            ("Server cannot find remote object: " + id);
-                        try {
-                            remoteCon.getOutputStream().writeThrowable(t);
-                            remoteCon.close();
-                        } catch (IOException e) {
-                            mLog.error("Failure processing request. " +
-                                       "Server cannot find remote object and " +
-                                       "cannot send error to client. Object id: " + id, e);
-                        }
-                        continue;
+                    Throwable t = new NoSuchObjectException
+                        ("Server cannot find remote object: " + id);
+                    try {
+                        remoteCon.getOutputStream().writeThrowable(t);
+                        remoteCon.close();
+                    } catch (IOException e) {
+                        mLog.error("Failure processing request. " +
+                                   "Server cannot find remote object and " +
+                                   "cannot send error to client. Object id: " + id, e);
                     }
+                    continue;
                 }
 
                 try {
@@ -889,12 +871,17 @@ public class StandardSession implements Session {
                     throw new WriteAbortedException("Malformed Remote object", e);
                 }
 
-                Identifier typeID = Identifier.identify(remoteType);
                 RemoteInfo info = null;
 
-                // FIXME: Don't use ref counting.
-                // Only send RemoteInfo for first use of exported object.
                 if (!mStubRefs.containsKey(objID) && !mSkeletons.containsKey(objID)) {
+                    // Create skeleton for use by client. This also prevents
+                    // remote object from being freed by garbage collector.
+                    SkeletonFactory factory =
+                        SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                    mSkeletons.putIfAbsent(objID, factory.createSkeleton(remote));
+
+                    // FIXME: Don't use ref counting.
+                    // Only send RemoteInfo for first use of exported object.
                     if (mSkeletonTypeCounts.getAndIncrement(remoteType) == 0) {
                         // Send info for first use of remote type. If not sent,
                         // client will request it anyhow, so this is an
@@ -908,6 +895,7 @@ public class StandardSession implements Session {
                     }
                 }
 
+                Identifier typeID = Identifier.identify(remoteType);
                 obj = new MarshalledRemote(objID, typeID, info);
             }
 
