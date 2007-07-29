@@ -168,6 +168,7 @@ public class Multiplexer implements Broker, Closeable {
 
         // Write the initial message in a separate thread, in case the master
         // connection's send buffer is too small. We'd otherwise deadlock.
+        // FIXME: use thread pool
         class Writer extends Thread {
             private final Thread mReader;
             volatile IOException mEx;
@@ -256,19 +257,20 @@ public class Multiplexer implements Broker, Closeable {
 
     public Connection accept() throws IOException {
         Connection con;
-        while ((con = pump()) == null) {}
+        while ((con = pump(-1)) == null) {}
         return con;
     }
 
     public Connection tryAccept(int timeoutMillis) throws IOException {
         if (timeoutMillis <= 0) {
-            return pump();
+            return pump(timeoutMillis);
         }
         long start = System.nanoTime();
-        long end = start + 1000000L * timeoutMillis;
-        Connection con = pump();
-        while ((con = pump()) == null) {
-            if (System.nanoTime() >= end) {
+        Connection con;
+        while ((con = pump(timeoutMillis)) == null) {
+            long now = System.nanoTime();
+            timeoutMillis -= (now - start) / 1000000L;
+            if (timeoutMillis <= 0) {
                 break;
             }
         }
@@ -276,20 +278,40 @@ public class Multiplexer implements Broker, Closeable {
     }
 
     /**
+     * @param timeoutMillis maximum time to block reading command
      * @return newly accepted connection, or null if none
      */
-    private Connection pump() throws IOException {
+    private Connection pump(int timeoutMillis) throws IOException {
         Connection master = checkClosed();
         try {
-            InputStream in = checkClosed().getInputStream();
+            InputStream in = master.getInputStream();
 
             synchronized (in) {
                 byte[] buffer = mReadBuffer;
-                
+
+                final int originalTimeout = master.getReadTimeout();
+                master.setReadTimeout(timeoutMillis);
+
                 // Read command and id.
-                int id = readInt(in);
-                int command = id & (3 << 30);
-                id &= ~(3 << 30);
+                int id, command;
+                try {
+                    try {
+                        id = readInt(in);
+                        command = id & (3 << 30);
+                        id &= ~(3 << 30);
+                    } finally {
+                        try {
+                            master.setReadTimeout(originalTimeout);
+                        } catch (IOException e) {
+                            // Connection is just plain broken.
+                        }
+                    }
+                } catch (InterruptedIOException e) {
+                    if (timeoutMillis < 0) {
+                        throw e;
+                    }
+                    return null;
+                }
 
                 if (command == RECEIVE) {
                     MultiplexConnection con;
