@@ -28,6 +28,10 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+
 import java.security.SecureRandom;
 
 import org.cojen.util.IntHashMap;
@@ -86,6 +90,18 @@ public class Multiplexer implements Broker, Closeable {
     // byte 0: 10xxxxxx or 11xxxxxx
 
     static final int SEND_HEADER_SIZE = 6;
+
+    private static final Executor cThreadPool;
+
+    static {
+        cThreadPool = Executors.newCachedThreadPool(new ThreadFactory() {
+            public Thread newThread(Runnable r) {
+                Thread t = Executors.defaultThreadFactory().newThread(r);
+                t.setDaemon(true);
+                return t;
+            }
+        });
+    }
 
     private volatile Connection mMaster;
     final String mLocalAddress;
@@ -168,10 +184,10 @@ public class Multiplexer implements Broker, Closeable {
 
         // Write the initial message in a separate thread, in case the master
         // connection's send buffer is too small. We'd otherwise deadlock.
-        // FIXME: use thread pool
-        class Writer extends Thread {
+        class Writer implements Runnable {
             private final Thread mReader;
             volatile IOException mEx;
+            boolean mDone;
 
             Writer() {
                 mReader = Thread.currentThread();
@@ -184,12 +200,23 @@ public class Multiplexer implements Broker, Closeable {
                 } catch (IOException e) {
                     mEx = e;
                     mReader.interrupt();
+                } finally {
+                    synchronized (this) {
+                        mDone = true;
+                        notifyAll();
+                    }
+                }
+            }
+
+            public synchronized void waitUntilDone() throws InterruptedException {
+                while (!mDone) {
+                    wait();
                 }
             }
         }
 
         Writer writer = new Writer();
-        writer.start();
+        cThreadPool.execute(writer);
 
         try {
             DataInputStream din = new DataInputStream(master.getInputStream());
@@ -217,7 +244,7 @@ public class Multiplexer implements Broker, Closeable {
             throw e;
         } finally {
             try {
-                writer.join();
+                writer.waitUntilDone();
             } catch (InterruptedException e) {
                 // Don't care.
             }
