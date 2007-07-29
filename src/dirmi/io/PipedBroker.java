@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Establishes {@link Connection}s between threads. To establish a connection,
- * one thread must call Accepter.accept, and another must call Connector.connect.
+ * one thread must call accept, and another must call connect.
  *
  * <p>Connections produced by PipedBroker support timeouts, and if an
  * InterruptedIOException is thrown, the connection is still valid. For write

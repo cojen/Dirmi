@@ -35,8 +35,8 @@ import org.cojen.util.IntHashMap;
 /**
  * Multiplexer allows new connections to be established over a single master
  * connection. Opening a new connection never blocks. At least one thread must
- * be calling the Accepter's accept method at all times in order for the
- * Multiplexer to work.
+ * be calling the accept method at all times in order for the Multiplexer to
+ * work.
  *
  * <p>Establishing new connections is relatively cheap, as is closing
  * connections. The buffers used by connections start small and grow as needed,
@@ -46,7 +46,7 @@ import org.cojen.util.IntHashMap;
  * <p>A simple request reply operation can be implemented as opening a
  * connection and writing a message. The server responds by writing a response
  * and immediately closing the connection. For small messages, the whole
- * operation requires only one network round trip. If the response is a
+ * operation requires only one network round trip. If the response has a
  * variable length, then the length should be encoded so that the client need
  * not catch the IOException when the connection is closed.
  *
