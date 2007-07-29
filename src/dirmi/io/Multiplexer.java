@@ -59,7 +59,7 @@ import org.cojen.util.IntHashMap;
  *
  * @author Brian S O'Neill
  */
-public class Multiplexer extends AbstractBroker implements Closeable {
+public class Multiplexer implements Broker, Closeable {
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_MIN_BUFFER_SIZE = 64;
@@ -232,7 +232,7 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         }
     }
 
-    protected Connection connect() throws IOException {
+    public Connection connect() throws IOException {
         checkClosed();
         synchronized (mConnections) {
             int id;
@@ -250,17 +250,17 @@ public class Multiplexer extends AbstractBroker implements Closeable {
         }
     }
 
-    protected Connection tryConnect(int timeoutMillis) throws IOException {
+    public Connection tryConnect(int timeoutMillis) throws IOException {
         return connect();
     }
 
-    protected Connection accept() throws IOException {
+    public Connection accept() throws IOException {
         Connection con;
         while ((con = pump()) == null) {}
         return con;
     }
 
-    protected Connection tryAccept(int timeoutMillis) throws IOException {
+    public Connection tryAccept(int timeoutMillis) throws IOException {
         if (timeoutMillis <= 0) {
             return pump();
         }

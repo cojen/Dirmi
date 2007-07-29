@@ -191,7 +191,7 @@ public class StandardSession implements Session {
             public synchronized void run() {
                 RemoteOutputStream out = null;
                 try {
-                    RemoteConnection remoteCon = new RemoteCon(mBroker.connecter().connect());
+                    RemoteConnection remoteCon = new RemoteCon(mBroker.connect());
                     out = remoteCon.getOutputStream();
                     out.writeObject(new AdminImpl());
                     out.close();
@@ -228,7 +228,7 @@ public class StandardSession implements Session {
         executor.execute(sendAdmin);
 
         // Accept connection and get remote identifier.
-        RemoteConnection remoteCon = new RemoteCon(mBroker.accepter().accept());
+        RemoteConnection remoteCon = new RemoteCon(mBroker.accept());
         RemoteInputStream in = remoteCon.getInputStream();
         try {
             mRemoteAdmin = (Hidden.Admin) in.readObject();
@@ -640,7 +640,7 @@ public class StandardSession implements Session {
             do {
                 Connection con;
                 try {
-                    con = mBroker.accepter().accept();
+                    con = mBroker.accept();
                 } catch (IOException e) {
                     if (!mClosing) {
                         mLog.error("Failure accepting connection; closing session", e);
@@ -936,9 +936,9 @@ public class StandardSession implements Session {
 
                 RemoteConnection con;
                 if (requestTimeout < 0) {
-                    con = new RemoteCon(mBroker.connecter().connect());
+                    con = new RemoteCon(mBroker.connect());
                 } else {
-                    con = new RemoteCon(mBroker.connecter().tryConnect(requestTimeout));
+                    con = new RemoteCon(mBroker.tryConnect(requestTimeout));
                     if (con == null) {
                         throw new RequestTimeoutException
                             ("Unable to establish connection after " + requestTimeout + "ms");

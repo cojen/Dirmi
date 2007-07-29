@@ -62,7 +62,7 @@ public class TestMultiplexer extends TestCase {
         Thread t = new Thread() {
             public void run() {
                 try {
-                    mServerCon = broker.accepter().accept();
+                    mServerCon = broker.accept();
                 } catch (Exception e) {
                     e.printStackTrace(System.out);
                     fail();
@@ -70,7 +70,7 @@ public class TestMultiplexer extends TestCase {
             }
         };
         t.start();
-        mClientCon = broker.connecter().connect();
+        mClientCon = broker.connect();
         t.join();
     }
 
@@ -115,7 +115,7 @@ public class TestMultiplexer extends TestCase {
         Thread dummyAccepter = new DummyAccepter(broker);
         dummyAccepter.start();
 
-        final Connection con = broker.connecter().connect();
+        final Connection con = broker.connect();
 
         new Thread() {
             {
@@ -278,7 +278,7 @@ public class TestMultiplexer extends TestCase {
         remote.start();
 
         final int rndSeed = 424342239;
-        final Connection con = localBroker.connecter().connect();
+        final Connection con = localBroker.connect();
 
         // Write random numbers, and read them back, ensuring the result is correct.
 
@@ -426,7 +426,7 @@ public class TestMultiplexer extends TestCase {
         public void run() {
             try {
                 while (true) {
-                    Connection con = mBroker.accepter().accept();
+                    Connection con = mBroker.accept();
                     if (con != null) {
                         fail();
                         con.close();
@@ -463,7 +463,7 @@ public class TestMultiplexer extends TestCase {
             try {
                 mBroker = new Multiplexer(mMasterCon);
                 while (true) {
-                    mQueue.put(mBroker.accepter().accept());
+                    mQueue.put(mBroker.accept());
                 }
             } catch (InterruptedIOException e) {
                 //

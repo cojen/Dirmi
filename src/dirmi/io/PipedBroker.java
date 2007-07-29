@@ -38,14 +38,14 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-public class PipedBroker extends AbstractBroker {
+public class PipedBroker implements Broker {
     private final BlockingQueue<Con> mAcceptQueue;
 
     public PipedBroker() {
         mAcceptQueue = new SynchronousQueue<Con>();
     }
 
-    protected Connection connect() throws IOException {
+    public Connection connect() throws IOException {
         Con con = new Con();
         try {
             mAcceptQueue.put(new Con(con));
@@ -55,7 +55,7 @@ public class PipedBroker extends AbstractBroker {
         return con;
     }
 
-    protected Connection tryConnect(int timeoutMillis) throws IOException {
+    public Connection tryConnect(int timeoutMillis) throws IOException {
         Con con = new Con();
         try {
             if (!mAcceptQueue.offer(new Con(con), timeoutMillis, TimeUnit.MILLISECONDS)) {
@@ -67,7 +67,7 @@ public class PipedBroker extends AbstractBroker {
         return con;
     }
 
-    protected Connection accept() throws IOException {
+    public Connection accept() throws IOException {
         try {
             return mAcceptQueue.take();
         } catch (InterruptedException e) {
@@ -75,7 +75,7 @@ public class PipedBroker extends AbstractBroker {
         }
     }
 
-    protected Connection tryAccept(int timeoutMillis) throws IOException {
+    public Connection tryAccept(int timeoutMillis) throws IOException {
         try {
             return mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {

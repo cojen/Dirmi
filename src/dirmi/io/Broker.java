@@ -21,14 +21,5 @@ package dirmi.io;
  *
  * @author Brian S O'Neill
  */
-public interface Broker {
-    /**
-     * Returns a Connecter for creating new client-side connections.
-     */
-    Connecter connecter();
-
-    /**
-     * Returns an Accepter for accepting new server-side connections.
-     */
-    Accepter accepter();
+public interface Broker extends Connecter, Accepter {
 }
