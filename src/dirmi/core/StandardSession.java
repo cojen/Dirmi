@@ -95,7 +95,9 @@ public class StandardSession implements Session {
     // sharable Skeleton instances.
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
 
-    // FIXME: Change or chuck this map
+    // FIXME: Change or chuck this map. Instead, client has weak references to
+    // StubFactories. When ref is cleared, send message to server so that it
+    // can forget that it ever sent info on the remote type.
     final AtomicIntegerMap<Class> mSkeletonTypeCounts;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
@@ -104,6 +106,7 @@ public class StandardSession implements Session {
     // unreachable, its entry in this map must be removed to reclaim memory.
     final ConcurrentMap<Identifier, StubRef> mStubRefs;
 
+    // FIXME: make this sharable
     final ReferenceQueue<Remote> mRefQueue;
 
     // Remote Admin object.
@@ -553,6 +556,7 @@ public class StandardSession implements Session {
         public void run() {
             mThread = Thread.currentThread();
 
+            // FIXME: Move heartbeat support into Multiplexer or Broker.
             long heartbeatDelay = DEFAULT_HEARTBEAT_DELAY_MILLIS / 2;
             heartbeatReceived();
 
