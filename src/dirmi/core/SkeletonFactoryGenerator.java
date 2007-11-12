@@ -255,17 +255,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 LocalVariable asyncCompletionVar = null;
                 if (method.isAsynchronous()) {
-                    // If limited permits, read AsynchronousCompletion object.
-                    if (method.getAsynchronousPermits() >= 0) {
-                        b.loadLocal(remoteInVar);
-                        b.invokeVirtual(remoteInVar.getType(), "readObject",
-                                        TypeDesc.OBJECT, null);
-                        asyncCompletionVar = b.createLocalVariable
-                            (null, TypeDesc.forClass(AsynchronousCompletion.class));
-                        b.checkCast(asyncCompletionVar.getType());
-                        b.storeLocal(asyncCompletionVar);
-                    }
-
                     // Caller should have closed connection, but we should do
                     // so also to clean up.
                     b.loadLocal(conVar);

@@ -445,27 +445,29 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         {
             LinkedHashSet<String> addrSet = new LinkedHashSet<String>();
             if (mLocalAddress != null) {
-                addrSet.add(serverLocalAddress);
-            }
-            if (mRemoteAddress != null) {
-                addrSet.add(serverRemoteAddress);
-            }
-            if (serverRemoteAddress != null) {
-                addrSet.add(mRemoteAddress);
-            }
-            if (serverLocalAddress != null) {
                 addrSet.add(mLocalAddress);
             }
+            if (mRemoteAddress != null) {
+                addrSet.add(mRemoteAddress);
+            }
+            if (serverRemoteAddress != null) {
+                addrSet.add(serverRemoteAddress);
+            }
+            if (serverLocalAddress != null) {
+                addrSet.add(serverLocalAddress);
+            }
+
+            String pseudoClass = "Remote Method Invocation";
 
             if (addrSet.size() == 0) {
                 mid = new StackTraceElement[] {
-                    new StackTraceElement("Remote Method Invocation", "", null, -1)
+                    new StackTraceElement(pseudoClass, "", null, -1)
                 };
             } else {
                 mid = new StackTraceElement[addrSet.size()];
                 int i = 0;
                 for (String addr : addrSet) {
-                    mid[i++] = new StackTraceElement("Remote Method Invocation", "", addr, -1);
+                    mid[i++] = new StackTraceElement(pseudoClass, "address", addr, -1);
                 }
             }
         }

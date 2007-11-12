@@ -64,6 +64,8 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         }
         Identifier id = cObjectsToIdentifiers.get(obj);
         if (id == null) {
+            // FIXME: Use thread local random number generator and possibly use
+            // a faster generator, like Mersenne twister.
             do {
                 id = new Identifier(cRandom.nextLong());
             } while (cIdentifiersToObjects.containsKey(id));
@@ -143,8 +145,8 @@ public class Identifier implements Serializable, Comparable<Identifier> {
      * @return registered object, never null
      * @throws IllegalArgumentException if given object is null
      */
-    public Object register(Object obj) throws IllegalArgumentException {
-        return register(this, obj);
+    public <T> T register(T obj) throws IllegalArgumentException {
+        return (T) register(this, obj);
     }
 
     public void write(DataOutput out) throws IOException {

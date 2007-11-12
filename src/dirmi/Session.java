@@ -35,62 +35,6 @@ public interface Session extends Closeable {
     Object getRemoteServer();
 
     /**
-     * Returns the client-side timeout for sending method requests, in
-     * milliseconds. A negative timeout is infinite. When a request times out,
-     * it throws a {@link RequestTimeoutException}.
-     */
-    int getSendRequestTimeout();
-
-    /**
-     * Set the client-side timeout for sending method requests, in
-     * milliseconds. A negative timeout is infinite. When a request times out,
-     * it throws a {@link RequestTimeoutException}.
-     */
-    void setSendRequestTimeout(int timeoutMillis);
-
-    /**
-     * Returns the client-side timeout for receiving method responses, in
-     * milliseconds. A negative timeout is infinite. When a response times out,
-     * it throws a {@link ResponseTimeoutException}.
-     */
-    int getReceiveResponseTimeout();
-
-    /**
-     * Set the client-side timeout for receiving method responses, in
-     * milliseconds. A negative timeout is infinite. When a response times out,
-     * it throws a {@link ResponseTimeoutException}.
-     */
-    void setReceiveResponseTimeout(int timeoutMillis);
-
-    /**
-     * Returns the server-side timeout for receiving method requests, in
-     * milliseconds. A negative timeout is infinite. When receiving a request
-     * times out, a warning is logged.
-     */
-    int getReceiveRequestTimeout();
-
-    /**
-     * Set the server-side timeout for receiving method requests, in
-     * milliseconds. A negative timeout is infinite. When receiving a request
-     * times out, a warning is logged.
-     */
-    void setReceiveRequestTimeout(int timeoutMillis);
-
-    /**
-     * Returns the server-side timeout for sending method responses, in
-     * milliseconds. A negative timeout is infinite. When sending a response
-     * times out, a warning is logged.
-     */
-    int getSendResponseTimeout();
-
-    /**
-     * Set the server-side timeout for sending method responses, in
-     * milliseconds. A negative timeout is infinite. When sending a response
-     * times out, a warning is logged.
-     */
-    void setSendResponseTimeout(int timeoutMillis);
-
-    /**
      * Closes the session.
      */
     void close() throws RemoteException;

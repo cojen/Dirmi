@@ -64,18 +64,6 @@ public interface RemoteMethod extends Serializable {
     boolean isAsynchronous();
 
     /**
-     * Returns the amount of permits for asynchronous method. Is negative if
-     * unlimited or if method is not asynchronous.
-     */
-    int getAsynchronousPermits();
-
-    /**
-     * Returns true if asynchronous method is fair with permits. Is false if
-     * unfair or if method is not asynchronous.
-     */
-    boolean isAsynchronousFair();
-
-    /**
      * Returns true if this method is idempotent.
      *
      * @see Idempotent

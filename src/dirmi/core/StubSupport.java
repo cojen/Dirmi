@@ -27,18 +27,12 @@ import java.rmi.RemoteException;
  */
 public interface StubSupport {
     /**
-     * Registers an AsynchronousCompletion object so that it can be disposed
-     * when session is closed.
-     */
-    void register(AsynchronousCompletion completion);
-
-    /**
      * @return RemoteConnection for writing method identifier and arguments,
      * and for reading response. If call is synchronous, output is flushed
      * after arguments are written, and then connection is read from. If call
      * is asynchronous, connection is closed after arguments are written.
      *
-     * @throws java.rmi.NoSuchObjectException of support has been disposed
+     * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
     RemoteConnection invoke() throws RemoteException;
 
