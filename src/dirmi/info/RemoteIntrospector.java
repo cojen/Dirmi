@@ -194,7 +194,7 @@ public class RemoteIntrospector {
                             ("Asynchronous method must return void: " + method.methodDesc());
                     }
                     for (RemoteParameter type : method.getExceptionTypes()) {
-                        if (type.getSerializedType() != RemoteException.class) {
+                        if (type.getType() != RemoteException.class) {
                             throw new IllegalArgumentException
                                 ("Asynchronous method can only throw RemoteException: \"" +
                                  method.getSignature(remote.getName()) + '"');
@@ -595,7 +595,7 @@ public class RemoteIntrospector {
         }
 
         boolean declaresException(RemoteParameter exceptionType) {
-            return declaresException(exceptionType.getSerializedType());
+            return declaresException(exceptionType.getType());
         }
 
         boolean declaresException(Class<?> exceptionType) {
@@ -603,7 +603,7 @@ public class RemoteIntrospector {
                 return false;
             }
             for (RemoteParameter declared : mExceptionTypes) {
-                if (declared.getSerializedType().isAssignableFrom(exceptionType)) {
+                if (declared.getType().isAssignableFrom(exceptionType)) {
                     return true;
                 }
             }
@@ -612,14 +612,8 @@ public class RemoteIntrospector {
 
         void resolve() {
             if (mReturnType != null) {
-                Class<?> type = mReturnType.getSerializedType();
-                if (Remote.class.isAssignableFrom(type)) {
-                    mReturnType = RParameter.make
-                        (examine((Class<Remote>) type), mReturnType.getRemoteDimensions(),
-                         null, mReturnType.isUnshared());
-                } else {
-                    mReturnType = RParameter.make(null, 0, type, mReturnType.isUnshared());
-                }
+                Class<?> type = mReturnType.getType();
+                mReturnType = RParameter.make(type, mReturnType.isUnshared());
             }
 
             if (mParameterTypes != null) {
@@ -638,14 +632,14 @@ public class RemoteIntrospector {
 
                 for (int i=0; i<size; i++) {
                     RemoteParameter param = mParameterTypes.get(i);
-                    Class<?> type = param.getSerializedType();
+                    Class<?> type = param.getType();
 
                     boolean unshared = !noneUnshared && param.isUnshared();
                     // Can only be truly unshared if no other parameter is of same type.
                     if (unshared) {
                         for (int j=i+1; j<size; j++) {
                             RParameter jp = mParameterTypes.get(j);
-                            if (type == jp.getSerializedType()) {
+                            if (type == jp.getType()) {
                                 unshared = false;
                                 // Mark parameter as unshared for when we see it again.
                                 mParameterTypes.set(j, jp.toUnshared(false));
@@ -654,21 +648,7 @@ public class RemoteIntrospector {
                         }
                     }
 
-                    int dimensions = param.getRemoteDimensions();
-                    if (Remote.class.isAssignableFrom(type)) {
-                        mParameterTypes.set
-                            (i, RParameter.make
-                             (examine((Class<Remote>) type), dimensions, null, unshared));
-                    } else {
-                        if (dimensions > 0) {
-                            TypeDesc desc = TypeDesc.forClass(type);
-                            while (--dimensions >= 0) {
-                                desc = desc.toArrayType();
-                            }
-                            type = desc.toClass();
-                        }
-                        mParameterTypes.set(i, RParameter.make(null, 0, type, unshared));
-                    }
+                    mParameterTypes.set(i, RParameter.make(type, unshared));
                 }
 
                 mParameterTypes = Collections.unmodifiableList(mParameterTypes);
@@ -687,52 +667,31 @@ public class RemoteIntrospector {
     private static class RParameter implements RemoteParameter {
         private static final long serialVersionUID = 1L;
 
-        static RParameter makeTemp(Class<?> serializedType) {
-            if (serializedType == void.class) {
-                serializedType = null;
-            }
-            if (serializedType == null) {
+        static RParameter makeTemp(Class<?> type) {
+            if (type == void.class || type == null) {
                 return null;
             }
-            int dimensions = 0;
-            while (serializedType.isArray()) {
-                dimensions++;
-                serializedType = serializedType.getComponentType();
-            }
 
-            boolean unshared = serializedType.isPrimitive() ||
-                Remote.class.isAssignableFrom(serializedType) ||
-                String.class.isAssignableFrom(serializedType) ||
-                TypeDesc.forClass(serializedType).toPrimitiveType() != null;
+            boolean unshared = type.isPrimitive() ||
+                String.class.isAssignableFrom(type) ||
+                TypeDesc.forClass(type).toPrimitiveType() != null;
 
-            return intern(new RParameter(null, dimensions, serializedType, unshared));
+            return intern(new RParameter(type, unshared));
         }
 
-        static RParameter make(RemoteInfo remoteInfoType, int dimensions,
-                               Class<?> serializedType,
-                               boolean unshared)
+        static RParameter make(Class<?> type, boolean unshared)
         {
-            if (serializedType == void.class) {
-                serializedType = null;
-            }
-            if (remoteInfoType == null && serializedType == null) {
+            if (type == void.class || type == null) {
                 return null;
             }
-            return intern(new RParameter(remoteInfoType, dimensions, serializedType, unshared));
+            return intern(new RParameter(type, unshared));
         }
 
-        private final RemoteInfo mRemoteInfoType;
-        private final int mDimensions;
-        private final Class<?> mSerializedType;
+        private final Class<?> mType;
         private final boolean mUnshared;
 
-        private RParameter(RemoteInfo remoteInfoType, int dimensions,
-                           Class<?> serializedType,
-                           boolean unshared)
-        {
-            mRemoteInfoType = remoteInfoType;
-            mDimensions = dimensions;
-            mSerializedType = serializedType;
+        private RParameter(Class<?> type, boolean unshared) {
+            mType = type;
             mUnshared = unshared;
         }
 
@@ -740,42 +699,22 @@ public class RemoteIntrospector {
             return mUnshared;
         }
 
-        public boolean isRemote() {
-            return mRemoteInfoType != null;
-        }
-
-        public int getRemoteDimensions() {
-            return mDimensions;
-        }
-
-        public RemoteInfo getRemoteInfoType() {
-            return mRemoteInfoType;
-        }
-
-        public Class<?> getSerializedType() {
-            return mSerializedType;
+        public Class<?> getType() {
+            return mType;
         }
 
         public boolean equalTypes(RemoteParameter other) {
             if (this == other) {
                 return true;
             }
-            return ((getRemoteInfoType() == null) ? (other.getRemoteInfoType() == null) :
-                    (getRemoteInfoType().getName().equals(other.getRemoteInfoType().getName()))) &&
-                (getRemoteDimensions() == other.getRemoteDimensions()) &&
-                ((getSerializedType() == null) ? (other.getSerializedType() == null) :
-                 (getSerializedType().getName().equals(other.getSerializedType().getName())));
+            return 
+                ((getType() == null) ? (other.getType() == null) :
+                 (getType().getName().equals(other.getType().getName())));
         }
 
         @Override
         public int hashCode() {
-            if (mRemoteInfoType != null) {
-                return mRemoteInfoType.hashCode() + mDimensions;
-            }
-            if (mSerializedType != null) {
-                return mSerializedType.hashCode();
-            }
-            return 0;
+            return mType.hashCode();
         }
 
         @Override
@@ -785,32 +724,24 @@ public class RemoteIntrospector {
             }
             if (obj instanceof RParameter) {
                 RParameter other = (RParameter) obj;
-                return ((mRemoteInfoType == null) ? (other.mRemoteInfoType == null) :
-                        (mRemoteInfoType.equals(other.mRemoteInfoType))) &&
-                    (mDimensions == other.mDimensions) &&
+                return
                     (mUnshared == other.mUnshared) &&
-                    ((mSerializedType == null) ? (other.mSerializedType == null) :
-                     (mSerializedType.equals(other.mSerializedType)));
+                    ((mType == null) ? (other.mType == null) :
+                     (mType.equals(other.mType)));
             }
             return false;
         }
 
         @Override
         public String toString() {
-            if (mRemoteInfoType != null) {
-                return mRemoteInfoType.getName();
-            }
-            if (mSerializedType != null) {
-                return TypeDesc.forClass(mSerializedType).getFullName();
-            }
-            return super.toString();
+            return TypeDesc.forClass(mType).getFullName();
         }
 
         RParameter toUnshared(boolean unshared) {
             if (unshared == mUnshared) {
                 return this;
             }
-            return intern(new RParameter(mRemoteInfoType, mDimensions, mSerializedType, unshared));
+            return intern(new RParameter(mType, unshared));
         }
     }
 }

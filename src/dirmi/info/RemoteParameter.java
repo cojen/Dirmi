@@ -31,28 +31,7 @@ public interface RemoteParameter extends Serializable {
      */
     boolean isUnshared();
 
-    /**
-     * Returns true if parameter is remote, false if serialized.
-     */
-    boolean isRemote();
-
-    /**
-     * If parameter is an array of remotes, call this method to get the
-     * dimensions. If zero is returned, then remote parameter is not an array.
-     */
-    int getRemoteDimensions();
-
-    /**
-     * If parameter is remote, then call this method to get RemoteInfo. If null
-     * is returned, then parameter is not remote.
-     */
-    RemoteInfo getRemoteInfoType();
-
-    /**
-     * If parameter is serialized, then call this method to get the type. If
-     * null is returned, then parameter is not serialized.
-     */
-    Class<?> getSerializedType();
+    Class<?> getType();
 
     boolean equalTypes(RemoteParameter other);
 }

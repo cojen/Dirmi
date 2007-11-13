@@ -138,15 +138,7 @@ class CodeBuilderUtil {
         if (param == null) {
             return null;
         }
-        if (!param.isRemote()) {
-            return TypeDesc.forClass(param.getSerializedType());
-        } 
-        TypeDesc type = TypeDesc.forClass(param.getRemoteInfoType().getName());
-        int dimensions = param.getRemoteDimensions();
-        while (--dimensions >= 0) {
-            type = type.toArrayType();
-        }
-        return type;
+        return TypeDesc.forClass(param.getType());
     }
 
     static TypeDesc[] getTypeDescs(Collection<? extends RemoteParameter> params) {
