@@ -75,6 +75,9 @@ public class StandardSession implements Session {
         return new SessionThreadFactory();
     }
 
+    static final int MAGIC_NUMBER = 0x7696b623;
+    static final int PROTOCOL_VERSION = 1;
+
     private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
     private static final int DISPOSE_BATCH = 1000;
 
@@ -184,15 +187,36 @@ public class StandardSession implements Session {
         {
             RemoteConnection remoteCon = new RemoteCon(mBroker.accept());
             RemoteInputStream in = remoteCon.getInputStream();
+
             try {
-                mRemoteServer = in.readObject();
-                mRemoteAdmin = (Hidden.Admin) in.readObject();
-            } catch (ClassNotFoundException e) {
-                IOException io = new IOException();
-                io.initCause(e);
-                throw io;
+                int magic = in.readInt();
+                if (magic != MAGIC_NUMBER) {
+                    throw new IOException("Incorrect magic number: " + magic);
+                }
+
+                int version = in.readInt();
+                if (version != PROTOCOL_VERSION) {
+                    throw new IOException("Unsupported protocol version: " + version);
+                }
+
+                try {
+                    mRemoteServer = in.readObject();
+                    mRemoteAdmin = (Hidden.Admin) in.readObject();
+                } catch (ClassNotFoundException e) {
+                    IOException io = new IOException();
+                    io.initCause(e);
+                    throw io;
+                }
+            } catch (IOException e) {
+                try {
+                    in.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                throw e;
+            } finally {
+                in.close();
             }
-            in.close();
         }
 
         // Wait for bootstrap to complete.
@@ -558,6 +582,10 @@ public class StandardSession implements Session {
             try {
                 RemoteConnection remoteCon = new RemoteCon(mBroker.connect());
                 out = remoteCon.getOutputStream();
+
+                out.writeInt(MAGIC_NUMBER);
+                out.writeInt(PROTOCOL_VERSION);
+
                 for (Object obj : mObjectsToSend) {
                     out.writeObject(obj);
                 }
