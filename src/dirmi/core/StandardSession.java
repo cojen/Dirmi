@@ -226,15 +226,15 @@ public class StandardSession implements Session {
         heartbeatReceived();
 
         try {
-            // Start first accept thread.
-            mExecutor.execute(new Accepter());
+            // Start first worker thread.
+            mExecutor.execute(new Worker());
         } catch (RejectedExecutionException e) {
             try {
                 close();
             } catch (IOException e2) {
                 // Don't care.
             }
-            IOException io = new IOException("Unable to start accept thread");
+            IOException io = new IOException("Unable to start worker thread");
             io.initCause(e);
             throw io;
         }
@@ -619,14 +619,14 @@ public class StandardSession implements Session {
         }
     }
 
-    private class Accepter implements Runnable {
+    private class Worker implements Runnable {
         private final int mHeartbeatSendDelay;
 
-        Accepter() {
+        Worker() {
             this(DEFAULT_HEARTBEAT_DELAY_MILLIS >> 1);
         }
 
-        private Accepter(int heartbeatSendDelay) {
+        private Worker(int heartbeatSendDelay) {
             mHeartbeatSendDelay = heartbeatSendDelay;
         }
 
@@ -649,20 +649,20 @@ public class StandardSession implements Session {
                     return;
                 }
 
-                // Spawn a replacement accepter.
+                // Spawn a replacement worker.
                 try {
-                    Accepter accepter;
+                    Worker worker;
                     if (con == null) {
-                        accepter = new Accepter();
+                        worker = new Worker();
                     } else {
                         long elapsedNanos = System.nanoTime() - acceptStartNanos;
                         int elapsedMillis = (int) (elapsedNanos / 1000000);
-                        accepter = new Accepter(mHeartbeatSendDelay - elapsedMillis);
+                        worker = new Worker(mHeartbeatSendDelay - elapsedMillis);
                     }
-                    mExecutor.execute(accepter);
+                    mExecutor.execute(worker);
                     spawned = true;
                 } catch (RejectedExecutionException e) {
-                    warn("Unable to spawn replacement accept thread; will loop back", e);
+                    warn("Unable to spawn replacement worker thread; will loop back", e);
                     spawned = false;
                 }
 
