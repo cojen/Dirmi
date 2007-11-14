@@ -35,7 +35,8 @@ class MarshalledRemote implements Externalizable {
     Identifier mTypeID;
     RemoteInfo mInfo;
 
-    MarshalledRemote() {
+    // Need public constructor for Externalizable.
+    public MarshalledRemote() {
     }
 
     MarshalledRemote(Identifier objID, Identifier typeID, RemoteInfo info) {
