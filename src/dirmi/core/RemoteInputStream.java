@@ -26,7 +26,6 @@ import java.io.StreamCorruptedException;
 import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 
 import java.rmi.Remote;
@@ -443,33 +442,13 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         // method was invoked remotely. Also include any addresses.
         StackTraceElement[] mid;
         {
-            LinkedHashSet<String> addrSet = new LinkedHashSet<String>();
-            if (mLocalAddress != null) {
-                addrSet.add(mLocalAddress);
-            }
-            if (mRemoteAddress != null) {
-                addrSet.add(mRemoteAddress);
-            }
-            if (serverRemoteAddress != null) {
-                addrSet.add(serverRemoteAddress);
-            }
-            if (serverLocalAddress != null) {
-                addrSet.add(serverLocalAddress);
-            }
-
-            String pseudoClass = "Remote Method Invocation";
-
-            if (addrSet.size() == 0) {
-                mid = new StackTraceElement[] {
-                    new StackTraceElement(pseudoClass, "", null, -1)
-                };
-            } else {
-                mid = new StackTraceElement[addrSet.size()];
-                int i = 0;
-                for (String addr : addrSet) {
-                    mid[i++] = new StackTraceElement(pseudoClass, "address", addr, -1);
-                }
-            }
+            String pseudo = "Remote Method Invocation";
+            mid = new StackTraceElement[] {
+                new StackTraceElement(pseudo, "address", serverLocalAddress, -1),
+                new StackTraceElement(pseudo, "address", mRemoteAddress, -1),
+                new StackTraceElement(pseudo, "address", serverRemoteAddress, -1),
+                new StackTraceElement(pseudo, "address", mLocalAddress, -1),
+            };
         }
         
         if (localTraceLength >= 1) {

@@ -313,7 +313,7 @@ public class StandardSession implements Session {
                 mRemoteAdmin.disposed(disposedStubs);
             } catch (RemoteException e) {
                 if (!mClosing) {
-                    mLog.error("Unable to dispose remote stubs", e);
+                    error("Unable to dispose remote stubs", e);
                 }
             }
         } while (!finished);
@@ -330,7 +330,7 @@ public class StandardSession implements Session {
             remoteCon = new RemoteCon(con);
             id = Identifier.read(remoteCon.getInputStream());
         } catch (IOException e) {
-            mLog.error("Failure reading request", e);
+            error("Failure reading request", e);
             try {
                 con.close();
             } catch (IOException e2) {
@@ -348,9 +348,9 @@ public class StandardSession implements Session {
                 remoteCon.getOutputStream().writeThrowable(t);
                 remoteCon.close();
             } catch (IOException e) {
-                mLog.error("Failure processing request. " +
-                           "Server cannot find remote object and " +
-                           "cannot send error to client. Object id: " + id, e);
+                error("Failure processing request. " +
+                      "Server cannot find remote object and " +
+                      "cannot send error to client. Object id: " + id, e);
             }
             return;
         }
@@ -372,15 +372,31 @@ public class StandardSession implements Session {
                 if (cause == null) {
                     cause = e;
                 }
-                mLog.error("Unhandled exception in asynchronous server method", cause);
+                error("Unhandled exception in asynchronous server method", cause);
                 return;
             }
 
             remoteCon.getOutputStream().writeThrowable(throwable);
             remoteCon.close();
         } catch (IOException e) {
-            mLog.error("Failure processing request", e);
+            error("Failure processing request", e);
         }
+    }
+
+    void warn(String message) {
+        mLog.warn(message);
+    }
+
+    void warn(String message, Throwable e) {
+        mLog.warn(message, e);
+    }
+
+    void error(String message) {
+        mLog.error(message);
+    }
+
+    void error(String message, Throwable e) {
+        mLog.error(message, e);
     }
 
     private static class SessionThreadFactory implements ThreadFactory {
@@ -618,7 +634,7 @@ public class StandardSession implements Session {
                     mExecutor.execute(accepter);
                     spawned = true;
                 } catch (RejectedExecutionException e) {
-                    mLog.warn("Unable to spawn replacement accept thread; will loop back", e);
+                    warn("Unable to spawn replacement accept thread; will loop back", e);
                     spawned = false;
                 }
 
@@ -665,7 +681,7 @@ public class StandardSession implements Session {
 
             mRemoteOut = new RemoteOutputStream(con.getOutputStream(),
                                                 getLocalAddressString(),
-                                                getLocalAddressString())
+                                                getRemoteAddressString())
             {
                 @Override
                 protected ObjectOutputStream createObjectOutputStream(OutputStream out)
@@ -751,7 +767,7 @@ public class StandardSession implements Session {
                             // FIXME: Use resolveClass.
                             type = Class.forName(info.getName());
                         } catch (ClassNotFoundException e) {
-                            mLog.warn("Remote interface not found", e);
+                            warn("Remote interface not found", e);
                             type = Remote.class;
                         }
 
