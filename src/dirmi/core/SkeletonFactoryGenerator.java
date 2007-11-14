@@ -90,8 +90,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         Class<? extends Skeleton> skeletonClass = generateSkeleton();
 
         try {
-            CodeBuilderUtil.invokeMethodIDInitMethod(skeletonClass, mInfo);
-            return new Factory<R>(mType, skeletonClass);
+            SkeletonFactory<R> factory = new Factory<R>(mType, skeletonClass);
+            CodeBuilderUtil.invokeInitMethod(skeletonClass, factory, mInfo);
+            return factory;
         } catch (IllegalAccessException e) {
             throw new Error(e);
         } catch (InvocationTargetException e) {
@@ -123,12 +124,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add fields
         {
             cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_FIELD_NAME, remoteType);
-
-            CodeBuilderUtil.addMethodIDFields(cf, mInfo);
         }
 
         // Add static method to assign identifiers.
-        CodeBuilderUtil.addMethodIDInitMethod(cf, mInfo);
+        CodeBuilderUtil.addInitMethodAndFields(cf, mInfo);
 
         // Add constructor
         {

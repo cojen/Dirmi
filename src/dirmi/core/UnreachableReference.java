@@ -21,7 +21,8 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 /**
- * 
+ * PhantomReference which has a callback which is invoked when reference
+ * becomes unreachable.
  *
  * @author Brian S O'Neill
  */
@@ -38,8 +39,9 @@ abstract class UnreachableReference<T> extends PhantomReference<T> {
     }
 
     /**
-     * Callback invoked when reference is unreachable. Implementation should
-     * perform any necessary cleanup, but it should do so without blocking.
+     * Callback invoked when reference becomes unreachable. Implementation
+     * should perform any necessary cleanup, but it should do so without
+     * blocking.
      */
     protected abstract void unreachable();
 

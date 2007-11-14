@@ -40,6 +40,8 @@ import dirmi.info.RemoteParameter;
  * @author Brian S O'Neill
  */
 class CodeBuilderUtil {
+    static final String FACTORY_FIELD = "factory";
+
     static final String METHOD_ID_FIELD_PREFIX = "method_";
 
     // Method name ends with '$' so as not to conflict with user method.
@@ -150,7 +152,18 @@ class CodeBuilderUtil {
         return paramDescs;
     }
 
-    static void addMethodIDFields(ClassFile cf, RemoteInfo info) {
+    static void loadMethodID(CodeBuilder b, int methodOrdinal) {
+        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
+        b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
+    }
+
+    static void addInitMethodAndFields(ClassFile cf, RemoteInfo info) {
+        cf.addField(Modifiers.PRIVATE.toStatic(true), FACTORY_FIELD, TypeDesc.OBJECT);
+        addMethodIDFields(cf, info);
+        addInitMethod(cf, info);
+    }
+
+    private static void addMethodIDFields(ClassFile cf, RemoteInfo info) {
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         int methodOrdinal = -1;
         for (RemoteMethod method : info.getRemoteMethods()) {
@@ -160,20 +173,18 @@ class CodeBuilderUtil {
         }
     }
 
-    static void loadMethodID(CodeBuilder b, int methodOrdinal) {
-        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
-        b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-    }
-
-    static void addMethodIDInitMethod(ClassFile cf, RemoteInfo info) {
+    private static void addInitMethod(ClassFile cf, RemoteInfo info) {
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc identifierArrayType = identifierType.toArrayType();
 
         MethodInfo mi = cf.addMethod
-            (Modifiers.PUBLIC.toStatic(true), INIT_METHOD_NAME,
-             null, new TypeDesc[] {identifierArrayType});
+            (Modifiers.PUBLIC.toStatic(true).toSynchronized(true), INIT_METHOD_NAME,
+             null, new TypeDesc[] {TypeDesc.OBJECT, identifierArrayType});
 
         CodeBuilder b = new CodeBuilder(mi);
+
+        b.loadLocal(b.getParameter(0));
+        b.storeStaticField(FACTORY_FIELD, TypeDesc.OBJECT);
 
         int methodOrdinal = -1;
         for (RemoteMethod method : info.getRemoteMethods()) {
@@ -193,7 +204,7 @@ class CodeBuilderUtil {
                 doInit.setLocation();
             }
 
-            b.loadLocal(b.getParameter(0));
+            b.loadLocal(b.getParameter(1));
             b.loadConstant(methodOrdinal);
             b.loadFromArray(identifierType);
             b.storeStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
@@ -202,7 +213,11 @@ class CodeBuilderUtil {
         b.returnVoid();
     }
 
-    static void invokeMethodIDInitMethod(Class clazz, RemoteInfo info)
+    /**
+     * @param factory Strong reference is kept to this object. As long as stub
+     * or skeleton instances exist, the factory will not get reclaimed.
+     */
+    static void invokeInitMethod(Class clazz, Object factory, RemoteInfo info)
         throws NoSuchMethodException, IllegalAccessException, InvocationTargetException
     {
         // Prepare identifiers for init method.
@@ -214,6 +229,7 @@ class CodeBuilderUtil {
         }
 
         // Call static method to initialize method identifiers.
-        clazz.getMethod(INIT_METHOD_NAME, Identifier[].class).invoke(null, (Object) ids);
+        clazz.getMethod(INIT_METHOD_NAME, Object.class, Identifier[].class)
+            .invoke(null, factory, ids);
     }
 }

@@ -28,6 +28,7 @@ import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,7 +61,10 @@ import dirmi.info.RemoteParameter;
  * @author Brian S O'Neill
  */
 public class StubFactoryGenerator<R extends Remote> {
-    private static final String STUB_SUPPORT_FIELD_NAME = "support";
+    private static final String STUB_SUPPORT_NAME = "support";
+
+    private static final String HANDLE_SEND_REQUEST_FAILURE_NAME = "handleSendRequestFailure$";
+    private static final String HANDLE_TOTAL_FAILURE_NAME = "handleTotalFailure$";
 
     private static final Map<Object, StubFactory<?>> cCache;
 
@@ -108,8 +112,9 @@ public class StubFactoryGenerator<R extends Remote> {
         Class<? extends R> stubClass = generateStub();
 
         try {
-            CodeBuilderUtil.invokeMethodIDInitMethod(stubClass, mRemoteInfo);
-            return new Factory<R>(mType, stubClass);
+            StubFactory<R> factory =  new Factory<R>(mType, stubClass);
+            CodeBuilderUtil.invokeInitMethod(stubClass, factory, mRemoteInfo);
+            return factory;
         } catch (IllegalAccessException e) {
             throw new Error(e);
         } catch (InvocationTargetException e) {
@@ -140,23 +145,52 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc classType = TypeDesc.forClass(Class.class);
         final TypeDesc methodType = TypeDesc.forClass(Method.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
+        final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
 
         // Add fields
         {
-            cf.addField(Modifiers.PRIVATE.toFinal(true),
-                        STUB_SUPPORT_FIELD_NAME, stubSupportType);
-
-            CodeBuilderUtil.addMethodIDFields(cf, mRemoteInfo);
+            cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, stubSupportType);
         }
 
         // Add static method to assign identifiers.
-        CodeBuilderUtil.addMethodIDInitMethod(cf, mRemoteInfo);
+        CodeBuilderUtil.addInitMethodAndFields(cf, mRemoteInfo);
+
+        // Add private methods for handling exceptions.
+        {
+            MethodInfo mi = cf.addMethod(Modifiers.PRIVATE,
+                                         HANDLE_SEND_REQUEST_FAILURE_NAME,
+                                         throwableType,
+                                         new TypeDesc[] {throwableType, remoteConnectionType});
+            CodeBuilder b = new CodeBuilder(mi);
+
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadLocal(b.getParameter(1));
+            b.invokeInterface(stubSupportType, "recoverServerException",
+                              null, new TypeDesc[] {remoteConnectionType});
+
+            b.loadLocal(b.getParameter(0));
+            b.returnValue(throwableType);
+
+            mi = cf.addMethod(Modifiers.PRIVATE,
+                              HANDLE_TOTAL_FAILURE_NAME,
+                              throwableType,
+                              new TypeDesc[] {throwableType, remoteConnectionType});
+            b = new CodeBuilder(mi);
+
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadLocal(b.getParameter(1));
+            b.invokeInterface(stubSupportType, "forceConnectionClose",
+                              null, new TypeDesc[] {remoteConnectionType});
+
+            b.loadLocal(b.getParameter(0));
+            b.returnValue(throwableType);
+        }
 
         // Add constructor
         {
-            MethodInfo mi = cf.addConstructor
-                (Modifiers.PUBLIC, new TypeDesc[] {stubSupportType});
-
+            MethodInfo mi = cf.addConstructor(Modifiers.PUBLIC, new TypeDesc[] {stubSupportType});
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
@@ -164,7 +198,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadLocal(b.getParameter(0));
-            b.storeField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.storeField(STUB_SUPPORT_NAME, stubSupportType);
 
             b.returnVoid();
         }
@@ -172,6 +206,9 @@ public class StubFactoryGenerator<R extends Remote> {
         // Implement all methods provided by server, including ones not defined
         // by local interface. This allows the server to upgrade before the
         // client, making new methods available via reflection.
+
+        // Track which exception converting methods need to be created.
+        Map<Class, String> exceptionConverters = new HashMap<Class, String>();
 
         int methodOrdinal = -1;
         for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
@@ -196,7 +233,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Create connection for invoking remote method.
             b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "invoke", remoteConnectionType, null);
             LocalVariable conVar = b.createLocalVariable(null, remoteConnectionType);
             b.storeLocal(conVar);
@@ -299,42 +336,30 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 // For read, convert InterruptedIOException to ResponseTimeoutException.
                 b.exceptionHandler(readStart, readEnd, InterruptedIOException.class.getName());
-                LocalVariable exceptionVar =
-                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
-                b.storeLocal(exceptionVar);
-
-                final TypeDesc remoteExType = TypeDesc.forClass(ResponseTimeoutException.class);
-
-                b.newObject(remoteExType);
-                b.dup();
-                b.loadLocal(exceptionVar);
-                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
-                                TypeDesc.STRING, null);
-                b.loadLocal(exceptionVar);
-                b.invokeConstructor(remoteExType,
-                                    new TypeDesc[] {TypeDesc.STRING,
-                                                    TypeDesc.forClass(Throwable.class)});
+                String convertName = "createResponseTimeoutException$";
+                exceptionConverters.put(ResponseTimeoutException.class, convertName);
+                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
                 b.throwObject();
             }
 
             // For write, convert InterruptedIOException to RequestTimeoutException.
             {
                 b.exceptionHandler(writeStart, writeEnd, InterruptedIOException.class.getName());
-                LocalVariable exceptionVar =
-                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
-                b.storeLocal(exceptionVar);
+                String convertName = "createRequestTimeoutException$";
+                exceptionConverters.put(RequestTimeoutException.class, convertName);
+                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
+                b.throwObject();
+            }
 
-                final TypeDesc remoteExType = TypeDesc.forClass(RequestTimeoutException.class);
-
-                b.newObject(remoteExType);
-                b.dup();
-                b.loadLocal(exceptionVar);
-                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
-                                TypeDesc.STRING, null);
-                b.loadLocal(exceptionVar);
-                b.invokeConstructor(remoteExType,
-                                    new TypeDesc[] {TypeDesc.STRING,
-                                                    TypeDesc.forClass(Throwable.class)});
+            // If any other IOException during write, an exception might have
+            // been written back before request could be completely written.
+            {
+                b.exceptionHandler(writeStart, writeEnd, IOException.class.getName());
+                b.loadThis();
+                b.swap();
+                b.loadLocal(conVar);
+                b.invokePrivate(HANDLE_SEND_REQUEST_FAILURE_NAME, throwableType,
+                                new TypeDesc[] {throwableType, remoteConnectionType});
                 b.throwObject();
             }
 
@@ -352,21 +377,9 @@ public class StubFactoryGenerator<R extends Remote> {
             // Catch IOException
             {
                 b.exceptionHandler(tryStart, tryEnd, IOException.class.getName());
-                LocalVariable exceptionVar =
-                    b.createLocalVariable(null, TypeDesc.forClass(IOException.class));
-                b.storeLocal(exceptionVar);
-
-                final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
-
-                b.newObject(remoteExType);
-                b.dup();
-                b.loadLocal(exceptionVar);
-                b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
-                                TypeDesc.STRING, null);
-                b.loadLocal(exceptionVar);
-                b.invokeConstructor(remoteExType,
-                                    new TypeDesc[] {TypeDesc.STRING,
-                                                    TypeDesc.forClass(Throwable.class)});
+                String convertName = "createRemoteException$";
+                exceptionConverters.put(RemoteException.class, convertName);
+                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
                 b.throwObject();
             }
 
@@ -375,17 +388,11 @@ public class StubFactoryGenerator<R extends Remote> {
             // If any exception, force connection to close.
             {
                 b.exceptionHandler(tryStart, tryEnd3, Throwable.class.getName());
-                LocalVariable exceptionVar =
-                    b.createLocalVariable(null, TypeDesc.forClass(Throwable.class));
-                b.storeLocal(exceptionVar);
-
                 b.loadThis();
-                b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+                b.swap();
                 b.loadLocal(conVar);
-                b.invokeInterface(stubSupportType, "forceConnectionClose",
-                                  null, new TypeDesc[] {remoteConnectionType});
-
-                b.loadLocal(exceptionVar);
+                b.invokePrivate(HANDLE_TOTAL_FAILURE_NAME, throwableType,
+                                new TypeDesc[] {throwableType, remoteConnectionType});
                 b.throwObject();
             }
         }
@@ -442,7 +449,7 @@ public class StubFactoryGenerator<R extends Remote> {
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "stubHashCode", TypeDesc.INT, null);
             b.returnValue(TypeDesc.INT);
         }
@@ -468,10 +475,10 @@ public class StubFactoryGenerator<R extends Remote> {
             b.ifZeroComparisonBranch(notInstance, "==");
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.loadLocal(b.getParameter(0));
             b.checkCast(cf.getType());
-            b.loadField(cf.getType(), STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadField(cf.getType(), STUB_SUPPORT_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "stubEquals", TypeDesc.BOOLEAN,
                               new TypeDesc[] {stubSupportType});
             b.returnValue(TypeDesc.BOOLEAN);
@@ -489,13 +496,31 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadConstant(mLocalInfo.getName() + '@');
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_FIELD_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.invokeInterface(stubSupportType, "stubToString", TypeDesc.STRING, null);
 
             b.invokeVirtual(TypeDesc.STRING, "concat", TypeDesc.STRING,
                             new TypeDesc[] {TypeDesc.STRING});
 
             b.returnValue(TypeDesc.STRING);
+        }
+
+        // Define remaining static exception converting methods.
+        for (Map.Entry<Class, String> entry : exceptionConverters.entrySet()) {
+            MethodInfo mi = cf.addMethod(Modifiers.PRIVATE.toStatic(true), entry.getValue(),
+                                         throwableType, new TypeDesc[] {throwableType});
+            CodeBuilder b = new CodeBuilder(mi);
+
+            TypeDesc exType = TypeDesc.forClass(entry.getKey());
+
+            b.newObject(exType);
+            b.dup();
+            b.loadLocal(b.getParameter(0));
+            b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
+                            TypeDesc.STRING, null);
+            b.loadLocal(b.getParameter(0));
+            b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, throwableType});
+            b.returnValue(exType);
         }
 
         return ci.defineClass(cf);

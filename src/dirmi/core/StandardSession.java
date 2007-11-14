@@ -82,10 +82,22 @@ public class StandardSession implements Session {
     final Executor mExecutor;
     final Log mLog;
 
+    // Strong references to SkeletonFactories. SkeletonFactories are created as
+    // needed and can be recreated as well. This map just provides quick
+    // concurrent access to sharable SkeletonFactory instances.
+    final ConcurrentMap<Identifier, SkeletonFactory> mSkeletonFactories;
+
     // Strong references to Skeletons. Skeletons are created as needed and can
     // be recreated as well. This map just provides quick concurrent access to
     // sharable Skeleton instances.
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
+
+    // Strong references to PhantomReferences to StubFactories.
+    // PhantomReferences need to be strongly reachable or else they will be
+    // reclaimed sooner than the referent becomes unreachable. When the
+    // referent StubFactory becomes unreachable, its entry in this map must be
+    // removed to reclaim memory.
+    final ConcurrentMap<Identifier, StubFactoryRef> mStubFactoryRefs;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
     // to be strongly reachable or else they will be reclaimed sooner than the
@@ -93,8 +105,8 @@ public class StandardSession implements Session {
     // unreachable, its entry in this map must be removed to reclaim memory.
     final ConcurrentMap<Identifier, StubRef> mStubRefs;
 
-    // Automatically disposed stubs, pending transmission to server.
-    final ConcurrentLinkedQueue<Identifier> mDisposedStubs;
+    // Automatically disposed objects, pending transmission to server.
+    final ConcurrentLinkedQueue<Identifier> mDisposedObjects;
 
     // Published remote server object.
     final Object mRemoteServer;
@@ -156,9 +168,11 @@ public class StandardSession implements Session {
         mExecutor = executor;
         mLog = log;
 
+        mSkeletonFactories = new ConcurrentHashMap<Identifier, SkeletonFactory>();
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
+        mStubFactoryRefs = new ConcurrentHashMap<Identifier, StubFactoryRef>();
         mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
-        mDisposedStubs = new ConcurrentLinkedQueue<Identifier>();
+        mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
 
         // Transmit bootstrap information. Do so in a separate thread because
         // remote side cannot accept our connection until it sends its
@@ -225,10 +239,16 @@ public class StandardSession implements Session {
                 }
             }
         } finally {
-            mSkeletons.clear();
-            mStubRefs.clear();
-            mDisposedStubs.clear();
+            clearCollections();
         }
+    }
+
+    void clearCollections() {
+        mSkeletonFactories.clear();
+        mSkeletons.clear();
+        mStubFactoryRefs.clear();
+        mStubRefs.clear();
+        mDisposedObjects.clear();
     }
 
     public Object getRemoteServer() {
@@ -248,10 +268,14 @@ public class StandardSession implements Session {
     boolean dispose(Identifier id) {
         boolean doNotify = false;
 
+        mSkeletonFactories.remove(id);
+
         Skeleton skeleton = mSkeletons.remove(id);
         if (skeleton != null) {
             doNotify = true;
         }
+
+        mStubFactoryRefs.remove(id);
 
         StubRef ref = mStubRefs.remove(id);
         if (ref != null) {
@@ -268,7 +292,7 @@ public class StandardSession implements Session {
         do {
             ArrayList<Identifier> disposedStubsList = new ArrayList<Identifier>();
             for (int i = 0; i < DISPOSE_BATCH; i++) {
-                Identifier id = mDisposedStubs.poll();
+                Identifier id = mDisposedObjects.poll();
                 if (id == null) {
                     finished = true;
                     break;
@@ -383,6 +407,19 @@ public class StandardSession implements Session {
         }
     }
 
+    private class StubFactoryRef extends UnreachableReference<StubFactory> {
+        private final Identifier mTypeID;
+
+        StubFactoryRef(StubFactory factory, Identifier typeID) {
+            super(factory);
+            mTypeID = typeID;
+        }
+
+        protected void unreachable() {
+            mDisposedObjects.add(mTypeID);
+        }
+    }
+
     private static class StubRef extends UnreachableReference<Remote> {
         private final StubSupportImpl mStubSupport;
 
@@ -479,9 +516,7 @@ public class StandardSession implements Session {
         }
 
         public void closed() {
-            mSkeletons.clear();
-            mStubRefs.clear();
-            mDisposedStubs.clear();
+            clearCollections();
             if (mBroker instanceof Closeable) {
                 try {
                     ((Closeable) mBroker).close();
@@ -722,9 +757,7 @@ public class StandardSession implements Session {
 
                         factory = typeID.register(StubFactoryGenerator.getStubFactory(type, info));
 
-                        // FIXME: Client has weak references to StubFactories. When
-                        // ref is cleared, send message to server so that it can
-                        // forget that it ever sent info on the remote type.
+                        mStubFactoryRefs.put(typeID, new StubFactoryRef(factory, typeID));
                     }
 
                     StubSupportImpl support = new StubSupportImpl(objID);
@@ -759,26 +792,34 @@ public class StandardSession implements Session {
                     throw new WriteAbortedException("Malformed Remote object", e);
                 }
 
+                Identifier typeID = Identifier.identify(remoteType);
                 RemoteInfo info = null;
 
                 if (!mStubRefs.containsKey(objID) && !mSkeletons.containsKey(objID)) {
                     // Create skeleton for use by client. This also prevents
                     // remote object from being freed by garbage collector.
-                    SkeletonFactory factory =
-                        SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
-                    mSkeletons.putIfAbsent(objID, factory.createSkeleton(remote));
 
-                    // FIXME: Only send RemoteInfo for first use of exported
-                    // object. If not sent, client will request it anyhow, so
-                    // this is an optimization to avoid an extra round trip.
-                    try {
-                        info = RemoteIntrospector.examine(remoteType);
-                    } catch (IllegalArgumentException e) {
-                        throw new WriteAbortedException("Malformed Remote object", e);
+                    SkeletonFactory factory = mSkeletonFactories.get(typeID);
+                    if (factory == null) {
+                        factory = SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                        SkeletonFactory existing = mSkeletonFactories.putIfAbsent(typeID, factory);
+                        if (existing != null && existing != factory) {
+                            factory = existing;
+                        } else {
+                            // Only send RemoteInfo for first use of exported
+                            // object. If not sent, client will request it anyhow, so
+                            // this is an optimization to avoid an extra round trip.
+                            try {
+                                info = RemoteIntrospector.examine(remoteType);
+                            } catch (IllegalArgumentException e) {
+                                throw new WriteAbortedException("Malformed Remote object", e);
+                            }
+                        }
                     }
+
+                    mSkeletons.putIfAbsent(objID, factory.createSkeleton(remote));
                 }
 
-                Identifier typeID = Identifier.identify(remoteType);
                 obj = new MarshalledRemote(objID, typeID, info);
             }
 
@@ -816,6 +857,26 @@ public class StandardSession implements Session {
             }
         }
 
+        public void recoverServerException(RemoteConnection con) throws Throwable {
+            RemoteInputStream in;
+            try {
+                in = con.getInputStream();
+            } catch (IOException e) {
+                // Ignore.
+                return;
+            }
+            try {
+                in.readOk();
+            } catch (RemoteException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof IOException) {
+                    // Ignore.
+                    return;
+                }
+                throw e;
+            }
+        }
+
         public void forceConnectionClose(RemoteConnection con) {
             try {
                 con.setWriteTimeout(0);
@@ -850,7 +911,7 @@ public class StandardSession implements Session {
         void unreachable() {
             mDisposed = true;
             if (mStubRefs.remove(mObjID) != null) {
-                mDisposedStubs.add(mObjID);
+                mDisposedObjects.add(mObjID);
             }
         }
     }

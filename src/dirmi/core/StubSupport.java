@@ -37,6 +37,12 @@ public interface StubSupport {
     RemoteConnection invoke() throws RemoteException;
 
     /**
+     * Try to recover any exception sent by the server before it closed the
+     * connection, and throw it. If none recovered, return normally.
+     */
+    void recoverServerException(RemoteConnection con) throws Throwable;
+
+    /**
      * Forcibly close connection and don't throw any exception.
      */
     void forceConnectionClose(RemoteConnection con);
