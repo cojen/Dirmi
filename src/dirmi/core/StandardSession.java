@@ -17,13 +17,10 @@
 package dirmi.core;
 
 import java.io.Closeable;
-import java.io.Externalizable;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
-import java.io.ObjectInput;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.io.OutputStream;
@@ -474,35 +471,6 @@ public class StandardSession implements Session {
 
         void markStubDisposed() {
             mStubSupport.markDisposed();
-        }
-    }
-
-    private static class MarshalledRemote implements Externalizable {
-        private static final long serialVersionUID = 1;
-
-        Identifier mObjID;
-        Identifier mTypeID;
-        RemoteInfo mInfo;
-
-        public MarshalledRemote() {
-        }
-
-        MarshalledRemote(Identifier objID, Identifier typeID, RemoteInfo info) {
-            mObjID = objID;
-            mTypeID = typeID;
-            mInfo = info;
-        }
-
-        public void writeExternal(ObjectOutput out) throws IOException {
-            mObjID.write(out);
-            mTypeID.write(out);
-            out.writeObject(mInfo);
-        }
-
-        public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-            mObjID = Identifier.read(in);
-            mTypeID = Identifier.read(in);
-            mInfo = (RemoteInfo) in.readObject();
         }
     }
 
