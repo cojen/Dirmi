@@ -24,6 +24,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.io.WriteAbortedException;
 
 import java.rmi.NoSuchObjectException;
@@ -840,7 +841,7 @@ public class StandardSession implements Session {
 
         @Override
         protected Object replaceObject(Object obj) throws IOException {
-            if (obj instanceof Remote) {
+            if (obj instanceof Remote && !(obj instanceof Serializable)) {
                 Remote remote = (Remote) obj;
                 Identifier objID = Identifier.identify(remote);
 
