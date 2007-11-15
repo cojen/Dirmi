@@ -240,14 +240,22 @@ public class StandardSession implements Session {
     }
 
     public void close() throws RemoteException {
-        close(false, null, null);
+        close(true, true, null, null);
     }
 
     void closeOnFailure(String message, Throwable exception) throws RemoteException {
-        close(true, message, exception);
+        close(true, false, message, exception);
     }
 
-    private void close(boolean onFailure, String message, Throwable exception)
+    void peerClosed() {
+        try {
+            close(false, true, null, null);
+        } catch (RemoteException e) {
+            // Don't care.
+        }
+    }
+
+    private void close(boolean notify, boolean explicit, String message, Throwable exception)
         throws RemoteException
     {
         if (mClosing) {
@@ -263,21 +271,23 @@ public class StandardSession implements Session {
         }
 
         try {
-            if (onFailure) {
-                mRemoteAdmin.closedExplicitly();
-            } else {
-                try {
-                    mRemoteAdmin.closedOnFailure(message, exception);
-                } catch (RemoteException e) {
-                    // Perhaps exception is not serializable?
-                    if (exception != null) {
-                        try {
-                            mRemoteAdmin.closedOnFailure(message, null);
-                        } catch (RemoteException e2) {
-                            // Don't care.
+            if (notify) {
+                if (explicit) {
+                    mRemoteAdmin.closedExplicitly();
+                } else {
+                    try {
+                        mRemoteAdmin.closedOnFailure(message, exception);
+                    } catch (RemoteException e) {
+                        // Perhaps exception is not serializable?
+                        if (exception != null) {
+                            try {
+                                mRemoteAdmin.closedOnFailure(message, null);
+                            } catch (RemoteException e2) {
+                                // Don't care.
+                            }
                         }
+                        throw e;
                     }
-                    throw e;
                 }
             }
 
@@ -560,24 +570,14 @@ public class StandardSession implements Session {
         }
 
         public void closedExplicitly() {
-            try {
-                if (mBroker instanceof Closeable) {
-                    try {
-                        ((Closeable) mBroker).close();
-                    } catch (IOException e) {
-                        // Don't care.
-                    }
-                }
-            } finally {
-                clearCollections();
-            }
+            peerClosed();
         }
 
         public void closedOnFailure(String message, Throwable exception) {
             String prefix = "Connection closed by peer due to unexpected failure";
             message = message == null ? prefix : (prefix + ": " + message);
             mLog.error(message, exception);
-            closedExplicitly();
+            peerClosed();
         }
     }
 
