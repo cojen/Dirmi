@@ -20,6 +20,7 @@ import java.io.Closeable;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
+import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
@@ -427,6 +428,8 @@ public class StandardSession implements Session {
                 throwable = e;
             } catch (ClassNotFoundException e) {
                 throwable = e;
+            } catch (NotSerializableException e) {
+                throwable = e;
             } catch (AsynchronousInvocationException e) {
                 Throwable cause = e.getCause();
                 if (cause == null) {
@@ -440,6 +443,11 @@ public class StandardSession implements Session {
             remoteCon.close();
         } catch (IOException e) {
             error("Failure processing request", e);
+            try {
+                remoteCon.close();
+            } catch (IOException e2) {
+                // Don't care.
+            }
         }
     }
 
