@@ -226,18 +226,29 @@ public class StandardSession implements Session {
             // Start first worker thread.
             mExecutor.execute(new Worker());
         } catch (RejectedExecutionException e) {
+            String message = "Unable to start worker thread";
             try {
-                close();
+                closeOnFailure(message, e);
             } catch (IOException e2) {
                 // Don't care.
             }
-            IOException io = new IOException("Unable to start worker thread");
+            IOException io = new IOException(message);
             io.initCause(e);
             throw io;
         }
     }
 
     public void close() throws RemoteException {
+        close(false, null, null);
+    }
+
+    void closeOnFailure(String message, Throwable exception) throws RemoteException {
+        close(true, message, exception);
+    }
+
+    private void close(boolean onFailure, String message, Throwable exception)
+        throws RemoteException
+    {
         if (mClosing) {
             return;
         }
@@ -251,7 +262,24 @@ public class StandardSession implements Session {
         }
 
         try {
-            mRemoteAdmin.closed();
+            if (onFailure) {
+                mRemoteAdmin.closedExplicitly();
+            } else {
+                try {
+                    mRemoteAdmin.closedOnFailure(message, exception);
+                } catch (RemoteException e) {
+                    // Perhaps exception is not serializable?
+                    if (exception != null) {
+                        try {
+                            mRemoteAdmin.closedOnFailure(message, null);
+                        } catch (RemoteException e2) {
+                            // Don't care.
+                        }
+                    }
+                    throw e;
+                }
+            }
+
             if (mBroker instanceof Closeable) {
                 try {
                     ((Closeable) mBroker).close();
@@ -496,7 +524,14 @@ public class StandardSession implements Session {
              * Notification from client when explicitly closed.
              */
             @Asynchronous
-            void closed() throws RemoteException;
+            void closedExplicitly() throws RemoteException;
+
+            /**
+             * Notification from client when closed due to an unexpected
+             * failure.
+             */
+            @Asynchronous
+            void closedOnFailure(String message, Throwable exception) throws RemoteException;
         }
     }
 
@@ -523,15 +558,25 @@ public class StandardSession implements Session {
             }
         }
 
-        public void closed() {
-            clearCollections();
-            if (mBroker instanceof Closeable) {
-                try {
-                    ((Closeable) mBroker).close();
-                } catch (IOException e) {
-                    // Don't care.
+        public void closedExplicitly() {
+            try {
+                if (mBroker instanceof Closeable) {
+                    try {
+                        ((Closeable) mBroker).close();
+                    } catch (IOException e) {
+                        // Don't care.
+                    }
                 }
+            } finally {
+                clearCollections();
             }
+        }
+
+        public void closedOnFailure(String message, Throwable exception) {
+            String prefix = "Connection closed by peer due to unexpected failure";
+            message = message == null ? prefix : (prefix + ": " + message);
+            mLog.error(message, exception);
+            closedExplicitly();
         }
     }
 
@@ -607,9 +652,10 @@ public class StandardSession implements Session {
                     con = mBroker.tryAccept(mHeartbeatSendDelay);
                 } catch (IOException e) {
                     if (!mClosing) {
-                        mLog.error("Failure accepting connection; closing session", e);
+                        String message = "Failure accepting connection; closing session";
+                        mLog.error(message, e);
                         try {
-                            close();
+                            closeOnFailure(message, e);
                         } catch (IOException e2) {
                             // Don't care.
                         }
@@ -640,9 +686,10 @@ public class StandardSession implements Session {
                     long now = System.currentTimeMillis();
                     if (now > mNextExpectedHeartbeat) {
                         // Didn't get a heartbeat from peer, so close session.
-                        mLog.error("No heartbeat received; closing session");
+                        String message = "No heartbeat received; closing session";
+                        mLog.error(message);
                         try {
-                            close();
+                            closeOnFailure(message, null);
                         } catch (IOException e) {
                             // Don't care.
                         }
