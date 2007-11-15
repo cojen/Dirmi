@@ -24,6 +24,6 @@ import java.rmi.RemoteException;
  *
  * @author Brian S O'Neill
  */
-public interface RemoteIterable<T> extends Remote {
-    RemoteIterator<T> iterator() throws RemoteException;
+public interface RemoteIterable<E> extends Remote {
+    RemoteIterator<E> iterator() throws RemoteException;
 }

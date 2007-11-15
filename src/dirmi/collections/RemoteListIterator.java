@@ -29,6 +29,13 @@ public interface RemoteListIterator<E> extends RemoteIterator<E>, Remote {
 
     E previous() throws RemoteException;
 
+    /**
+     * @param type element type
+     * @param max max amount to fetch
+     * @return null or smaller than max amount if start is reached
+     */
+    E[] previous(Class<? extends E> type, int max) throws RemoteException;
+
     int nextIndex() throws RemoteException;
 
     int previousIndex() throws RemoteException;
