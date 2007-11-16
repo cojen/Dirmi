@@ -649,6 +649,9 @@ public class StandardSession implements Session {
         }
 
         private Worker(int heartbeatSendDelay) {
+            if (heartbeatSendDelay < 0) {
+                heartbeatSendDelay = 0;
+            }
             mHeartbeatSendDelay = heartbeatSendDelay;
         }
 
