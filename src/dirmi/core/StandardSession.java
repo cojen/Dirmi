@@ -34,8 +34,6 @@ import java.rmi.RemoteException;
 
 import java.util.ArrayList;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -44,7 +42,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadFactory;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -66,14 +63,6 @@ import dirmi.io.Multiplexer;
  * @author Brian S O'Neill
  */
 public class StandardSession implements Session {
-    /**
-     * Returns a ThreadFactory which produces non-daemon threads whose name
-     * begins with "Session".
-     */
-    static ThreadFactory newSessionThreadFactory() {
-        return new SessionThreadFactory();
-    }
-
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 1;
 
@@ -160,7 +149,7 @@ public class StandardSession implements Session {
             throw new IllegalArgumentException("Broker is null");
         }
         if (executor == null) {
-            executor = Executors.newCachedThreadPool(newSessionThreadFactory());
+            executor = Executors.newCachedThreadPool(new SessionThreadFactory(true));
         }
         if (log == null) {
             log = LogFactory.getLog(Session.class);
@@ -465,30 +454,6 @@ public class StandardSession implements Session {
 
     void error(String message, Throwable e) {
         mLog.error(message, e);
-    }
-
-    private static class SessionThreadFactory implements ThreadFactory {
-        static final AtomicInteger mPoolNumber = new AtomicInteger(1);
-        final ThreadGroup mGroup;
-        final AtomicInteger mThreadNumber = new AtomicInteger(1);
-        final String mNamePrefix;
-
-        SessionThreadFactory() {
-            SecurityManager s = System.getSecurityManager();
-            mGroup = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
-            mNamePrefix = "Session-" + mPoolNumber.getAndIncrement() + "-worker-";
-        }
-
-        public Thread newThread(Runnable r) {
-            Thread t = new Thread(mGroup, r, mNamePrefix + mThreadNumber.getAndIncrement(), 0);
-            if (!t.isDaemon()) {
-                t.setDaemon(false);
-            }
-            if (t.getPriority() != Thread.NORM_PRIORITY) {
-                t.setPriority(Thread.NORM_PRIORITY);
-            }
-            return t;
-        }
     }
 
     private class StubFactoryRef extends UnreachableReference<StubFactory> {
