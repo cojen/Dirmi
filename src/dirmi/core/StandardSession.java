@@ -114,7 +114,7 @@ public class StandardSession implements Session {
      * @param master single connection which is multiplexed
      */
     public StandardSession(Connection master) throws IOException {
-        this(new Multiplexer(master), null, null, null);
+        this(master, null, null, null);
     }
 
     /**
@@ -122,24 +122,36 @@ public class StandardSession implements Session {
      * @param server optional server object to export
      */
     public StandardSession(Connection master, Object server) throws IOException {
-        this(new Multiplexer(master), server, null, null);
+        this(master, server, null, null);
     }
 
     /**
      * @param master single connection which is multiplexed
      * @param server optional server object to export
-     * @param executor used to execute remote methods; pass null for default
+     * @param executor non-shared executor for remote methods; pass null for default
      */
     public StandardSession(Connection master, Object server, Executor executor)
         throws IOException
     {
-        this(new Multiplexer(master), server, executor, null);
+        this(master, server, executor, null);
+    }
+
+    /**
+     * @param master single connection which is multiplexed
+     * @param server optional server object to export
+     * @param executor non-shared executor for remote methods; pass null for default
+     * @param log message log; pass null for default
+     */
+    public StandardSession(Connection master, Object server, Executor executor, Log log)
+        throws IOException
+    {
+        this(new Multiplexer(master), server, executor, log);
     }
 
     /**
      * @param broker connection broker must always connect to same remote server
      * @param server optional server object to export
-     * @param executor used to execute remote methods; pass null for default
+     * @param executor non-shared executor for remote methods; pass null for default
      * @param log message log; pass null for default
      */
     public StandardSession(Broker broker, Object server, Executor executor, Log log)
@@ -306,9 +318,11 @@ public class StandardSession implements Session {
     }
 
     public void dispose(Remote object) throws RemoteException {
-        Identifier id = Identifier.identify(object);
-        if (dispose(id)) {
-            mRemoteAdmin.disposed(id);
+        if (object != null) {
+            Identifier id = Identifier.identify(object);
+            if (dispose(id)) {
+                mRemoteAdmin.disposed(id);
+            }
         }
     }
 
@@ -424,7 +438,7 @@ public class StandardSession implements Session {
                 if (cause == null) {
                     cause = e;
                 }
-                error("Unhandled exception in asynchronous server method", cause);
+                warn("Unhandled exception in asynchronous server method", cause);
                 return;
             }
 

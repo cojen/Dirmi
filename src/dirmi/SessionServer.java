@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2007 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,33 +16,16 @@
 
 package dirmi;
 
-import java.io.Closeable;
-
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**
- * Remote method invocation session.
+ * Handle to a remote session server.
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface SessionServer {
     /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
-     */
-    Object getRemoteServer();
-
-    /**
-     * Closes the session.
+     * Closes the session server.
      */
     void close() throws RemoteException;
-
-    /**
-     * Dispose a Remote object, rendering it unusable for future remote
-     * calls. Usually objects need not be explicitly disposed, since the local
-     * and remote garbage collectors do so automatically.
-     */
-    void dispose(Remote object) throws RemoteException;
 }

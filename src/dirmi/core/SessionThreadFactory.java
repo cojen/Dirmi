@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ThreadFactory;
 
 /**
- * This ThreadFactory produces threads whose name begins with "Session".
+ * ThreadFactory used by sessions.
  *
  * @author Brian S O'Neill
  */
@@ -34,8 +34,8 @@ public class SessionThreadFactory implements ThreadFactory {
     final Thread.UncaughtExceptionHandler mHandler;
 
     /**
-     * Create a ThreadFactory which produces threads whose name begins with
-     * "Session".
+     * Create a ThreadFactory which produces threads whose name begins with the
+     * prefix "Session".
      *
      * @param daemon pass true for all threads to be daemon -- they won't
      * prevent the JVM from exiting
@@ -46,35 +46,34 @@ public class SessionThreadFactory implements ThreadFactory {
 
     /**
      * Create a ThreadFactory which produces threads whose name begins with
-     * "Session-" and the given subname.
+     * the given prefix.
      *
      * @param daemon pass true for all threads to be daemon -- they won't
      * prevent the JVM from exiting
-     * @param subname optional
+     * @param prefix thread name prefix; default used if null
      */
-    public SessionThreadFactory(boolean daemon, String subname) {
-        this(daemon, subname, null);
+    public SessionThreadFactory(boolean daemon, String prefix) {
+        this(daemon, prefix, null);
     }
 
     /**
      * Create a ThreadFactory which produces threads whose name begins with the
-     * "Session-" and the given subname.
+     * the given prefix.
      *
      * @param daemon pass true for all threads to be daemon -- they won't
      * prevent the JVM from exiting
-     * @param subname optional
+     * @param prefix thread name prefix; default used if null
      * @param handler optional uncaught exception handler
      */
-    public SessionThreadFactory(boolean daemon, String subname,
+    public SessionThreadFactory(boolean daemon, String prefix,
                                 Thread.UncaughtExceptionHandler handler)
     {
         SecurityManager s = System.getSecurityManager();
         mGroup = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
-        if (subname == null) {
-            mNamePrefix = "Session-" + mPoolNumber.getAndIncrement() + "-worker-";
-        } else {
-            mNamePrefix = "Session-" + subname + '-' + mPoolNumber.getAndIncrement() + "-worker-";
+        if (prefix == null) {
+            prefix = "Session";
         }
+        mNamePrefix = prefix + '-' + mPoolNumber.getAndIncrement() + "-worker-";
         mDaemon = daemon;
         mHandler = handler;
     }
