@@ -37,7 +37,6 @@ import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
-import dirmi.Idempotent;
 
 import dirmi.core.Identifier;
 
@@ -203,8 +202,6 @@ public class RemoteIntrospector {
                 }
             }
 
-            // FIXME: check asynchronous: no response timeout
-
             info = new RInfo(remote.getName(), new LinkedHashSet<RMethod>(methodMap.values()));
             cInfoCache.put(remote, info);
 
@@ -361,7 +358,6 @@ public class RemoteIntrospector {
         private final Set<RemoteParameter> mExceptionTypes;
 
         private final boolean mAsynchronous;
-        private final boolean mIdempotent;
 
         private transient Method mMethod;
 
@@ -415,8 +411,6 @@ public class RemoteIntrospector {
                 mAsynchronous = true;
             }
 
-            mIdempotent = m.getAnnotation(Idempotent.class) != null;
-
             // Hang on to this until resolve is called.
             mMethod = m;
         }
@@ -429,7 +423,6 @@ public class RemoteIntrospector {
             mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
 
             mAsynchronous = existing.mAsynchronous;
-            mIdempotent = existing.mIdempotent;
 
             mMethod = existing.mMethod;
         }
@@ -471,10 +464,6 @@ public class RemoteIntrospector {
             return mAsynchronous;
         }
 
-        public boolean isIdempotent() {
-            return mIdempotent;
-        }
-
         @Override
         public int hashCode() {
             return mName.hashCode() + mID.hashCode();
@@ -490,8 +479,7 @@ public class RemoteIntrospector {
                 return mName.equals(other.mName) && (mID == other.mID) &&
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
-                    (mAsynchronous == other.mAsynchronous) &&
-                    (mIdempotent == other.mIdempotent);
+                    (mAsynchronous == other.mAsynchronous);
             }
             return false;
         }
@@ -561,13 +549,6 @@ public class RemoteIntrospector {
             if (!getParameterTypes().equals(other.getParameterTypes())) {
                 // This indicates a bug in RemoteIntrospector.
                 throw new IllegalArgumentException("parameter types mismatch");
-            }
-
-            if (mIdempotent != other.mIdempotent) {
-                // This is user error.
-                throw new IllegalArgumentException
-                    ("Inherited methods conflict in use of @Idempotent annotation: " +
-                     methodDesc() + " and " + other.methodDesc());
             }
 
             if (mAsynchronous != other.mAsynchronous) {

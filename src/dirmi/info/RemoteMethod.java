@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Set;
 
 import dirmi.Asynchronous;
-import dirmi.Idempotent;
 
 import dirmi.core.Identifier;
 
@@ -62,11 +61,4 @@ public interface RemoteMethod extends Serializable {
      * @see Asynchronous
      */
     boolean isAsynchronous();
-
-    /**
-     * Returns true if this method is idempotent.
-     *
-     * @see Idempotent
-     */
-    boolean isIdempotent();
 }
