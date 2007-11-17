@@ -181,6 +181,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     public void writeUnsharedString(String str) throws IOException {
         if (str == null) {
             mOut.write(NULL);
+            return;
         }
 
         int length = str.length();
