@@ -30,6 +30,8 @@ import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
+import org.cojen.util.ClassInjector;
+
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
@@ -46,6 +48,15 @@ class CodeBuilderUtil {
 
     // Method name ends with '$' so as not to conflict with user method.
     static final String INIT_METHOD_NAME = "init$";
+
+    static ClassInjector createInjector(Class<?> type, String suffix) {
+        String name = type.getName();
+        if (name.startsWith("java.")) {
+            // Rename to avoid SecurityException.
+            name = "java$" + name.substring(4);
+        }
+        return ClassInjector.create(name + '$' + suffix, type.getClassLoader());
+    }
 
     /**
      * Generates code to read a parameter from a RemoteInput, cast it, and

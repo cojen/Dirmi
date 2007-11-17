@@ -105,9 +105,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends Skeleton> generateSkeleton() {
-        ClassInjector ci =
-            ClassInjector.create(mType.getName() + "$Skeleton", mType.getClassLoader());
-
+        ClassInjector ci = CodeBuilderUtil.createInjector(mType, "Skeleton");
         ClassFile cf = new ClassFile(ci.getClassName());
         cf.addInterface(Skeleton.class);
         cf.setSourceFile(SkeletonFactoryGenerator.class.getName());

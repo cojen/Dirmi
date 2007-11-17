@@ -127,9 +127,7 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends R> generateStub() {
-        ClassInjector ci =
-            ClassInjector.create(mType.getName() + "$Stub", mType.getClassLoader());
-
+        ClassInjector ci = CodeBuilderUtil.createInjector(mType, "Stub");
         ClassFile cf = new ClassFile(ci.getClassName());
         cf.addInterface(mType);
         cf.setSourceFile(StubFactoryGenerator.class.getName());
@@ -493,7 +491,7 @@ public class StubFactoryGenerator<R extends Remote> {
             MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "toString", TypeDesc.STRING, null);
             CodeBuilder b = new CodeBuilder(mi);
 
-            b.loadConstant(mLocalInfo.getName() + '@');
+            b.loadConstant(mRemoteInfo.getName() + '@');
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);

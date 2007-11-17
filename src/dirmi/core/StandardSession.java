@@ -801,7 +801,7 @@ public class StandardSession implements Session {
                             // FIXME: Use resolveClass.
                             type = Class.forName(info.getName());
                         } catch (ClassNotFoundException e) {
-                            warn("Remote interface not found", e);
+                            warn("Remote interface not found: " + info.getName(), e);
                             type = Remote.class;
                         }
 
