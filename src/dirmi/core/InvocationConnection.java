@@ -17,18 +17,16 @@
 package dirmi.core;
 
 import java.io.IOException;
-import java.rmi.Remote;
-import java.rmi.RemoteException;
 
 import dirmi.io.Connection;
 
 /**
- * Basic interface for a bidirectional remote I/O connection.
+ * Basic interface for a bidirectional method invocation I/O connection.
  *
  * @author Brian S O'Neill
  */
-public interface RemoteConnection extends Connection {
-    RemoteInputStream getInputStream() throws IOException;
+public interface InvocationConnection extends Connection {
+    InvocationInputStream getInputStream() throws IOException;
 
-    RemoteOutputStream getOutputStream() throws IOException;
+    InvocationOutputStream getOutputStream() throws IOException;
 }

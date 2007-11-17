@@ -25,9 +25,9 @@ import java.rmi.RemoteException;
 /**
  *
  * @author Brian S O'Neill
- * @see RemoteOutput
+ * @see InvocationOutput
  */
-public interface RemoteInput extends ObjectInput, Closeable {
+public interface InvocationInput extends ObjectInput, Closeable {
     /**
      * Reads the length and of contents the String from a packed format similar
      * to UTF-8.

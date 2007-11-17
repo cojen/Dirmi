@@ -36,7 +36,7 @@ public interface Skeleton {
      * asynchronous. Any other exception thrown from this method indicates a
      * communication failure, and so the connection should be closed.
      *
-     * @param con RemoteConnection for reading method identifier and arguments,
+     * @param con InvocationConnection for reading method identifier and arguments,
      * and for writing response.
      * @throws IOException if thrown from connection
      * @throws NoSuchMethodException if method is unknown
@@ -46,7 +46,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(RemoteConnection con)
+    void invoke(InvocationConnection con)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

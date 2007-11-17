@@ -25,9 +25,9 @@ import java.io.ObjectOutput;
 /**
  *
  * @author Brian S O'Neill
- * @see RemoteInput
+ * @see InvocationInput
  */
-public interface RemoteOutput extends ObjectOutput, Flushable, Closeable {
+public interface InvocationOutput extends ObjectOutput, Flushable, Closeable {
     /**
      * Writes the length and contents of the String in a packed format similar
      * to UTF-8.

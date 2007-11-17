@@ -37,9 +37,9 @@ import dirmi.ResponseTimeoutException;
  * 
  *
  * @author Brian S O'Neill
- * @see RemoteOutputStream
+ * @see InvocationOutputStream
  */
-public class RemoteInputStream extends InputStream implements RemoteInput {
+public class InvocationInputStream extends InputStream implements InvocationInput {
     private volatile InputStream mIn;
     private final String mLocalAddress;
     private final String mRemoteAddress;
@@ -47,7 +47,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
     /**
      * @param in stream to wrap
      */
-    public RemoteInputStream(InputStream in) {
+    public InvocationInputStream(InputStream in) {
         mIn = in;
         mLocalAddress = null;
         mRemoteAddress = null;
@@ -58,7 +58,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
      * @param localAddress optional local address to stitch into stack traces from server.
      * @param remoteAddress optional remote address to stitch into stack traces from server.
      */
-    public RemoteInputStream(InputStream in, String localAddress, String remoteAddress) {
+    public InvocationInputStream(InputStream in, String localAddress, String remoteAddress) {
         mIn = in;
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
@@ -98,7 +98,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         if (b < 0) {
             throw new EOFException();
         }
-        return b != RemoteOutputStream.FALSE;
+        return b != InvocationOutputStream.FALSE;
     }
 
     public byte readByte() throws IOException {
@@ -345,7 +345,7 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         if (b1 < 0) {
             throw new EOFException();
         }
-        if (b1 == RemoteOutputStream.NULL) {
+        if (b1 == InvocationOutputStream.NULL) {
             return null;
         }
         if (b1 <= 0x7f) {
@@ -386,8 +386,8 @@ public class RemoteInputStream extends InputStream implements RemoteInput {
         Throwable t;
         try {
             int v = mIn.read();
-            if (v != RemoteOutputStream.NOT_OK) {
-                return v == RemoteOutputStream.OK_TRUE;
+            if (v != InvocationOutputStream.NOT_OK) {
+                return v == InvocationOutputStream.OK_TRUE;
             }
 
             ObjectInput in = getObjectInputStream();

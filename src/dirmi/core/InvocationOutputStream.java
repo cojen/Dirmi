@@ -30,9 +30,9 @@ import java.util.List;
  * 
  *
  * @author Brian S O'Neill
- * @see RemoteInputStream
+ * @see InvocationInputStream
  */
-public class RemoteOutputStream extends OutputStream implements RemoteOutput {
+public class InvocationOutputStream extends OutputStream implements InvocationOutput {
     static final byte FALSE = 0;
     static final byte TRUE = 1;
     static final byte OK_FALSE = 2;
@@ -48,7 +48,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
     /**
      * @param out stream to wrap
      */
-    public RemoteOutputStream(OutputStream out) {
+    public InvocationOutputStream(OutputStream out) {
         mOut = out;
         mLocalAddress = null;
         mRemoteAddress = null;
@@ -59,7 +59,7 @@ public class RemoteOutputStream extends OutputStream implements RemoteOutput {
      * @param localAddress optional local address to stitch into stack traces sent to client.
      * @param remoteAddress optional remote address to stitch into stack traces sent to client.
      */
-    public RemoteOutputStream(OutputStream out, String localAddress, String remoteAddress) {
+    public InvocationOutputStream(OutputStream out, String localAddress, String remoteAddress) {
         mOut = out;
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;

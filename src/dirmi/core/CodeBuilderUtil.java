@@ -59,7 +59,7 @@ class CodeBuilderUtil {
     }
 
     /**
-     * Generates code to read a parameter from a RemoteInput, cast it, and
+     * Generates code to read a parameter from an InvocationInput, cast it, and
      * leave it on the stack. Generated code may throw an IOException,
      * NoSuchObjectException, or ClassNotFoundException.
      *
@@ -68,7 +68,7 @@ class CodeBuilderUtil {
      */
     static void readParam(CodeBuilder b,
                           RemoteParameter param,
-                          LocalVariable remoteInVar)
+                          LocalVariable invInVar)
     {
         TypeDesc type = getTypeDesc(param);
 
@@ -98,8 +98,8 @@ class CodeBuilderUtil {
             castType = type;
         }
 
-        b.loadLocal(remoteInVar);
-        b.invokeVirtual(remoteInVar.getType(), methodName, methodType, null);
+        b.loadLocal(invInVar);
+        b.invokeVirtual(invInVar.getType(), methodName, methodType, null);
 
         if (castType != null && castType != TypeDesc.OBJECT) {
             b.checkCast(type);
@@ -107,8 +107,8 @@ class CodeBuilderUtil {
     }
 
     /**
-     * Generates code to write a parameter to a RemoteOutput. Generated code
-     * may throw an IOException.
+     * Generates code to write a parameter to an InvocationOutput. Generated
+     * code may throw an IOException.
      *
      * @param param type of parameter to write
      * @param remoteOutVar variable which references a RemoteOutput instance
@@ -116,7 +116,7 @@ class CodeBuilderUtil {
      */
     static void writeParam(CodeBuilder b,
                            RemoteParameter param,
-                           LocalVariable remoteOutVar,
+                           LocalVariable invOutVar,
                            LocalVariable paramVar)
     {
         TypeDesc type = getTypeDesc(param);
@@ -142,9 +142,9 @@ class CodeBuilderUtil {
             methodType = TypeDesc.OBJECT;
         }
 
-        b.loadLocal(remoteOutVar);
+        b.loadLocal(invOutVar);
         b.loadLocal(paramVar);
-        b.invokeVirtual(remoteOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        b.invokeVirtual(invOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
     }
 
     static TypeDesc getTypeDesc(RemoteParameter param) {

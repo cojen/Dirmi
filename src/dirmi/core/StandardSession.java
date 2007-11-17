@@ -185,8 +185,8 @@ public class StandardSession implements Session {
 
         // Accept connection and get remote bootstrap information.
         {
-            RemoteConnection remoteCon = new RemoteCon(mBroker.accept());
-            RemoteInputStream in = remoteCon.getInputStream();
+            InvocationConnection invCon = new InvocationCon(mBroker.accept());
+            InvocationInputStream in = invCon.getInputStream();
 
             try {
                 int magic = in.readInt();
@@ -388,11 +388,11 @@ public class StandardSession implements Session {
     }
 
     void handleRequest(Connection con) {
-        final RemoteConnection remoteCon;
+        final InvocationConnection invCon;
         final Identifier id;
         try {
-            remoteCon = new RemoteCon(con);
-            id = Identifier.read(remoteCon.getInputStream());
+            invCon = new InvocationCon(con);
+            id = Identifier.read(invCon.getInputStream());
         } catch (IOException e) {
             error("Failure reading request", e);
             try {
@@ -409,8 +409,8 @@ public class StandardSession implements Session {
         if (skeleton == null) {
             Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
             try {
-                remoteCon.getOutputStream().writeThrowable(t);
-                remoteCon.close();
+                invCon.getOutputStream().writeThrowable(t);
+                invCon.close();
             } catch (IOException e) {
                 error("Failure processing request. " +
                       "Server cannot find remote object and " +
@@ -423,7 +423,7 @@ public class StandardSession implements Session {
             Throwable throwable;
 
             try {
-                skeleton.invoke(remoteCon);
+                skeleton.invoke(invCon);
                 return;
             } catch (NoSuchMethodException e) {
                 throwable = e;
@@ -442,12 +442,12 @@ public class StandardSession implements Session {
                 return;
             }
 
-            remoteCon.getOutputStream().writeThrowable(throwable);
-            remoteCon.close();
+            invCon.getOutputStream().writeThrowable(throwable);
+            invCon.close();
         } catch (IOException e) {
             error("Failure processing request", e);
             try {
-                remoteCon.close();
+                invCon.close();
             } catch (IOException e2) {
                 // Don't care.
             }
@@ -579,10 +579,10 @@ public class StandardSession implements Session {
         }
 
         public synchronized void run() {
-            RemoteOutputStream out = null;
+            InvocationOutputStream out = null;
             try {
-                RemoteConnection remoteCon = new RemoteCon(mBroker.connect());
-                out = remoteCon.getOutputStream();
+                InvocationConnection invCon = new InvocationCon(mBroker.connect());
+                out = invCon.getOutputStream();
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
@@ -694,16 +694,16 @@ public class StandardSession implements Session {
         }
     }
 
-    private class RemoteCon implements RemoteConnection {
+    private class InvocationCon implements InvocationConnection {
         private final Connection mCon;
-        private final RemoteInputStream mRemoteIn;
-        private final RemoteOutputStream mRemoteOut;
+        private final InvocationInputStream mInvIn;
+        private final InvocationOutputStream mInvOut;
 
-        RemoteCon(Connection con) throws IOException {
+        InvocationCon(Connection con) throws IOException {
             mCon = con;
-            mRemoteIn = new RemoteInputStream(con.getInputStream(),
-                                              getLocalAddressString(),
-                                              getRemoteAddressString())
+            mInvIn = new InvocationInputStream(con.getInputStream(),
+                                               getLocalAddressString(),
+                                               getRemoteAddressString())
             {
                 @Override
                 protected ObjectInputStream createObjectInputStream(InputStream in)
@@ -713,9 +713,9 @@ public class StandardSession implements Session {
                 }
             };
 
-            mRemoteOut = new RemoteOutputStream(con.getOutputStream(),
-                                                getLocalAddressString(),
-                                                getRemoteAddressString())
+            mInvOut = new InvocationOutputStream(con.getOutputStream(),
+                                                 getLocalAddressString(),
+                                                 getRemoteAddressString())
             {
                 @Override
                 protected ObjectOutputStream createObjectOutputStream(OutputStream out)
@@ -730,8 +730,8 @@ public class StandardSession implements Session {
             mCon.close();
         }
 
-        public RemoteInputStream getInputStream() throws IOException {
-            return mRemoteIn;
+        public InvocationInputStream getInputStream() throws IOException {
+            return mInvIn;
         }
 
         public int getReadTimeout() throws IOException {
@@ -742,8 +742,8 @@ public class StandardSession implements Session {
             mCon.setReadTimeout(timeoutMillis);
         }
 
-        public RemoteOutputStream getOutputStream() throws IOException {
-            return mRemoteOut;
+        public InvocationOutputStream getOutputStream() throws IOException {
+            return mInvOut;
         }
 
         public int getWriteTimeout() throws IOException {
@@ -885,12 +885,12 @@ public class StandardSession implements Session {
             mObjID = id;
         }
 
-        public RemoteConnection invoke() throws RemoteException {
+        public InvocationConnection invoke() throws RemoteException {
             if (mDisposed) {
                 throw new NoSuchObjectException("Remote object disposed");
             }
             try {
-                RemoteConnection con = new RemoteCon(mBroker.connect());
+                InvocationConnection con = new InvocationCon(mBroker.connect());
 
                 try {
                     mObjID.write(con.getOutputStream());
@@ -907,8 +907,8 @@ public class StandardSession implements Session {
             }
         }
 
-        public void recoverServerException(RemoteConnection con) throws Throwable {
-            RemoteInputStream in;
+        public void recoverServerException(InvocationConnection con) throws Throwable {
+            InvocationInputStream in;
             try {
                 in = con.getInputStream();
             } catch (IOException e) {
@@ -927,7 +927,7 @@ public class StandardSession implements Session {
             }
         }
 
-        public void forceConnectionClose(RemoteConnection con) {
+        public void forceConnectionClose(InvocationConnection con) {
             try {
                 con.setWriteTimeout(0);
                 con.close();

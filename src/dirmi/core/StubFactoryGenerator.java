@@ -137,9 +137,9 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-        final TypeDesc remoteConnectionType = TypeDesc.forClass(RemoteConnection.class);
-        final TypeDesc remoteInType = TypeDesc.forClass(RemoteInputStream.class);
-        final TypeDesc remoteOutType = TypeDesc.forClass(RemoteOutputStream.class);
+        final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
+        final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
+        final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc classType = TypeDesc.forClass(Class.class);
         final TypeDesc methodType = TypeDesc.forClass(Method.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
@@ -158,14 +158,14 @@ public class StubFactoryGenerator<R extends Remote> {
             MethodInfo mi = cf.addMethod(Modifiers.PRIVATE,
                                          HANDLE_SEND_REQUEST_FAILURE_NAME,
                                          throwableType,
-                                         new TypeDesc[] {throwableType, remoteConnectionType});
+                                         new TypeDesc[] {throwableType, invConnectionType});
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.loadLocal(b.getParameter(1));
             b.invokeInterface(stubSupportType, "recoverServerException",
-                              null, new TypeDesc[] {remoteConnectionType});
+                              null, new TypeDesc[] {invConnectionType});
 
             b.loadLocal(b.getParameter(0));
             b.returnValue(throwableType);
@@ -173,14 +173,14 @@ public class StubFactoryGenerator<R extends Remote> {
             mi = cf.addMethod(Modifiers.PRIVATE,
                               HANDLE_TOTAL_FAILURE_NAME,
                               throwableType,
-                              new TypeDesc[] {throwableType, remoteConnectionType});
+                              new TypeDesc[] {throwableType, invConnectionType});
             b = new CodeBuilder(mi);
 
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.loadLocal(b.getParameter(1));
             b.invokeInterface(stubSupportType, "forceConnectionClose",
-                              null, new TypeDesc[] {remoteConnectionType});
+                              null, new TypeDesc[] {invConnectionType});
 
             b.loadLocal(b.getParameter(0));
             b.returnValue(throwableType);
@@ -232,8 +232,8 @@ public class StubFactoryGenerator<R extends Remote> {
             // Create connection for invoking remote method.
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "invoke", remoteConnectionType, null);
-            LocalVariable conVar = b.createLocalVariable(null, remoteConnectionType);
+            b.invokeInterface(stubSupportType, "invoke", invConnectionType, null);
+            LocalVariable conVar = b.createLocalVariable(null, invConnectionType);
             b.storeLocal(conVar);
 
             Label tryStart = b.createLabel().setLocation();
@@ -241,12 +241,12 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Write method identifier to connection.
             b.loadLocal(conVar);
-            b.invokeInterface(remoteConnectionType, "getOutputStream", remoteOutType, null);
-            LocalVariable remoteOutVar = b.createLocalVariable(null, remoteOutType);
-            b.storeLocal(remoteOutVar);
+            b.invokeInterface(invConnectionType, "getOutputStream", invOutType, null);
+            LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
+            b.storeLocal(invOutVar);
 
             CodeBuilderUtil.loadMethodID(b, methodOrdinal);
-            b.loadLocal(remoteOutVar);
+            b.loadLocal(invOutVar);
             b.invokeVirtual(identifierType, "write", null,
                             new TypeDesc[] {TypeDesc.forClass(DataOutput.class)});
 
@@ -254,7 +254,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 // Write parameters to connection.
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
-                    CodeBuilderUtil.writeParam(b, paramType, remoteOutVar, b.getParameter(i));
+                    CodeBuilderUtil.writeParam(b, paramType, invOutVar, b.getParameter(i));
                     i++;
                 }
             }
@@ -264,7 +264,7 @@ public class StubFactoryGenerator<R extends Remote> {
             if (method.isAsynchronous()) {
                 // Now close connection since no return value to read back.
                 b.loadLocal(conVar);
-                b.invokeInterface(remoteConnectionType, "close", null, null);
+                b.invokeInterface(invConnectionType, "close", null, null);
 
                 writeEnd = b.createLabel().setLocation();
 
@@ -299,8 +299,8 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 }
             } else {
-                b.loadLocal(remoteOutVar);
-                b.invokeVirtual(remoteOutType, "flush", null, null);
+                b.loadLocal(invOutVar);
+                b.invokeVirtual(invOutType, "flush", null, null);
 
                 writeEnd = b.createLabel().setLocation();
 
@@ -308,17 +308,17 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 // Read response.
                 b.loadLocal(conVar);
-                b.invokeInterface(remoteConnectionType, "getInputStream", remoteInType, null);
-                LocalVariable remoteInVar = b.createLocalVariable(null, remoteInType);
-                b.storeLocal(remoteInVar);
+                b.invokeInterface(invConnectionType, "getInputStream", invInType, null);
+                LocalVariable invInVar = b.createLocalVariable(null, invInType);
+                b.storeLocal(invInVar);
 
-                b.loadLocal(remoteInVar);
-                b.invokeVirtual(remoteInType, "readOk", TypeDesc.BOOLEAN, null);
+                b.loadLocal(invInVar);
+                b.invokeVirtual(invInType, "readOk", TypeDesc.BOOLEAN, null);
 
                 if (returnDesc != TypeDesc.BOOLEAN) {
                     b.pop();
                     if (returnDesc != null) {
-                        CodeBuilderUtil.readParam(b, method.getReturnType(), remoteInVar);
+                        CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
                     }
                 }
 
@@ -357,7 +357,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.swap();
                 b.loadLocal(conVar);
                 b.invokePrivate(HANDLE_SEND_REQUEST_FAILURE_NAME, throwableType,
-                                new TypeDesc[] {throwableType, remoteConnectionType});
+                                new TypeDesc[] {throwableType, invConnectionType});
                 b.throwObject();
             }
 
@@ -390,7 +390,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.swap();
                 b.loadLocal(conVar);
                 b.invokePrivate(HANDLE_TOTAL_FAILURE_NAME, throwableType,
-                                new TypeDesc[] {throwableType, remoteConnectionType});
+                                new TypeDesc[] {throwableType, invConnectionType});
                 b.throwObject();
             }
         }
