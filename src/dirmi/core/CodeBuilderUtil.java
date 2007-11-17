@@ -64,7 +64,7 @@ class CodeBuilderUtil {
      * NoSuchObjectException, or ClassNotFoundException.
      *
      * @param param type of parameter to read
-     * @param remoteInVar variable which references a RemoteInput instance
+     * @param invInVar variable which references an InvocationInput instance
      */
     static void readParam(CodeBuilder b,
                           RemoteParameter param,
@@ -111,7 +111,7 @@ class CodeBuilderUtil {
      * code may throw an IOException.
      *
      * @param param type of parameter to write
-     * @param remoteOutVar variable which references a RemoteOutput instance
+     * @param invOutVar variable which references a InvocationOutput instance
      * @param paramVar variable which references parameter value
      */
     static void writeParam(CodeBuilder b,
