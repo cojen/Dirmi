@@ -39,6 +39,12 @@ public interface RemoteInfo extends Serializable {
     Identifier getInfoID();
 
     /**
+     * Returns the names of all remote interfaces implemented by this
+     * RemoteInfo, in an unmodifiable set.
+     */
+    Set<String> getInterfaceNames();
+
+    /**
      * Returns all remote methods in an unmodifiable set.
      */
     Set<? extends RemoteMethod> getRemoteMethods();

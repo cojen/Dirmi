@@ -20,6 +20,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -202,7 +203,13 @@ public class RemoteIntrospector {
                 }
             }
 
-            info = new RInfo(remote.getName(), new LinkedHashSet<RMethod>(methodMap.values()));
+            // Gather all implemented interfaces which implement Remote.
+            Set<String> interfaces = new LinkedHashSet<String>();
+            gatherRemoteInterfaces(interfaces, remote);
+
+            info = new RInfo(remote.getName(), interfaces,
+                             new LinkedHashSet<RMethod>(methodMap.values()));
+
             cInfoCache.put(remote, info);
 
             // Now that RInfo is in the cache, call resolve to check remote
@@ -218,6 +225,19 @@ public class RemoteIntrospector {
         }
     }
 
+    private static void gatherRemoteInterfaces(Set<String> interfaces, Class clazz) {
+        for (Class i : clazz.getInterfaces()) {
+            if (Remote.class.isAssignableFrom(i)) {
+                if (interfaces.add(i.getName())) {
+                    gatherRemoteInterfaces(interfaces, i);
+                }
+            }
+        }
+        if (clazz.isInterface() && Remote.class.isAssignableFrom(clazz)) {
+            interfaces.add(clazz.getName());
+        }
+    }
+
     private RemoteIntrospector() {
     }
 
@@ -226,14 +246,16 @@ public class RemoteIntrospector {
 
         private final Identifier mID;
         private final String mName;
+        private final Set<String> mInterfaceNames;
         private final Set<RMethod> mMethods;
 
         private transient Map<String, Set<RMethod>> mMethodsByName;
         private transient Map<Identifier, RemoteMethod> mMethodMap;
 
-        RInfo(String name, Set<RMethod> methods) {
+        RInfo(String name, Set<String> interfaces, Set<RMethod> methods) {
             mID = Identifier.identify(this);
             mName = name;
+            mInterfaceNames = Collections.unmodifiableSet(interfaces);
             mMethods = Collections.unmodifiableSet(methods);
         }
 
@@ -243,6 +265,10 @@ public class RemoteIntrospector {
 
         public Identifier getInfoID() {
             return mID;
+        }
+
+        public Set<String> getInterfaceNames() {
+            return mInterfaceNames;
         }
 
         public Set<? extends RemoteMethod> getRemoteMethods() {
@@ -325,6 +351,7 @@ public class RemoteIntrospector {
             if (obj instanceof RInfo) {
                 RInfo other = (RInfo) obj;
                 return mName.equals(other.mName) && (mID == other.mID) &&
+                    mInterfaceNames.equals(other.mInterfaceNames) &&
                     getRemoteMethods().equals(other.getRemoteMethods());
             }
             return false;
