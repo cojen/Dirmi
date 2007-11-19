@@ -18,6 +18,8 @@ package dirmi.io;
 
 import java.io.IOException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Factory for server-side accepted {@link Connection}s.
  *
@@ -36,5 +38,5 @@ public interface Accepter {
      *
      * @return new connection, or null if timed out
      */
-    Connection tryAccept(int timeoutMillis) throws IOException;
+    Connection tryAccept(long time, TimeUnit unit) throws IOException;
 }

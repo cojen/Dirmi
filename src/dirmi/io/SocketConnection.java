@@ -23,6 +23,8 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketAddress;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Basic connection implementation that wraps a socket.
  *
@@ -39,7 +41,7 @@ public class SocketConnection implements Connection {
         return mSocket.getInputStream();
     }
 
-    public int getReadTimeout() throws IOException {
+    public long getReadTimeout() throws IOException {
         int timeout = mSocket.getSoTimeout();
         if (timeout == 0) {
             timeout = -1;
@@ -47,27 +49,37 @@ public class SocketConnection implements Connection {
         return timeout;
     }
 
-    public void setReadTimeout(int timeoutMillis) throws IOException {
-        if (timeoutMillis <= 0) {
-            if (timeoutMillis < 0) {
-                timeoutMillis = 0;
-            } else {
-                timeoutMillis = 1;
+    public TimeUnit getReadTimeoutUnit() throws IOException {
+        return TimeUnit.MILLISECONDS;
+    }
+
+    public void setReadTimeout(long time, TimeUnit unit) throws IOException {
+        long millis;
+        if (time <= 0) {
+            millis = time < 0 ? 0 : 1;
+        } else {
+            millis = unit.toMillis(time);
+            if (millis > Integer.MAX_VALUE) {
+                millis = Integer.MAX_VALUE;
             }
         }
-        mSocket.setSoTimeout(timeoutMillis);
+        mSocket.setSoTimeout((int) millis);
     }
 
     public OutputStream getOutputStream() throws IOException {
         return mSocket.getOutputStream();
     }
 
-    public int getWriteTimeout() throws IOException {
+    public long getWriteTimeout() throws IOException {
         // FIXME: may need to use Selector
         return -1;
     }
 
-    public void setWriteTimeout(int timeoutMillis) throws IOException {
+    public TimeUnit getWriteTimeoutUnit() throws IOException {
+        return TimeUnit.MILLISECONDS;
+    }
+
+    public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
         // FIXME: may need to use Selector
     }
 

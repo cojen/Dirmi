@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 import java.security.SecureRandom;
 
@@ -278,28 +279,30 @@ public class Multiplexer implements Broker, Closeable {
         }
     }
 
-    public Connection tryConnect(int timeoutMillis) throws IOException {
+    public Connection tryConnect(long time, TimeUnit unit) throws IOException {
         return connect();
     }
 
     public Connection accept() throws IOException {
         Connection con;
-        while ((con = pump(-1)) == null) {}
+        while ((con = pump(-1, TimeUnit.NANOSECONDS)) == null) {}
         return con;
     }
 
-    public Connection tryAccept(int timeoutMillis) throws IOException {
-        if (timeoutMillis <= 0) {
-            return pump(timeoutMillis);
+    public Connection tryAccept(long time, TimeUnit unit) throws IOException {
+        if (time <= 0) {
+            return pump(time, unit);
         }
+        time = unit.toNanos(time);
+        unit = TimeUnit.NANOSECONDS;
         long start = System.nanoTime();
         Connection con;
-        while ((con = pump(timeoutMillis)) == null) {
+        while ((con = pump(time, unit)) == null) {
             long now = System.nanoTime();
-            timeoutMillis -= (now - start) / 1000000L;
-            if (timeoutMillis <= 0) {
+            if ((time -= (now - start)) <= 0) {
                 break;
             }
+            start = now;
         }
         return con;
     }
@@ -308,7 +311,7 @@ public class Multiplexer implements Broker, Closeable {
      * @param timeoutMillis maximum time to block reading command
      * @return newly accepted connection, or null if none
      */
-    private Connection pump(int timeoutMillis) throws IOException {
+    private Connection pump(long time, TimeUnit unit) throws IOException {
         Connection master = checkClosed();
         try {
             InputStream in = master.getInputStream();
@@ -316,8 +319,10 @@ public class Multiplexer implements Broker, Closeable {
             synchronized (in) {
                 byte[] buffer = mReadBuffer;
 
-                final int originalTimeout = master.getReadTimeout();
-                master.setReadTimeout(timeoutMillis);
+                final long originalTimeout = master.getReadTimeout();
+                final TimeUnit originalTimeoutUnit = master.getReadTimeoutUnit();
+
+                master.setReadTimeout(time, unit);
 
                 // Read command and id.
                 int id, command;
@@ -328,13 +333,13 @@ public class Multiplexer implements Broker, Closeable {
                         id &= ~(3 << 30);
                     } finally {
                         try {
-                            master.setReadTimeout(originalTimeout);
+                            master.setReadTimeout(originalTimeout, originalTimeoutUnit);
                         } catch (IOException e) {
                             // Connection is just plain broken.
                         }
                     }
                 } catch (InterruptedIOException e) {
-                    if (timeoutMillis < 0) {
+                    if (time < 0) {
                         throw e;
                     }
                     return null;

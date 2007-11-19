@@ -18,6 +18,8 @@ package dirmi.io;
 
 import java.io.IOException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Defines timeout configuration for write operations.
  *
@@ -25,16 +27,18 @@ import java.io.IOException;
  */
 public interface WriteTimeout {
     /**
-     * Returns the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, blocking timeout is infinite. When a write times
-     * out, it throws an InterruptedIOException.
+     * Returns the timeout for blocking write operations. If timeout is
+     * negative, blocking timeout is infinite. When a write times out, it
+     * throws an InterruptedIOException.
      */
-    int getWriteTimeout() throws IOException;
+    long getWriteTimeout() throws IOException;
+
+    TimeUnit getWriteTimeoutUnit() throws IOException;
 
     /**
-     * Set the timeout for blocking write operations, in milliseconds. If
-     * timeout is negative, blocking timeout is infinite. When a write times
-     * out, it throws an InterruptedIOException.
+     * Set the timeout for blocking write operations. If timeout is negative,
+     * blocking timeout is infinite. When a write times out, it throws an
+     * InterruptedIOException.
      */
-    void setWriteTimeout(int timeoutMillis) throws IOException;
+    void setWriteTimeout(long time, TimeUnit unit) throws IOException;
 }

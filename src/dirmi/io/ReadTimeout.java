@@ -18,6 +18,8 @@ package dirmi.io;
 
 import java.io.IOException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Defines timeout configuration for read operations.
  *
@@ -25,16 +27,18 @@ import java.io.IOException;
  */
 public interface ReadTimeout {
     /**
-     * Returns the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, blocking timeout is infinite. When a read times
-     * out, it throws an InterruptedIOException.
+     * Returns the timeout for blocking read operations. If timeout is
+     * negative, blocking timeout is infinite. When a read times out, it throws
+     * an InterruptedIOException.
      */
-    int getReadTimeout() throws IOException;
+    long getReadTimeout() throws IOException;
+
+    TimeUnit getReadTimeoutUnit() throws IOException;
 
     /**
-     * Set the timeout for blocking read operations, in milliseconds. If
-     * timeout is negative, blocking timeout is infinite. When a read times
-     * out, it throws an InterruptedIOException.
+     * Set the timeout for blocking read operations. If timeout is negative,
+     * blocking timeout is infinite. When a read times out, it throws an
+     * InterruptedIOException.
      */
-    void setReadTimeout(int timeoutMillis) throws IOException;
+    void setReadTimeout(long time, TimeUnit unit) throws IOException;
 }

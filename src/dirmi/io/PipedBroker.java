@@ -55,10 +55,10 @@ public class PipedBroker implements Broker {
         return con;
     }
 
-    public Connection tryConnect(int timeoutMillis) throws IOException {
+    public Connection tryConnect(long time, TimeUnit unit) throws IOException {
         Con con = new Con();
         try {
-            if (!mAcceptQueue.offer(new Con(con), timeoutMillis, TimeUnit.MILLISECONDS)) {
+            if (!mAcceptQueue.offer(new Con(con), time, unit)) {
                 return null;
             }
         } catch (InterruptedException e) {
@@ -75,9 +75,9 @@ public class PipedBroker implements Broker {
         }
     }
 
-    public Connection tryAccept(int timeoutMillis) throws IOException {
+    public Connection tryAccept(long time, TimeUnit unit) throws IOException {
         try {
-            return mAcceptQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
+            return mAcceptQueue.poll(time, unit);
         } catch (InterruptedException e) {
             throw new InterruptedIOException();
         }
@@ -101,24 +101,32 @@ public class PipedBroker implements Broker {
             return mIn;
         }
 
-        public int getReadTimeout() throws IOException {
+        public long getReadTimeout() throws IOException {
             return mIn.getReadTimeout();
         }
 
-        public void setReadTimeout(int timeoutMillis) throws IOException {
-            mIn.setReadTimeout(timeoutMillis);
+        public TimeUnit getReadTimeoutUnit() throws IOException {
+            return mIn.getReadTimeoutUnit();
+        }
+
+        public void setReadTimeout(long time, TimeUnit unit) throws IOException {
+            mIn.setReadTimeout(time, unit);
         }
 
         public OutputStream getOutputStream() throws IOException {
             return mOut;
         }
 
-        public int getWriteTimeout() throws IOException {
+        public long getWriteTimeout() throws IOException {
             return mOut.getWriteTimeout();
         }
 
-        public void setWriteTimeout(int timeoutMillis) throws IOException {
-            mOut.setWriteTimeout(timeoutMillis);
+        public TimeUnit getWriteTimeoutUnit() throws IOException {
+            return mOut.getWriteTimeoutUnit();
+        }
+
+        public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
+            mOut.setWriteTimeout(time, unit);
         }
 
         public String getLocalAddressString() {

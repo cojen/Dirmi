@@ -71,21 +71,25 @@ public class PipedOutputStream extends OutputStream implements WriteTimeout {
         setInput(pin);
     }
 
-    public int getWriteTimeout() throws IOException {
+    public long getWriteTimeout() throws IOException {
         mLock.lock();
         try {
             checkConnected();
-            return (int) TimeUnit.NANOSECONDS.toMillis(mWriteTimeoutNanos);
+            return mWriteTimeoutNanos;
         } finally {
             mLock.unlock();
         }
     }
 
-    public void setWriteTimeout(int timeoutMillis) throws IOException {
+    public TimeUnit getWriteTimeoutUnit() throws IOException {
+        return TimeUnit.NANOSECONDS;
+    }
+
+    public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
         mLock.lock();
         try {
             checkConnected();
-            mWriteTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+            mWriteTimeoutNanos = unit.toNanos(time);
         } finally {
             mLock.unlock();
         }
@@ -196,13 +200,17 @@ public class PipedOutputStream extends OutputStream implements WriteTimeout {
     }
 
     // Caller must hold mLock.
-    int getReadTimeout() {
-        return (int) TimeUnit.NANOSECONDS.toMillis(mReadTimeoutNanos);
+    long getReadTimeout() {
+        return (int) mReadTimeoutNanos;
+    }
+
+    TimeUnit getReadTimeoutUnit() {
+        return TimeUnit.NANOSECONDS;
     }
 
     // Caller must hold mLock.
-    void setReadTimeout(int timeoutMillis) {
-        mReadTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+    void setReadTimeout(long time, TimeUnit unit) {
+        mReadTimeoutNanos = unit.toNanos(time);
     }
 
     // Caller must hold mLock.

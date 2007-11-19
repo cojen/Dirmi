@@ -42,6 +42,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -105,8 +106,10 @@ public class StandardSession implements Session {
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
 
+    volatile long mHeartbeatCheckNanos;
+
     // Instant (in millis) for next expected heartbeat. If not received, session closes.
-    volatile long mNextExpectedHeartbeat;
+    volatile long mNextExpectedHeartbeatMillis;
 
     volatile boolean mClosing;
 
@@ -221,6 +224,8 @@ public class StandardSession implements Session {
 
         // Wait for bootstrap to complete.
         bootstrap.waitUntilDone();
+
+        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_DELAY_MILLIS));
 
         // Initialize next expected heartbeat.
         heartbeatReceived();
@@ -384,7 +389,8 @@ public class StandardSession implements Session {
     }
 
     void heartbeatReceived() {
-        mNextExpectedHeartbeat = System.currentTimeMillis() + DEFAULT_HEARTBEAT_DELAY_MILLIS;
+        mNextExpectedHeartbeatMillis = System.currentTimeMillis() +
+            TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
     }
 
     void handleRequest(Connection con) {
@@ -621,48 +627,56 @@ public class StandardSession implements Session {
     }
 
     private class Worker implements Runnable {
-        private final int mHeartbeatSendDelay;
+        // Time when last heatbeat was sent, in nanoseconds.
+        private final long mLastHeartbeat;
 
         Worker() {
-            this(DEFAULT_HEARTBEAT_DELAY_MILLIS >> 1);
+            mLastHeartbeat = System.nanoTime();
         }
 
-        private Worker(int heartbeatSendDelay) {
-            if (heartbeatSendDelay < 0) {
-                heartbeatSendDelay = 0;
-            }
-            mHeartbeatSendDelay = heartbeatSendDelay;
+        private Worker(long lastHeartbeat) {
+            mLastHeartbeat = lastHeartbeat;
         }
 
         public void run() {
+            // Copy last heartbeat such that it can be modified in case a new
+            // worker couldn't spawn.
+            long lastHeartbeat = mLastHeartbeat;
+
             boolean spawned;
             do {
-                long acceptStartNanos = System.nanoTime();
+                long nowNanos = System.nanoTime();
+                long delay = lastHeartbeat + (mHeartbeatCheckNanos >> 1) - nowNanos;
+
                 Connection con;
-                try {
-                    con = mBroker.tryAccept(mHeartbeatSendDelay);
-                } catch (IOException e) {
-                    if (!mClosing) {
-                        String message = "Failure accepting connection; closing session";
-                        mLog.error(message, e);
-                        try {
-                            closeOnFailure(message, e);
-                        } catch (IOException e2) {
-                            // Don't care.
+                if (delay <= 0) {
+                    // Send a heartbeat instead of accepting a connection.
+                    con = null;
+                } else {
+                    try {
+                        con = mBroker.tryAccept(delay, TimeUnit.NANOSECONDS);
+                    } catch (IOException e) {
+                        if (!mClosing) {
+                            String message = "Failure accepting connection; closing session";
+                            mLog.error(message, e);
+                            try {
+                                closeOnFailure(message, e);
+                            } catch (IOException e2) {
+                                // Don't care.
+                            }
                         }
+                        return;
                     }
-                    return;
                 }
 
                 // Spawn a replacement worker.
                 try {
                     Worker worker;
                     if (con == null) {
-                        worker = new Worker();
+                        // Heartbeat will be sent, so reset the time.
+                        worker = new Worker(lastHeartbeat = nowNanos);
                     } else {
-                        long elapsedNanos = System.nanoTime() - acceptStartNanos;
-                        int elapsedMillis = (int) (elapsedNanos / 1000000);
-                        worker = new Worker(mHeartbeatSendDelay - elapsedMillis);
+                        worker = new Worker(lastHeartbeat);
                     }
                     mExecutor.execute(worker);
                     spawned = true;
@@ -674,8 +688,8 @@ public class StandardSession implements Session {
                 if (con != null) {
                     handleRequest(con);
                 } else if (!mClosing) {
-                    long now = System.currentTimeMillis();
-                    if (now > mNextExpectedHeartbeat) {
+                    long nowMillis = System.currentTimeMillis();
+                    if (nowMillis > mNextExpectedHeartbeatMillis) {
                         // Didn't get a heartbeat from peer, so close session.
                         String message = "No heartbeat received; closing session";
                         mLog.error(message);
@@ -734,24 +748,32 @@ public class StandardSession implements Session {
             return mInvIn;
         }
 
-        public int getReadTimeout() throws IOException {
+        public long getReadTimeout() throws IOException {
             return mCon.getReadTimeout();
         }
 
-        public void setReadTimeout(int timeoutMillis) throws IOException {
-            mCon.setReadTimeout(timeoutMillis);
+        public TimeUnit getReadTimeoutUnit() throws IOException {
+            return mCon.getReadTimeoutUnit();
+        }
+
+        public void setReadTimeout(long time, TimeUnit unit) throws IOException {
+            mCon.setReadTimeout(time, unit);
         }
 
         public InvocationOutputStream getOutputStream() throws IOException {
             return mInvOut;
         }
 
-        public int getWriteTimeout() throws IOException {
+        public long getWriteTimeout() throws IOException {
             return mCon.getWriteTimeout();
         }
 
-        public void setWriteTimeout(int timeoutMillis) throws IOException {
-            mCon.setWriteTimeout(timeoutMillis);
+        public TimeUnit getWriteTimeoutUnit() throws IOException {
+            return mCon.getWriteTimeoutUnit();
+        }
+
+        public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
+            mCon.setWriteTimeout(time, unit);
         }
 
         public String getLocalAddressString() {
@@ -929,7 +951,7 @@ public class StandardSession implements Session {
 
         public void forceConnectionClose(InvocationConnection con) {
             try {
-                con.setWriteTimeout(0);
+                con.setWriteTimeout(0, TimeUnit.NANOSECONDS);
                 con.close();
             } catch (IOException e2) {
                 // Don't care.

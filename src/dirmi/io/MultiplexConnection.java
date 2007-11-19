@@ -57,24 +57,32 @@ final class MultiplexConnection implements Connection {
         return mIn;
     }
 
-    public int getReadTimeout() throws IOException {
+    public long getReadTimeout() throws IOException {
         return mIn.getReadTimeout();
     }
 
-    public void setReadTimeout(int timeoutMillis) throws IOException {
-        mIn.setReadTimeout(timeoutMillis);
+    public TimeUnit getReadTimeoutUnit() throws IOException {
+        return mIn.getReadTimeoutUnit();
+    }
+
+    public void setReadTimeout(long time, TimeUnit unit) throws IOException {
+        mIn.setReadTimeout(time, unit);
     }
 
     public OutputStream getOutputStream() {
         return mOut;
     }
 
-    public int getWriteTimeout() throws IOException {
+    public long getWriteTimeout() throws IOException {
         return mOut.getWriteTimeout();
     }
 
-    public void setWriteTimeout(int timeoutMillis) throws IOException {
-        mOut.setWriteTimeout(timeoutMillis);
+    public TimeUnit getWriteTimeoutUnit() throws IOException {
+        return mOut.getWriteTimeoutUnit();
+    }
+
+    public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
+        mOut.setWriteTimeout(time, unit);
     }
 
     public String getLocalAddressString() {
@@ -138,19 +146,23 @@ final class MultiplexConnection implements Connection {
             mBuffer = new byte[initialBufferSize];
         }
 
-        public int getReadTimeout() throws IOException {
+        public long getReadTimeout() throws IOException {
             mLock.lock();
             try {
-                return (int) TimeUnit.NANOSECONDS.toMillis(mTimeoutNanos);
+                return mTimeoutNanos;
             } finally {
                 mLock.unlock();
             }
         }
 
-        public void setReadTimeout(int timeoutMillis) throws IOException {
+        public TimeUnit getReadTimeoutUnit() throws IOException {
+            return TimeUnit.NANOSECONDS;
+        }
+
+        public void setReadTimeout(long time, TimeUnit unit) throws IOException {
             mLock.lock();
             try {
-                mTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                mTimeoutNanos = unit.toNanos(time);
             } finally {
                 mLock.unlock();
             }
@@ -374,12 +386,16 @@ final class MultiplexConnection implements Connection {
             mOpened = opened;
         }
 
-        public synchronized int getWriteTimeout() throws IOException {
-            return (int) TimeUnit.NANOSECONDS.toMillis(mTimeoutNanos);
+        public synchronized long getWriteTimeout() throws IOException {
+            return (int) mTimeoutNanos;
         }
 
-        public synchronized void setWriteTimeout(int timeoutMillis) throws IOException {
-            mTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        public TimeUnit getWriteTimeoutUnit() throws IOException {
+            return TimeUnit.NANOSECONDS;
+        }
+
+        public synchronized void setWriteTimeout(long time, TimeUnit unit) throws IOException {
+            mTimeoutNanos = unit.toNanos(time);
         }
 
         public synchronized void write(int b) throws IOException {

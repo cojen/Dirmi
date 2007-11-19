@@ -20,6 +20,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Basic connection implementation that wraps two streams.
  *
@@ -53,14 +55,18 @@ public class StreamConnection implements Connection {
     /**
      * Always returns -1, indicating infinite timeout.
      */
-    public int getReadTimeout() {
+    public long getReadTimeout() {
         return -1;
+    }
+
+    public TimeUnit getReadTimeoutUnit() {
+        return TimeUnit.NANOSECONDS;
     }
 
     /**
      * Ignored -- timeout is always infinite.
      */
-    public void setReadTimeout(int timeoutMillis) {
+    public void setReadTimeout(long time, TimeUnit unit) {
     }
 
     public OutputStream getOutputStream() {
@@ -70,14 +76,18 @@ public class StreamConnection implements Connection {
     /**
      * Always returns -1, indicating infinite timeout.
      */
-    public int getWriteTimeout() {
+    public long getWriteTimeout() {
         return -1;
+    }
+
+    public TimeUnit getWriteTimeoutUnit() {
+        return TimeUnit.NANOSECONDS;
     }
 
     /**
      * Ignored -- timeout is always infinite.
      */
-    public void setWriteTimeout(int timeoutMillis) {
+    public void setWriteTimeout(long time, TimeUnit unit) {
     }
 
     public String getLocalAddressString() {

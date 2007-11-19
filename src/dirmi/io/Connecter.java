@@ -18,6 +18,8 @@ package dirmi.io;
 
 import java.io.IOException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Factory for client-side created {@link Connection}s.
  *
@@ -36,5 +38,5 @@ public interface Connecter {
      *
      * @return new connection, or null if timed out
      */
-    Connection tryConnect(int timeoutMillis) throws IOException;
+    Connection tryConnect(long time, TimeUnit unit) throws IOException;
 }
