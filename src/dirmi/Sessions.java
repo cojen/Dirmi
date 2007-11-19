@@ -28,9 +28,9 @@ import java.util.concurrent.ThreadFactory;
 import dirmi.io.Connection;
 import dirmi.io.SocketConnection;
 
-import dirmi.core.SessionThreadFactory;
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
+import dirmi.core.ThreadPool;
 
 /**
  * Factories for creating {@link Session}s.
@@ -85,7 +85,8 @@ public class Sessions {
             name = "Session-" + name;
         }
 
-        Executor executor = Executors.newCachedThreadPool(new SessionThreadFactory(true, name));
+        // FIXME: control max threads
+        Executor executor = new ThreadPool(100, true, "Session");
 
         return new StandardSession(con, server, executor);
     }
@@ -114,7 +115,8 @@ public class Sessions {
             name = "SessionServer-" + name;
         }
 
-        Executor executor = Executors.newCachedThreadPool(new SessionThreadFactory(false, name));
+        // FIXME: control threads
+        Executor executor = new ThreadPool(100, false, name);
 
         return new StandardSessionServer(ss, export, executor);
     }

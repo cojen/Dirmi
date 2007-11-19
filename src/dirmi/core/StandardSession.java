@@ -164,7 +164,7 @@ public class StandardSession implements Session {
             throw new IllegalArgumentException("Broker is null");
         }
         if (executor == null) {
-            executor = Executors.newCachedThreadPool(new SessionThreadFactory(true));
+            executor = new ThreadPool(Integer.MAX_VALUE, true);
         }
         if (log == null) {
             log = LogFactory.getLog(Session.class);
@@ -272,7 +272,7 @@ public class StandardSession implements Session {
 
         if (mExecutor instanceof ExecutorService) {
             try {
-                ((ExecutorService) mExecutor).shutdownNow();
+                ((ExecutorService) mExecutor).shutdown();
             } catch (SecurityException e) {
             }
         }
@@ -400,7 +400,9 @@ public class StandardSession implements Session {
             invCon = new InvocationCon(con);
             id = Identifier.read(invCon.getInputStream());
         } catch (IOException e) {
-            error("Failure reading request", e);
+            if (!mClosing) {
+                error("Failure reading request", e);
+            }
             try {
                 con.close();
             } catch (IOException e2) {

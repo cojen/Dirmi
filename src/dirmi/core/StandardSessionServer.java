@@ -64,7 +64,7 @@ public class StandardSessionServer implements SessionServer {
             throw new IllegalArgumentException("ServerSocket is null");
         }
         if (executor == null) {
-            executor = Executors.newCachedThreadPool(new SessionThreadFactory(false));
+            executor = new ThreadPool(Integer.MAX_VALUE, false);
         }
         if (log == null) {
             log = LogFactory.getLog(SessionServer.class);
