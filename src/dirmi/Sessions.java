@@ -86,7 +86,7 @@ public class Sessions {
         }
 
         // FIXME: control max threads
-        Executor executor = new ThreadPool(100, true, "Session");
+        Executor executor = new ThreadPool(100, true, name);
 
         return new StandardSession(con, server, executor);
     }
