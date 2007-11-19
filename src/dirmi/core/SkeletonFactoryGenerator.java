@@ -250,7 +250,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
                 }
 
-                LocalVariable asyncCompletionVar = null;
                 if (method.isAsynchronous()) {
                     // Caller should have closed connection, but we should do
                     // so also to clean up.
@@ -284,16 +283,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         } else {
                             b.pop();
                         }
-                    }
-
-                    // Invoke AsynchronousCompletion object, if any. Any
-                    // RemoteException thrown from this method is passed to the
-                    // invoker of the Skeleton. Since it is a subclass of
-                    // IOException, it should be interpreted as a communication
-                    // failure.
-                    if (asyncCompletionVar != null) {
-                        b.loadLocal(asyncCompletionVar);
-                        b.invokeInterface(asyncCompletionVar.getType(), "completed", null, null);
                     }
                 } else {
                     // For synchronous method, write response and close connection.
