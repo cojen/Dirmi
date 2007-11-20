@@ -38,6 +38,8 @@ import dirmi.core.ThreadPool;
  * @author Brian S O'Neill
  */
 public class Sessions {
+    private static final int DEFAULT_TCP_BUFFER_SIZE = 1 << 16;
+
     /**
      * @param host name of remote host
      * @param port remote port
@@ -60,6 +62,14 @@ public class Sessions {
      * @param server optional server object to export
      */
     public static Session createSession(Socket con, Object server) throws IOException {
+        if (con.getSendBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
+            con.setSendBufferSize(DEFAULT_TCP_BUFFER_SIZE);
+        }
+        if (con.getReceiveBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
+            con.setReceiveBufferSize(DEFAULT_TCP_BUFFER_SIZE);
+        }
+        con.setTcpNoDelay(true);
+
         return createSession(new SocketConnection(con), server);
     }
 
