@@ -180,6 +180,11 @@ public class StandardSession implements Session {
         mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
         mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
 
+        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_DELAY_MILLIS));
+
+        // Initialize next expected heartbeat.
+        heartbeatReceived();
+
         // Transmit bootstrap information. Do so in a separate thread because
         // remote side cannot accept our connection until it sends its
         // identifier. This strategy avoids instant deadlock.
@@ -187,51 +192,12 @@ public class StandardSession implements Session {
         executor.execute(bootstrap);
 
         // Accept connection and get remote bootstrap information.
-        {
-            InvocationConnection invCon = new InvocationCon(mBroker.accept());
-            InvocationInputStream in = invCon.getInputStream();
-
-            try {
-                int magic = in.readInt();
-                if (magic != MAGIC_NUMBER) {
-                    throw new IOException("Incorrect magic number: " + magic);
-                }
-
-                int version = in.readInt();
-                if (version != PROTOCOL_VERSION) {
-                    throw new IOException("Unsupported protocol version: " + version);
-                }
-
-                try {
-                    mRemoteServer = in.readObject();
-                    mRemoteAdmin = (Hidden.Admin) in.readObject();
-                } catch (ClassNotFoundException e) {
-                    IOException io = new IOException();
-                    io.initCause(e);
-                    throw io;
-                }
-            } catch (IOException e) {
-                try {
-                    in.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                throw e;
-            } finally {
-                in.close();
-            }
-        }
-
-        // Wait for bootstrap to complete.
-        bootstrap.waitUntilDone();
-
-        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_DELAY_MILLIS));
-
-        // Initialize next expected heartbeat.
-        heartbeatReceived();
+        InvocationConnection invCon = new InvocationCon(mBroker.accept());
 
         try {
-            // Start first worker thread.
+            // Start first worker thread now to ensure multiplexer is getting
+            // processed. This avoids deadlock during bootstrap if send buffer
+            // is too small.
             mExecutor.execute(new Worker());
         } catch (RejectedExecutionException e) {
             String message = "Unable to start worker thread";
@@ -244,6 +210,41 @@ public class StandardSession implements Session {
             io.initCause(e);
             throw io;
         }
+
+        InvocationInputStream in = invCon.getInputStream();
+
+        try {
+            int magic = in.readInt();
+            if (magic != MAGIC_NUMBER) {
+                throw new IOException("Incorrect magic number: " + magic);
+            }
+
+            int version = in.readInt();
+            if (version != PROTOCOL_VERSION) {
+                throw new IOException("Unsupported protocol version: " + version);
+            }
+
+            try {
+                mRemoteServer = in.readObject();
+                mRemoteAdmin = (Hidden.Admin) in.readObject();
+            } catch (ClassNotFoundException e) {
+                IOException io = new IOException();
+                io.initCause(e);
+                throw io;
+            }
+        } catch (IOException e) {
+            try {
+                in.close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
+        } finally {
+            in.close();
+        }
+
+        // Wait for bootstrap to complete.
+        bootstrap.waitUntilDone();
     }
 
     public void close() throws RemoteException {
