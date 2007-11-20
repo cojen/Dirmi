@@ -68,7 +68,7 @@ public class Multiplexer implements Broker, Closeable {
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_MIN_BUFFER_SIZE = 64;
-    private static final int DEFAULT_MAX_BUFFER_SIZE = 4096;
+    private static final int DEFAULT_MAX_BUFFER_SIZE = 1 << 16;
 
     static final int CLOSE   = 0 << 30;
     static final int RECEIVE = 1 << 30;
@@ -482,6 +482,7 @@ public class Multiplexer implements Broker, Closeable {
      * As a side effect, destroys contents of byte array, as it used to build
      * the block header: id, chunk size.
      *
+     * @param op either OPEN or SEND
      * @param bytes must always have enough header bytes before the offset
      * @param offset must always be at least SEND_HEADER_SIZE
      * @param size amount of bytes to send after offset
@@ -507,26 +508,31 @@ public class Multiplexer implements Broker, Closeable {
                     bytes[offset - 2] = (byte)((chunk - 1) >> 8);
                     bytes[offset - 1] = (byte)(chunk - 1);
 
-                    if ((size -= chunk) <= 0 && close) {
-                        // Try to piggyback close command.
-                        if (offset + chunk + 4 <= bytes.length) {
-                            id &= ~(3 << 30);
-                            synchronized (mConnections) {
-                                mConnections.remove(id);
+                    if ((size -= chunk) > 0) {
+                        out.write(bytes, offset - SEND_HEADER_SIZE, chunk + SEND_HEADER_SIZE);
+                        offset += chunk;
+                        // Ensure remaining chunks are SEND instead of OPEN.
+                        id = (id & ~(3 << 30)) | SEND;
+                    } else {
+                        if (close) {
+                            // Try to piggyback close command.
+                            if (offset + chunk + 4 <= bytes.length) {
+                                id &= ~(3 << 30);
+                                synchronized (mConnections) {
+                                    mConnections.remove(id);
+                                }
+                                id |= CLOSE;
+                                bytes[offset + chunk]     = (byte)(id >> 24);
+                                bytes[offset + chunk + 1] = (byte)(id >> 16);
+                                bytes[offset + chunk + 2] = (byte)(id >> 8);
+                                bytes[offset + chunk + 3] = (byte)id;
+                                chunk += 4;
+                                close = false;
                             }
-                            id |= CLOSE;
-                            bytes[offset + chunk]     = (byte)(id >> 24);
-                            bytes[offset + chunk + 1] = (byte)(id >> 16);
-                            bytes[offset + chunk + 2] = (byte)(id >> 8);
-                            bytes[offset + chunk + 3] = (byte)id;
-                            chunk += 4;
-                            close = false;
                         }
+
+                        out.write(bytes, offset - SEND_HEADER_SIZE, chunk + SEND_HEADER_SIZE);
                     }
-
-                    out.write(bytes, offset - SEND_HEADER_SIZE, chunk + SEND_HEADER_SIZE);
-
-                    offset += chunk;
                 }
 
                 if (close) {
