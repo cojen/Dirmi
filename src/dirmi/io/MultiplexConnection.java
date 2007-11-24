@@ -525,21 +525,23 @@ final class MultiplexConnection implements Connection {
 
                 mReceiveWindowLock.lock();
                 try {
-                    long timeoutNanos = mTimeoutNanos;
-                    while ((window = mReceiveWindow) <= 0) {
-                        // Wait on mReceiveWindowLock instead of this, to
-                        // prevent other threads from writing to this while
-                        // flush is in progress.
-                        if (timeoutNanos < 0) {
-                            mReceiveWindowCondition.await();
-                        } else if ((timeoutNanos =
-                                    mReceiveWindowCondition.awaitNanos(timeoutNanos)) < 0) {
-                            timeoutNanos = mTimeoutNanos - timeoutNanos;
-                            throw new InterruptedIOException
-                                ("Timed out after " +
-                                 TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
-                        }
-                        checkClosed();
+                    if ((window = mReceiveWindow) <= 0) {
+                        long timeoutNanos = mTimeoutNanos;
+                        do {
+                            // Wait on mReceiveWindowLock instead of this, to
+                            // prevent other threads from writing to this while
+                            // flush is in progress.
+                            if (timeoutNanos < 0) {
+                                mReceiveWindowCondition.await();
+                            } else if ((timeoutNanos =
+                                        mReceiveWindowCondition.awaitNanos(timeoutNanos)) < 0) {
+                                timeoutNanos = mTimeoutNanos - timeoutNanos;
+                                throw new InterruptedIOException
+                                    ("Timed out after " +
+                                     TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "ms");
+                            }
+                            checkClosed();
+                        } while ((window = mReceiveWindow) <= 0);
                     }
                 } catch (InterruptedException e) {
                     throw new InterruptedIOException("Thread interrupted");
@@ -552,14 +554,18 @@ final class MultiplexConnection implements Connection {
                     if (sendMode != SEND_NO_FLUSH ||
                         size >= ((buffer.length - (Multiplexer.SEND_HEADER_SIZE - 1)) >> 1))
                     {
-                        mux.send(mId, sendOp(), buffer, offset, size, sendMode == SEND_AND_CLOSE);
-                        mReceiveWindowLock.lock();
-                        try {
-                            mReceiveWindow -= size;
-                        } finally {
-                            mReceiveWindowLock.unlock();
+                        if (sendMode == SEND_AND_CLOSE) {
+                            mux.send(mId, sendOp(), buffer, offset, size, true);
+                        } else {
+                            mux.send(mId, sendOp(), buffer, offset, size, false);
+                            mReceiveWindowLock.lock();
+                            try {
+                                mReceiveWindow -= size;
+                            } finally {
+                                mReceiveWindowLock.unlock();
+                            }
+                            mEnd = Multiplexer.SEND_HEADER_SIZE;
                         }
-                        mEnd = Multiplexer.SEND_HEADER_SIZE;
                     } else {
                         // Save for later, hoping to fill window.
                         System.arraycopy
