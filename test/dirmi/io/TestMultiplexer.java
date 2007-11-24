@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
@@ -83,7 +84,7 @@ public class TestMultiplexer extends TestCase {
         Thread.currentThread().setName(mThreadName);
     }
 
-    // FIXME: test timeouts
+    // FIXME: more timeout tests
 
     public void testBasic() throws Exception {
         final AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
@@ -403,6 +404,18 @@ public class TestMultiplexer extends TestCase {
 
         reader.join();
         con.close();
+    }
+
+    public void testAcceptTimeout() throws Exception {
+        final AcceptQueue acceptQueue = new AcceptQueue(mServerCon);
+        acceptQueue.start();
+
+        Multiplexer mux = new Multiplexer(mClientCon);
+        mux.tryAccept(100, TimeUnit.MILLISECONDS);
+
+        mux.tryAccept(0, TimeUnit.MILLISECONDS);
+
+        acceptQueue.interrupt();
     }
 
     void handleException(IOException e) {

@@ -19,6 +19,7 @@ package dirmi.io;
 import java.io.InterruptedIOException;
 
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
@@ -152,7 +153,7 @@ public class TestPipedStreams extends TestCase {
 
     public void testReadTimeout() throws Exception {
         try {
-            mIn.setReadTimeout(0);
+            mIn.setReadTimeout(0, TimeUnit.MILLISECONDS);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -160,7 +161,7 @@ public class TestPipedStreams extends TestCase {
 
         long start = System.currentTimeMillis();
         try {
-            mIn.setReadTimeout(1000);
+            mIn.setReadTimeout(1000, TimeUnit.MILLISECONDS);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -169,7 +170,7 @@ public class TestPipedStreams extends TestCase {
 
         start = System.currentTimeMillis();
         try {
-            mIn.setReadTimeout(500);
+            mIn.setReadTimeout(500, TimeUnit.MILLISECONDS);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
@@ -200,7 +201,7 @@ public class TestPipedStreams extends TestCase {
 
     public void testWriteTimeout() throws Exception {
         try {
-            mOut.setWriteTimeout(0);
+            mOut.setWriteTimeout(0, TimeUnit.MILLISECONDS);
             mOut.write(50);
             fail();
         } catch (InterruptedIOException e) {
@@ -209,7 +210,7 @@ public class TestPipedStreams extends TestCase {
 
         long start = System.currentTimeMillis();
         try {
-            mOut.setWriteTimeout(1000);
+            mOut.setWriteTimeout(1000, TimeUnit.MILLISECONDS);
             mOut.write(51);
             fail();
         } catch (InterruptedIOException e) {
@@ -220,7 +221,7 @@ public class TestPipedStreams extends TestCase {
         assertEquals(0, mIn.available());
 
         try {
-            mIn.setReadTimeout(0);
+            mIn.setReadTimeout(0, TimeUnit.MILLISECONDS);
             mIn.read();
             fail();
         } catch (InterruptedIOException e) {
