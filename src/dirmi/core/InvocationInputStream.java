@@ -31,8 +31,6 @@ import java.util.List;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import dirmi.ResponseTimeoutException;
-
 /**
  * 
  *
@@ -379,15 +377,15 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return (b2 << 24) | (b3 << 16) | (b4 << 8) | b5;
     }
 
-    public boolean readOk() throws RemoteException, Throwable {
+    public Throwable readOk() throws IOException {
         List<ThrowableInfo> chain = null;
         String serverLocalAddress = null;
         String serverRemoteAddress = null;
         Throwable t;
         try {
             int v = mIn.read();
-            if (v != InvocationOutputStream.NOT_OK) {
-                return v == InvocationOutputStream.OK_TRUE;
+            if (v == InvocationOutputStream.OK) {
+                return null;
             }
 
             ObjectInput in = getObjectInputStream();
@@ -403,13 +401,9 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             }
 
             t = (Throwable) in.readObject();
-        } catch (InterruptedIOException e) {
-            if ((t = tryReconstruct(chain)) == null) {
-                throw new ResponseTimeoutException(e.getMessage(), e);
-            }
         } catch (IOException e) {
             if ((t = tryReconstruct(chain)) == null) {
-                throw new RemoteException(e.getMessage(), e);
+                throw e;
             }
         } catch (ClassNotFoundException e) {
             if ((t = tryReconstruct(chain)) == null) {
@@ -461,7 +455,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             t.setStackTrace(combined);
         }
 
-        throw t;
+        return t;
     }
 
     private RemoteException tryReconstruct(List<ThrowableInfo> chain) {

@@ -43,8 +43,6 @@ import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
-import dirmi.RequestTimeoutException;
-import dirmi.ResponseTimeoutException;
 import dirmi.UnimplementedMethodException;
 
 import dirmi.core.Identifier;
@@ -61,9 +59,6 @@ import dirmi.info.RemoteParameter;
  */
 public class StubFactoryGenerator<R extends Remote> {
     private static final String STUB_SUPPORT_NAME = "support";
-
-    private static final String HANDLE_SEND_REQUEST_FAILURE_NAME = "handleSendRequestFailure$";
-    private static final String HANDLE_TOTAL_FAILURE_NAME = "handleTotalFailure$";
 
     private static final Map<Object, StubFactory<?>> cCache;
 
@@ -143,6 +138,7 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
         final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
+        final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
 
         // Add fields
         {
@@ -151,39 +147,6 @@ public class StubFactoryGenerator<R extends Remote> {
 
         // Add static method to assign identifiers.
         CodeBuilderUtil.addInitMethodAndFields(cf, mRemoteInfo);
-
-        // Add private methods for handling exceptions.
-        {
-            MethodInfo mi = cf.addMethod(Modifiers.PRIVATE,
-                                         HANDLE_SEND_REQUEST_FAILURE_NAME,
-                                         throwableType,
-                                         new TypeDesc[] {throwableType, invConnectionType});
-            CodeBuilder b = new CodeBuilder(mi);
-
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.loadLocal(b.getParameter(1));
-            b.invokeInterface(stubSupportType, "recoverServerException",
-                              null, new TypeDesc[] {invConnectionType});
-
-            b.loadLocal(b.getParameter(0));
-            b.returnValue(throwableType);
-
-            mi = cf.addMethod(Modifiers.PRIVATE,
-                              HANDLE_TOTAL_FAILURE_NAME,
-                              throwableType,
-                              new TypeDesc[] {throwableType, invConnectionType});
-            b = new CodeBuilder(mi);
-
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.loadLocal(b.getParameter(1));
-            b.invokeInterface(stubSupportType, "forceConnectionClose",
-                              null, new TypeDesc[] {invConnectionType});
-
-            b.loadLocal(b.getParameter(0));
-            b.returnValue(throwableType);
-        }
 
         // Add constructor
         {
@@ -235,8 +198,7 @@ public class StubFactoryGenerator<R extends Remote> {
             LocalVariable conVar = b.createLocalVariable(null, invConnectionType);
             b.storeLocal(conVar);
 
-            Label tryStart = b.createLabel().setLocation();
-            Label writeStart = tryStart;
+            Label invokeStart = b.createLabel().setLocation();
 
             // Write method identifier to connection.
             b.loadLocal(conVar);
@@ -258,14 +220,19 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            Label writeEnd;
+            b.loadLocal(invOutVar);
+            b.invokeVirtual(invOutType, "flush", null, null);
+
+            Label invokeEnd;
 
             if (method.isAsynchronous()) {
-                // Now close connection since no return value to read back.
+                // Finished with connection.
+                invokeEnd = b.createLabel().setLocation();
+                b.loadThis();
+                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
                 b.loadLocal(conVar);
-                b.invokeInterface(invConnectionType, "close", null, null);
-
-                writeEnd = b.createLabel().setLocation();
+                b.invokeInterface(stubSupportType, "finished", null,
+                                  new TypeDesc[] {invConnectionType});
 
                 if (returnDesc == null) {
                     b.returnVoid();
@@ -298,13 +265,6 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 }
             } else {
-                b.loadLocal(invOutVar);
-                b.invokeVirtual(invOutType, "flush", null, null);
-
-                writeEnd = b.createLabel().setLocation();
-
-                Label readStart = writeEnd;
-
                 // Read response.
                 b.loadLocal(conVar);
                 b.invokeInterface(invConnectionType, "getInputStream", invInType, null);
@@ -312,84 +272,46 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeLocal(invInVar);
 
                 b.loadLocal(invInVar);
-                b.invokeVirtual(invInType, "readOk", TypeDesc.BOOLEAN, null);
+                b.invokeVirtual(invInType, "readOk", throwableType, null);
 
-                if (returnDesc != TypeDesc.BOOLEAN) {
-                    b.pop();
-                    if (returnDesc != null) {
-                        CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
-                    }
-                }
+                LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
+                b.storeLocal(throwableVar);
 
-                // Assume server has closed connection.
+                // Finished with connection.
+                invokeEnd = b.createLabel().setLocation();
+                b.loadThis();
+                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+                b.loadLocal(conVar);
+                b.invokeInterface(stubSupportType, "finished", null,
+                                  new TypeDesc[] {invConnectionType});
 
+                b.loadLocal(throwableVar);
+                Label normalResponse = b.createLabel();
+                b.ifNullBranch(normalResponse, true);
+                b.loadLocal(throwableVar);
+                b.throwObject();
+                
+                normalResponse.setLocation();
                 if (returnDesc == null) {
                     b.returnVoid();
                 } else {
+                    CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
                     b.returnValue(returnDesc);
                 }
-
-                Label readEnd = b.createLabel().setLocation();
-
-                // For read, convert InterruptedIOException to ResponseTimeoutException.
-                b.exceptionHandler(readStart, readEnd, InterruptedIOException.class.getName());
-                String convertName = "createResponseTimeoutException$";
-                exceptionConverters.put(ResponseTimeoutException.class, convertName);
-                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
-                b.throwObject();
             }
 
-            // For write, convert InterruptedIOException to RequestTimeoutException.
+            // If any invocation exception, indicate connection failed.
             {
-                b.exceptionHandler(writeStart, writeEnd, InterruptedIOException.class.getName());
-                String convertName = "createRequestTimeoutException$";
-                exceptionConverters.put(RequestTimeoutException.class, convertName);
-                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
-                b.throwObject();
-            }
+                b.exceptionHandler(invokeStart, invokeEnd, Throwable.class.getName());
+                LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
+                b.storeLocal(throwableVar);
 
-            // If any other IOException during write, an exception might have
-            // been written back before request could be completely written.
-            {
-                b.exceptionHandler(writeStart, writeEnd, IOException.class.getName());
                 b.loadThis();
-                b.swap();
+                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
                 b.loadLocal(conVar);
-                b.invokePrivate(HANDLE_SEND_REQUEST_FAILURE_NAME, throwableType,
-                                new TypeDesc[] {throwableType, invConnectionType});
-                b.throwObject();
-            }
-
-            Label tryEnd = b.createLabel().setLocation();
-
-            // Convert any IOException to a RemoteException.
-
-            // Catch RemoteException
-            {
-                b.exceptionHandler(tryStart, tryEnd, RemoteException.class.getName());
-                // RemoteException is an IOException, but leave it as-is.
-                b.throwObject();
-            }
-
-            // Catch IOException
-            {
-                b.exceptionHandler(tryStart, tryEnd, IOException.class.getName());
-                String convertName = "createRemoteException$";
-                exceptionConverters.put(RemoteException.class, convertName);
-                b.invokeStatic(convertName, throwableType, new TypeDesc[] {throwableType});
-                b.throwObject();
-            }
-
-            Label tryEnd3 = b.createLabel().setLocation();
-
-            // If any exception, force connection to close.
-            {
-                b.exceptionHandler(tryStart, tryEnd3, Throwable.class.getName());
-                b.loadThis();
-                b.swap();
-                b.loadLocal(conVar);
-                b.invokePrivate(HANDLE_TOTAL_FAILURE_NAME, throwableType,
-                                new TypeDesc[] {throwableType, invConnectionType});
+                b.loadLocal(throwableVar);
+                b.invokeInterface(stubSupportType, "failed", remoteExType,
+                                  new TypeDesc[] {invConnectionType, throwableType});
                 b.throwObject();
             }
         }

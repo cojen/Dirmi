@@ -253,13 +253,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
                 }
 
-                if (method.isAsynchronous()) {
-                    // Caller should have closed connection, but we should do
-                    // so also to clean up.
-                    b.loadLocal(conVar);
-                    b.invokeInterface(invConnectionType, "close", null, null);
-                }
-
                 TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
 
                 {
@@ -275,9 +268,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 }
 
                 if (method.isAsynchronous()) {
-                    // For asynchronous methods, no response needs to be
-                    // written. Connection is already closed.
-
                     // Return type should be void for asynchronous methods, but
                     // get rid of any just in case.
                     if (returnDesc != null) {
@@ -288,7 +278,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         }
                     }
                 } else {
-                    // For synchronous method, write response and close connection.
+                    // For synchronous method, write response and flush stream.
 
                     LocalVariable retVar = null;
                     if (returnDesc != null) {
@@ -302,22 +292,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
                     b.storeLocal(invOutVar);
 
-                    if (returnDesc == TypeDesc.BOOLEAN) {
-                        b.loadLocal(invOutVar);
-                        b.loadLocal(retVar);
-                        b.invokeVirtual(invOutType, "writeOk", null,
-                                        new TypeDesc[] {TypeDesc.BOOLEAN});
-                    } else {
-                        b.loadLocal(invOutVar);
-                        b.invokeVirtual(invOutType, "writeOk", null, null);
-                        if (retVar != null) {
-                            CodeBuilderUtil.writeParam
-                                (b, method.getReturnType(), invOutVar, retVar);
-                        }
+                    b.loadLocal(invOutVar);
+                    b.invokeVirtual(invOutType, "writeOk", null, null);
+                    if (retVar != null) {
+                        CodeBuilderUtil.writeParam
+                            (b, method.getReturnType(), invOutVar, retVar);
                     }
 
-                    b.loadLocal(conVar);
-                    b.invokeInterface(invConnectionType, "close", null, null);
+                    b.loadLocal(invOutVar);
+                    b.invokeVirtual(invOutType, "flush", null, null);
                 }
 
                 b.returnVoid();
@@ -383,11 +366,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
             b.loadLocal(conVar);
             b.invokeInterface(invConnectionType, "getOutputStream", invOutType, null);
+            LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
+            b.storeLocal(invOutVar);
+
+            b.loadLocal(invOutVar);
             b.loadLocal(throwableVar);
             b.invokeVirtual(invOutType, "writeThrowable",
                             null, new TypeDesc[] {throwableVar.getType()});
-            b.loadLocal(conVar);
-            b.invokeInterface(invConnectionType, "close", null, null);
+            b.loadLocal(invOutVar);
+            b.invokeVirtual(invOutType, "flush", null, null);
             
             b.returnVoid();
         }

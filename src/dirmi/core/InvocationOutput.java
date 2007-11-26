@@ -52,12 +52,12 @@ public interface InvocationOutput extends ObjectOutput, Flushable, Closeable {
     void writeOk() throws IOException;
 
     /**
-     * Writes OK marker combined with boolean return value.
-     */
-    void writeOk(boolean result) throws IOException;
-
-    /**
      * Writes not-OK marker, followed by the given Throwable.
      */
     void writeThrowable(Throwable t) throws IOException;
+
+    /**
+     * Resets the stream for reuse.
+     */
+    void reset() throws IOException;
 }

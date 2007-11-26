@@ -35,11 +35,10 @@ import java.util.List;
 public class InvocationOutputStream extends OutputStream implements InvocationOutput {
     static final byte FALSE = 0;
     static final byte TRUE = 1;
-    static final byte OK_FALSE = 2;
-    static final byte OK_TRUE = 3;
-    static final byte NOT_OK = 4;
-    static final byte NULL = 5;
-    static final byte NOT_NULL = 6;
+    static final byte OK = 2;
+    static final byte NOT_OK = 3;
+    static final byte NULL = 4;
+    static final byte NOT_NULL = 5;
 
     private volatile OutputStream mOut;
     private final String mLocalAddress;
@@ -260,12 +259,7 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     }
 
     public void writeOk() throws IOException {
-        // Caller should not care if true or false.
-        mOut.write(OK_TRUE);
-    }
-
-    public void writeOk(boolean result) throws IOException {
-        mOut.write(result ? OK_TRUE : OK_FALSE);
+        mOut.write(OK);
     }
 
     public void writeThrowable(Throwable t) throws IOException {
@@ -299,16 +293,8 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         // Ensure caller gets something before we try to serialize the whole Throwable.
         out.flush();
 
-        try {
-            // Write the Throwable in all its glory.
-            out.writeObject(t);
-        } finally {
-            try {
-                out.close();
-            } catch (IOException e) {
-                // Don't care.
-            }
-        }
+        // Write the Throwable in all its glory.
+        out.writeObject(t);
     }
 
     private void collectChain(List<Throwable> chain, Throwable t) {
@@ -317,6 +303,13 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
             collectChain(chain, cause);
         }
         chain.add(t);
+    }
+
+    public void reset() throws IOException {
+        OutputStream out = mOut;
+        if (out instanceof ObjectOutputStream) {
+            ((ObjectOutputStream) out).reset();
+        }
     }
 
     public void flush() throws IOException {

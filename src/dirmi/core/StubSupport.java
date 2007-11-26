@@ -27,25 +27,26 @@ import java.rmi.RemoteException;
  */
 public interface StubSupport {
     /**
-     * @return InvocationConnection for writing method identifier and arguments,
-     * and for reading response. If call is synchronous, output is flushed
-     * after arguments are written, and then connection is read from. If call
-     * is asynchronous, connection is closed after arguments are written.
+     * @return InvocationConnection for writing method identifier and
+     * arguments, and for reading response. Output is flushed after arguments
+     * are written, and then connection is read from.
      *
      * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
     InvocationConnection invoke() throws RemoteException;
 
     /**
-     * Try to recover any exception sent by the server before it closed the
-     * connection, and throw it. If none recovered, return normally.
+     * Called after invocation is finished and connection can be reused. This
+     * method should not throw any exception.
      */
-    void recoverServerException(InvocationConnection con) throws Throwable;
+    void finished(InvocationConnection con);
 
     /**
-     * Forcibly close connection and don't throw any exception.
+     * Called if invocation failed due to a problem with the connection, and it
+     * should be closed. This method should not throw any exception, however it
+     * must return a RemoteException which will get thrown to the client.
      */
-    void forceConnectionClose(InvocationConnection con);
+    RemoteException failed(InvocationConnection con, Throwable cause);
 
     /**
      * Returns a hashCode implementation for the Stub.

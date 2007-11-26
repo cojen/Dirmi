@@ -33,6 +33,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -68,6 +69,7 @@ public class StandardSession implements Session {
     static final int PROTOCOL_VERSION = 1;
 
     private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
+    private static final int DEFAULT_CONNECTION_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
 
     final Broker mBroker;
@@ -105,6 +107,9 @@ public class StandardSession implements Session {
 
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
+
+    // Pool of connections for client calls.
+    final LinkedList<InvocationCon> mConnectionPool;
 
     volatile long mHeartbeatCheckNanos;
 
@@ -179,6 +184,8 @@ public class StandardSession implements Session {
         mStubFactoryRefs = new ConcurrentHashMap<Identifier, StubFactoryRef>();
         mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
         mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
+
+        mConnectionPool = new LinkedList<InvocationCon>();
 
         mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_DELAY_MILLIS));
 
@@ -394,22 +401,20 @@ public class StandardSession implements Session {
             TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
     }
 
-    void handleRequest(Connection con) {
-        final InvocationConnection invCon;
+    /**
+     * @return true if connection is still open and can be reused.
+     */
+    boolean handleRequest(InvocationConnection invCon) {
         final Identifier id;
         try {
-            invCon = new InvocationCon(con);
             id = Identifier.read(invCon.getInputStream());
         } catch (IOException e) {
-            if (!mClosing) {
-                error("Failure reading request", e);
-            }
             try {
-                con.close();
+                invCon.close();
             } catch (IOException e2) {
                 // Don't care.
             }
-            return;
+            return false;
         }
 
         // Find a Skeleton to invoke.
@@ -425,15 +430,26 @@ public class StandardSession implements Session {
                       "Server cannot find remote object and " +
                       "cannot send error to client. Object id: " + id, e);
             }
-            return;
+            return false;
         }
 
         try {
             Throwable throwable;
 
             try {
-                skeleton.invoke(invCon);
-                return;
+                try {
+                    skeleton.invoke(invCon);
+                } catch (AsynchronousInvocationException e) {
+                    throwable = null;
+                    Throwable cause = e.getCause();
+                    if (cause == null) {
+                        cause = e;
+                    }
+                    warn("Unhandled exception in asynchronous server method", cause);
+                }
+
+                // Connection is open and can be reused.
+                return true;
             } catch (NoSuchMethodException e) {
                 throwable = e;
             } catch (NoSuchObjectException e) {
@@ -442,17 +458,14 @@ public class StandardSession implements Session {
                 throwable = e;
             } catch (NotSerializableException e) {
                 throwable = e;
-            } catch (AsynchronousInvocationException e) {
-                Throwable cause = e.getCause();
-                if (cause == null) {
-                    cause = e;
-                }
-                warn("Unhandled exception in asynchronous server method", cause);
-                return;
             }
 
-            invCon.getOutputStream().writeThrowable(throwable);
-            invCon.close();
+            InvocationOutputStream out = invCon.getOutputStream();
+            out.writeThrowable(throwable);
+            out.flush();
+            
+            // Connection is open and can be reused.
+            return true;
         } catch (IOException e) {
             error("Failure processing request", e);
             try {
@@ -460,7 +473,18 @@ public class StandardSession implements Session {
             } catch (IOException e2) {
                 // Don't care.
             }
+            return false;
         }
+    }
+
+    InvocationConnection getConnection() throws IOException {
+        synchronized (mConnectionPool) {
+            if (mConnectionPool.size() > 0) {
+                InvocationConnection con = mConnectionPool.removeLast();
+                return con;
+            }
+        }
+        return new InvocationCon(mBroker.connect());
     }
 
     void warn(String message) {
@@ -689,7 +713,23 @@ public class StandardSession implements Session {
                 }
 
                 if (con != null) {
-                    handleRequest(con);
+                    final InvocationConnection invCon;
+                    try {
+                        invCon = new InvocationCon(con);
+                    } catch (IOException e) {
+                        if (!mClosing) {
+                            error("Failure reading request", e);
+                        }
+                        try {
+                            con.close();
+                        } catch (IOException e2) {
+                            // Don't care.
+                        }
+                        return;
+                    }
+
+                    // Yes, this is a while loop with an empty body.
+                    while (handleRequest(invCon));
                 } else if (!mClosing) {
                     long nowMillis = System.currentTimeMillis();
                     if (nowMillis > mNextExpectedHeartbeatMillis) {
@@ -706,6 +746,27 @@ public class StandardSession implements Session {
 
                     // Send disposed ids to peer, which also serves as a heartbeat.
                     sendDisposedStubs();
+
+                    // Close idle connections.
+                    while (true) {
+                        InvocationCon pooledCon;
+                        synchronized (mConnectionPool) {
+                            pooledCon = mConnectionPool.peek();
+                            if (pooledCon == null) {
+                                break;
+                            }
+                            long age = System.currentTimeMillis() - pooledCon.getIdleTimestamp();
+                            if (age < DEFAULT_CONNECTION_IDLE_MILLIS) {
+                                break;
+                            }
+                            mConnectionPool.remove();
+                        }
+                        try {
+                            pooledCon.close();
+                        } catch (IOException e) {
+                            // Don't care.
+                        }
+                    }
                 }
             } while (!spawned);
         }
@@ -715,6 +776,8 @@ public class StandardSession implements Session {
         private final Connection mCon;
         private final InvocationInputStream mInvIn;
         private final InvocationOutputStream mInvOut;
+
+        private volatile long mTimestamp;
 
         InvocationCon(Connection con) throws IOException {
             mCon = con;
@@ -785,6 +848,27 @@ public class StandardSession implements Session {
 
         public String getRemoteAddressString() {
             return mCon.getRemoteAddressString();
+        }
+
+        void recycle() {
+            try {
+                getOutputStream().reset();
+                mTimestamp = System.currentTimeMillis();
+                synchronized (mConnectionPool) {
+                    mConnectionPool.add(this);
+                }
+            } catch (Exception e) {
+                try {
+                    close();
+                } catch (IOException e2) {
+                    // Don't care.
+                }
+                // Don't care.
+            }
+        }
+
+        long getIdleTimestamp() {
+            return mTimestamp;
         }
     }
 
@@ -914,50 +998,34 @@ public class StandardSession implements Session {
             if (mDisposed) {
                 throw new NoSuchObjectException("Remote object disposed");
             }
+            InvocationConnection con = null;
             try {
-                InvocationConnection con = new InvocationCon(mBroker.connect());
-
-                try {
-                    mObjID.write(con.getOutputStream());
-                } catch (IOException e) {
-                    forceConnectionClose(con);
-                    throw e;
-                }
-
+                con = getConnection();
+                mObjID.write(con.getOutputStream());
                 return con;
-            } catch (RemoteException e) {
-                throw e;
             } catch (IOException e) {
-                throw new RemoteException(e.getMessage(), e);
+                throw failed(con, e);
             }
         }
 
-        public void recoverServerException(InvocationConnection con) throws Throwable {
-            InvocationInputStream in;
-            try {
-                in = con.getInputStream();
-            } catch (IOException e) {
-                // Ignore.
-                return;
+        public void finished(InvocationConnection con) {
+            if (con instanceof InvocationCon) {
+                ((InvocationCon) con).recycle();
             }
-            try {
-                in.readOk();
-            } catch (RemoteException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof IOException) {
-                    // Ignore.
-                    return;
+        }
+
+        public RemoteException failed(InvocationConnection con, Throwable cause) {
+            if (con != null) {
+                try {
+                    con.close();
+                } catch (IOException e) {
+                    // Don't care.
                 }
-                throw e;
             }
-        }
-
-        public void forceConnectionClose(InvocationConnection con) {
-            try {
-                con.setWriteTimeout(0, TimeUnit.NANOSECONDS);
-                con.close();
-            } catch (IOException e2) {
-                // Don't care.
+            if (cause == null) {
+                return new RemoteException();
+            } else {
+                return new RemoteException(cause.getMessage(), cause);
             }
         }
 
