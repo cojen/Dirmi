@@ -16,11 +16,7 @@
 
 package dirmi;
 
-import java.lang.reflect.Method;
-
 import java.rmi.RemoteException;
-
-import org.cojen.classfile.MethodDesc;
 
 /**
  * Thrown when a remote method has not been implemented by the remote
@@ -32,21 +28,7 @@ import org.cojen.classfile.MethodDesc;
 public class UnimplementedMethodException extends RemoteException {
     private static final long serialVersionUID = 1;
 
-    private static String makeMessage(Method method) {
-        if (method == null) {
-            return null;
-        }
-        return MethodDesc.forMethod(method).toMethodSignature(method.getName());
-    }
-
-    private final Method mMethod;
-
-    public UnimplementedMethodException(Method method) {
-        super(makeMessage(method));
-        mMethod = method;
-    }
-
-    public Method getMethod() {
-        return mMethod;
+    public UnimplementedMethodException(String message) {
+        super(message);
     }
 }

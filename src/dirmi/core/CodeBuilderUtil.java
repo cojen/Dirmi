@@ -49,13 +49,16 @@ class CodeBuilderUtil {
     // Method name ends with '$' so as not to conflict with user method.
     static final String INIT_METHOD_NAME = "init$";
 
-    static ClassInjector createInjector(Class<?> type, String suffix) {
-        String name = type.getName();
+    static boolean equalTypes(RemoteParameter a, RemoteParameter b) {
+        return a == null ? b == null : (a.equalTypes(b));
+    }
+
+    static String cleanClassName(String name) {
         if (name.startsWith("java.")) {
             // Rename to avoid SecurityException.
             name = "java$" + name.substring(4);
         }
-        return ClassInjector.create(name + '$' + suffix, type.getClassLoader());
+        return name;
     }
 
     /**

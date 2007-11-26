@@ -65,10 +65,14 @@ import org.cojen.util.IntHashMap;
  * @author Brian S O'Neill
  */
 public class Multiplexer implements Broker, Closeable {
+    // FIXME: Multiplexed connection cannot read anything if nothing was
+    // initially written. This is because OPEN command is delayed until first
+    // write.
+
     private static final int MAGIC_NUMBER = 0x17524959;
 
     private static final int DEFAULT_MIN_BUFFER_SIZE = 64;
-    private static final int DEFAULT_MAX_BUFFER_SIZE = 1 << 16;
+    private static final int DEFAULT_MAX_BUFFER_SIZE = 1 << 17;
 
     static final int CLOSE   = 0 << 30;
     static final int RECEIVE = 1 << 30;

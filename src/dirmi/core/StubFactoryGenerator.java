@@ -22,7 +22,6 @@ import java.io.IOException;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
@@ -112,7 +111,7 @@ public class StubFactoryGenerator<R extends Remote> {
         Class<? extends R> stubClass = generateStub();
 
         try {
-            StubFactory<R> factory =  new Factory<R>(mType, stubClass);
+            StubFactory<R> factory =  new Factory<R>(stubClass);
             CodeBuilderUtil.invokeInitMethod(stubClass, factory, mRemoteInfo);
             return factory;
         } catch (IllegalAccessException e) {
@@ -127,21 +126,21 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends R> generateStub() {
-        ClassInjector ci = CodeBuilderUtil.createInjector(mType, "Stub");
+        ClassInjector ci = ClassInjector.create
+            (CodeBuilderUtil.cleanClassName(mRemoteInfo.getName()) + "$Stub",
+             mType.getClassLoader());
+
         ClassFile cf = new ClassFile(ci.getClassName());
         cf.addInterface(mType);
         cf.setSourceFile(StubFactoryGenerator.class.getName());
         cf.markSynthetic();
         cf.setTarget("1.5");
 
-        final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
         final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
         final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
-        final TypeDesc classType = TypeDesc.forClass(Class.class);
-        final TypeDesc methodType = TypeDesc.forClass(Method.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
         final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
 
@@ -397,47 +396,47 @@ public class StubFactoryGenerator<R extends Remote> {
 
         // Methods unimplemented by server throw UnimplementedMethodException
 
-        for (RemoteMethod method : mLocalInfo.getRemoteMethods()) {
-            List<? extends RemoteParameter> paramList = method.getParameterTypes();
+        for (RemoteMethod localMethod : mLocalInfo.getRemoteMethods()) {
+            List<? extends RemoteParameter> paramList = localMethod.getParameterTypes();
             try {
                 RemoteParameter[] paramTypes = new RemoteParameter[paramList.size()];
                 paramList.toArray(paramTypes);
-                // FIXME: check return type
-                mRemoteInfo.getRemoteMethod(method.getName(), paramTypes);
-                // Method has been implemented.
-                continue;
+
+                RemoteMethod remoteMethod =
+                    mRemoteInfo.getRemoteMethod(localMethod.getName(), paramTypes);
+
+                if (CodeBuilderUtil.equalTypes(remoteMethod.getReturnType(),
+                                               localMethod.getReturnType()))
+                {
+                    // Method has been implemented.
+                    continue;
+                }
+
+                // If this point is reached, server does not implement method
+                // because return type differs.
             } catch (NoSuchMethodException e) {
                 // Server does not have this method.
             }
 
-            TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
-            TypeDesc[] paramDescs = CodeBuilderUtil.getTypeDescs(method.getParameterTypes());
+            TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(localMethod.getReturnType());
+            TypeDesc[] paramDescs = CodeBuilderUtil.getTypeDescs(localMethod.getParameterTypes());
 
             MethodInfo mi = cf.addMethod
-                (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
+                (Modifiers.PUBLIC, localMethod.getName(), returnDesc, paramDescs);
 
-            TypeDesc[] exceptionDescs = CodeBuilderUtil.getTypeDescs(method.getExceptionTypes());
+            TypeDesc[] exceptionDescs = CodeBuilderUtil
+                .getTypeDescs(localMethod.getExceptionTypes());
+
             for (TypeDesc desc : exceptionDescs) {
                 mi.addException(desc);
             }
 
             CodeBuilder b = new CodeBuilder(mi);
-            
+
             b.newObject(unimplementedExType);
             b.dup();
-            b.loadConstant(TypeDesc.forClass(mType));
-            b.loadConstant(method.getName());
-            b.loadConstant(paramList.size());
-            b.newObject(classType.toArrayType());
-            for (int i=0; i<paramList.size(); i++) {
-                b.dup();
-                b.loadConstant(i);
-                b.loadConstant(CodeBuilderUtil.getTypeDesc(paramList.get(i)));
-                b.storeToArray(classType);
-            }
-            b.invokeVirtual(classType, "getMethod", methodType,
-                            new TypeDesc[] {TypeDesc.STRING, classType.toArrayType()});
-            b.invokeConstructor(unimplementedExType, new TypeDesc[] {methodType});
+            b.loadConstant(mi.getMethodDescriptor().toMethodSignature(localMethod.getName()));
+            b.invokeConstructor(unimplementedExType, new TypeDesc[] {TypeDesc.STRING});
             b.throwObject();
         }
 
@@ -525,16 +524,10 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {
-        private final Class<R> mType;
         private final Constructor<? extends R> mStubCtor;
 
-        Factory(Class<R> type, Class<? extends R> stubClass) throws NoSuchMethodException {
-            mType = type;
+        Factory(Class<? extends R> stubClass) throws NoSuchMethodException {
             mStubCtor = stubClass.getConstructor(StubSupport.class);
-        }
-
-        public Class<R> getRemoteType() {
-            return mType;
         }
 
         public Class<? extends R> getStubClass() {

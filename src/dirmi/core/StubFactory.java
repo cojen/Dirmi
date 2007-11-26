@@ -31,11 +31,6 @@ import dirmi.info.RemoteInfo;
  */
 public interface StubFactory<R extends Remote> {
     /**
-     * @return remote type supported by this stub factory
-     */
-    Class<R> getRemoteType();
-
-    /**
      * @return class that implements stub
      */
     Class<? extends R> getStubClass();
