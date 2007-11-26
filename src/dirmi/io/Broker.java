@@ -17,7 +17,9 @@
 package dirmi.io;
 
 /**
- * Supports accepting connections and making new connections.
+ * Supports accepting connections and making new connections. Broker
+ * implementations may require at least one thread must be calling the accept
+ * method at all times in order to work.
  *
  * @author Brian S O'Neill
  */

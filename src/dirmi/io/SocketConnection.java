@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 public class SocketConnection implements Connection {
     private final Socket mSocket;
 
+    // FIXME: support buffering
+
     public SocketConnection(Socket socket) throws IOException {
         mSocket = socket;
     }
