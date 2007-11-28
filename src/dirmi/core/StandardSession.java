@@ -728,8 +728,17 @@ public class StandardSession implements Session {
                         return;
                     }
 
-                    // Yes, this is a while loop with an empty body.
-                    while (handleRequest(invCon));
+                    while (handleRequest(invCon)) {
+                        try {
+                            invCon.getOutputStream().reset();
+                        } catch (IOException e) {
+                            try {
+                                invCon.close();
+                            } catch (IOException e2) {
+                                // Don't care.
+                            }
+                        }
+                    }
                 } else if (!mClosing) {
                     long nowMillis = System.currentTimeMillis();
                     if (nowMillis > mNextExpectedHeartbeatMillis) {
