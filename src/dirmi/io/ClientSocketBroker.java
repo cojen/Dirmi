@@ -16,13 +16,16 @@
 
 package dirmi.io;
 
+import java.io.InterruptedIOException;
 import java.io.IOException;
 
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 
@@ -31,48 +34,125 @@ import java.util.concurrent.TimeUnit;
  * @see ServerSocketBroker
  */
 public class ClientSocketBroker implements Broker {
-    // FIXME: support buffering
-
     private final SocketAddress mAddress;
+
+    private final ReentrantLock mAcceptLock;
+    private Connection mReadyToAccept;
+
+    public ClientSocketBroker(String host, int port) {
+        this(new InetSocketAddress(host, port));
+    }
 
     public ClientSocketBroker(SocketAddress address) {
         mAddress = address;
+        mAcceptLock = new ReentrantLock();
     }
 
     public Connection connect() throws IOException {
         Connection con = doConnect();
         con.getOutputStream().write(ServerSocketBroker.FOR_CONNECT);
+        con.getOutputStream().flush();
         return con;
     }
 
     public Connection tryConnect(long time, TimeUnit unit) throws IOException {
         Connection con = doTryConnect(time, unit);
         con.getOutputStream().write(ServerSocketBroker.FOR_CONNECT);
+        con.getOutputStream().flush();
+        // Default to infinite timeout.
+        con.setReadTimeout(-1, unit);
         return con;
     }
 
     public Connection accept() throws IOException {
-        Connection con = doConnect();
-        con.getOutputStream().write(ServerSocketBroker.FOR_ACCEPT);
-        // FIXME: wait for one byte
+        mAcceptLock.lock();
+        try {
+            Connection con;
+            if ((con = mReadyToAccept) != null) {
+                mReadyToAccept = null;
+            } else {
+                con = doConnect();
+                con.getOutputStream().write(ServerSocketBroker.FOR_ACCEPT);
+                con.getOutputStream().flush();
+            }
 
-        // FIXME
-        return null;
+            // Wait for acceptance.
+            con.getInputStream().read();
+
+            return con;
+        } finally {
+            mAcceptLock.unlock();
+        }
     }
 
     public Connection tryAccept(long time, TimeUnit unit) throws IOException {
-        Connection con = doTryConnect(time, unit);
-        con.getOutputStream().write(ServerSocketBroker.FOR_ACCEPT);
-        // FIXME: wait for one byte
+        if (time < 0) {
+            return accept();
+        }
 
-        // FIXME
-        return null;
+        time = unit.toNanos(time);
+        unit = TimeUnit.NANOSECONDS;
+        long start = System.nanoTime();
+
+        try {
+            if (!mAcceptLock.tryLock(time, unit)) {
+                return null;
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptedIOException();
+        }
+        try {
+            long now = System.nanoTime();
+            if ((time -= (now - start)) <= 0) {
+                return null;
+            }
+            start = now;
+
+            Connection con;
+            if ((con = mReadyToAccept) != null) {
+                mReadyToAccept = null;
+            } else {
+                con = doTryConnect(time, unit);
+                if (con == null) {
+                    return null;
+                }
+                con.getOutputStream().write(ServerSocketBroker.FOR_ACCEPT);
+                con.getOutputStream().flush();
+
+                now = System.nanoTime();
+                if ((time -= (now - start)) <= 0) {
+                    // Save for later.
+                    con.setReadTimeout(-1, unit);
+                    mReadyToAccept = con;
+                    return null;
+                }
+                start = now;
+            }
+
+            con.setReadTimeout(time, unit);
+
+            // Wait for acceptance.
+            try {
+                con.getInputStream().read();
+            } catch (SocketTimeoutException e) {
+                // Save for later.
+                con.setReadTimeout(-1, unit);
+                mReadyToAccept = con;
+                return null;
+            }
+
+            // Default to infinite timeout.
+            con.setReadTimeout(-1, unit);
+            return con;
+        } finally {
+            mAcceptLock.unlock();
+        }
     }
 
     private Connection doConnect() throws IOException {
         Socket s = new Socket();
         s.connect(mAddress);
-        return new SocketConnection(s);
+        return buffer(new SocketConnection(s));
     }
 
     private Connection doTryConnect(long time, TimeUnit unit) throws IOException {
@@ -92,6 +172,10 @@ public class ClientSocketBroker implements Broker {
             return null;
         }
 
-        return new SocketConnection(s);
+        return buffer(new SocketConnection(s));
+    }
+
+    protected Connection buffer(Connection con) throws IOException {
+        return new BufferedConnection(con);
     }
 }

@@ -26,6 +26,7 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 
@@ -34,18 +35,22 @@ import java.util.concurrent.TimeUnit;
  * @see ClientSocketBroker
  */
 public class ServerSocketBroker implements Broker {
-    // FIXME: support buffering
-
     static final byte FOR_CONNECT = 1;
     static final byte FOR_ACCEPT = 2;
 
     private final ServerSocket mServerSocket;
+    private final ReentrantLock mAcceptLock;
     private final BlockingQueue<Connection> mReadyToConnect;
 
     private int mAcceptTimeout = -1;
 
+    public ServerSocketBroker(int port) throws IOException {
+        this(new ServerSocket(port));
+    }
+
     public ServerSocketBroker(ServerSocket ss) {
         mServerSocket = ss;
+        mAcceptLock = new ReentrantLock();
         mReadyToConnect = new LinkedBlockingQueue<Connection>();
     }
 
@@ -84,58 +89,101 @@ public class ServerSocketBroker implements Broker {
     public Connection accept() throws IOException {
         while (true) {
             Socket s;
-            synchronized (mServerSocket) {
+            mAcceptLock.lock();
+            try {
                 if (mAcceptTimeout != 0) {
                     mServerSocket.setSoTimeout(mAcceptTimeout = 0);
                 }
                 s = mServerSocket.accept();
+            } finally {
+                mAcceptLock.unlock();
             }
 
-            Connection con = new SocketConnection(s);
+            Connection con = buffer(new SocketConnection(s));
             int purpose = con.getInputStream().read();
 
             if (purpose == FOR_CONNECT) {
                 return con;
             } else if (purpose == FOR_ACCEPT) {
                 if (!mReadyToConnect.offer(con)) {
-                    s.close();
+                    con.close();
                 }
             } else {
-                s.close();
+                con.close();
             }
         }
     }
 
     public Connection tryAccept(long time, TimeUnit unit) throws IOException {
-        long timeMillis = unit.toMillis(time);
-        if (timeMillis <= 0) {
-            // Socket timeout of zero is interpreted as infinite.
-            timeMillis = 1;
-        } else if (timeMillis > Integer.MAX_VALUE) {
-            // Go infinite.
-            timeMillis = 0;
+        if (time < 0) {
+            return accept();
         }
 
-        Socket s;
-        synchronized (mServerSocket) {
-            if (mAcceptTimeout != timeMillis) {
-                mServerSocket.setSoTimeout(mAcceptTimeout = ((int) timeMillis));
+        time = unit.toNanos(time);
+        unit = TimeUnit.NANOSECONDS;
+        long start = System.nanoTime();
+
+        while (true) {
+            Socket s;
+            try {
+                if (!mAcceptLock.tryLock(time, unit)) {
+                    return null;
+                }
+            } catch (InterruptedException e) {
+                throw new InterruptedIOException();
             }
             try {
-                s = mServerSocket.accept();
-            } catch (SocketTimeoutException e) {
-                return null;
+                long now = System.nanoTime();
+                if ((time -= (now - start)) <= 0) {
+                    break;
+                }
+                start = now;
+
+                long timeMillis = unit.toMillis(time);
+                if (timeMillis > Integer.MAX_VALUE) {
+                    // Socket timeout of zero is interpreted as infinite.
+                    timeMillis = 0;
+                } else if (timeMillis <= 0) {
+                    timeMillis = 1;
+                }
+
+                if (mAcceptTimeout != timeMillis) {
+                    mServerSocket.setSoTimeout(mAcceptTimeout = ((int) timeMillis));
+                }
+
+                try {
+                    s = mServerSocket.accept();
+                } catch (SocketTimeoutException e) {
+                    return null;
+                }
+            } finally {
+                mAcceptLock.unlock();
             }
+
+            Connection con = buffer(new SocketConnection(s));
+            int purpose = con.getInputStream().read();
+
+            if (purpose == FOR_CONNECT) {
+                return con;
+            } else if (purpose == FOR_ACCEPT) {
+                if (!mReadyToConnect.offer(con)) {
+                    con.close();
+                }
+            } else {
+                con.close();
+            }
+
+            long now = System.nanoTime();
+            if ((time -= (now - start)) <= 0) {
+                break;
+            }
+            start = now;
         }
 
-        Connection con = new SocketConnection(s);
-        int purpose = con.getInputStream().read();
-
-        if (purpose == FOR_CONNECT) {
-            return con;
-        }
-
-        // FIXME
         return null;
+    }
+
+    protected Connection buffer(Connection con) throws IOException {
+        return new BufferedConnection(con);
     }
 }
