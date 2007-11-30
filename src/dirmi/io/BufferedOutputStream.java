@@ -21,8 +21,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * Replacement for Java's BufferedOutputStream which does a better job of
- * buffer packing. The intent is to reduce the amount of packets sent over a
+ * Replacement for {@link java.io.BufferedOutputStream} which does a better job
+ * of buffer packing. The intent is to reduce the amount of packets sent over a
  * network. This implementation is also unsynchronized.
  *
  * @author Brian S O'Neill

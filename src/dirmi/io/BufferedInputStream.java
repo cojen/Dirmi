@@ -23,9 +23,9 @@ import java.io.InputStream;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
- * Replacement for Java's BufferedInputStream which does not have the block
- * forever on read bug. Marking is not supported, and this implementation is
- * also unsynchronized.
+ * Replacement for {@link java.io.BufferedInputStream} which does not have the
+ * block forever on read bug. Marking is not supported, and this implementation
+ * is also unsynchronized.
  *
  * @author Brian S O'Neill
  */
@@ -78,19 +78,18 @@ public class BufferedInputStream extends FilterInputStream {
             len -= avail;
             if (len >= mBuffer.length) {
                 int amt = in.read(b, off, len);
-                if (amt <= 0) {
-                    amt = 0;
-                }
-                return amt + avail;
+                amt = (amt <= 0 ? 0 : amt) + avail;
+                return amt <= 0 ? -1 : amt;
             } else {
                 int amt = in.read(mBuffer);
                 if (amt <= 0) {
-                    return -1;
+                    return avail <= 0 ? -1 : avail;
                 } else {
-                    System.arraycopy(mBuffer, 0, b, off, amt);
-                    mStart = off;
+                    int fill = Math.min(amt, len);
+                    System.arraycopy(mBuffer, 0, b, off, fill);
+                    mStart = fill;
                     mEnd = amt;
-                    return amt;
+                    return fill + avail;
                 }
             }
         }
