@@ -19,14 +19,15 @@ package dirmi;
 import java.io.IOException;
 
 import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.SocketAddress;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import dirmi.io.Connection;
-import dirmi.io.SocketConnection;
+import dirmi.io.Broker;
+import dirmi.io.ClientSocketBroker;
+import dirmi.io.ServerSocketBroker;
 
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
@@ -54,14 +55,15 @@ public class Sessions {
      * @param server optional server object to export
      */
     public static Session createSession(String host, int port, Object server) throws IOException {
-        return createSession(new Socket(host, port), server);
+        return createSession(new ClientSocketBroker(host, port), server);
     }
 
     /**
-     * @param con remote connection
+     * @param address address of remote host
      * @param server optional server object to export
      */
-    public static Session createSession(Socket con, Object server) throws IOException {
+    public static Session createSession(SocketAddress address, Object server) throws IOException {
+        /* FIXME: support this in ClientSocketBroker
         if (con.getSendBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
             con.setSendBufferSize(DEFAULT_TCP_BUFFER_SIZE);
         }
@@ -69,35 +71,35 @@ public class Sessions {
             con.setReceiveBufferSize(DEFAULT_TCP_BUFFER_SIZE);
         }
         con.setTcpNoDelay(true);
-
-        return createSession(new SocketConnection(con), server);
+        */
+        return createSession(new ClientSocketBroker(address), server);
     }
 
     /**
-     * @param con remote connection
+     * @param ss socket for accepting connections
      * @param server optional server object to export
      */
-    public static Session createSession(Connection con, Object server) throws IOException {
-        return createSession(con, server, con.getRemoteAddressString());
-    }
-
-    /**
-     * @param con remote connection
-     * @param server optional server object to export
-     * @param name session name
-     */
-    public static Session createSession(Connection con, Object server, String name)
-        throws IOException
-    {
-        if (name == null) {
-            name = "Session";
-        } else {
-            name = "Session-" + name;
+    public static Session createSession(ServerSocket ss, Object server) throws IOException {
+        /* FIXME: support this in ServerSocketBroker
+        if (con.getSendBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
+            con.setSendBufferSize(DEFAULT_TCP_BUFFER_SIZE);
         }
+        if (con.getReceiveBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
+            con.setReceiveBufferSize(DEFAULT_TCP_BUFFER_SIZE);
+        }
+        con.setTcpNoDelay(true);
+        */
+        return createSession(new ServerSocketBroker(ss), server);
+    }
 
+    /**
+     * @param con remote connection
+     * @param server optional server object to export
+     */
+    public static Session createSession(Broker broker, Object server) throws IOException {
         // FIXME: control max threads
-        Executor executor = new ThreadPool(100, true, name);
-
+        // FIXME: use globally shared pool
+        Executor executor = new ThreadPool(100, true);
         return new StandardSession(con, server, executor);
     }
 

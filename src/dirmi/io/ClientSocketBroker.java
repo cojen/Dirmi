@@ -39,6 +39,8 @@ public class ClientSocketBroker implements Broker {
     private final ReentrantLock mAcceptLock;
     private Connection mReadyToAccept;
 
+    // FIXME: create and pass random session id (63 bit, top bit for connect/accept mode)
+
     public ClientSocketBroker(String host, int port) {
         this(new InetSocketAddress(host, port));
     }

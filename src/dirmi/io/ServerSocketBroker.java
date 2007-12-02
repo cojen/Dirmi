@@ -42,11 +42,9 @@ public class ServerSocketBroker implements Broker {
     private final ReentrantLock mAcceptLock;
     private final BlockingQueue<Connection> mReadyToConnect;
 
-    private int mAcceptTimeout = -1;
+    // FIXME: create queue for accepted sockets
 
-    public ServerSocketBroker(int port) throws IOException {
-        this(new ServerSocket(port));
-    }
+    private int mAcceptTimeout = -1;
 
     public ServerSocketBroker(ServerSocket ss) {
         mServerSocket = ss;

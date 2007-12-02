@@ -57,7 +57,6 @@ import dirmi.info.RemoteIntrospector;
 
 import dirmi.io.Broker;
 import dirmi.io.Connection;
-import dirmi.io.Multiplexer;
 
 /**
  * 
@@ -119,41 +118,22 @@ public class StandardSession implements Session {
     volatile boolean mClosing;
 
     /**
-     * @param master single connection which is multiplexed
-     */
-    public StandardSession(Connection master) throws IOException {
-        this(master, null, null, null);
-    }
-
-    /**
-     * @param master single connection which is multiplexed
+     * @param broker connection broker must always connect to same remote server
      * @param server optional server object to export
      */
-    public StandardSession(Connection master, Object server) throws IOException {
-        this(master, server, null, null);
+    public StandardSession(Broker broker, Object server) throws IOException {
+        this(broker, server, null, null);
     }
 
     /**
-     * @param master single connection which is multiplexed
+     * @param broker connection broker must always connect to same remote server
      * @param server optional server object to export
      * @param executor non-shared executor for remote methods; pass null for default
      */
-    public StandardSession(Connection master, Object server, Executor executor)
+    public StandardSession(Broker broker, Object server, Executor executor)
         throws IOException
     {
-        this(master, server, executor, null);
-    }
-
-    /**
-     * @param master single connection which is multiplexed
-     * @param server optional server object to export
-     * @param executor non-shared executor for remote methods; pass null for default
-     * @param log message log; pass null for default
-     */
-    public StandardSession(Connection master, Object server, Executor executor, Log log)
-        throws IOException
-    {
-        this(new Multiplexer(master), server, executor, log);
+        this(broker, server, executor, null);
     }
 
     /**
@@ -306,6 +286,7 @@ public class StandardSession implements Session {
                 }
             }
 
+            // FIXME: Make Broker extend Closeable
             if (mBroker instanceof Closeable) {
                 try {
                     ((Closeable) mBroker).close();
