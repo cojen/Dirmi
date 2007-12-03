@@ -20,81 +20,61 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.net.Socket;
-import java.net.SocketAddress;
-
 import java.util.concurrent.TimeUnit;
 
 /**
- * Basic connection implementation that wraps a socket.
+ * 
  *
  * @author Brian S O'Neill
  */
-public class SocketConnection implements Connection {
-    private final Socket mSocket;
+public class Unconnection implements Connection {
+    public static final Unconnection THE = new Unconnection();
 
-    public SocketConnection(Socket socket) {
-        mSocket = socket;
+    private Unconnection() {
     }
 
     public InputStream getInputStream() throws IOException {
-        return mSocket.getInputStream();
+        throw unconnected();
     }
 
     public long getReadTimeout() throws IOException {
-        int timeout = mSocket.getSoTimeout();
-        if (timeout == 0) {
-            timeout = -1;
-        }
-        return timeout;
+        return 0;
     }
 
     public TimeUnit getReadTimeoutUnit() throws IOException {
-        return TimeUnit.MILLISECONDS;
+        return TimeUnit.NANOSECONDS;
     }
 
     public void setReadTimeout(long time, TimeUnit unit) throws IOException {
-        long millis;
-        if (time <= 0) {
-            millis = time < 0 ? 0 : 1;
-        } else {
-            millis = unit.toMillis(time);
-            if (millis > Integer.MAX_VALUE) {
-                millis = Integer.MAX_VALUE;
-            }
-        }
-        mSocket.setSoTimeout((int) millis);
     }
 
     public OutputStream getOutputStream() throws IOException {
-        return mSocket.getOutputStream();
+        throw unconnected();
     }
 
     public long getWriteTimeout() throws IOException {
-        // FIXME: may need to use Selector
-        return -1;
+        return 0;
     }
 
     public TimeUnit getWriteTimeoutUnit() throws IOException {
-        return TimeUnit.MILLISECONDS;
+        return TimeUnit.NANOSECONDS;
     }
 
     public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
-        // FIXME: may need to use Selector
     }
 
     public String getLocalAddressString() {
-        SocketAddress addr = mSocket.getLocalSocketAddress();
-        return addr == null ? null : addr.toString();
+        return null;
     }
 
     public String getRemoteAddressString() {
-        SocketAddress addr = mSocket.getRemoteSocketAddress();
-        return addr == null ? null : addr.toString();
+        return null;
     }
 
     public void close() throws IOException {
-        mSocket.close();
+    }
+
+    private IOException unconnected() {
+        return new IOException("unconnected");
     }
 }
-

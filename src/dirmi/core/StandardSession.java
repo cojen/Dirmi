@@ -16,7 +16,6 @@
 
 package dirmi.core;
 
-import java.io.Closeable;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
@@ -239,7 +238,7 @@ public class StandardSession implements Session {
     }
 
     void closeOnFailure(String message, Throwable exception) throws RemoteException {
-        close(true, false, message, exception);
+        close(false, false, message, exception);
     }
 
     void peerClosed() {
@@ -258,15 +257,17 @@ public class StandardSession implements Session {
         }
         mClosing = true;
 
+        /*
         if (mExecutor instanceof ExecutorService) {
             try {
                 ((ExecutorService) mExecutor).shutdown();
             } catch (SecurityException e) {
             }
         }
+        */
 
         try {
-            if (notify) {
+            if (notify && mRemoteAdmin != null) {
                 if (explicit) {
                     mRemoteAdmin.closedExplicitly();
                 } else {
@@ -286,13 +287,10 @@ public class StandardSession implements Session {
                 }
             }
 
-            // FIXME: Make Broker extend Closeable
-            if (mBroker instanceof Closeable) {
-                try {
-                    ((Closeable) mBroker).close();
-                } catch (IOException e) {
-                    throw new RemoteException("Failed to close connection broker", e);
-                }
+            try {
+                mBroker.close();
+            } catch (IOException e) {
+                throw new RemoteException("Failed to close connection broker", e);
             }
         } finally {
             clearCollections();
@@ -346,6 +344,10 @@ public class StandardSession implements Session {
 
 
     void sendDisposedStubs() {
+        if (mRemoteAdmin == null) {
+            return;
+        }
+
         boolean finished = false;
         do {
             ArrayList<Identifier> disposedStubsList = new ArrayList<Identifier>();

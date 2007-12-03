@@ -83,6 +83,10 @@ public class PipedBroker implements Broker {
         }
     }
 
+    public void close() throws IOException {
+        // FIXME
+    }
+
     private static class Con implements Connection {
         private final PipedInputStream mIn;
         private final PipedOutputStream mOut;

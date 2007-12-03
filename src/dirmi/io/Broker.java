@@ -16,6 +16,8 @@
 
 package dirmi.io;
 
+import java.io.Closeable;
+
 /**
  * Supports accepting connections and making new connections. Broker
  * implementations may require at least one thread must be calling the accept
@@ -23,5 +25,5 @@ package dirmi.io;
  *
  * @author Brian S O'Neill
  */
-public interface Broker extends Connecter, Accepter {
+public interface Broker extends Connecter, Accepter, Closeable {
 }

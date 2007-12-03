@@ -23,6 +23,9 @@ import java.net.Socket;
 
 import java.rmi.RemoteException;
 
+import java.util.Arrays;
+import java.util.Map;
+
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -30,11 +33,14 @@ import java.util.concurrent.RejectedExecutionException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.cojen.util.WeakCanonicalSet;
+import org.cojen.util.WeakValuedHashMap;
 
 import dirmi.Session;
-import dirmi.Sessions;
 import dirmi.SessionServer;
+
+import dirmi.io.BufferedConnection;
+import dirmi.io.Connection;
+import dirmi.io.SocketConnection;
 
 /**
  * 
@@ -47,7 +53,8 @@ public class StandardSessionServer implements SessionServer {
     final Executor mExecutor;
     final Log mLog;
 
-    final WeakCanonicalSet<Session> mSessions;
+    final Map<SessionKey, Session> mSessions;
+    final Map<SessionKey, ServerSocketBroker> mSessionBrokers;
 
     volatile boolean mClosing;
 
@@ -75,7 +82,8 @@ public class StandardSessionServer implements SessionServer {
         mExecutor = executor;
         mLog = log;
 
-        mSessions = new WeakCanonicalSet<Session>();
+        mSessions = new WeakValuedHashMap<SessionKey, Session>();
+        mSessionBrokers = new WeakValuedHashMap<SessionKey, ServerSocketBroker>();
 
         try {
             // Start first accept thread.
@@ -98,7 +106,7 @@ public class StandardSessionServer implements SessionServer {
         }
 
         synchronized (mSessions) {
-            for (Session session : mSessions) {
+            for (Session session : mSessions.values()) {
                 try {
                     session.close();
                 } catch (RemoteException e) {
@@ -106,7 +114,12 @@ public class StandardSessionServer implements SessionServer {
                 }
             }
             mSessions.clear();
+            mSessionBrokers.clear();
         }
+    }
+
+    protected Connection buffer(Connection con) throws IOException {
+        return new BufferedConnection(con);
     }
 
     void warn(String message) {
@@ -151,16 +164,78 @@ public class StandardSessionServer implements SessionServer {
                     spawned = false;
                 }
 
-                Session session;
                 try {
-                    session = Sessions.createSession(s, mExport);
+                    Connection con = buffer(new SocketConnection(s));
+                    byte[] sessionId = ClientSocketBroker.readSessionId(con);
+
+                    SessionKey key = new SessionKey(sessionId);
+
+                    ServerSocketBroker broker;
+                    boolean newSession;
+                    synchronized (mSessions) {
+                        broker = mSessionBrokers.get(key);
+                        if (broker == null) {
+                            broker = new ServerSocketBroker(sessionId);
+                            mSessionBrokers.put(key, broker);
+                            newSession = true;
+                        } else {
+                            newSession = false;
+                        }
+                    }
+
+                    if (sessionId[0] >= 0) {
+                        // Client connect is seen as server accept.
+                        broker.accepted(con);
+                    } else {
+                        // Client accept is seen as server connect.
+                        broker.connected(con);
+                    }
+
+                    if (newSession) {
+                        Session session = new StandardSession(broker, mExport, mExecutor);
+                        synchronized (mSessions) {
+                            // FIXME: what if another?
+                            mSessions.put(key, session);
+                        }
+                    }
                 } catch (IOException e) {
                     warn("Unable to create session on socket: " + s, e);
+                    try {
+                        s.close();
+                    } catch (IOException e2) {
+                        // Don't care.
+                    }
                     return;
                 }
-
-                mSessions.put(session);
             } while (!spawned);
+        }
+    }
+
+    private static class SessionKey {
+        private final byte[] mSessionId;
+        private final int mHashCode;
+
+        SessionKey(byte[] sessionId) {
+            sessionId = sessionId.clone();
+            sessionId[0] &= 0x7f;
+            mSessionId = sessionId;
+            mHashCode = Arrays.hashCode(sessionId);
+        }
+
+        @Override
+        public int hashCode() {
+            return mHashCode;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof SessionKey) {
+                return Arrays.equals(mSessionId, ((SessionKey) obj).mSessionId);
+            }
+            return false;
         }
     }
 }

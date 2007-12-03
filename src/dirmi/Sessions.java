@@ -26,9 +26,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 import dirmi.io.Broker;
-import dirmi.io.ClientSocketBroker;
-import dirmi.io.ServerSocketBroker;
 
+import dirmi.core.ClientSocketBroker;
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
 import dirmi.core.ThreadPool;
@@ -76,31 +75,13 @@ public class Sessions {
     }
 
     /**
-     * @param ss socket for accepting connections
-     * @param server optional server object to export
-     */
-    public static Session createSession(ServerSocket ss, Object server) throws IOException {
-        /* FIXME: support this in ServerSocketBroker
-        if (con.getSendBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
-            con.setSendBufferSize(DEFAULT_TCP_BUFFER_SIZE);
-        }
-        if (con.getReceiveBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
-            con.setReceiveBufferSize(DEFAULT_TCP_BUFFER_SIZE);
-        }
-        con.setTcpNoDelay(true);
-        */
-        return createSession(new ServerSocketBroker(ss), server);
-    }
-
-    /**
      * @param con remote connection
      * @param server optional server object to export
      */
-    public static Session createSession(Broker broker, Object server) throws IOException {
+    private static Session createSession(Broker broker, Object server) throws IOException {
         // FIXME: control max threads
-        // FIXME: use globally shared pool
         Executor executor = new ThreadPool(100, true);
-        return new StandardSession(con, server, executor);
+        return new StandardSession(broker, server, executor);
     }
 
     /**
@@ -110,26 +91,18 @@ public class Sessions {
     public static SessionServer createSessionServer(int port, Object export)
         throws IOException
     {
-        ServerSocket ss = new ServerSocket(port);
-        return createSessionServer(ss, export, String.valueOf(ss.getLocalSocketAddress()));
+        return createSessionServer(new ServerSocket(port), export);
     }
 
     /**
      * @param ss accepts sockets
      * @param export server object to export
      */
-    public static SessionServer createSessionServer(ServerSocket ss, Object export, String name)
+    public static SessionServer createSessionServer(ServerSocket ss, Object export)
         throws IOException
     {
-        if (name == null) {
-            name = "SessionServer";
-        } else {
-            name = "SessionServer-" + name;
-        }
-
-        // FIXME: control threads
-        Executor executor = new ThreadPool(100, false, name);
-
+        // FIXME: control max threads
+        Executor executor = new ThreadPool(100, false);
         return new StandardSessionServer(ss, export, executor);
     }
 }
