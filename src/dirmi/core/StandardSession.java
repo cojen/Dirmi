@@ -343,7 +343,7 @@ public class StandardSession implements Session {
     }
 
 
-    void sendDisposedStubs() {
+    void sendDisposedStubs() throws IOException {
         if (mRemoteAdmin == null) {
             return;
         }
@@ -372,6 +372,9 @@ public class StandardSession implements Session {
             try {
                 mRemoteAdmin.disposed(disposedStubs);
             } catch (RemoteException e) {
+                if (e.getCause() instanceof IOException) {
+                    throw (IOException) e.getCause();
+                }
                 if (!mClosing) {
                     error("Unable to dispose remote stubs", e);
                 }
@@ -737,7 +740,18 @@ public class StandardSession implements Session {
                     }
 
                     // Send disposed ids to peer, which also serves as a heartbeat.
-                    sendDisposedStubs();
+                    try {
+                        sendDisposedStubs();
+                    } catch (IOException e) {
+                        String message = "Unable to send heartbeat; closing session: " + e;
+                        mLog.error(message);
+                        try {
+                            closeOnFailure(message, null);
+                        } catch (IOException e2) {
+                            // Don't care.
+                        }
+                        return;
+                    }
 
                     // Close idle connections.
                     while (true) {
