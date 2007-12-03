@@ -136,20 +136,25 @@ public class QueuedBroker implements Broker {
         mClosed = true;
 
         // Drain any existing connections.
-        Connection con;
-        while ((con = mReadyToConnect.poll()) != null) {
-            try {
-                con.close();
-            } catch (IOException e) {
-                // Don't care.
+        if (mReadyToConnect != null) {
+            Connection con;
+            while ((con = mReadyToConnect.poll()) != null) {
+                try {
+                    con.close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
             }
         }
 
-        while ((con = mReadyToAccept.poll()) != null) {
-            try {
-                con.close();
-            } catch (IOException e) {
-                // Don't care.
+        if (mReadyToAccept != null) {
+            Connection con;
+            while ((con = mReadyToAccept.poll()) != null) {
+                try {
+                    con.close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
             }
         }
 
