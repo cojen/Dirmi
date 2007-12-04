@@ -273,8 +273,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 }
 
                 if (method.isAsynchronous()) {
-                    // Return type should be void for asynchronous methods, but
-                    // get rid of any just in case.
+                    // Discard return value from asynchronous methods.
                     if (returnDesc != null) {
                         if (returnDesc.isDoubleWord()) {
                             b.pop2();

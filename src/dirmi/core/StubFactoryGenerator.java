@@ -237,8 +237,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 if (returnDesc == null) {
                     b.returnVoid();
                 } else {
-                    // Asynchronous method should not have a return value, but
-                    // this one does for some reason. Just return 0, false, or null.
+                    // Return empty value for asynchronous method.
                     switch (returnDesc.getTypeCode()) {
                     case TypeDesc.BYTE_CODE:
                     case TypeDesc.SHORT_CODE:
