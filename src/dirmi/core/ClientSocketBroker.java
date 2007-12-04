@@ -16,18 +16,14 @@
 
 package dirmi.core;
 
-import java.io.EOFException;
 import java.io.InterruptedIOException;
 import java.io.IOException;
+import java.io.OutputStream;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
-
-import java.security.SecureRandom;
-
-import java.util.Arrays;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -43,28 +39,11 @@ import dirmi.io.SocketConnection;
  * @author Brian S O'Neill
  */
 public class ClientSocketBroker extends QueuedBroker {
-    private static final int SESSION_LENGTH = 16;
+    static final byte FOR_CONNECT = 1;
+    static final byte FOR_ACCEPT = 2;
 
-    private static final SecureRandom cRandom = new SecureRandom();
-
-    static byte[] readSessionId(Connection con) throws IOException {
-        int off = 0;
-        int len = SESSION_LENGTH;
-        byte[] sessionId = new byte[len];
-        int amt;
-        while ((amt = con.getInputStream().read(sessionId, off, len)) > 0) {
-            off += amt;
-            len -= amt;
-        }
-        if (len > 0) {
-            throw new EOFException("Unable to fully read session identifier");
-        }
-	return sessionId;
-    }
-
+    private final Identifier mIdentifier;
     private final SocketAddress mAddress;
-    private final byte[] mConnectSessionId;
-    private final byte[] mAcceptSessionId;
 
     public ClientSocketBroker(String host, int port) {
         this(new InetSocketAddress(host, port));
@@ -72,24 +51,14 @@ public class ClientSocketBroker extends QueuedBroker {
 
     public ClientSocketBroker(SocketAddress address) {
         super(null, new LinkedBlockingQueue<Connection>());
+        mIdentifier = Identifier.identify(this);
         mAddress = address;
-
-        byte[] connectSessionId = new byte[SESSION_LENGTH];
-        cRandom.nextBytes(connectSessionId);
-
-        // MSB of session id defines connect or accept mode.
-        connectSessionId[0] &= 0x7f;
-
-        byte[] acceptSessionId = connectSessionId.clone();
-        acceptSessionId[0] |= 0x80;
-
-        mConnectSessionId = connectSessionId;
-        mAcceptSessionId = acceptSessionId;
     }
 
     @Override
     public Connection connect() throws IOException {
         Connection con = doConnect();
+        register(con);
         forConnect(con);
         return con;
     }
@@ -98,6 +67,7 @@ public class ClientSocketBroker extends QueuedBroker {
     public Connection tryConnect(long time, TimeUnit unit) throws IOException {
         Connection con = doTryConnect(time, unit);
         if (con != null) {
+            register(con);
             forConnect(con);
         }
         return con;
@@ -157,14 +127,14 @@ public class ClientSocketBroker extends QueuedBroker {
     }
 
     private Connection doConnect() throws IOException {
-	checkClosed();
+        checkClosed();
         Socket s = new Socket();
         s.connect(mAddress);
         return buffer(new SocketConnection(s));
     }
 
     private Connection doTryConnect(long time, TimeUnit unit) throws IOException {
-	checkClosed();
+        checkClosed();
         long timeMillis = unit.toMillis(time);
         if (timeMillis <= 0) {
             // Socket timeout of zero is interpreted as infinite.
@@ -185,21 +155,24 @@ public class ClientSocketBroker extends QueuedBroker {
     }
 
     private void forConnect(Connection con) throws IOException {
-        con.getOutputStream().write(mConnectSessionId);
-        con.getOutputStream().flush();
+        OutputStream out = con.getOutputStream();
+        mIdentifier.write(out);
+        out.write(FOR_CONNECT);
+        out.flush();
     }
 
     private void forAccept(Connection con) throws IOException {
-        con.getOutputStream().write(mAcceptSessionId);
-        con.getOutputStream().flush();
+        OutputStream out = con.getOutputStream();
+        mIdentifier.write(out);
+        out.write(FOR_ACCEPT);
+        out.flush();
     }
 
     private void waitForAccept(Connection con) throws IOException {
-        byte[] sessionId = readSessionId(con);
-        if (!Arrays.equals(mAcceptSessionId, sessionId)) {
+        Identifier identifier = Identifier.read(con.getInputStream());
+        if (identifier != mIdentifier) {
             throw new IOException("Session identifier does not match: " +
-				  Arrays.toString(mAcceptSessionId) + " != " +
-				  Arrays.toString(sessionId));
+                                  mIdentifier + " != " + identifier);
         }
     }
 

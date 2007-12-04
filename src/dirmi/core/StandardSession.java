@@ -16,6 +16,8 @@
 
 package dirmi.core;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
@@ -393,7 +395,7 @@ public class StandardSession implements Session {
     boolean handleRequest(InvocationConnection invCon) {
         final Identifier id;
         try {
-            id = Identifier.read(invCon.getInputStream());
+            id = Identifier.read((DataInput) invCon.getInputStream());
         } catch (IOException e) {
             try {
                 invCon.close();
@@ -1007,7 +1009,7 @@ public class StandardSession implements Session {
             InvocationConnection con = null;
             try {
                 con = getConnection();
-                mObjID.write(con.getOutputStream());
+                mObjID.write((DataOutput) con.getOutputStream());
                 return con;
             } catch (IOException e) {
                 throw failed(con, e);

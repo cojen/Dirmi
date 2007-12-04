@@ -18,7 +18,10 @@ package dirmi.core;
 
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.io.EOFException;
+import java.io.InputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.Serializable;
 
 import java.rmi.NoSuchObjectException;
@@ -81,9 +84,34 @@ public class Identifier implements Serializable, Comparable<Identifier> {
      * registered with it.
      */
     public static Identifier read(DataInput in) throws IOException {
-        long bits = in.readLong();
-        Identifier id = new Identifier(bits);
-        return canonicalIdentifier(id);
+        return canonicalIdentifier(new Identifier(in.readLong()));
+    }
+
+    /**
+     * Returns a deserialized identifier, which may or may not have an object
+     * registered with it.
+     */
+    public static Identifier read(InputStream in) throws IOException {
+        int off = 0;
+        int len = 8;
+        byte[] buf = new byte[len];
+        int amt;
+        while ((amt = in.read(buf, off, len)) > 0) {
+            off += amt;
+            len -= amt;
+        }
+        if (len > 0) {
+            throw new EOFException("Unable to fully read identifier");
+        }
+        long bits = (((long)buf[0] << 56) +
+                     ((long)(buf[1] & 0xff) << 48) +
+                     ((long)(buf[2] & 0xff) << 40) +
+                     ((long)(buf[3] & 0xff) << 32) +
+                     ((long)(buf[4] & 0xff) << 24) +
+                     ((buf[5] & 0xff) << 16) +
+                     ((buf[6] & 0xff) <<  8) +
+                     (buf[7] & 0xff));
+        return canonicalIdentifier(new Identifier(bits));
     }
 
     private synchronized static Identifier canonicalIdentifier(Identifier id) {
@@ -151,6 +179,20 @@ public class Identifier implements Serializable, Comparable<Identifier> {
 
     public void write(DataOutput out) throws IOException {
         out.writeLong(mBits);
+    }
+
+    public void write(OutputStream out) throws IOException {
+        long bits = mBits;
+        byte[] buf = new byte[8];
+        buf[0] = (byte)(bits >>> 56);
+        buf[1] = (byte)(bits >>> 48);
+        buf[2] = (byte)(bits >>> 40);
+        buf[3] = (byte)(bits >>> 32);
+        buf[4] = (byte)(bits >>> 24);
+        buf[5] = (byte)(bits >>> 16);
+        buf[6] = (byte)(bits >>>  8);
+        buf[7] = (byte)(bits);
+        out.write(buf, 0, 8);
     }
 
     @Override

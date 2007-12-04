@@ -18,6 +18,7 @@ package dirmi.core;
 
 import java.io.IOException;
 
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -53,8 +54,7 @@ public class StandardSessionServer implements SessionServer {
     final Executor mExecutor;
     final Log mLog;
 
-    final Map<SessionKey, Session> mSessions;
-    final Map<SessionKey, ServerSocketBroker> mSessionBrokers;
+    final Map<Identifier, Session> mSessions;
 
     volatile boolean mClosing;
 
@@ -82,8 +82,7 @@ public class StandardSessionServer implements SessionServer {
         mExecutor = executor;
         mLog = log;
 
-        mSessions = new WeakValuedHashMap<SessionKey, Session>();
-        mSessionBrokers = new WeakValuedHashMap<SessionKey, ServerSocketBroker>();
+        mSessions = new WeakValuedHashMap<Identifier, Session>();
 
         try {
             // Start first accept thread.
@@ -114,7 +113,6 @@ public class StandardSessionServer implements SessionServer {
                 }
             }
             mSessions.clear();
-            mSessionBrokers.clear();
         }
     }
 
@@ -164,78 +162,61 @@ public class StandardSessionServer implements SessionServer {
                     spawned = false;
                 }
 
+                InetAddress remoteAddress = s.getInetAddress();
+
                 try {
                     Connection con = buffer(new SocketConnection(s));
-                    byte[] sessionId = ClientSocketBroker.readSessionId(con);
+                    Identifier id = Identifier.read(con.getInputStream());
 
-                    SessionKey key = new SessionKey(sessionId);
+                    ServerSocketBroker broker = (ServerSocketBroker) id.tryRetrieve();
 
-                    ServerSocketBroker broker;
-                    boolean newSession;
-                    synchronized (mSessions) {
-                        broker = mSessionBrokers.get(key);
-                        if (broker == null) {
-                            broker = new ServerSocketBroker(sessionId);
-                            mSessionBrokers.put(key, broker);
-                            newSession = true;
-                        } else {
-                            newSession = false;
+                    boolean makeNewSession = false;
+                    if (broker == null) {
+                        ServerSocketBroker newBroker = new ServerSocketBroker(remoteAddress, id);
+                        broker = id.register(newBroker);
+                        if (broker == newBroker) {
+                            makeNewSession = true;
                         }
                     }
 
-                    if (sessionId[0] >= 0) {
+                    if (!broker.getRemoteAddress().equals(remoteAddress)) {
+                        warn("Mismatched remote address: " + broker.getRemoteAddress() +
+                             " != " + remoteAddress);
+                        forceClose(s);
+                        return;
+                    }
+
+                    byte forWhat = (byte) con.getInputStream().read();
+                    if (forWhat == ClientSocketBroker.FOR_CONNECT) {
                         // Client connect is seen as server accept.
                         broker.accepted(con);
-                    } else {
+                    } else if (forWhat == ClientSocketBroker.FOR_ACCEPT) {
                         // Client accept is seen as server connect.
                         broker.connected(con);
+                    } else {
+                        warn("Unknown connection option: " + forWhat);
+                        forceClose(s);
+                        return;
                     }
 
-                    if (newSession) {
+                    if (makeNewSession) {
                         Session session = new StandardSession(broker, mExport, mExecutor);
-                        synchronized (mSessions) {
-                            // FIXME: what if another?
-                            mSessions.put(key, session);
-                        }
+                        mSessions.put(id, session);
                     }
                 } catch (IOException e) {
                     warn("Unable to create session on socket: " + s, e);
-                    try {
-                        s.close();
-                    } catch (IOException e2) {
-                        // Don't care.
-                    }
+                    forceClose(s);
                     return;
                 }
             } while (!spawned);
         }
-    }
 
-    private static class SessionKey {
-        private final byte[] mSessionId;
-        private final int mHashCode;
-
-        SessionKey(byte[] sessionId) {
-            sessionId = sessionId.clone();
-            sessionId[0] &= 0x7f;
-            mSessionId = sessionId;
-            mHashCode = Arrays.hashCode(sessionId);
-        }
-
-        @Override
-        public int hashCode() {
-            return mHashCode;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
+        private void forceClose(Socket s) {
+            try {
+                s.close();
+            } catch (IOException e) {
+                // Don't care.
             }
-            if (obj instanceof SessionKey) {
-                return Arrays.equals(mSessionId, ((SessionKey) obj).mSessionId);
-            }
-            return false;
         }
     }
 }

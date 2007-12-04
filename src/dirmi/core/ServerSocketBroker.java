@@ -17,6 +17,9 @@
 package dirmi.core;
 
 import java.io.IOException;
+import java.io.OutputStream;
+
+import java.net.InetAddress;
 
 import java.util.concurrent.TimeUnit;
 
@@ -29,12 +32,12 @@ import dirmi.io.QueuedBroker;
  * @author Brian S O'Neill
  */
 public class ServerSocketBroker extends QueuedBroker {
-    private final byte[] mSessionId;
+    private final InetAddress mRemoteAddress;
+    private final Identifier mIdentifier;
 
-    public ServerSocketBroker(byte[] sessionId) {
-        sessionId = sessionId.clone();
-        sessionId[0] |= 0x80;
-        mSessionId = sessionId;
+    public ServerSocketBroker(InetAddress remoteAddress, Identifier id) {
+        mRemoteAddress = remoteAddress;
+        mIdentifier = id;
     }
 
     @Override
@@ -53,8 +56,13 @@ public class ServerSocketBroker extends QueuedBroker {
         return con;
     }
 
+    public InetAddress getRemoteAddress() {
+        return mRemoteAddress;
+    }
+
     private void ackConnect(Connection con) throws IOException {
-        con.getOutputStream().write(mSessionId);
-        con.getOutputStream().flush();
+        OutputStream out = con.getOutputStream();
+        mIdentifier.write(out);
+        out.flush();
     }
 }
