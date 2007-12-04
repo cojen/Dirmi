@@ -129,6 +129,7 @@ public class ClientSocketBroker extends QueuedBroker {
     private Connection doConnect() throws IOException {
         checkClosed();
         Socket s = new Socket();
+        s.setTcpNoDelay(true);
         s.connect(mAddress);
         return buffer(new SocketConnection(s));
     }
@@ -145,6 +146,7 @@ public class ClientSocketBroker extends QueuedBroker {
         }
 
         Socket s = new Socket();
+        s.setTcpNoDelay(true);
         try {
             s.connect(mAddress, (int) timeMillis);
         } catch (SocketTimeoutException e) {

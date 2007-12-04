@@ -165,6 +165,7 @@ public class StandardSessionServer implements SessionServer {
                 InetAddress remoteAddress = s.getInetAddress();
 
                 try {
+                    s.setTcpNoDelay(true);
                     Connection con = buffer(new SocketConnection(s));
                     Identifier id = Identifier.read(con.getInputStream());
 
