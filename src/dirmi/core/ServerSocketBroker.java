@@ -34,10 +34,19 @@ import dirmi.io.QueuedBroker;
 public class ServerSocketBroker extends QueuedBroker {
     private final InetAddress mRemoteAddress;
     private final Identifier mIdentifier;
+    private final boolean mFlushOnConnect;
 
     public ServerSocketBroker(InetAddress remoteAddress, Identifier id) {
+        this(remoteAddress, id, false);
+    }
+
+    /**
+     * @param flushOnConnect when true, immediately flush connection after acknowledgment.
+     */
+    public ServerSocketBroker(InetAddress remoteAddress, Identifier id, boolean flushOnConnect) {
         mRemoteAddress = remoteAddress;
         mIdentifier = id;
+        mFlushOnConnect = flushOnConnect;
     }
 
     @Override
@@ -63,6 +72,8 @@ public class ServerSocketBroker extends QueuedBroker {
     private void ackConnect(Connection con) throws IOException {
         OutputStream out = con.getOutputStream();
         mIdentifier.write(out);
-        out.flush();
+        if (mFlushOnConnect) {
+            out.flush();
+        }
     }
 }
