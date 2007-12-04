@@ -32,7 +32,7 @@ import dirmi.Asynchronous;
  * 
  *
  * @author Brian S O'Neill
- * @see RemoteConsumer
+ * @see Consumer
  */
 public class Producer<E> {
     static final int INITIAL_CAPACITY = 64;

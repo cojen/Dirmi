@@ -32,7 +32,7 @@ import dirmi.Asynchronous;
  * 
  *
  * @author Brian S O'Neill
- * @see RemoteProducer
+ * @see Producer
  */
 public class Consumer<E> {
     static final AtomicReferenceFieldUpdater<Consumer, Producer.Channel> cChannelUpdater =
