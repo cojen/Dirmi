@@ -313,15 +313,6 @@ public class StandardSession implements Session {
         return mRemoteServer;
     }
 
-    public void dispose(Remote object) throws RemoteException {
-        if (object != null) {
-            Identifier id = Identifier.identify(object);
-            if (dispose(id)) {
-                mRemoteAdmin.disposed(id);
-            }
-        }
-    }
-
     /**
      * @return true if remote side should be notified
      */

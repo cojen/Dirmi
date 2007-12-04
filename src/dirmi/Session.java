@@ -38,11 +38,4 @@ public interface Session extends Closeable {
      * Closes the session.
      */
     void close() throws RemoteException;
-
-    /**
-     * Dispose a Remote object, rendering it unusable for future remote
-     * calls. Usually objects need not be explicitly disposed, since the local
-     * and remote garbage collectors do so automatically.
-     */
-    void dispose(Remote object) throws RemoteException;
 }
