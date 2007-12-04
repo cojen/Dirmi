@@ -968,7 +968,11 @@ public class StandardSession implements Session {
 
                     SkeletonFactory factory = mSkeletonFactories.get(typeID);
                     if (factory == null) {
-                        factory = SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                        try {
+                            factory = SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                        } catch (IllegalArgumentException e) {
+                            throw new WriteAbortedException("Malformed Remote object", e);
+                        }
                         SkeletonFactory existing = mSkeletonFactories.putIfAbsent(typeID, factory);
                         if (existing != null && existing != factory) {
                             factory = existing;
@@ -976,11 +980,7 @@ public class StandardSession implements Session {
                             // Only send RemoteInfo for first use of exported
                             // object. If not sent, client will request it anyhow, so
                             // this is an optimization to avoid an extra round trip.
-                            try {
-                                info = RemoteIntrospector.examine(remoteType);
-                            } catch (IllegalArgumentException e) {
-                                throw new WriteAbortedException("Malformed Remote object", e);
-                            }
+                            info = RemoteIntrospector.examine(remoteType);
                         }
                     }
 
