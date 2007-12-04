@@ -395,6 +395,11 @@ public class StandardSession implements Session {
             } catch (IOException e2) {
                 // Don't care.
             }
+            try {
+                closeOnFailure("Failed to read request identifier", e);
+            } catch (IOException e2) {
+                // Don't care.
+            }
             return false;
         }
 
