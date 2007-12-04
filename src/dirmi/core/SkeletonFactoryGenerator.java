@@ -20,6 +20,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
 import java.io.DataInput;
+import java.io.IOException;
 
 import java.rmi.Remote;
 
@@ -87,10 +88,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     private SkeletonFactory<R> generateFactory() {
+        if (mInfo.getRemoteMethods().size() == 0) {
+            return EmptySkeletonFactory.THE;
+        }
+
         Class<? extends Skeleton> skeletonClass = generateSkeleton();
 
         try {
-            SkeletonFactory<R> factory = new Factory<R>(mType, skeletonClass);
+            SkeletonFactory<R> factory = new Factory<R>(skeletonClass.getConstructor(mType));
             CodeBuilderUtil.invokeInitMethod(skeletonClass, factory, mInfo);
             return factory;
         } catch (IllegalAccessException e) {
@@ -383,22 +388,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     private static class Factory<R extends Remote> implements SkeletonFactory<R> {
-        private final Class<R> mType;
         private final Constructor<? extends Skeleton> mSkeletonCtor;
 
-        Factory(Class<R> type, Class<? extends Skeleton> skeletonClass)
-            throws NoSuchMethodException
-        {
-            mType = type;
-            mSkeletonCtor = skeletonClass.getConstructor(type);
-        }
-
-        public Class<R> getRemoteType() {
-            return mType;
-        }
-
-        public Class<? extends Skeleton> getSkeletonClass() {
-            return mSkeletonCtor.getDeclaringClass();
+        Factory(Constructor<? extends Skeleton> ctor) {
+            mSkeletonCtor = ctor;
         }
 
         public Skeleton createSkeleton(R remoteServer) {
@@ -415,6 +408,24 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             InternalError ie = new InternalError();
             ie.initCause(error);
             throw ie;
+        }
+    }
+
+    private static class EmptySkeletonFactory implements SkeletonFactory {
+        static final EmptySkeletonFactory THE = new EmptySkeletonFactory();
+
+        private EmptySkeletonFactory() {
+        }
+
+        public Skeleton createSkeleton(Remote remoteServer) {
+            return new Skeleton() {
+                public void invoke(InvocationConnection con)
+                    throws IOException, NoSuchMethodException
+                {
+                    Identifier id = Identifier.read((DataInput) con.getInputStream());
+                    throw new NoSuchMethodException(String.valueOf(id));
+                }
+            };
         }
     }
 }

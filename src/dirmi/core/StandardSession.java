@@ -231,6 +231,8 @@ public class StandardSession implements Session {
             in.close();
         }
 
+        // FIXME: re-use initial con for handling requests
+
         // Wait for bootstrap to complete.
         bootstrap.waitUntilDone();
     }
@@ -625,6 +627,8 @@ public class StandardSession implements Session {
                 mDone = true;
                 notify();
             }
+
+            // FIXME: re-use initial con for sending requests
         }
 
         synchronized void waitUntilDone() throws IOException {

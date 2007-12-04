@@ -28,16 +28,6 @@ import dirmi.info.RemoteInfo;
  */
 public interface SkeletonFactory<R extends Remote> {
     /**
-     * @return type supported by this skeleton factory
-     */
-    Class<R> getRemoteType();
-
-    /**
-     * @return class that implements Skeleton
-     */
-    Class<? extends Skeleton> getSkeletonClass();
-
-    /**
      * @param remoteServer server implementation of Remote object
      */
     Skeleton createSkeleton(R remoteServer);

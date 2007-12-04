@@ -106,7 +106,7 @@ public class StubFactoryGenerator<R extends Remote> {
         Class<? extends R> stubClass = generateStub();
 
         try {
-            StubFactory<R> factory =  new Factory<R>(stubClass);
+            StubFactory<R> factory =  new Factory<R>(stubClass.getConstructor(StubSupport.class));
             CodeBuilderUtil.invokeInitMethod(stubClass, factory, mRemoteInfo);
             return factory;
         } catch (IllegalAccessException e) {
@@ -448,12 +448,8 @@ public class StubFactoryGenerator<R extends Remote> {
     private static class Factory<R extends Remote> implements StubFactory<R> {
         private final Constructor<? extends R> mStubCtor;
 
-        Factory(Class<? extends R> stubClass) throws NoSuchMethodException {
-            mStubCtor = stubClass.getConstructor(StubSupport.class);
-        }
-
-        public Class<? extends R> getStubClass() {
-            return mStubCtor.getDeclaringClass();
+        Factory(Constructor<? extends R> ctor) {
+            mStubCtor = ctor;
         }
 
         public R createStub(StubSupport support) {

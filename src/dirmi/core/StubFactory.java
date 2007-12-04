@@ -31,11 +31,6 @@ import dirmi.info.RemoteInfo;
  */
 public interface StubFactory<R extends Remote> {
     /**
-     * @return class that implements stub
-     */
-    Class<? extends R> getStubClass();
-
-    /**
      * @param support for invoking remote methods
      */
     R createStub(StubSupport support);
