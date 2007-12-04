@@ -23,6 +23,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.cojen.util.WeakCanonicalSet;
+
 /**
  * Broker which vends connections from queues.
  *
@@ -31,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 public class QueuedBroker implements Broker {
     private final BlockingQueue<Connection> mReadyToConnect;
     private final BlockingQueue<Connection> mReadyToAccept;
+
+    private final WeakCanonicalSet mConnections;
 
     private volatile boolean mClosed;
 
@@ -44,6 +48,7 @@ public class QueuedBroker implements Broker {
     {
         mReadyToConnect = connectQueue;
         mReadyToAccept = acceptQueue;
+        mConnections = new WeakCanonicalSet();
     }
 
     public Connection connect() throws IOException {
@@ -110,6 +115,7 @@ public class QueuedBroker implements Broker {
             con.close();
             return;
         }
+        register(con);
         try {
             mReadyToConnect.put(con);
         } catch (InterruptedException e) {
@@ -125,6 +131,7 @@ public class QueuedBroker implements Broker {
             con.close();
             return;
         }
+        register(con);
         try {
             mReadyToAccept.put(con);
         } catch (InterruptedException e) {
@@ -161,11 +168,35 @@ public class QueuedBroker implements Broker {
         // Notify any waiters.
         connectClose();
         acceptClose();
+
+        // Close all remaining registered connections.
+        synchronized (mConnections) {
+            for (Object con : mConnections) {
+                try {
+                    ((Connection) con).close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
+            }
+            // Unsupported.
+            //mConnections.clear();
+        }
     }
 
     protected void checkClosed() throws IOException {
         if (mClosed) {
             throw new IOException("Broker is closed");
+        }
+    }
+
+    /**
+     * Register connection to be closed when broker is closed.
+     */
+    protected void register(Connection con) throws IOException {
+        if (mClosed) {
+            con.close();
+        } else {
+            mConnections.put(con);
         }
     }
 
