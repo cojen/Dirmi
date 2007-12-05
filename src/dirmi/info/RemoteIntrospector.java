@@ -38,6 +38,7 @@ import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
+import dirmi.Pipe;
 
 import dirmi.core.Identifier;
 
@@ -190,8 +191,26 @@ public class RemoteIntrospector {
 
                 if (method.isAsynchronous()) {
                     if (method.getReturnType() != null) {
-                        throw new IllegalArgumentException
-                            ("Asynchronous method must return void: " + method.methodDesc());
+                        Class returnType = method.getReturnType().getType();
+                        if (Pipe.class.isAssignableFrom(returnType)) {
+                            // Verify one parameter is a pipe.
+                            int count = 0;
+                            for (RemoteParameter param : method.getParameterTypes()) {
+                                if (param.getType() == returnType) {
+                                    count++;
+                                }
+                            }
+                            if (count != 1) {
+                                throw new IllegalArgumentException
+                                    ("Asynchronous method which returns a pipe must have " +
+                                     "exactly one matching pipe input parameter: " +
+                                     method.methodDesc());
+                            }
+                        } else {
+                            throw new IllegalArgumentException
+                                ("Asynchronous method must return void or a pipe: " +
+                                 method.methodDesc());
+                        }
                     }
                     for (RemoteParameter type : method.getExceptionTypes()) {
                         if (type.getType() != RemoteException.class) {

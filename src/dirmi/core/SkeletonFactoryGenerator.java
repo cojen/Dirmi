@@ -41,6 +41,8 @@ import org.cojen.classfile.TypeDesc;
 import org.cojen.util.ClassInjector;
 import org.cojen.util.SoftValuedHashMap;
 
+import dirmi.Pipe;
+
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;
 import dirmi.info.RemoteMethod;
@@ -153,7 +155,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         }
 
         // Add the all-important invoke method
-        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
+        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
                                      new TypeDesc[] {invConnectionType});
         CodeBuilder b = new CodeBuilder(mi);
 
@@ -251,10 +253,22 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
 
+                boolean reuseCon = true;
+
                 if (paramTypes.size() != 0) {
                     // Read parameters onto stack.
+
+                    boolean lookForPipe = method.isAsynchronous();
+
                     for (RemoteParameter paramType : paramTypes) {
-                        CodeBuilderUtil.readParam(b, paramType, invInVar);
+                        if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
+                            lookForPipe = false;
+                            // Use connection as Pipe.
+                            b.loadLocal(conVar);
+                            reuseCon = false;
+                        } else {
+                            CodeBuilderUtil.readParam(b, paramType, invInVar);
+                        }
                     }
                 }
 
@@ -305,9 +319,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                     b.loadLocal(invOutVar);
                     b.invokeVirtual(invOutType, "flush", null, null);
+
                 }
 
-                b.returnVoid();
+                b.loadConstant(reuseCon);
+                b.returnValue(TypeDesc.BOOLEAN);
+
                 ordinal++;
 
                 if (collision != null) {
@@ -379,8 +396,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                             null, new TypeDesc[] {throwableVar.getType()});
             b.loadLocal(invOutVar);
             b.invokeVirtual(invOutType, "flush", null, null);
-            
-            b.returnVoid();
+
+            b.loadConstant(true);
+            b.returnValue(TypeDesc.BOOLEAN);
         }
 
         return ci.defineClass(cf);
@@ -418,7 +436,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         public Skeleton createSkeleton(Remote remoteServer) {
             return new Skeleton() {
-                public void invoke(InvocationConnection con)
+                public boolean invoke(InvocationConnection con)
                     throws IOException, NoSuchMethodException
                 {
                     Identifier id = Identifier.read((DataInput) con.getInputStream());

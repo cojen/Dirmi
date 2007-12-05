@@ -38,6 +38,7 @@ public interface Skeleton {
      *
      * @param con InvocationConnection for reading method identifier and arguments,
      * and for writing response.
+     * @return true if connection can be reused
      * @throws IOException if thrown from connection
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
@@ -46,7 +47,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(InvocationConnection con)
+    boolean invoke(InvocationConnection con)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

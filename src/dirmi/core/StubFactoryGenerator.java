@@ -43,6 +43,7 @@ import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
+import dirmi.Pipe;
 import dirmi.UnimplementedMethodException;
 
 import dirmi.core.Identifier;
@@ -213,9 +214,17 @@ public class StubFactoryGenerator<R extends Remote> {
 
             if (paramDescs.length > 0) {
                 // Write parameters to connection.
+
+                boolean lookForPipe = method.isAsynchronous();
+
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
-                    CodeBuilderUtil.writeParam(b, paramType, invOutVar, b.getParameter(i));
+                    if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
+                        lookForPipe = false;
+                        // Don't pass the Pipe to server.
+                    } else {
+                        CodeBuilderUtil.writeParam(b, paramType, invOutVar, b.getParameter(i));
+                    }
                     i++;
                 }
             }
@@ -226,42 +235,49 @@ public class StubFactoryGenerator<R extends Remote> {
             Label invokeEnd;
 
             if (method.isAsynchronous()) {
-                // Finished with connection.
                 invokeEnd = b.createLabel().setLocation();
-                b.loadThis();
-                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-                b.loadLocal(conVar);
-                b.invokeInterface(stubSupportType, "finished", null,
-                                  new TypeDesc[] {invConnectionType});
 
-                if (returnDesc == null) {
-                    b.returnVoid();
-                } else {
-                    // Return empty value for asynchronous method.
-                    switch (returnDesc.getTypeCode()) {
-                    case TypeDesc.BYTE_CODE:
-                    case TypeDesc.SHORT_CODE:
-                    case TypeDesc.CHAR_CODE:
-                    case TypeDesc.INT_CODE:
-                        b.loadConstant(0);
-                        break;
-                    case TypeDesc.LONG_CODE:
-                        b.loadConstant(0L);
-                        break;
-                    case TypeDesc.FLOAT_CODE:
-                        b.loadConstant(0.0f);
-                        break;
-                    case TypeDesc.DOUBLE_CODE:
-                        b.loadConstant(0.0d);
-                        break;
-                    case TypeDesc.BOOLEAN_CODE:
-                        b.loadConstant(false);
-                        break;
-                    default:
-                        b.loadNull();
-                        break;
-                    }
+                if (returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass())) {
+                    // Return connection as a Pipe.
+                    b.loadLocal(conVar);
                     b.returnValue(returnDesc);
+                } else {
+                    // Finished with connection.
+                    b.loadThis();
+                    b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+                    b.loadLocal(conVar);
+                    b.invokeInterface(stubSupportType, "finished", null,
+                                      new TypeDesc[] {invConnectionType});
+
+                    if (returnDesc == null) {
+                        b.returnVoid();
+                    } else {
+                        // Return empty value for asynchronous method.
+                        switch (returnDesc.getTypeCode()) {
+                        case TypeDesc.BYTE_CODE:
+                        case TypeDesc.SHORT_CODE:
+                        case TypeDesc.CHAR_CODE:
+                        case TypeDesc.INT_CODE:
+                            b.loadConstant(0);
+                            break;
+                        case TypeDesc.LONG_CODE:
+                            b.loadConstant(0L);
+                            break;
+                        case TypeDesc.FLOAT_CODE:
+                            b.loadConstant(0.0f);
+                            break;
+                        case TypeDesc.DOUBLE_CODE:
+                            b.loadConstant(0.0d);
+                            break;
+                        case TypeDesc.BOOLEAN_CODE:
+                            b.loadConstant(false);
+                            break;
+                        default:
+                            b.loadNull();
+                            break;
+                        }
+                        b.returnValue(returnDesc);
+                    }
                 }
             } else {
                 // Read response.

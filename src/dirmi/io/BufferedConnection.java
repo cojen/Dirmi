@@ -79,6 +79,7 @@ public class BufferedConnection implements Connection {
     }
 
     public void close() throws IOException {
+        mOut.close();
         mCon.close();
     }
 }

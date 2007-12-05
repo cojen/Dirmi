@@ -89,4 +89,12 @@ public class BufferedOutputStream extends FilterOutputStream {
         mPos = 0;
         out.flush();
     }
+
+    public void close() throws IOException {
+        if (mPos != 0) {
+            out.write(mBuffer, 0, mPos);
+            mPos = 0;
+        }
+        out.close();
+    }
 }

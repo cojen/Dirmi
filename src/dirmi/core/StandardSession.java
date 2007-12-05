@@ -424,7 +424,7 @@ public class StandardSession implements Session {
 
             try {
                 try {
-                    skeleton.invoke(invCon);
+                    return skeleton.invoke(invCon);
                 } catch (AsynchronousInvocationException e) {
                     throwable = null;
                     Throwable cause = e.getCause();
@@ -432,10 +432,8 @@ public class StandardSession implements Session {
                         cause = e;
                     }
                     warn("Unhandled exception in asynchronous server method", cause);
+                    return false;
                 }
-
-                // Connection is open and can be reused.
-                return true;
             } catch (NoSuchMethodException e) {
                 throwable = e;
             } catch (NoSuchObjectException e) {
@@ -450,8 +448,7 @@ public class StandardSession implements Session {
             out.writeThrowable(throwable);
             out.flush();
             
-            // Connection is open and can be reused.
-            return true;
+            return false;
         } catch (IOException e) {
             error("Failure processing request", e);
             try {
@@ -743,6 +740,7 @@ public class StandardSession implements Session {
 
                     // Send disposed ids to peer, which also serves as a heartbeat.
                     try {
+                        // FIXME: this is sent too often
                         sendDisposedStubs();
                     } catch (IOException e) {
                         String message = "Unable to send heartbeat; closing session: " + e;
