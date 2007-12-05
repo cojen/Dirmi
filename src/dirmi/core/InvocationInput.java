@@ -45,15 +45,10 @@ public interface InvocationInput extends ObjectInput, Closeable {
     Object readObject() throws IOException, ClassNotFoundException;
 
     /**
-     * Reads OK return marker or returns an exception originating from remote
-     * server.
-     *
      * <p>If remote exception cannot be represented by a local exception class
      * or it cannot be serialized, it is represented as a RemoteException
      * instead, with as much useful information as possible, including server
      * stack trace.
-     *
-     * @return null if OK, or else throwable from server
      */
-    Throwable readOk() throws IOException;
+    Throwable readThrowable() throws IOException;
 }

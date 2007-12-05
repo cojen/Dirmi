@@ -311,7 +311,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.storeLocal(invOutVar);
 
                     b.loadLocal(invOutVar);
-                    b.invokeVirtual(invOutType, "writeOk", null, null);
+                    b.loadConstant(true); // true == no exception
+                    b.invokeVirtual(invOutType, "writeBoolean", null,
+                                    new TypeDesc[] {TypeDesc.BOOLEAN});
                     if (retVar != null) {
                         CodeBuilderUtil.writeParam
                             (b, method.getReturnType(), invOutVar, retVar);
@@ -390,6 +392,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
             b.storeLocal(invOutVar);
 
+            b.loadLocal(invOutVar);
+            b.loadConstant(false); // false == exception thrown
+            b.invokeVirtual(invOutType, "writeBoolean", null,
+                            new TypeDesc[] {TypeDesc.BOOLEAN});
             b.loadLocal(invOutVar);
             b.loadLocal(throwableVar);
             b.invokeVirtual(invOutType, "writeThrowable",

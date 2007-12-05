@@ -377,17 +377,12 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return (b2 << 24) | (b3 << 16) | (b4 << 8) | b5;
     }
 
-    public Throwable readOk() throws IOException {
+    public Throwable readThrowable() throws IOException {
         List<ThrowableInfo> chain = null;
         String serverLocalAddress = null;
         String serverRemoteAddress = null;
         Throwable t;
         try {
-            int v = mIn.read();
-            if (v == InvocationOutputStream.OK) {
-                return null;
-            }
-
             ObjectInput in = getObjectInputStream();
             serverLocalAddress = (String) in.readObject();
             serverRemoteAddress = (String) in.readObject();

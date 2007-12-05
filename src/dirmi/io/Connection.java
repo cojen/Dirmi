@@ -21,14 +21,12 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import dirmi.Pipe;
-
 /**
  * Basic interface for a bidirectional I/O connection.
  *
  * @author Brian S O'Neill
  */
-public interface Connection extends Closeable, ReadTimeout, WriteTimeout, Pipe {
+public interface Connection extends Closeable, ReadTimeout, WriteTimeout {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;

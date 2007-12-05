@@ -35,10 +35,7 @@ import java.util.List;
 public class InvocationOutputStream extends OutputStream implements InvocationOutput {
     static final byte FALSE = 0;
     static final byte TRUE = 1;
-    static final byte OK = 2;
-    static final byte NOT_OK = 3;
-    static final byte NULL = 4;
-    static final byte NOT_NULL = 5;
+    static final byte NULL = 0;
 
     private volatile OutputStream mOut;
     private final String mLocalAddress;
@@ -258,13 +255,7 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         return (ObjectOutputStream) mOut;
     }
 
-    public void writeOk() throws IOException {
-        mOut.write(OK);
-    }
-
     public void writeThrowable(Throwable t) throws IOException {
-        write(NOT_OK);
-
         // Could just serialize Throwable, however:
         // 1. Caller might not have class for Throwable
         // 2. Throwable might not actually be serializable

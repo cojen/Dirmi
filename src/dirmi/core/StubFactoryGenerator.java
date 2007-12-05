@@ -286,10 +286,19 @@ public class StubFactoryGenerator<R extends Remote> {
                 LocalVariable invInVar = b.createLocalVariable(null, invInType);
                 b.storeLocal(invInVar);
 
-                b.loadLocal(invInVar);
-                b.invokeVirtual(invInType, "readOk", throwableType, null);
-
                 LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
+
+                b.loadLocal(invInVar);
+                b.invokeVirtual(invInType, "readBoolean", TypeDesc.BOOLEAN, null);
+                Label noThrowable = b.createLabel();
+                b.ifZeroComparisonBranch(noThrowable, "!=");
+                b.loadLocal(invInVar);
+                b.invokeVirtual(invInType, "readThrowable", throwableType, null);
+                Label storeThrowable = b.createLabel();
+                b.branch(storeThrowable);
+                noThrowable.setLocation();
+                b.loadNull();
+                storeThrowable.setLocation();
                 b.storeLocal(throwableVar);
 
                 // Finished with connection.

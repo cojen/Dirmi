@@ -47,12 +47,7 @@ public interface InvocationOutput extends ObjectOutput, Flushable, Closeable {
     void writeObject(Object obj) throws IOException;
 
     /**
-     * Writes OK marker, indicating method completed with no exceptions.
-     */
-    void writeOk() throws IOException;
-
-    /**
-     * Writes not-OK marker, followed by the given Throwable.
+     * Writes the given Throwable with additional remote information.
      */
     void writeThrowable(Throwable t) throws IOException;
 

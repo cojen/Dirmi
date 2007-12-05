@@ -18,6 +18,8 @@ package dirmi.core;
 
 import java.io.IOException;
 
+import dirmi.Pipe;
+
 import dirmi.io.Connection;
 
 /**
@@ -25,7 +27,7 @@ import dirmi.io.Connection;
  *
  * @author Brian S O'Neill
  */
-public interface InvocationConnection extends Connection {
+public interface InvocationConnection extends Connection, Pipe {
     InvocationInputStream getInputStream() throws IOException;
 
     InvocationOutputStream getOutputStream() throws IOException;

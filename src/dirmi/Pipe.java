@@ -17,8 +17,11 @@
 package dirmi;
 
 import java.io.Closeable;
+import java.io.Flushable;
 import java.io.InputStream;
 import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.io.OutputStream;
 
 import java.util.concurrent.TimeUnit;
@@ -29,17 +32,43 @@ import dirmi.io.ReadTimeout;
 import dirmi.io.WriteTimeout;
 
 /**
- * A pipe is a bidirectional byte stream which can be passed via an
- * asynchronous remote method. The client and server see the streams swapped
- * with respect to each other. Pipes can remain open as long as the session is
- * open.
+ * A pipe is a bidirectional stream which can be passed via an asynchronous
+ * remote method. Client and server see the streams swapped with respect to
+ * each other. Pipes can remain open as long as the session is open.
+ *
+ * <p>Pipes can also be used for transporting serializable objects or remote
+ * objects.
  *
  * @author Brian S O'Neill
  */
-public interface Pipe extends Closeable, ReadTimeout, WriteTimeout {
+public interface Pipe
+    extends Flushable, Closeable, ObjectInput, ObjectOutput, ReadTimeout, WriteTimeout
+{
+    /**
+     * Returns the Pipe's InputStream which also implements ObjectInput.
+     */
     InputStream getInputStream() throws IOException;
 
+    /**
+     * Returns the Pipe's OutputStream which also implements ObjectOutput.
+     */
     OutputStream getOutputStream() throws IOException;
+
+    /**
+     * Reads a Throwable which was written via writeThrowable.
+     */
+    Throwable readThrowable() throws IOException;
+
+    /**
+     * Writes the given Throwable with additional remote information.
+     */
+    void writeThrowable(Throwable t) throws IOException;
+
+    /**
+     * Disregard the state of any objects already written to the pipe, allowing
+     * them to get freed.
+     */
+    void reset() throws IOException;
 
     void close() throws IOException;
 

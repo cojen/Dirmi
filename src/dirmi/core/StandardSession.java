@@ -778,7 +778,7 @@ public class StandardSession implements Session {
         }
     }
 
-    private class InvocationCon implements InvocationConnection {
+    private class InvocationCon extends AbstractInvocationConnection {
         private final Connection mCon;
         private final InvocationInputStream mInvIn;
         private final InvocationOutputStream mInvOut;
@@ -854,6 +854,14 @@ public class StandardSession implements Session {
 
         public String getRemoteAddressString() {
             return mCon.getRemoteAddressString();
+        }
+
+        public Throwable readThrowable() throws IOException {
+            return mInvIn.readThrowable();
+        }
+
+        public void writeThrowable(Throwable t) throws IOException {
+            mInvOut.writeThrowable(t);
         }
 
         void recycle() {
