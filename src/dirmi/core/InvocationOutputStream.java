@@ -35,7 +35,8 @@ import java.util.List;
 public class InvocationOutputStream extends OutputStream implements InvocationOutput {
     static final byte FALSE = 0;
     static final byte TRUE = 1;
-    static final byte NULL = 0;
+    static final byte NULL = 2;
+    static final byte NOT_NULL = 3;
 
     private volatile OutputStream mOut;
     private final String mLocalAddress;
@@ -256,6 +257,13 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     }
 
     public void writeThrowable(Throwable t) throws IOException {
+        if (t == null) {
+            write(NULL);
+            return;
+        }
+
+        write(NOT_NULL);
+
         // Could just serialize Throwable, however:
         // 1. Caller might not have class for Throwable
         // 2. Throwable might not actually be serializable

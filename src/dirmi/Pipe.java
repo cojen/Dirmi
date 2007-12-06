@@ -55,12 +55,13 @@ public interface Pipe
     OutputStream getOutputStream() throws IOException;
 
     /**
-     * Reads a Throwable which was written via writeThrowable.
+     * Reads a Throwable which was written via writeThrowable, which may be null.
      */
     Throwable readThrowable() throws IOException;
 
     /**
-     * Writes the given Throwable with additional remote information.
+     * Writes the given Throwable with additional remote information. Throwable
+     * may be null.
      */
     void writeThrowable(Throwable t) throws IOException;
 

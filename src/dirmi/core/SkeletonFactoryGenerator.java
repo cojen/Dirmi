@@ -128,6 +128,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc noSuchMethodExType = TypeDesc.forClass(NoSuchMethodException.class);
+        final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
 
         // Add fields
         {
@@ -311,9 +312,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.storeLocal(invOutVar);
 
                     b.loadLocal(invOutVar);
-                    b.loadConstant(true); // true == no exception
-                    b.invokeVirtual(invOutType, "writeBoolean", null,
-                                    new TypeDesc[] {TypeDesc.BOOLEAN});
+                    b.loadNull();
+                    b.invokeVirtual(invOutType, "writeThrowable", null,
+                                    new TypeDesc[] {throwableType});
                     if (retVar != null) {
                         CodeBuilderUtil.writeParam
                             (b, method.getReturnType(), invOutVar, retVar);
@@ -351,8 +352,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Create common exception handlers. One for regular methods, the other
         // for asynchronous methods.
 
-        LocalVariable throwableVar =
-            b.createLocalVariable(null, TypeDesc.forClass(Throwable.class));
+        LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
 
         // Handler for asynchronous methods (if any). Re-throw exception
         // wrapped in AsynchronousInvocationException.
@@ -371,7 +371,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.newObject(asyncExType);
             b.dup();
             b.loadLocal(throwableVar);
-            b.invokeConstructor(asyncExType, new TypeDesc[] {throwableVar.getType()});
+            b.invokeConstructor(asyncExType, new TypeDesc[] {throwableType});
             b.throwObject();
         }
 
@@ -393,13 +393,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.storeLocal(invOutVar);
 
             b.loadLocal(invOutVar);
-            b.loadConstant(false); // false == exception thrown
-            b.invokeVirtual(invOutType, "writeBoolean", null,
-                            new TypeDesc[] {TypeDesc.BOOLEAN});
-            b.loadLocal(invOutVar);
             b.loadLocal(throwableVar);
-            b.invokeVirtual(invOutType, "writeThrowable",
-                            null, new TypeDesc[] {throwableVar.getType()});
+            b.invokeVirtual(invOutType, "writeThrowable", null, new TypeDesc[] {throwableType});
             b.loadLocal(invOutVar);
             b.invokeVirtual(invOutType, "flush", null, null);
 

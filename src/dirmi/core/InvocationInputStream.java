@@ -378,6 +378,10 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
     }
 
     public Throwable readThrowable() throws IOException {
+        if (read() == InvocationOutputStream.NULL) {
+            return null;
+        }
+
         List<ThrowableInfo> chain = null;
         String serverLocalAddress = null;
         String serverRemoteAddress = null;
