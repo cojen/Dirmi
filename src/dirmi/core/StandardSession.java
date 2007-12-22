@@ -68,7 +68,7 @@ public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 1;
 
-    private static final int DEFAULT_HEARTBEAT_DELAY_MILLIS = 30000;
+    private static final int DEFAULT_HEARTBEAT_CHECK_MILLIS = 10000;
     private static final int DEFAULT_CONNECTION_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
 
@@ -168,25 +168,65 @@ public class StandardSession implements Session {
 
         mConnectionPool = new LinkedList<InvocationCon>();
 
-        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_DELAY_MILLIS));
+        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_CHECK_MILLIS));
 
         // Initialize next expected heartbeat.
         heartbeatReceived();
 
-        // Transmit bootstrap information. Do so in a separate thread because
-        // remote side cannot accept our connection until it sends its
-        // identifier. This strategy avoids instant deadlock.
-        Bootstrap bootstrap = new Bootstrap(server, new AdminImpl());
-        executor.execute(bootstrap);
-
-        // Accept connection and get remote bootstrap information.
-        InvocationConnection invCon = new InvocationCon(mBroker.accept());
-
         try {
+            // Transmit bootstrap information. Do so in a separate thread because
+            // remote side cannot accept our connection until it sends its
+            // identifier. This strategy avoids instant deadlock.
+            Bootstrap bootstrap = new Bootstrap(server, new AdminImpl());
+            executor.execute(bootstrap);
+
+            // Accept connection and get remote bootstrap information.
+            final InvocationConnection invCon = new InvocationCon(mBroker.accept());
+
             // Start first worker thread now to ensure multiplexer is getting
             // processed. This avoids deadlock during bootstrap if send buffer
             // is too small.
             mExecutor.execute(new Worker());
+
+            InvocationInputStream in = invCon.getInputStream();
+
+            try {
+                int magic = in.readInt();
+                if (magic != MAGIC_NUMBER) {
+                    throw new IOException("Incorrect magic number: " + magic);
+                }
+
+                int version = in.readInt();
+                if (version != PROTOCOL_VERSION) {
+                    throw new IOException("Unsupported protocol version: " + version);
+                }
+
+                try {
+                    mRemoteServer = in.readObject();
+                    mRemoteAdmin = (Hidden.Admin) in.readObject();
+                } catch (ClassNotFoundException e) {
+                    IOException io = new IOException();
+                    io.initCause(e);
+                    throw io;
+                }
+            } catch (IOException e) {
+                try {
+                    invCon.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                throw e;
+            }
+
+            // Wait for bootstrap to complete.
+            bootstrap.waitUntilDone();
+
+            // Re-use initial con for handling requests.
+            mExecutor.execute(new Runnable() {
+                public void run() {
+                    handleRequests(invCon);
+                }
+            });
         } catch (RejectedExecutionException e) {
             String message = "Unable to start worker thread";
             try {
@@ -198,43 +238,6 @@ public class StandardSession implements Session {
             io.initCause(e);
             throw io;
         }
-
-        InvocationInputStream in = invCon.getInputStream();
-
-        try {
-            int magic = in.readInt();
-            if (magic != MAGIC_NUMBER) {
-                throw new IOException("Incorrect magic number: " + magic);
-            }
-
-            int version = in.readInt();
-            if (version != PROTOCOL_VERSION) {
-                throw new IOException("Unsupported protocol version: " + version);
-            }
-
-            try {
-                mRemoteServer = in.readObject();
-                mRemoteAdmin = (Hidden.Admin) in.readObject();
-            } catch (ClassNotFoundException e) {
-                IOException io = new IOException();
-                io.initCause(e);
-                throw io;
-            }
-        } catch (IOException e) {
-            try {
-                in.close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
-            throw e;
-        } finally {
-            in.close();
-        }
-
-        // FIXME: re-use initial con for handling requests
-
-        // Wait for bootstrap to complete.
-        bootstrap.waitUntilDone();
     }
 
     public void close() throws RemoteException {
@@ -380,6 +383,20 @@ public class StandardSession implements Session {
     void heartbeatReceived() {
         mNextExpectedHeartbeatMillis = System.currentTimeMillis() +
             TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
+    }
+
+    void handleRequests(InvocationConnection invCon) {
+        while (handleRequest(invCon)) {
+            try {
+                invCon.getOutputStream().reset();
+            } catch (IOException e) {
+                try {
+                    invCon.close();
+                } catch (IOException e2) {
+                    // Don't care.
+                }
+            }
+        }
     }
 
     /**
@@ -595,10 +612,10 @@ public class StandardSession implements Session {
         }
 
         public synchronized void run() {
-            InvocationOutputStream out = null;
+            InvocationCon invCon = null;
             try {
-                InvocationConnection invCon = new InvocationCon(mBroker.connect());
-                out = invCon.getOutputStream();
+                invCon = new InvocationCon(mBroker.connect());
+                InvocationOutputStream out = invCon.getOutputStream();
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
@@ -606,12 +623,14 @@ public class StandardSession implements Session {
                 for (Object obj : mObjectsToSend) {
                     out.writeObject(obj);
                 }
-                out.close();
+
+                out.flush();
+                invCon.recycle();
             } catch (IOException e) {
                 mError = e;
-                if (out != null) {
+                if (invCon != null) {
                     try {
-                        out.close();
+                        invCon.close();
                     } catch (IOException e2) {
                         // Don't care.
                     }
@@ -620,8 +639,6 @@ public class StandardSession implements Session {
                 mDone = true;
                 notify();
             }
-
-            // FIXME: re-use initial con for sending requests
         }
 
         synchronized void waitUntilDone() throws IOException {
@@ -684,7 +701,7 @@ public class StandardSession implements Session {
                 // Spawn a replacement worker.
                 try {
                     Worker worker;
-                    if (con == null) {
+                    if (con == null && (nowNanos = System.nanoTime()) + delay >= lastHeartbeat) {
                         // Heartbeat will be sent, so reset the time.
                         worker = new Worker(lastHeartbeat = nowNanos);
                     } else {
@@ -713,17 +730,7 @@ public class StandardSession implements Session {
                         return;
                     }
 
-                    while (handleRequest(invCon)) {
-                        try {
-                            invCon.getOutputStream().reset();
-                        } catch (IOException e) {
-                            try {
-                                invCon.close();
-                            } catch (IOException e2) {
-                                // Don't care.
-                            }
-                        }
-                    }
+                    handleRequests(invCon);
                 } else if (!mClosing) {
                     long nowMillis = System.currentTimeMillis();
                     if (nowMillis > mNextExpectedHeartbeatMillis) {
@@ -740,7 +747,6 @@ public class StandardSession implements Session {
 
                     // Send disposed ids to peer, which also serves as a heartbeat.
                     try {
-                        // FIXME: this is sent too often
                         sendDisposedStubs();
                     } catch (IOException e) {
                         String message = "Unable to send heartbeat; closing session: " + e;
@@ -813,6 +819,7 @@ public class StandardSession implements Session {
         }
 
         public void close() throws IOException {
+            mInvOut.close();
             mCon.close();
         }
 
