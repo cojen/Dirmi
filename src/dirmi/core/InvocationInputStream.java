@@ -378,7 +378,11 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
     }
 
     public Throwable readThrowable() throws IOException {
-        if (read() == InvocationOutputStream.NULL) {
+        int b = read();
+        if (b < 0) {
+            throw new EOFException();
+        }
+        if (b == InvocationOutputStream.NULL) {
             return null;
         }
 
