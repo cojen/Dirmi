@@ -24,8 +24,12 @@ import java.lang.annotation.*;
  * method to finish. An asynchronous method will likely block if the network
  * layer is backed up.
  *
- * <p>An asynchronous method must return void, and it may not declare any
- * exceptions other than {@link java.rmi.RemoteException}.
+ * <p>An asynchronous method must return void or a {@link Pipe}.
+ *
+ * <pre>
+ * &#64;Asynchronous
+ * void sendMessage(String data) throws RemoteException;
+ * </pre>
  *
  * @author Brian S O'Neill
  */

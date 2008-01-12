@@ -139,7 +139,7 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
         final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
-        final TypeDesc remoteExType = TypeDesc.forClass(RemoteException.class);
+        final TypeDesc classType = TypeDesc.forClass(Class.class);
 
         // Add fields
         {
@@ -175,19 +175,36 @@ public class StubFactoryGenerator<R extends Remote> {
         for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
             methodOrdinal++;
 
+            RemoteMethod localMethod;
+            {
+                RemoteParameter[] params = method.getParameterTypes()
+                    .toArray(new RemoteParameter[method.getParameterTypes().size()]);
+                try {
+                    localMethod = mLocalInfo.getRemoteMethod(method.getName(), params);
+                } catch (NoSuchMethodException e) {
+                    localMethod = null;
+                }
+            }
+
             TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
             TypeDesc[] paramDescs = CodeBuilderUtil.getTypeDescs(method.getParameterTypes());
 
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
 
-            boolean interruptible = false;
             TypeDesc[] exceptionDescs = CodeBuilderUtil.getTypeDescs(method.getExceptionTypes());
             for (TypeDesc desc : exceptionDescs) {
                 mi.addException(desc);
-                if (desc.toClass() == InterruptedException.class) {
-                    interruptible = true;
-                }
+            }
+
+            // Prefer locally declared exception for remote failure.
+            TypeDesc remoteFailureExType;
+            if (localMethod != null) {
+                remoteFailureExType = TypeDesc.forClass
+                    (localMethod.getRemoteFailureException().getType());
+            } else {
+                remoteFailureExType = TypeDesc.forClass
+                    (method.getRemoteFailureException().getType());
             }
 
             CodeBuilder b = new CodeBuilder(mi);
@@ -195,7 +212,9 @@ public class StubFactoryGenerator<R extends Remote> {
             // Create connection for invoking remote method.
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "invoke", invConnectionType, null);
+            b.loadConstant(remoteFailureExType);
+            b.invokeInterface(stubSupportType, "invoke", invConnectionType,
+                              new TypeDesc[] {classType});
             LocalVariable conVar = b.createLocalVariable(null, invConnectionType);
             b.storeLocal(conVar);
 
@@ -323,10 +342,11 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 b.loadThis();
                 b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+                b.loadConstant(remoteFailureExType);
                 b.loadLocal(conVar);
                 b.loadLocal(throwableVar);
-                b.invokeInterface(stubSupportType, "failed", remoteExType,
-                                  new TypeDesc[] {invConnectionType, throwableType});
+                b.invokeInterface(stubSupportType, "failed", throwableType,
+                                  new TypeDesc[] {classType, invConnectionType, throwableType});
                 b.throwObject();
             }
         }

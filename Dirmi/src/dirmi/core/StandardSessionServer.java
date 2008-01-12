@@ -18,30 +18,22 @@ package dirmi.core;
 
 import java.io.IOException;
 
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 import java.rmi.RemoteException;
 
-import java.util.Arrays;
-import java.util.Map;
-
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.cojen.util.WeakValuedHashMap;
+import org.cojen.util.WeakCanonicalSet;
 
 import dirmi.Session;
+import dirmi.Sessions;
 import dirmi.SessionServer;
-
-import dirmi.io.BufferedConnection;
-import dirmi.io.Connection;
-import dirmi.io.SocketConnection;
 
 /**
  * 
@@ -50,39 +42,50 @@ import dirmi.io.SocketConnection;
  */
 public class StandardSessionServer implements SessionServer {
     final ServerSocket mServerSocket;
-    final Object mExport;
-    final Executor mExecutor;
+    final Object mServer;
+    final ScheduledExecutorService mExecutor;
     final Log mLog;
 
-    final Map<Identifier, Session> mSessions;
+    final WeakCanonicalSet<Session> mSessions;
 
     volatile boolean mClosing;
 
-    public StandardSessionServer(ServerSocket ss, Object export, Executor executor)
+    /**
+     * @param server optional server object to export
+     * @param executor shared executor for remote methods
+     */
+    public StandardSessionServer(ServerSocket ss, Object server,
+                                 ScheduledExecutorService executor)
         throws IOException
     {
-        this(ss, export, executor, null);
+        this(ss, server, executor, null);
     }
 
-    public StandardSessionServer(ServerSocket ss, Object export, Executor executor, Log log)
+    /**
+     * @param server optional server object to export
+     * @param executor shared executor for remote methods
+     * @param log message log; pass null for default
+     */
+    public StandardSessionServer(ServerSocket ss, Object server,
+                                 ScheduledExecutorService executor, Log log)
         throws IOException
     {
         if (ss == null) {
             throw new IllegalArgumentException("ServerSocket is null");
         }
         if (executor == null) {
-            executor = new ThreadPool(Integer.MAX_VALUE, false);
+            throw new IllegalArgumentException("Executor is null");
         }
         if (log == null) {
             log = LogFactory.getLog(SessionServer.class);
         }
 
         mServerSocket = ss;
-        mExport = export;
+        mServer = server;
         mExecutor = executor;
         mLog = log;
 
-        mSessions = new WeakValuedHashMap<Identifier, Session>();
+        mSessions = new WeakCanonicalSet<Session>();
 
         try {
             // Start first accept thread.
@@ -105,7 +108,7 @@ public class StandardSessionServer implements SessionServer {
         }
 
         synchronized (mSessions) {
-            for (Session session : mSessions.values()) {
+            for (Session session : mSessions) {
                 try {
                     session.close();
                 } catch (RemoteException e) {
@@ -114,10 +117,6 @@ public class StandardSessionServer implements SessionServer {
             }
             mSessions.clear();
         }
-    }
-
-    protected Connection buffer(Connection con) throws IOException {
-        return new BufferedConnection(con);
     }
 
     void warn(String message) {
@@ -162,62 +161,16 @@ public class StandardSessionServer implements SessionServer {
                     spawned = false;
                 }
 
-                InetAddress remoteAddress = s.getInetAddress();
-
+                Session session;
                 try {
-                    s.setTcpNoDelay(true);
-                    Connection con = buffer(new SocketConnection(s));
-                    Identifier id = Identifier.read(con.getInputStream());
-
-                    ServerSocketBroker broker = (ServerSocketBroker) id.tryRetrieve();
-
-                    boolean makeNewSession = false;
-                    if (broker == null) {
-                        ServerSocketBroker newBroker = new ServerSocketBroker(remoteAddress, id);
-                        broker = id.register(newBroker);
-                        if (broker == newBroker) {
-                            makeNewSession = true;
-                        }
-                    }
-
-                    if (!broker.getRemoteAddress().equals(remoteAddress)) {
-                        warn("Mismatched remote address: " + broker.getRemoteAddress() +
-                             " != " + remoteAddress);
-                        forceClose(s);
-                        return;
-                    }
-
-                    byte forWhat = (byte) con.getInputStream().read();
-                    if (forWhat == ClientSocketBroker.FOR_CONNECT) {
-                        // Client connect is seen as server accept.
-                        broker.accepted(con);
-                    } else if (forWhat == ClientSocketBroker.FOR_ACCEPT) {
-                        // Client accept is seen as server connect.
-                        broker.connected(con);
-                    } else {
-                        warn("Unknown connection option: " + forWhat);
-                        forceClose(s);
-                        return;
-                    }
-
-                    if (makeNewSession) {
-                        Session session = new StandardSession(broker, mExport, mExecutor);
-                        mSessions.put(id, session);
-                    }
+                    session = Sessions.createSession(s, mServer, mExecutor);
                 } catch (IOException e) {
                     warn("Unable to create session on socket: " + s, e);
-                    forceClose(s);
                     return;
                 }
-            } while (!spawned);
-        }
 
-        private void forceClose(Socket s) {
-            try {
-                s.close();
-            } catch (IOException e) {
-                // Don't care.
-            }
+                mSessions.put(session);
+            } while (!spawned);
         }
     }
 }

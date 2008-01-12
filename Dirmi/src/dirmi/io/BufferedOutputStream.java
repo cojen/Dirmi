@@ -16,85 +16,46 @@
 
 package dirmi.io;
 
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
 /**
  * Replacement for {@link java.io.BufferedOutputStream} which does a better job
  * of buffer packing. The intent is to reduce the amount of packets sent over a
- * network. This implementation is also unsynchronized.
+ * network.
+ *
+ * <p>An additional feature is the ability to efficiently transfer bytes from
+ * an InputStream to the buffer, without requiring an intermediate buffer.
  *
  * @author Brian S O'Neill
  */
-public class BufferedOutputStream extends FilterOutputStream {
-    private final byte[] mBuffer;
-
-    private int mPos;
+public class BufferedOutputStream extends AbstractBufferedOutputStream {
+    private final OutputStream mOut;
     
     public BufferedOutputStream(OutputStream out) {
-        this(out, 8192);
+        super();
+        mOut = out;
     }
 
     public BufferedOutputStream(OutputStream out, int size) {
-        super(out);
-        if (size <= 0) {
-            throw new IllegalArgumentException("Buffer size <= 0");
-        }
-        mBuffer = new byte[size];
+        super(size);
+        mOut = out;
     }
 
-    public void write(int b) throws IOException {
-        byte[] buffer = mBuffer;
-        int pos = mPos;
-        buffer[pos++] = (byte) b;
-        if (pos >= buffer.length) {
-            out.write(buffer);
-            mPos = 0;
-        } else {
-            mPos = pos;
-        }
+    @Override
+    public synchronized void flush() throws IOException {
+        drain();
+        mOut.flush();
     }
 
-    public void write(byte[] b, int off, int len) throws IOException {
-        byte[] buffer = mBuffer;
-        int pos = mPos;
-        int avail = buffer.length - pos;
-        if (avail >= len) {
-            System.arraycopy(b, off, buffer, pos, len);
-            if (avail == len) {
-                out.write(buffer);
-                mPos = 0;
-            } else {
-                mPos = pos + len;
-            }
-        } else {
-            // Fill remainder of buffer and flush it.
-            System.arraycopy(b, off, buffer, pos, avail);
-            out.write(buffer);
-            off += avail;
-            len -= avail;
-            if (len < buffer.length) {
-                System.arraycopy(b, off, buffer, 0, len);
-                mPos = len;
-            } else {
-                mPos = 0;
-                out.write(b, off, len);
-            }
-        }
+    @Override
+    public synchronized void close() throws IOException {
+        drain();
+        mOut.close();
     }
 
-    public void flush() throws IOException {
-        out.write(mBuffer, 0, mPos);
-        mPos = 0;
-        out.flush();
-    }
-
-    public void close() throws IOException {
-        if (mPos != 0) {
-            out.write(mBuffer, 0, mPos);
-            mPos = 0;
-        }
-        out.close();
+    @Override
+    protected void doWrite(byte[] buffer, int offset, int length) throws IOException {
+        mOut.write(buffer, offset, length);
     }
 }

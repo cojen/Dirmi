@@ -24,26 +24,23 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
 
-import java.util.concurrent.TimeUnit;
-
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-
-import dirmi.io.ReadTimeout;
-import dirmi.io.WriteTimeout;
-
 /**
- * A pipe is a bidirectional stream which can be passed via an asynchronous
- * remote method. Client and server see the streams swapped with respect to
- * each other. Pipes can remain open as long as the session is open.
+ * A pipe is a bidirectional stream which can be passed via an {@link
+ * Asynchronous asynchronous} remote method. Client and server see the streams
+ * swapped with respect to each other. Pipes can remain open as long as the
+ * session is open.
  *
  * <p>Pipes can also be used for transporting serializable objects or remote
  * objects.
  *
+ * <pre>
+ * &#64;Asynchronous
+ * Pipe readFile(String name, Pipe pipe) throws RemoteException, IOException;
+ * </pre>
+ *
  * @author Brian S O'Neill
  */
-public interface Pipe
-    extends Flushable, Closeable, ObjectInput, ObjectOutput, ReadTimeout, WriteTimeout
-{
+public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
     /**
      * Returns the Pipe's InputStream which also implements ObjectInput.
      */
@@ -72,36 +69,4 @@ public interface Pipe
     void reset() throws IOException;
 
     void close() throws IOException;
-
-    /**
-     * Returns the timeout for blocking read operations. If timeout is
-     * negative, blocking timeout is infinite. When a read times out, it throws
-     * an InterruptedIOException.
-     */
-    long getReadTimeout() throws IOException;
-
-    TimeUnit getReadTimeoutUnit() throws IOException;
-
-    /**
-     * Set the timeout for blocking read operations. If timeout is negative,
-     * blocking timeout is infinite. When a read times out, it throws an
-     * InterruptedIOException.
-     */
-    void setReadTimeout(long time, TimeUnit unit) throws IOException;
-
-    /**
-     * Returns the timeout for blocking write operations. If timeout is
-     * negative, blocking timeout is infinite. When a write times out, it
-     * throws an InterruptedIOException.
-     */
-    long getWriteTimeout() throws IOException;
-
-    TimeUnit getWriteTimeoutUnit() throws IOException;
-
-    /**
-     * Set the timeout for blocking write operations. If timeout is negative,
-     * blocking timeout is infinite. When a write times out, it throws an
-     * InterruptedIOException.
-     */
-    void setWriteTimeout(long time, TimeUnit unit) throws IOException;
 }

@@ -23,7 +23,7 @@ import java.io.Serializable;
  *
  * @author Brian S O'Neill
  */
-public interface RemoteParameter extends Serializable {
+public interface RemoteParameter<T> extends Serializable {
     /**
      * Returns true if parameter does not need to be serialized such that it
      * can be back referenced. If parameter is an array, elements of array must
@@ -31,7 +31,7 @@ public interface RemoteParameter extends Serializable {
      */
     boolean isUnshared();
 
-    Class<?> getType();
+    Class<T> getType();
 
     boolean equalTypes(RemoteParameter other);
 }

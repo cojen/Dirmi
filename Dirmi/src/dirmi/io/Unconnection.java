@@ -20,8 +20,6 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * 
  *
@@ -37,30 +35,8 @@ public class Unconnection implements Connection {
         throw unconnected();
     }
 
-    public long getReadTimeout() throws IOException {
-        return 0;
-    }
-
-    public TimeUnit getReadTimeoutUnit() throws IOException {
-        return TimeUnit.NANOSECONDS;
-    }
-
-    public void setReadTimeout(long time, TimeUnit unit) throws IOException {
-    }
-
     public OutputStream getOutputStream() throws IOException {
         throw unconnected();
-    }
-
-    public long getWriteTimeout() throws IOException {
-        return 0;
-    }
-
-    public TimeUnit getWriteTimeoutUnit() throws IOException {
-        return TimeUnit.NANOSECONDS;
-    }
-
-    public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
     }
 
     public String getLocalAddressString() {

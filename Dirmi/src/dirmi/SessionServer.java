@@ -16,6 +16,8 @@
 
 package dirmi;
 
+import java.io.Closeable;
+
 import java.rmi.RemoteException;
 
 /**
@@ -23,7 +25,7 @@ import java.rmi.RemoteException;
  *
  * @author Brian S O'Neill
  */
-public interface SessionServer {
+public interface SessionServer extends Closeable {
     /**
      * Closes the session server.
      */

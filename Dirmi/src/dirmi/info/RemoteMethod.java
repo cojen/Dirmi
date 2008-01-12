@@ -43,17 +43,17 @@ public interface RemoteMethod extends Serializable {
     /**
      * Returns the return type of this method, which is null if void.
      */
-    RemoteParameter getReturnType();
+    RemoteParameter<?> getReturnType();
 
     /**
      * Returns the method parameters in an unmodifiable list.
      */
-    List<? extends RemoteParameter> getParameterTypes();
+    List<? extends RemoteParameter<?>> getParameterTypes();
 
     /**
      * Returns the method exception types in an unmodifiable set.
      */
-    Set<? extends RemoteParameter> getExceptionTypes();
+    Set<? extends RemoteParameter<? extends Throwable>> getExceptionTypes();
 
     /**
      * Returns true if this method is asynchronous.
@@ -61,4 +61,8 @@ public interface RemoteMethod extends Serializable {
      * @see Asynchronous
      */
     boolean isAsynchronous();
+
+    RemoteParameter<? extends Throwable> getRemoteFailureException();
+
+    boolean isRemoteFailureExceptionDeclared();
 }

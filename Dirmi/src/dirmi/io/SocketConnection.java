@@ -23,8 +23,6 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketAddress;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * Basic connection implementation that wraps a socket.
  *
@@ -41,46 +39,8 @@ public class SocketConnection implements Connection {
         return mSocket.getInputStream();
     }
 
-    public long getReadTimeout() throws IOException {
-        int timeout = mSocket.getSoTimeout();
-        if (timeout == 0) {
-            timeout = -1;
-        }
-        return timeout;
-    }
-
-    public TimeUnit getReadTimeoutUnit() throws IOException {
-        return TimeUnit.MILLISECONDS;
-    }
-
-    public void setReadTimeout(long time, TimeUnit unit) throws IOException {
-        long millis;
-        if (time <= 0) {
-            millis = time < 0 ? 0 : 1;
-        } else {
-            millis = unit.toMillis(time);
-            if (millis > Integer.MAX_VALUE) {
-                millis = Integer.MAX_VALUE;
-            }
-        }
-        mSocket.setSoTimeout((int) millis);
-    }
-
     public OutputStream getOutputStream() throws IOException {
         return mSocket.getOutputStream();
-    }
-
-    public long getWriteTimeout() throws IOException {
-        // FIXME: may need to use Selector
-        return -1;
-    }
-
-    public TimeUnit getWriteTimeoutUnit() throws IOException {
-        return TimeUnit.MILLISECONDS;
-    }
-
-    public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
-        // FIXME: may need to use Selector
     }
 
     public String getLocalAddressString() {

@@ -29,6 +29,8 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.io.WriteAbortedException;
 
+import java.lang.reflect.Constructor;
+
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
@@ -40,10 +42,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -73,7 +74,7 @@ public class StandardSession implements Session {
     private static final int DISPOSE_BATCH = 1000;
 
     final Broker mBroker;
-    final Executor mExecutor;
+    final ScheduledExecutorService mExecutor;
     final Log mLog;
 
     // Strong references to SkeletonFactories. SkeletonFactories are created as
@@ -111,6 +112,8 @@ public class StandardSession implements Session {
     // Pool of connections for client calls.
     final LinkedList<InvocationCon> mConnectionPool;
 
+    final ScheduledFuture<?> mBackgroundTask;
+
     volatile long mHeartbeatCheckNanos;
 
     // Instant (in millis) for next expected heartbeat. If not received, session closes.
@@ -121,17 +124,10 @@ public class StandardSession implements Session {
     /**
      * @param broker connection broker must always connect to same remote server
      * @param server optional server object to export
+     * @param executor shared executor for remote methods
      */
-    public StandardSession(Broker broker, Object server) throws IOException {
-        this(broker, server, null, null);
-    }
-
-    /**
-     * @param broker connection broker must always connect to same remote server
-     * @param server optional server object to export
-     * @param executor non-shared executor for remote methods; pass null for default
-     */
-    public StandardSession(Broker broker, Object server, Executor executor)
+    public StandardSession(Broker broker, Object server,
+                           ScheduledExecutorService executor)
         throws IOException
     {
         this(broker, server, executor, null);
@@ -140,17 +136,18 @@ public class StandardSession implements Session {
     /**
      * @param broker connection broker must always connect to same remote server
      * @param server optional server object to export
-     * @param executor non-shared executor for remote methods; pass null for default
+     * @param executor shared executor for remote methods
      * @param log message log; pass null for default
      */
-    public StandardSession(Broker broker, Object server, Executor executor, Log log)
+    public StandardSession(Broker broker, Object server,
+                           ScheduledExecutorService executor, Log log)
         throws IOException
     {
         if (broker == null) {
             throw new IllegalArgumentException("Broker is null");
         }
         if (executor == null) {
-            executor = new ThreadPool(Integer.MAX_VALUE, true);
+            throw new IllegalArgumentException("Executor is null");
         }
         if (log == null) {
             log = LogFactory.getLog(Session.class);
@@ -227,6 +224,11 @@ public class StandardSession implements Session {
                     handleRequests(invCon);
                 }
             });
+
+            // Start background task.
+            long delay = DEFAULT_HEARTBEAT_CHECK_MILLIS >> 1;
+            mBackgroundTask = mExecutor.scheduleWithFixedDelay
+                (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
             String message = "Unable to start worker thread";
             try {
@@ -264,14 +266,7 @@ public class StandardSession implements Session {
         }
         mClosing = true;
 
-        /*
-        if (mExecutor instanceof ExecutorService) {
-            try {
-                ((ExecutorService) mExecutor).shutdown();
-            } catch (SecurityException e) {
-            }
-        }
-        */
+        mBackgroundTask.cancel(false);
 
         try {
             if (notify && mRemoteAdmin != null) {
@@ -655,131 +650,115 @@ public class StandardSession implements Session {
         }
     }
 
-    private class Worker implements Runnable {
-        // Time when last heatbeat was sent, in nanoseconds.
-        private final long mLastHeartbeat;
-
-        Worker() {
-            mLastHeartbeat = System.nanoTime();
-        }
-
-        private Worker(long lastHeartbeat) {
-            mLastHeartbeat = lastHeartbeat;
+    private class BackgroundTask implements Runnable {
+        BackgroundTask() {
         }
 
         public void run() {
-            // Copy last heartbeat such that it can be modified in case a new
-            // worker couldn't spawn.
-            long lastHeartbeat = mLastHeartbeat;
+            long nowMillis = System.currentTimeMillis();
+            if (nowMillis > mNextExpectedHeartbeatMillis) {
+                // Didn't get a heartbeat from peer, so close session.
+                String message = "No heartbeat received; closing session";
+                if (!mBroker.isClosed()) {
+                    mLog.error(message);
+                }
+                try {
+                    closeOnFailure(message, null);
+                } catch (IOException e) {
+                    // Don't care.
+                }
+                return;
+            }
 
+            // Send disposed ids to peer, which also serves as a heartbeat.
+            try {
+                sendDisposedStubs();
+            } catch (IOException e) {
+                String message = "Unable to send heartbeat; closing session: " + e;
+                if (!mBroker.isClosed()) {
+                    mLog.error(message);
+                }
+                try {
+                    closeOnFailure(message, null);
+                } catch (IOException e2) {
+                    // Don't care.
+                }
+                return;
+            }
+
+            // Close idle connections.
+            while (true) {
+                InvocationCon pooledCon;
+                synchronized (mConnectionPool) {
+                    pooledCon = mConnectionPool.peek();
+                    if (pooledCon == null) {
+                        break;
+                    }
+                    long age = System.currentTimeMillis() - pooledCon.getIdleTimestamp();
+                    if (age < DEFAULT_CONNECTION_IDLE_MILLIS) {
+                        break;
+                    }
+                    mConnectionPool.remove();
+                }
+                try {
+                    pooledCon.close();
+                } catch (IOException e) {
+                    // Don't care.
+                }
+            }
+        }
+    }
+
+    private class Worker implements Runnable {
+        Worker() {
+        }
+
+        public void run() {
             boolean spawned;
             do {
-                long nowNanos = System.nanoTime();
-                long delay = lastHeartbeat + (mHeartbeatCheckNanos >> 1) - nowNanos;
-
                 Connection con;
-                if (delay <= 0) {
-                    // Send a heartbeat instead of accepting a connection.
-                    con = null;
-                } else {
-                    try {
-                        con = mBroker.tryAccept(delay, TimeUnit.NANOSECONDS);
-                    } catch (IOException e) {
-                        if (!mClosing) {
-                            String message = "Failure accepting connection; closing session";
+                try {
+                    con = mBroker.accept();
+                } catch (IOException e) {
+                    if (!mClosing) {
+                        String message = "Failure accepting connection; closing session";
+                        if (!mBroker.isClosed()) {
                             mLog.error(message, e);
-                            try {
-                                closeOnFailure(message, e);
-                            } catch (IOException e2) {
-                                // Don't care.
-                            }
                         }
-                        return;
+                        try {
+                            closeOnFailure(message, e);
+                        } catch (IOException e2) {
+                            // Don't care.
+                        }
                     }
+                    return;
                 }
 
                 // Spawn a replacement worker.
                 try {
-                    Worker worker;
-                    if (con == null && (nowNanos = System.nanoTime()) + delay >= lastHeartbeat) {
-                        // Heartbeat will be sent, so reset the time.
-                        worker = new Worker(lastHeartbeat = nowNanos);
-                    } else {
-                        worker = new Worker(lastHeartbeat);
-                    }
-                    mExecutor.execute(worker);
+                    mExecutor.execute(new Worker());
                     spawned = true;
                 } catch (RejectedExecutionException e) {
                     warn("Unable to spawn replacement worker thread; will loop back", e);
                     spawned = false;
                 }
 
-                if (con != null) {
-                    final InvocationConnection invCon;
+                final InvocationConnection invCon;
+                try {
+                    invCon = new InvocationCon(con);
+                } catch (IOException e) {
+                    if (!mClosing) {
+                        error("Failure reading request", e);
+                    }
                     try {
-                        invCon = new InvocationCon(con);
-                    } catch (IOException e) {
-                        if (!mClosing) {
-                            error("Failure reading request", e);
-                        }
-                        try {
-                            con.close();
-                        } catch (IOException e2) {
-                            // Don't care.
-                        }
-                        return;
+                        con.close();
+                    } catch (IOException e2) {
+                        // Don't care.
                     }
-
-                    handleRequests(invCon);
-                } else if (!mClosing) {
-                    long nowMillis = System.currentTimeMillis();
-                    if (nowMillis > mNextExpectedHeartbeatMillis) {
-                        // Didn't get a heartbeat from peer, so close session.
-                        String message = "No heartbeat received; closing session";
-                        mLog.error(message);
-                        try {
-                            closeOnFailure(message, null);
-                        } catch (IOException e) {
-                            // Don't care.
-                        }
-                        return;
-                    }
-
-                    // Send disposed ids to peer, which also serves as a heartbeat.
-                    try {
-                        sendDisposedStubs();
-                    } catch (IOException e) {
-                        String message = "Unable to send heartbeat; closing session: " + e;
-                        mLog.error(message);
-                        try {
-                            closeOnFailure(message, null);
-                        } catch (IOException e2) {
-                            // Don't care.
-                        }
-                        return;
-                    }
-
-                    // Close idle connections.
-                    while (true) {
-                        InvocationCon pooledCon;
-                        synchronized (mConnectionPool) {
-                            pooledCon = mConnectionPool.peek();
-                            if (pooledCon == null) {
-                                break;
-                            }
-                            long age = System.currentTimeMillis() - pooledCon.getIdleTimestamp();
-                            if (age < DEFAULT_CONNECTION_IDLE_MILLIS) {
-                                break;
-                            }
-                            mConnectionPool.remove();
-                        }
-                        try {
-                            pooledCon.close();
-                        } catch (IOException e) {
-                            // Don't care.
-                        }
-                    }
+                    return;
                 }
+
+                handleRequests(invCon);
             } while (!spawned);
         }
     }
@@ -827,32 +806,8 @@ public class StandardSession implements Session {
             return mInvIn;
         }
 
-        public long getReadTimeout() throws IOException {
-            return mCon.getReadTimeout();
-        }
-
-        public TimeUnit getReadTimeoutUnit() throws IOException {
-            return mCon.getReadTimeoutUnit();
-        }
-
-        public void setReadTimeout(long time, TimeUnit unit) throws IOException {
-            mCon.setReadTimeout(time, unit);
-        }
-
         public InvocationOutputStream getOutputStream() throws IOException {
             return mInvOut;
-        }
-
-        public long getWriteTimeout() throws IOException {
-            return mCon.getWriteTimeout();
-        }
-
-        public TimeUnit getWriteTimeoutUnit() throws IOException {
-            return mCon.getWriteTimeoutUnit();
-        }
-
-        public void setWriteTimeout(long time, TimeUnit unit) throws IOException {
-            mCon.setWriteTimeout(time, unit);
         }
 
         public String getLocalAddressString() {
@@ -1015,17 +970,25 @@ public class StandardSession implements Session {
             mObjID = id;
         }
 
-        public InvocationConnection invoke() throws RemoteException {
+        public <T extends Throwable> InvocationConnection invoke(Class<T> remoteFailureEx)
+            throws T
+        {
             if (mDisposed) {
-                throw new NoSuchObjectException("Remote object disposed");
+                RemoteException ex = new NoSuchObjectException("Remote object disposed");
+                if (remoteFailureEx == null || remoteFailureEx == RemoteException.class) {
+                    throw (T) ex;
+                } else {
+                    throw failed(remoteFailureEx, null, ex);
+                }
             }
+
             InvocationConnection con = null;
             try {
                 con = getConnection();
                 mObjID.write((DataOutput) con.getOutputStream());
                 return con;
             } catch (IOException e) {
-                throw failed(con, e);
+                throw failed(remoteFailureEx, con, e);
             }
         }
 
@@ -1035,7 +998,9 @@ public class StandardSession implements Session {
             }
         }
 
-        public RemoteException failed(InvocationConnection con, Throwable cause) {
+        public <T extends Throwable> T failed(Class<T> remoteFailureEx,
+                                              InvocationConnection con, Throwable cause)
+        {
             if (con != null) {
                 try {
                     con.close();
@@ -1043,11 +1008,31 @@ public class StandardSession implements Session {
                     // Don't care.
                 }
             }
+
+            RemoteException ex;
             if (cause == null) {
-                return new RemoteException();
+                ex = new RemoteException();
             } else {
-                return new RemoteException(cause.getMessage(), cause);
+                ex = new RemoteException(cause.getMessage(), cause);
             }
+
+            if (!remoteFailureEx.isAssignableFrom(RemoteException.class)) {
+                // Find appropriate constructor.
+                for (Constructor ctor : remoteFailureEx.getConstructors()) {
+                    Class[] paramTypes = ctor.getParameterTypes();
+                    if (paramTypes.length != 1) {
+                        continue;
+                    }
+                    if (paramTypes[0].isAssignableFrom(RemoteException.class)) {
+                        try {
+                            return (T) ctor.newInstance(ex);
+                        } catch (Exception e) {
+                        }
+                    }
+                }
+            }
+
+            return (T) ex;
         }
 
         public int stubHashCode() {

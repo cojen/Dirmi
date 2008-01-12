@@ -23,12 +23,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -39,6 +41,7 @@ import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
 import dirmi.Pipe;
+import dirmi.RemoteFailure;
 
 import dirmi.core.Identifier;
 
@@ -61,8 +64,8 @@ public class RemoteIntrospector {
         cParameterCache = new WeakCanonicalSet();
     }
 
-    static RParameter intern(RParameter param) {
-        return (RParameter) cParameterCache.put(param);
+    static <T> RParameter<T> intern(RParameter<T> param) {
+        return (RParameter<T>) cParameterCache.put(param);
     }
 
     /**
@@ -182,13 +185,6 @@ public class RemoteIntrospector {
             }
 
             for (RMethod method : methodMap.values()) {
-                if (!method.declaresException(RemoteException.class)) {
-                    throw new IllegalArgumentException
-                        ("Method must declare throwing " +
-                         "java.rmi.RemoteException (or superclass): " +
-                         method.methodDesc());
-                }
-
                 if (method.isAsynchronous()) {
                     if (method.getReturnType() != null) {
                         Class returnType = method.getReturnType().getType();
@@ -212,13 +208,6 @@ public class RemoteIntrospector {
                                  method.methodDesc());
                         }
                     }
-                    for (RemoteParameter type : method.getExceptionTypes()) {
-                        if (type.getType() != RemoteException.class) {
-                            throw new IllegalArgumentException
-                                ("Asynchronous method can only throw RemoteException: \"" +
-                                 method.getSignature(remote.getName()) + '"');
-                        }
-                    }
                 }
             }
 
@@ -226,8 +215,7 @@ public class RemoteIntrospector {
             Set<String> interfaces = new LinkedHashSet<String>();
             gatherRemoteInterfaces(interfaces, remote);
 
-            info = new RInfo(remote.getName(), interfaces,
-                             new LinkedHashSet<RMethod>(methodMap.values()));
+            info = new RInfo(remote, interfaces, new LinkedHashSet<RMethod>(methodMap.values()));
 
             cInfoCache.put(remote, info);
 
@@ -268,14 +256,28 @@ public class RemoteIntrospector {
         private final Set<String> mInterfaceNames;
         private final Set<RMethod> mMethods;
 
+        private final transient RemoteParameter<? extends Throwable> mRemoteFailureException;
+        private final transient boolean mRemoteFailureExceptionDeclared;
+
         private transient Map<String, Set<RMethod>> mMethodsByName;
         private transient Map<Identifier, RemoteMethod> mMethodMap;
 
-        RInfo(String name, Set<String> interfaces, Set<RMethod> methods) {
+        RInfo(Class<? extends Remote> remote, Set<String> interfaces, Set<RMethod> methods) {
             mID = Identifier.identify(this);
-            mName = name;
+            mName = remote.getName();
             mInterfaceNames = Collections.unmodifiableSet(interfaces);
             mMethods = Collections.unmodifiableSet(methods);
+
+            {
+                RemoteFailure ann  = remote.getAnnotation(RemoteFailure.class);
+                if (ann == null) {
+                    mRemoteFailureException = RParameter.make(RemoteException.class, false);
+                    mRemoteFailureExceptionDeclared = true;
+                } else {
+                    mRemoteFailureException = RParameter.make(ann.exception(), false);
+                    mRemoteFailureExceptionDeclared = ann.declared();
+                }
+            }
         }
 
         public String getName() {
@@ -387,9 +389,18 @@ public class RemoteIntrospector {
             return b.toString();
         }
 
+        RemoteParameter<? extends Throwable> getRemoteFailureException() {
+            return mRemoteFailureException;
+        }
+
+        boolean isRemoteFailureExceptionDeclared() {
+            return mRemoteFailureExceptionDeclared;
+        }
+
         void resolve() {
+            Set<Class> validExceptions = new HashSet<Class>();
             for (RMethod method : mMethods) {
-                method.resolve();
+                method.resolve(this, validExceptions);
             }
         }
     }
@@ -400,10 +411,13 @@ public class RemoteIntrospector {
         private final Identifier mID;
         private final String mName;
         private RemoteParameter mReturnType;
-        private List<RParameter> mParameterTypes;
-        private final Set<RemoteParameter> mExceptionTypes;
+        private List<RParameter<Object>> mParameterTypes;
+        private final Set<RemoteParameter<Throwable>> mExceptionTypes;
 
         private final boolean mAsynchronous;
+
+        private RemoteParameter<? extends Throwable> mRemoteFailureException;
+        private boolean mRemoteFailureExceptionDeclared;
 
         private transient Method mMethod;
 
@@ -433,8 +447,8 @@ public class RemoteIntrospector {
             if (paramsTypes == null || paramsTypes.length == 0) {
                 mParameterTypes = null;
             } else {
-                mParameterTypes = new ArrayList<RParameter>(paramsTypes.length);
-                for (Class<?> paramType : paramsTypes) {
+                mParameterTypes = new ArrayList<RParameter<Object>>(paramsTypes.length);
+                for (Class paramType : paramsTypes) {
                     mParameterTypes.add(RParameter.makeTemp(paramType));
                 }
             }
@@ -443,25 +457,39 @@ public class RemoteIntrospector {
             if (exceptionTypes == null || exceptionTypes.length == 0) {
                 mExceptionTypes = null;
             } else {
-                Set<RemoteParameter> set = new LinkedHashSet<RemoteParameter>();
-                for (Class<?> exceptionType : exceptionTypes) {
+                Set<RemoteParameter<Throwable>> set =
+                    new LinkedHashSet<RemoteParameter<Throwable>>();
+                for (Class exceptionType : exceptionTypes) {
                     set.add(RParameter.makeTemp(exceptionType));
                 }
                 mExceptionTypes = Collections.unmodifiableSet(set);
             }
 
-            Asynchronous ann = m.getAnnotation(Asynchronous.class);
-            if (ann == null) {
-                mAsynchronous = false;
-            } else {
-                mAsynchronous = true;
+            {
+                Asynchronous ann = m.getAnnotation(Asynchronous.class);
+                if (ann == null) {
+                    mAsynchronous = false;
+                } else {
+                    mAsynchronous = true;
+                }
+            }
+
+            {
+                RemoteFailure ann  = m.getAnnotation(RemoteFailure.class);
+                if (ann == null) {
+                    // Use inherited values from RemoteInfo, filled in when
+                    // resolve is called.
+                } else {
+                    mRemoteFailureException = RParameter.make(ann.exception(), false);
+                    mRemoteFailureExceptionDeclared = ann.declared();
+                }
             }
 
             // Hang on to this until resolve is called.
             mMethod = m;
         }
 
-        private RMethod(RMethod existing, Set<RemoteParameter> exceptionTypes) {
+        private RMethod(RMethod existing, Set<RemoteParameter<Throwable>> exceptionTypes) {
             mID = existing.mID;
             mName = existing.mName;
             mReturnType = existing.mReturnType;
@@ -469,6 +497,9 @@ public class RemoteIntrospector {
             mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
 
             mAsynchronous = existing.mAsynchronous;
+
+            mRemoteFailureException = existing.mRemoteFailureException;
+            mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
 
             mMethod = existing.mMethod;
         }
@@ -492,14 +523,14 @@ public class RemoteIntrospector {
             return mReturnType;
         }
 
-        public List<? extends RemoteParameter> getParameterTypes() {
+        public List<? extends RemoteParameter<?>> getParameterTypes() {
             if (mParameterTypes == null) {
                 return Collections.emptyList();
             }
             return mParameterTypes;
         }
 
-        public Set<? extends RemoteParameter> getExceptionTypes() {
+        public Set<? extends RemoteParameter<? extends Throwable>> getExceptionTypes() {
             if (mExceptionTypes == null) {
                 return Collections.emptySet();
             }
@@ -508,6 +539,14 @@ public class RemoteIntrospector {
 
         public boolean isAsynchronous() {
             return mAsynchronous;
+        }
+
+        public RemoteParameter<? extends Throwable> getRemoteFailureException() {
+            return mRemoteFailureException;
+        }
+
+        public boolean isRemoteFailureExceptionDeclared() {
+            return mRemoteFailureExceptionDeclared;
         }
 
         @Override
@@ -525,7 +564,9 @@ public class RemoteIntrospector {
                 return mName.equals(other.mName) && (mID == other.mID) &&
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
-                    (mAsynchronous == other.mAsynchronous);
+                    (mAsynchronous == other.mAsynchronous) &&
+                    (mRemoteFailureException == other.getRemoteFailureException()) &&
+                    (mRemoteFailureExceptionDeclared == other.isRemoteFailureExceptionDeclared());
             }
             return false;
         }
@@ -604,7 +645,8 @@ public class RemoteIntrospector {
                      methodDesc() + " and " + other.methodDesc());
             }
 
-            Set<RemoteParameter> subset = new LinkedHashSet<RemoteParameter>();
+            Set<RemoteParameter<Throwable>> subset =
+                new LinkedHashSet<RemoteParameter<Throwable>>();
 
             for (RemoteParameter exceptionType : mExceptionTypes) {
                 if (other.declaresException(exceptionType)) {
@@ -637,7 +679,7 @@ public class RemoteIntrospector {
             return false;
         }
 
-        void resolve() {
+        void resolve(RInfo info, Set<Class> validExceptions) {
             if (mReturnType != null) {
                 Class<?> type = mReturnType.getType();
                 mReturnType = RParameter.make(type, mReturnType.isUnshared());
@@ -659,7 +701,7 @@ public class RemoteIntrospector {
 
                 for (int i=0; i<size; i++) {
                     RemoteParameter param = mParameterTypes.get(i);
-                    Class<?> type = param.getType();
+                    Class type = param.getType();
 
                     boolean unshared = !noneUnshared && param.isUnshared();
                     // Can only be truly unshared if no other parameter is of same type.
@@ -681,6 +723,49 @@ public class RemoteIntrospector {
                 mParameterTypes = Collections.unmodifiableList(mParameterTypes);
             }
 
+            if (mRemoteFailureException == null) {
+                // Inherit from remote interface.
+                mRemoteFailureException = info.getRemoteFailureException();
+                mRemoteFailureExceptionDeclared = info.isRemoteFailureExceptionDeclared();
+            }
+
+            Class<? extends Throwable> exClass = mRemoteFailureException.getType();
+
+            if (!exClass.isAssignableFrom(RemoteException.class)) {
+                // Check for valid constructor.
+                validCheck: {
+                    if (validExceptions.contains(exClass)) {
+                        break validCheck;
+                    }
+                    for (Constructor ctor : exClass.getConstructors()) {
+                        Class[] paramTypes = ctor.getParameterTypes();
+                        if (paramTypes.length != 1) {
+                            continue;
+                        }
+                        if (paramTypes[0].isAssignableFrom(RemoteException.class)) {
+                            validExceptions.add(exClass);
+                            break validCheck;
+                        }
+                    }
+                    throw new IllegalArgumentException
+                        ("Remote failure exception does not have a public single-argument " +
+                         "constructor which accepts a RemoteException: " + exClass.getName());
+                }
+            }
+
+            boolean uncheckedException =
+                RuntimeException.class.isAssignableFrom(exClass) ||
+                Error.class.isAssignableFrom(exClass);
+
+            if (!uncheckedException && isRemoteFailureExceptionDeclared()) {
+                if (!declaresException(exClass)) {
+                    throw new IllegalArgumentException
+                        ("Method must declare throwing " + exClass.getName() +
+                         " (or a superclass): " + methodDesc() + "; use @RemoteFailure to " +
+                         "override behavior");
+                }
+            }
+
             // Won't need this again.
             mMethod = null;
         }
@@ -691,10 +776,10 @@ public class RemoteIntrospector {
         }
     }
 
-    private static class RParameter implements RemoteParameter {
+    private static class RParameter<T> implements RemoteParameter<T> {
         private static final long serialVersionUID = 1L;
 
-        static RParameter makeTemp(Class<?> type) {
+        static <T> RParameter<T> makeTemp(Class<T> type) {
             if (type == void.class || type == null) {
                 return null;
             }
@@ -703,21 +788,21 @@ public class RemoteIntrospector {
                 String.class.isAssignableFrom(type) ||
                 TypeDesc.forClass(type).toPrimitiveType() != null;
 
-            return intern(new RParameter(type, unshared));
+            return intern(new RParameter<T>(type, unshared));
         }
 
-        static RParameter make(Class<?> type, boolean unshared)
+        static <T> RParameter<T> make(Class<T> type, boolean unshared)
         {
             if (type == void.class || type == null) {
                 return null;
             }
-            return intern(new RParameter(type, unshared));
+            return intern(new RParameter<T>(type, unshared));
         }
 
-        private final Class<?> mType;
+        private final Class<T> mType;
         private final boolean mUnshared;
 
-        private RParameter(Class<?> type, boolean unshared) {
+        private RParameter(Class<T> type, boolean unshared) {
             mType = type;
             mUnshared = unshared;
         }
@@ -726,7 +811,7 @@ public class RemoteIntrospector {
             return mUnshared;
         }
 
-        public Class<?> getType() {
+        public Class<T> getType() {
             return mType;
         }
 

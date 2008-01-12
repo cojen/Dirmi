@@ -19,8 +19,6 @@ package dirmi.io;
 import java.io.InputStream;
 import java.io.IOException;
 
-import java.util.concurrent.TimeUnit;
-
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -33,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Brian S O'Neill
  * @see PipedOutputStream
  */
-public class PipedInputStream extends InputStream implements ReadTimeout {
+public class PipedInputStream extends InputStream {
     private final Lock mLock;
 
     private PipedOutputStream mPout;
@@ -46,34 +44,6 @@ public class PipedInputStream extends InputStream implements ReadTimeout {
     public PipedInputStream(PipedOutputStream pout) throws IOException {
         mLock = pout.setInput(this);
         setOutput(pout);
-    }
-
-    public long getReadTimeout() throws IOException {
-        mLock.lock();
-        try {
-            return mPout.getReadTimeout();
-        } catch (NullPointerException e) {
-            checkConnected();
-            throw e;
-        } finally {
-            mLock.unlock();
-        }
-    }
-
-    public TimeUnit getReadTimeoutUnit() throws IOException {
-        return mPout.getReadTimeoutUnit();
-    }
-
-    public void setReadTimeout(long time, TimeUnit unit) throws IOException {
-        mLock.lock();
-        try {
-            mPout.setReadTimeout(time, unit);
-        } catch (NullPointerException e) {
-            checkConnected();
-            throw e;
-        } finally {
-            mLock.unlock();
-        }
     }
 
     public int read() throws IOException {

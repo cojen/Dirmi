@@ -19,50 +19,67 @@ package dirmi;
 import java.io.IOException;
 
 import java.net.ServerSocket;
-import java.net.SocketAddress;
+import java.net.Socket;
 
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 
-import dirmi.io.Broker;
+import dirmi.io.Connection;
+import dirmi.io.Multiplexer;
+import dirmi.io.SocketConnection;
 
-import dirmi.core.ClientSocketBroker;
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
 import dirmi.core.ThreadPool;
 
 /**
- * Factories for creating {@link Session}s.
+ * {@link Session} and {@link SessionServer} factories.
  *
  * @author Brian S O'Neill
  */
 public class Sessions {
     private static final int DEFAULT_TCP_BUFFER_SIZE = 1 << 16;
 
+    private static volatile ScheduledExecutorService cDefaultSessionExecutor;
+
+    private static ScheduledExecutorService defaultSessionExecutor() {
+        ScheduledExecutorService executor = cDefaultSessionExecutor;
+        if (executor == null) {
+            synchronized (Sessions.class) {
+                executor = cDefaultSessionExecutor;
+                if (executor == null) {
+                    cDefaultSessionExecutor = executor =
+                        new ThreadPool(Integer.MAX_VALUE, true, "session");
+                }
+            }
+        }
+        return executor;
+    }
+
     /**
      * @param host name of remote host
      * @param port remote port
      */
     public static Session createSession(String host, int port) throws IOException {
-        return createSession(host, port, null);
+        return createSession(new Socket(host, port), null, null);
     }
 
     /**
-     * @param host name of remote host
-     * @param port remote port
-     * @param server optional server object to export
+     * @param con fresh remote connection
      */
-    public static Session createSession(String host, int port, Object server) throws IOException {
-        return createSession(new ClientSocketBroker(host, port), server);
+    public static Session createSession(Socket con) throws IOException {
+        return createSession(con, null, null);
     }
 
     /**
-     * @param address address of remote host
-     * @param server optional server object to export
+     * @param con fresh remote connection
+     * @param server optional remote or serializable object to export
+     * @param executor task executor; pass null for default
      */
-    public static Session createSession(SocketAddress address, Object server) throws IOException {
-        /* FIXME: support this in ClientSocketBroker
+    public static Session createSession(Socket con, Object server,
+                                        ScheduledExecutorService executor)
+        throws IOException
+    {
         if (con.getSendBufferSize() < DEFAULT_TCP_BUFFER_SIZE) {
             con.setSendBufferSize(DEFAULT_TCP_BUFFER_SIZE);
         }
@@ -70,39 +87,59 @@ public class Sessions {
             con.setReceiveBufferSize(DEFAULT_TCP_BUFFER_SIZE);
         }
         con.setTcpNoDelay(true);
-        */
-        return createSession(new ClientSocketBroker(address), server);
+        return createSession(new SocketConnection(con), server, executor);
     }
 
     /**
-     * @param con remote connection
-     * @param server optional server object to export
+     * @param con fresh remote connection
+     * @param server optional remote or serializable object to export
+     * @param executor task executor; pass null for default
      */
-    private static Session createSession(Broker broker, Object server) throws IOException {
-        // FIXME: control max threads
-        Executor executor = new ThreadPool(100, true);
-        return new StandardSession(broker, server, executor);
+    public static Session createSession(Connection con, Object server,
+                                        ScheduledExecutorService executor)
+        throws IOException
+    {
+        if (executor == null) {
+            executor = defaultSessionExecutor();
+        }
+        return new StandardSession(new Multiplexer(con, executor), server, executor);
     }
 
     /**
      * @param port port for accepting socket connections
-     * @param export server object to export
+     * @param server remote or serializable object to export
      */
-    public static SessionServer createSessionServer(int port, Object export)
+    public static SessionServer createSessionServer(int port, Object server)
         throws IOException
     {
-        return createSessionServer(new ServerSocket(port), export);
+        return createSessionServer(new ServerSocket(port), server);
     }
 
     /**
      * @param ss accepts sockets
-     * @param export server object to export
+     * @param server remote or serializable object to export
      */
-    public static SessionServer createSessionServer(ServerSocket ss, Object export)
+    public static SessionServer createSessionServer(ServerSocket ss, Object server)
         throws IOException
     {
-        // FIXME: control max threads
-        Executor executor = new ThreadPool(100, false);
-        return new StandardSessionServer(ss, export, executor);
+        return createSessionServer(ss, server, null);
+    }
+
+    /**
+     * @param ss accepts sockets
+     * @param server remote or serializable object to export
+     * @param executor task executor; pass null for default
+     */
+    public static SessionServer createSessionServer(ServerSocket ss, Object server,
+                                                    ScheduledExecutorService executor)
+        throws IOException
+    {
+        if (executor == null) {
+            executor = new ThreadPool(Integer.MAX_VALUE, false, "session-server");
+        }
+        return new StandardSessionServer(ss, server, executor);
+    }
+
+    private Sessions() {
     }
 }

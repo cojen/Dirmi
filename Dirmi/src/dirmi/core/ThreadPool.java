@@ -19,34 +19,42 @@ package dirmi.core;
 import java.util.Collections;
 import java.util.List;
 import java.util.LinkedList;
+import java.util.TreeSet;
 
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Delayed;
 import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Custom thread pool implementation which performs better than the default
  * JDK1.6 thread pool. A test program using the StandardSession and the default
- * thread pool performed was about 10,040 messages per second. With this thread
- * pool, the performance was about 10,440 messages per second. The overall CPU
- * utilization was lower too, by about 10%.
+ * thread pool performed at about 10,040 messages per second. With this thread
+ * pool, the performance was about 10,440 messages per second, which is
+ * slightly better. More importantly, the overall CPU utilization is lower,
+ * by about 10%.
  *
  * @author Brian S O'Neill
  */
-public class ThreadPool extends AbstractExecutorService {
+public class ThreadPool extends AbstractExecutorService implements ScheduledExecutorService {
     static final Runnable SHUTDOWN = new Runnable() {
         public void run() {
             throw new ThreadDeath();
         }
     };
 
-    private static final AtomicInteger cPoolNumber = new AtomicInteger(1);
+    private static final AtomicLong cPoolNumber = new AtomicLong(1);
+    static final AtomicLong cTaskNumber = new AtomicLong(1);
 
     private final ThreadGroup mGroup;
-    private final AtomicInteger mThreadNumber = new AtomicInteger(1);
+    private final AtomicLong mThreadNumber = new AtomicLong(1);
     private final String mNamePrefix;
     private final boolean mDaemon;
     private final Thread.UncaughtExceptionHandler mHandler;
@@ -56,6 +64,9 @@ public class ThreadPool extends AbstractExecutorService {
 
     // Pool is accessed like a stack.
     private final LinkedList<PooledThread> mPool;
+
+    private final TreeSet<Task> mScheduledTasks;
+    private TaskRunner mTaskRunner;
 
     private int mActive;
     private boolean mShutdown;
@@ -105,9 +116,15 @@ public class ThreadPool extends AbstractExecutorService {
 
         mMax = max;
         mPool = new LinkedList<PooledThread>();
+
+        mScheduledTasks = new TreeSet<Task>();
     }
 
     public void execute(Runnable command) throws RejectedExecutionException {
+        if (command == null) {
+            throw new NullPointerException("Command is null");
+        }
+
         PooledThread thread;
 
         while (true) {
@@ -121,7 +138,7 @@ public class ThreadPool extends AbstractExecutorService {
                         break find;
                     }
                     if (mActive >= mMax) {
-                        throw new RejectedExecutionException();
+                        throw new RejectedExecutionException("Too many active threads");
                     }
                     // Create a new thread if the number of active threads
                     // is less than the maximum allowed.
@@ -154,6 +171,36 @@ public class ThreadPool extends AbstractExecutorService {
         }
     }
 
+    public ScheduledFuture<?> schedule(final Runnable command, long delay, TimeUnit unit) {
+        return new Task<Object>(Executors.callable(command), delay, 0, unit);
+    }
+
+    public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+        return new Task<V>(callable, delay, 0, unit);
+    }
+
+    public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
+                                                  long initialDelay,
+                                                  long period,
+                                                  TimeUnit unit)
+    {
+        if (period <= 0) {
+            throw new IllegalArgumentException();
+        }
+        return new Task<Object>(Executors.callable(command), initialDelay, period, unit);
+    }
+
+    public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command,
+                                                     long initialDelay,
+                                                     long delay,
+                                                     TimeUnit unit)
+    {
+        if (delay <= 0) {
+            throw new IllegalArgumentException();
+        }
+        return new Task<Object>(Executors.callable(command), initialDelay, -delay, unit);
+    }
+
     public void shutdown() {
         synchronized (mPool) {
             mShutdown = true;
@@ -161,6 +208,10 @@ public class ThreadPool extends AbstractExecutorService {
                 thread.setCommand(SHUTDOWN);
             }
             mPool.notifyAll();
+        }
+        synchronized (mScheduledTasks) {
+            mScheduledTasks.clear();
+            mScheduledTasks.notifyAll();
         }
     }
 
@@ -222,6 +273,91 @@ public class ThreadPool extends AbstractExecutorService {
             mActive--;
             mPool.notify();
         }
+    }
+
+    void scheduleTask(Task<?> task) {
+        if (isShutdown()) {
+            throw new RejectedExecutionException("Thread pool is shutdown");
+        }
+        synchronized (mScheduledTasks) {
+            if (!mScheduledTasks.add(task)) {
+                throw new InternalError();
+            }
+            if (mScheduledTasks.first() == task) {
+                if (mTaskRunner == null) {
+                    mTaskRunner = new TaskRunner();
+                    execute(mTaskRunner);
+                } else {
+                    mScheduledTasks.notify();
+                }
+            }
+        }
+    }
+
+    void removeTask(Task<?> task) {
+        synchronized (mScheduledTasks) {
+            mScheduledTasks.remove(task);
+            if (mScheduledTasks.size() == 0) {
+                mScheduledTasks.notifyAll();
+            }
+        }
+    }
+
+    // Returns null if no more tasks
+    Task<?> acquireTask(boolean canWait) {
+        synchronized (mScheduledTasks) {
+            while (true) {
+                if (mScheduledTasks.size() == 0) {
+                    return null;
+                }
+                Task<?> task = mScheduledTasks.first();
+                long now = System.currentTimeMillis();
+                long at = task.getAtMillis();
+                if (at <= now) {
+                    mScheduledTasks.remove(task);
+                    if (mScheduledTasks.size() == 0) {
+                        mScheduledTasks.notifyAll();
+                    }
+                    return task;
+                }
+                if (canWait) {
+                    try {
+                        mScheduledTasks.wait(at - now);
+                    } catch (InterruptedException e) {
+                    }
+                } else {
+                    return null;
+                }
+            }
+        }
+    }
+
+    void tryReplace(TaskRunner runner) {
+        synchronized (mScheduledTasks) {
+            if (mScheduledTasks.size() > 0 && mTaskRunner == runner) {
+                runner = new TaskRunner();
+                try {
+                    execute(runner);
+                    mTaskRunner = runner;
+                } catch (RejectedExecutionException e) {
+                }
+            }
+        }
+    }
+
+    boolean canExit(TaskRunner runner) {
+        if (!isShutdown()) {
+            synchronized (mScheduledTasks) {
+                if (mTaskRunner == runner) {
+                    mTaskRunner = null;
+                }
+                if (mTaskRunner == null && mScheduledTasks.size() != 0) {
+                    mTaskRunner = runner;
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private PooledThread newPooledThread(Runnable command) {
@@ -303,8 +439,6 @@ public class ThreadPool extends AbstractExecutorService {
 
                     try {
                         command.run();
-                    } catch (ThreadDeath death) {
-                        break;
                     } catch (Throwable e) {
                         getUncaughtExceptionHandler().uncaughtException(this, e);
                         e = null;
@@ -320,6 +454,125 @@ public class ThreadPool extends AbstractExecutorService {
             } finally {
                 threadExiting(this);
             }
+        }
+    }
+
+    private class Task<V> extends FutureTask<V> implements ScheduledFuture<V> {
+        private final long mNum;
+        private final long mPeriodMillis;
+
+        private volatile long mAtMillis;
+
+        /**
+         * @param period Period in milliseconds for repeating tasks. A positive
+         * value indicates fixed-rate execution. A negative value indicates
+         * fixed-delay execution. A value of 0 indicates a non-repeating task.
+         */
+        Task(Callable<V> callable, long initialDelay, long period, TimeUnit unit) {
+            super(callable);
+
+            long periodMillis;
+            if (period == 0) {
+                periodMillis = 0;
+            } else if ((periodMillis = unit.toMillis(period)) == 0) {
+                // Account for any rounding error.
+                periodMillis = period < 0 ? -1 : 1;
+            }
+            mPeriodMillis = periodMillis;
+
+            mNum = cTaskNumber.getAndIncrement();
+
+            mAtMillis = System.currentTimeMillis();
+            if (initialDelay > 0) {
+                mAtMillis += unit.toMillis(initialDelay);
+            }
+
+            scheduleTask(this);
+        }
+
+        public long getDelay(TimeUnit unit) {
+            return unit.convert(mAtMillis - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+        }
+
+        public int compareTo(Delayed delayed) {
+            if (this == delayed) {
+                return 0;
+            }
+            if (delayed instanceof Task) {
+                Task<?> other = (Task<?>) delayed;
+                long diff = mAtMillis - other.mAtMillis;
+                if (diff < 0) {
+                    return -1;
+                } else if (diff > 0) {
+                    return 1;
+                } else if (mNum < other.mNum) {
+                    return -1;
+                } else {
+                    return 1;
+                }
+            }
+            long diff = getDelay(TimeUnit.NANOSECONDS) - delayed.getDelay(TimeUnit.NANOSECONDS);
+            return diff == 0 ? 0 : (diff < 0 ? -1 : 1);
+        }
+
+        @Override
+        public void run() {
+            long periodMillis = mPeriodMillis;
+            if (periodMillis == 0) {
+                super.run();
+            } else if (super.runAndReset()) {
+                if (periodMillis > 0) {
+                    mAtMillis += periodMillis;
+                } else {
+                    mAtMillis = System.currentTimeMillis() - periodMillis;
+                }
+                try {
+                    scheduleTask(this);
+                } catch (RejectedExecutionException e) {
+                }
+            }
+        }
+
+        @Override
+        protected void done() {
+            removeTask(this);
+        }
+
+        long getAtMillis() {
+            return mAtMillis;
+        }
+    }
+
+    private class TaskRunner implements Runnable {
+        TaskRunner() {
+        }
+
+        public void run() {
+            do {
+                try {
+                    Task<?> task = acquireTask(true);
+                    if (task != null) {
+                        // Try to replace this runner, to allow task to block.
+                        tryReplace(this);
+
+                        task.run();
+
+                        // Run any more tasks which need to be run immediately, to
+                        // avoid having to switch context.
+                        while ((task = acquireTask(false)) != null) {
+                            task.run();
+                        }
+
+                        // Allow the garbage collector to reclaim task from stack
+                        // if runner cannot exit.
+                        task = null;
+                    }
+                } catch (Throwable e) {
+                    Thread t = Thread.currentThread();
+                    t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                    e = null;
+                }
+            } while (!canExit(this));
         }
     }
 }

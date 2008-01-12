@@ -26,7 +26,7 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public interface Connection extends Closeable, ReadTimeout, WriteTimeout {
+public interface Connection extends Closeable {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;

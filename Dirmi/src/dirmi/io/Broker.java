@@ -17,13 +17,43 @@
 package dirmi.io;
 
 import java.io.Closeable;
+import java.io.IOException;
+
+import java.util.concurrent.TimeUnit;
 
 /**
- * Supports accepting connections and making new connections. Broker
- * implementations may require at least one thread must be calling the accept
- * method at all times in order to work.
+ * Supports accepting connections and making new connections.
  *
  * @author Brian S O'Neill
  */
-public interface Broker extends Connecter, Accepter, Closeable {
+public interface Broker extends Closeable {
+    /**
+     * Called by client to establish a new connection.
+     *
+     * @return new connection
+     */
+    Connection connect() throws IOException;
+
+    /**
+     * Called by client to establish a new connection.
+     *
+     * @return new connection, or null if timed out
+     */
+    Connection tryConnect(long time, TimeUnit unit) throws IOException;
+
+    /**
+     * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection
+     */
+    Connection accept() throws IOException;
+
+    /**
+     * Called by server to block waiting for a new connection request from client.
+     *
+     * @return new connection, or null if timed out
+     */
+    Connection tryAccept(long time, TimeUnit unit) throws IOException;
+
+    boolean isClosed();
 }
