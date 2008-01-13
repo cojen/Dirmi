@@ -267,7 +267,7 @@ public class Multiplexer implements Broker {
         // Close all connections.
         mConnectionsLock.writeLock().lock();
         try {
-            if (mClosedCause != null) {
+            if (mClosedCause == null) {
                 mClosedCause = cause;
             }
 
@@ -296,7 +296,6 @@ public class Multiplexer implements Broker {
             if (cause == null) {
                 throw new IOException("Closed");
             } else {
-                cause.fillInStackTrace();
                 throw cause;
             }
         }
