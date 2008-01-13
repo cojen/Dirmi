@@ -262,11 +262,7 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 } else {
                     // Finished with connection.
-                    b.loadThis();
-                    b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-                    b.loadLocal(conVar);
-                    b.invokeInterface(stubSupportType, "finished", null,
-                                      new TypeDesc[] {invConnectionType});
+                    genFinished(b, conVar);
 
                     if (returnDesc == null) {
                         b.returnVoid();
@@ -311,27 +307,28 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.invokeVirtual(invInType, "readThrowable", throwableType, null);
                 b.storeLocal(throwableVar);
 
-                // Finished with connection.
-                invokeEnd = b.createLabel().setLocation();
-                b.loadThis();
-                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-                b.loadLocal(conVar);
-                b.invokeInterface(stubSupportType, "finished", null,
-                                  new TypeDesc[] {invConnectionType});
+                b.loadLocal(throwableVar);
+                Label abnormalResponse = b.createLabel();
+                b.ifNullBranch(abnormalResponse, false);
 
-                b.loadLocal(throwableVar);
-                Label normalResponse = b.createLabel();
-                b.ifNullBranch(normalResponse, true);
-                b.loadLocal(throwableVar);
-                b.throwObject();
-                
-                normalResponse.setLocation();
                 if (returnDesc == null) {
+                    invokeEnd = b.createLabel().setLocation();
+                    // Finished with connection.
+                    genFinished(b, conVar);
                     b.returnVoid();
                 } else {
                     CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
+                    invokeEnd = b.createLabel().setLocation();
+                    // Finished with connection.
+                    genFinished(b, conVar);
                     b.returnValue(returnDesc);
                 }
+
+                abnormalResponse.setLocation();
+                // Finished with connection.
+                genFinished(b, conVar);
+                b.loadLocal(throwableVar);
+                b.throwObject();
             }
 
             // If any invocation exception, indicate connection failed.
@@ -478,6 +475,17 @@ public class StubFactoryGenerator<R extends Remote> {
         }
 
         return ci.defineClass(cf);
+    }
+
+    private void genFinished(CodeBuilder b, LocalVariable conVar) {
+        final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
+        final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
+
+        b.loadThis();
+        b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+        b.loadLocal(conVar);
+        b.invokeInterface(stubSupportType, "finished", null,
+                          new TypeDesc[] {invConnectionType});
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {
