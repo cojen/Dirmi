@@ -852,8 +852,8 @@ public class StandardSession implements Session {
     }
 
     private class ResolvingObjectInputStream extends ObjectInputStream {
-        ResolvingObjectInputStream(InputStream out) throws IOException {
-            super(out);
+        ResolvingObjectInputStream(InputStream in) throws IOException {
+            super(in);
             enableResolveObject(true);
         }
 
