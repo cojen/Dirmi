@@ -432,6 +432,15 @@ public class RemoteIntrospector {
             mID = id;
             mName = m.getName();
 
+            {
+                Asynchronous ann = m.getAnnotation(Asynchronous.class);
+                if (ann == null) {
+                    mAsynchronous = false;
+                } else {
+                    mAsynchronous = true;
+                }
+            }
+
             // First pass, treat all params as serialized. Resolve on second pass.
             // This allows remote methods to pass instances of declaring class without
             // causing the introspector to overflow the stack.
@@ -440,7 +449,7 @@ public class RemoteIntrospector {
             if (returnType == null) {
                 mReturnType = null;
             } else {
-                mReturnType = RParameter.makeTemp(returnType);
+                mReturnType = RParameter.makeTemp(returnType, mAsynchronous);
             }
 
             Class<?>[] paramsTypes = m.getParameterTypes();
@@ -449,7 +458,7 @@ public class RemoteIntrospector {
             } else {
                 mParameterTypes = new ArrayList<RParameter<Object>>(paramsTypes.length);
                 for (Class paramType : paramsTypes) {
-                    mParameterTypes.add(RParameter.makeTemp(paramType));
+                    mParameterTypes.add(RParameter.makeTemp(paramType, mAsynchronous));
                 }
             }
 
@@ -460,18 +469,9 @@ public class RemoteIntrospector {
                 Set<RemoteParameter<Throwable>> set =
                     new LinkedHashSet<RemoteParameter<Throwable>>();
                 for (Class exceptionType : exceptionTypes) {
-                    set.add(RParameter.makeTemp(exceptionType));
+                    set.add(RParameter.makeTemp(exceptionType, false));
                 }
                 mExceptionTypes = Collections.unmodifiableSet(set);
-            }
-
-            {
-                Asynchronous ann = m.getAnnotation(Asynchronous.class);
-                if (ann == null) {
-                    mAsynchronous = false;
-                } else {
-                    mAsynchronous = true;
-                }
             }
 
             {
@@ -779,13 +779,14 @@ public class RemoteIntrospector {
     private static class RParameter<T> implements RemoteParameter<T> {
         private static final long serialVersionUID = 1L;
 
-        static <T> RParameter<T> makeTemp(Class<T> type) {
+        static <T> RParameter<T> makeTemp(Class<T> type, boolean asynchronous) {
             if (type == void.class || type == null) {
                 return null;
             }
 
             boolean unshared = type.isPrimitive() ||
                 String.class.isAssignableFrom(type) ||
+                (asynchronous && Pipe.class.isAssignableFrom(type)) ||
                 TypeDesc.forClass(type).toPrimitiveType() != null;
 
             return intern(new RParameter<T>(type, unshared));
