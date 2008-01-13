@@ -266,7 +266,13 @@ public class StandardSession implements Session {
         }
         mClosing = true;
 
-        mBackgroundTask.cancel(false);
+        try {
+            mBackgroundTask.cancel(false);
+        } catch (NullPointerException e) {
+            if (mBackgroundTask != null) {
+                throw e;
+            }
+        }
 
         try {
             if (notify && mRemoteAdmin != null) {
@@ -407,11 +413,6 @@ public class StandardSession implements Session {
             } catch (IOException e2) {
                 // Don't care.
             }
-            try {
-                closeOnFailure("Failed to read request identifier", e);
-            } catch (IOException e2) {
-                // Don't care.
-            }
             return false;
         }
 
@@ -539,11 +540,13 @@ public class StandardSession implements Session {
             /**
              * Notification from client when it has disposed of an identified object.
              */
+            @Asynchronous
             void disposed(Identifier id) throws RemoteException;
 
             /**
              * Notification from client when it has disposed of identified objects.
              */
+            @Asynchronous
             void disposed(Identifier[] ids) throws RemoteException;
 
             /**
@@ -995,6 +998,12 @@ public class StandardSession implements Session {
         public void finished(InvocationConnection con) {
             if (con instanceof InvocationCon) {
                 ((InvocationCon) con).recycle();
+            } else {
+                try {
+                    con.close();
+                } catch (IOException e2) {
+                    // Don't care.
+                }
             }
         }
 
