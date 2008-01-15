@@ -67,8 +67,7 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         }
         Identifier id = cObjectsToIdentifiers.get(obj);
         if (id == null) {
-            // FIXME: Use thread local random number generator and possibly use
-            // a faster generator, like Mersenne twister.
+            // FIXME: Possibly use a faster generator, like Mersenne twister.
             do {
                 id = new Identifier(cRandom.nextLong());
             } while (cIdentifiersToObjects.containsKey(id));
