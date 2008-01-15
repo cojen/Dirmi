@@ -317,31 +317,6 @@ public class StandardSession implements Session {
         return mRemoteServer;
     }
 
-    /**
-     * @return true if remote side should be notified
-     */
-    boolean dispose(Identifier id) {
-        boolean doNotify = false;
-
-        mSkeletonFactories.remove(id);
-
-        Skeleton skeleton = mSkeletons.remove(id);
-        if (skeleton != null) {
-            doNotify = true;
-        }
-
-        mStubFactoryRefs.remove(id);
-
-        StubRef ref = mStubRefs.remove(id);
-        if (ref != null) {
-            ref.markStubDisposed();
-            doNotify = true;
-        }
-
-        return doNotify;
-    }
-
-
     void sendDisposedStubs() throws IOException {
         if (mRemoteAdmin == null) {
             return;
@@ -523,10 +498,6 @@ public class StandardSession implements Session {
         protected void unreachable() {
             mStubSupport.unreachable();
         }
-
-        void markStubDisposed() {
-            mStubSupport.markDisposed();
-        }
     }
 
     private static class Hidden {
@@ -585,6 +556,11 @@ public class StandardSession implements Session {
                     dispose(id);
                 }
             }
+        }
+
+        private void dispose(Identifier id) {
+            mSkeletonFactories.remove(id);
+            mSkeletons.remove(id);
         }
 
         public void closedExplicitly() {
@@ -967,7 +943,6 @@ public class StandardSession implements Session {
 
     private class StubSupportImpl implements StubSupport {
         private final Identifier mObjID;
-        private volatile boolean mDisposed;
 
         StubSupportImpl(Identifier id) {
             mObjID = id;
@@ -976,15 +951,6 @@ public class StandardSession implements Session {
         public <T extends Throwable> InvocationConnection invoke(Class<T> remoteFailureEx)
             throws T
         {
-            if (mDisposed) {
-                RemoteException ex = new NoSuchObjectException("Remote object disposed");
-                if (remoteFailureEx == null || remoteFailureEx == RemoteException.class) {
-                    throw (T) ex;
-                } else {
-                    throw failed(remoteFailureEx, null, ex);
-                }
-            }
-
             InvocationConnection con = null;
             try {
                 con = getConnection();
@@ -1062,12 +1028,7 @@ public class StandardSession implements Session {
             return mObjID.toString();
         }
 
-        void markDisposed() {
-            mDisposed = true;
-        }
-
         void unreachable() {
-            mDisposed = true;
             if (mStubRefs.remove(mObjID) != null) {
                 mDisposedObjects.add(mObjID);
             }
