@@ -337,14 +337,11 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return (ObjectInputStream) mIn;
     }
 
-    private Integer readVarUnsignedInteger() throws IOException {
+    private int readVarUnsignedInteger() throws IOException {
         InputStream in = mIn;
         int b1 = in.read();
         if (b1 < 0) {
             throw new EOFException();
-        }
-        if (b1 == InvocationOutputStream.NULL) {
-            return null;
         }
         if (b1 <= 0x7f) {
             return b1;
