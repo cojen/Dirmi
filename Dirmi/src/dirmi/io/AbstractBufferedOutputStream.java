@@ -46,7 +46,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         int pos = mPos;
         buffer[pos++] = (byte) b;
         if (pos >= buffer.length) {
-            doWrite(buffer, 0, buffer.length);
+            doWrite(buffer, 0, buffer.length, false);
             mPos = 0;
         } else {
             mPos = pos;
@@ -60,7 +60,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         if (avail >= len) {
             System.arraycopy(b, off, buffer, pos, len);
             if (avail == len) {
-                doWrite(buffer, 0, buffer.length);
+                doWrite(buffer, 0, buffer.length, false);
                 mPos = 0;
             } else {
                 mPos = pos + len;
@@ -68,7 +68,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         } else {
             // Fill remainder of buffer and flush it.
             System.arraycopy(b, off, buffer, pos, avail);
-            doWrite(buffer, 0, buffer.length);
+            doWrite(buffer, 0, buffer.length, false);
             off += avail;
             len -= avail;
             if (len < buffer.length) {
@@ -76,7 +76,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
                 mPos = len;
             } else {
                 mPos = 0;
-                doWrite(b, off, len);
+                doWrite(b, off, len, false);
             }
         }
     }
@@ -158,24 +158,26 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
     public synchronized void drain() throws IOException {
         int pos = mPos;
         if (pos != 0) {
-            doWrite(mBuffer, 0, pos);
+            doWrite(mBuffer, 0, pos, false);
+            mPos = 0;
+        }
+    }
+
+    public synchronized void flush() throws IOException {
+        int pos = mPos;
+        if (pos != 0) {
+            doWrite(mBuffer, 0, pos, true);
             mPos = 0;
         }
     }
 
     /**
-     * Just calls drain.
-     */
-    public void flush() throws IOException {
-        drain();
-    }
-
-    /**
-     * Just calls drain.
+     * Just calls flush.
      */
     public void close() throws IOException {
-        drain();
+        flush();
     }
 
-    protected abstract void doWrite(byte[] buffer, int offset, int length) throws IOException;
+    protected abstract void doWrite(byte[] buffer, int offset, int length, boolean flush)
+        throws IOException;
 }

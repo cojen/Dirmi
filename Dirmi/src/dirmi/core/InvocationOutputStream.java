@@ -38,14 +38,14 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     static final byte NULL = 2;
     static final byte NOT_NULL = 3;
 
-    private volatile OutputStream mOut;
+    private final ObjectOutputStream mOut;
     private final String mLocalAddress;
     private final String mRemoteAddress;
 
     /**
      * @param out stream to wrap
      */
-    public InvocationOutputStream(OutputStream out) {
+    public InvocationOutputStream(ObjectOutputStream out) {
         mOut = out;
         mLocalAddress = null;
         mRemoteAddress = null;
@@ -56,7 +56,9 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
      * @param localAddress optional local address to stitch into stack traces sent to client.
      * @param remoteAddress optional remote address to stitch into stack traces sent to client.
      */
-    public InvocationOutputStream(OutputStream out, String localAddress, String remoteAddress) {
+    public InvocationOutputStream(ObjectOutputStream out,
+                                  String localAddress, String remoteAddress)
+    {
         mOut = out;
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
@@ -75,101 +77,47 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     }
 
     public void writeBoolean(boolean v) throws IOException {
-        mOut.write(v ? TRUE : FALSE);
+        mOut.writeBoolean(v);
     }
 
     public void writeByte(int v) throws IOException {
-        mOut.write(v);
+        mOut.writeByte(v);
     }
 
     public void writeShort(int v) throws IOException {
-        OutputStream out = mOut;
-        out.write(v >> 8);
-        out.write(v);
+        mOut.writeShort(v);
     }
 
     public void writeChar(int v) throws IOException {
-        OutputStream out = mOut;
-        out.write(v >> 8);
-        out.write(v);
+        mOut.writeChar(v);
     }
 
     public void writeInt(int v) throws IOException {
-        OutputStream out = mOut;
-        out.write(v >> 24);
-        out.write(v >> 16);
-        out.write(v >> 8);
-        out.write(v);
+        mOut.writeInt(v);
     }
 
     public void writeLong(long v) throws IOException {
-        writeInt((int) (v >> 32));
-        writeInt((int) v);
+        mOut.writeLong(v);
     }
 
     public void writeFloat(float v) throws IOException {
-        writeInt(Float.floatToRawIntBits(v));
+        mOut.writeFloat(v);
     }
 
     public void writeDouble(double v) throws IOException {
-        writeLong(Double.doubleToRawLongBits(v));
+        mOut.writeDouble(v);
     }
 
     public void writeBytes(String s) throws IOException {
-        int length = s.length();
-        OutputStream out = mOut;
-        for (int i=0; i<length; i++) {
-            out.write(s.charAt(i));
-        }
+        mOut.writeBytes(s);
     }
 
     public void writeChars(String s) throws IOException {
-        int length = s.length();
-        OutputStream out = mOut;
-        for (int i=0; i<length; i++) {
-            int c = s.charAt(i);
-            out.write(c >> 8);
-            out.write(c);
-        }
+        mOut.writeChars(s);
     }
 
     public void writeUTF(String s) throws IOException {
-        int length = s.length();
-
-        int utflen = 0;
-        for (int i=0; i<length; i++) {
-            int c = s.charAt(i);
-            if ((c >= 0x0001) && (c <= 0x007F)) {
-                utflen++;
-            } else if (c > 0x07FF) {
-                utflen += 3;
-            } else {
-                utflen += 2;
-            }
-        }
-
-        if (utflen > 65535) {
-            throw new UTFDataFormatException("encoded string too long: " + utflen + " bytes");
-        }
-
-        OutputStream out = mOut;
-
-        out.write(utflen >> 8);
-        out.write(utflen);
-
-        for (int i=0; i<length; i++) {
-            int c = s.charAt(i);
-            if ((c >= 0x0001) && (c <= 0x007f)) {
-                out.write(c);
-            } else if (c > 0x07ff) {
-                out.write(0xe0 | ((c >> 12) & 0x0f));
-                out.write(0x80 | ((c >> 6) & 0x3f));
-                out.write(0x80 | (c & 0x3f));
-            } else {
-                out.write(0xc0 | ((c >> 6) & 0x1f));
-                out.write(0x80 | (c & 0x3f));
-            }
-        }
+        mOut.writeUTF(s);
     }
 
     /**
@@ -242,18 +190,11 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     }
 
     public void writeUnshared(Object obj) throws IOException {
-        getObjectOutputStream().writeUnshared(obj);
+        mOut.writeUnshared(obj);
     }
 
     public void writeObject(Object obj) throws IOException {
-        getObjectOutputStream().writeObject(obj);
-    }
-
-    private ObjectOutputStream getObjectOutputStream() throws IOException {
-        if (!(mOut instanceof ObjectOutputStream)) {
-            mOut = createObjectOutputStream(mOut);
-        }
-        return (ObjectOutputStream) mOut;
+        mOut.writeObject(obj);
     }
 
     public void writeThrowable(Throwable t) throws IOException {
@@ -276,7 +217,7 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         // Element zero is root cause.
         collectChain(chain, t);
 
-        ObjectOutput out = getObjectOutputStream();
+        ObjectOutput out = mOut;
         out.writeObject(mLocalAddress);
         out.writeObject(mRemoteAddress);
 
@@ -305,10 +246,7 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     }
 
     public void reset() throws IOException {
-        OutputStream out = mOut;
-        if (out instanceof ObjectOutputStream) {
-            ((ObjectOutputStream) out).reset();
-        }
+        mOut.reset();
     }
 
     public void flush() throws IOException {
@@ -318,12 +256,4 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     public void close() throws IOException {
         mOut.close();
     }
-
-    /**
-     * Override this method to return a subclassed ObjectOutputStream.
-     */
-    protected ObjectOutputStream createObjectOutputStream(OutputStream out) throws IOException {
-        return new ObjectOutputStream(out);
-    }
-
 }

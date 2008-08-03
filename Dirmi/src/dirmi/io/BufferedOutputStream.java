@@ -44,18 +44,23 @@ public class BufferedOutputStream extends AbstractBufferedOutputStream {
 
     @Override
     public synchronized void flush() throws IOException {
-        drain();
+        super.drain();
         mOut.flush();
     }
 
     @Override
     public synchronized void close() throws IOException {
-        drain();
+        super.drain();
         mOut.close();
     }
 
     @Override
-    protected void doWrite(byte[] buffer, int offset, int length) throws IOException {
+    protected void doWrite(byte[] buffer, int offset, int length, boolean flush)
+        throws IOException
+    {
         mOut.write(buffer, offset, length);
+        if (flush) {
+            mOut.flush();
+        }
     }
 }

@@ -110,6 +110,7 @@ public class StandardSession implements Session {
     final Hidden.Admin mRemoteAdmin;
 
     // Pool of connections for client calls.
+    // FIXME: consider using concurrent queue
     final LinkedList<InvocationCon> mConnectionPool;
 
     final ScheduledFuture<?> mBackgroundTask;
@@ -178,16 +179,14 @@ public class StandardSession implements Session {
             executor.execute(bootstrap);
 
             // Accept connection and get remote bootstrap information.
-            final InvocationConnection invCon = new InvocationCon(mBroker.accept());
-
-            // Start first worker thread now to ensure multiplexer is getting
-            // processed. This avoids deadlock during bootstrap if send buffer
-            // is too small.
-            mExecutor.execute(new Worker());
-
-            InvocationInputStream in = invCon.getInputStream();
+            Connection con = mBroker.accept();
 
             try {
+                InvocationInputStream in = new InvocationInputStream
+                    (new ResolvingObjectInputStream(con.getInputStream()),
+                     con.getLocalAddressString(),
+                     con.getRemoteAddressString());
+
                 int magic = in.readInt();
                 if (magic != MAGIC_NUMBER) {
                     throw new IOException("Incorrect magic number: " + magic);
@@ -208,7 +207,7 @@ public class StandardSession implements Session {
                 }
             } catch (IOException e) {
                 try {
-                    invCon.close();
+                    con.close();
                 } catch (IOException e2) {
                     // Ignore.
                 }
@@ -218,12 +217,8 @@ public class StandardSession implements Session {
             // Wait for bootstrap to complete.
             bootstrap.waitUntilDone();
 
-            // Re-use initial con for handling requests.
-            mExecutor.execute(new Runnable() {
-                public void run() {
-                    handleRequests(invCon);
-                }
-            });
+            // Start first worker thread.
+            mExecutor.execute(new Worker());
 
             // Start background task.
             long delay = DEFAULT_HEARTBEAT_CHECK_MILLIS >> 1;
@@ -586,10 +581,14 @@ public class StandardSession implements Session {
         }
 
         public synchronized void run() {
-            InvocationCon invCon = null;
+            Connection con = null;
             try {
-                invCon = new InvocationCon(mBroker.connect());
-                InvocationOutputStream out = invCon.getOutputStream();
+                con = mBroker.connect();
+
+                InvocationOutputStream out = new InvocationOutputStream
+                    (new ReplacingObjectOutputStream(con.getOutputStream()),
+                     con.getLocalAddressString(),
+                     con.getRemoteAddressString());
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
@@ -599,19 +598,18 @@ public class StandardSession implements Session {
                 }
 
                 out.flush();
-                invCon.recycle();
             } catch (IOException e) {
                 mError = e;
-                if (invCon != null) {
+            } finally {
+                mDone = true;
+                notify();
+                if (con != null) {
                     try {
-                        invCon.close();
+                        con.close();
                     } catch (IOException e2) {
                         // Don't care.
                     }
                 }
-            } finally {
-                mDone = true;
-                notify();
             }
         }
 
@@ -751,29 +749,20 @@ public class StandardSession implements Session {
 
         InvocationCon(Connection con) throws IOException {
             mCon = con;
-            mInvIn = new InvocationInputStream(con.getInputStream(),
-                                               getLocalAddressString(),
-                                               getRemoteAddressString())
-            {
-                @Override
-                protected ObjectInputStream createObjectInputStream(InputStream in)
-                    throws IOException
-                {
-                    return new ResolvingObjectInputStream(in);
-                }
-            };
 
-            mInvOut = new InvocationOutputStream(con.getOutputStream(),
-                                                 getLocalAddressString(),
-                                                 getRemoteAddressString())
-            {
-                @Override
-                protected ObjectOutputStream createObjectOutputStream(OutputStream out)
-                    throws IOException
-                {
-                    return new ReplacingObjectOutputStream(out);
-                }
-            };
+            mInvOut = new InvocationOutputStream
+                (new ReplacingObjectOutputStream(con.getOutputStream()),
+                 getLocalAddressString(),
+                 getRemoteAddressString());
+
+            // Hack to ensure ObjectOutputStream header is sent, to prevent
+            // peer from locking up when it constructs ObjectInputStream.
+            mInvOut.flush();
+
+            mInvIn = new InvocationInputStream
+                (new ResolvingObjectInputStream(con.getInputStream()),
+                 getLocalAddressString(),
+                 getRemoteAddressString());
         }
 
         public void close() throws IOException {

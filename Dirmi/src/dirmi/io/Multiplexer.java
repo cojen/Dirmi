@@ -27,15 +27,12 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -81,19 +78,21 @@ public class Multiplexer implements Broker {
 
     final Connection mMaster;
     final BufferedInputStream mMasterIn;
-    final Lock mMasterInLock;
-    final byte[] mInBuf = new byte[4];
-    final BufferedOutputStream mMasterOut;
-    final Executor mExecutor;
+    final OutputStream mMasterOut;
+    final ReentrantLock mMasterOutLock;
+
     final String mLocalAddress;
     final String mRemoteAddress;
 
-    final BlockingQueue<Connection> mAcceptQueue;
+    final ConcurrentBlockingQueue<Connection> mAcceptQueue;
 
     final IntHashMap<Con> mConnections;
     final ReadWriteLock mConnectionsLock;
 
-    private int mNextId;
+    // Queue of connections which need to write acks.
+    final ConcurrentBlockingQueue<Object> mAckQueue;
+
+    private final AtomicInteger mNextId;
 
     private volatile boolean mClosed;
     private volatile IOException mClosedCause;
@@ -106,14 +105,13 @@ public class Multiplexer implements Broker {
             throw new IllegalArgumentException();
         }
         mMaster = master;
-        mMasterIn = new BufferedInputStream(master.getInputStream(), 1024);
-        mMasterInLock = new ReentrantLock();
+        mMasterIn = new BufferedInputStream(master.getInputStream(), 8192);
         mMasterOut = new BufferedOutputStream(master.getOutputStream(), 8192);
-        mExecutor = executor;
+        mMasterOutLock = new ReentrantLock();
         mLocalAddress = master.getLocalAddressString();
         mRemoteAddress = master.getRemoteAddressString();
 
-        mAcceptQueue = new LinkedBlockingQueue<Connection>();
+        mAcceptQueue = new ConcurrentBlockingQueue<Connection>();
 
         mConnections = new IntHashMap<Con>();
         mConnectionsLock = new ReentrantReadWriteLock();
@@ -181,8 +179,8 @@ public class Multiplexer implements Broker {
                 // What are the odds?
                 throw new IOException("Negotiation failure");
             }
-            
-            mNextId = ourRnd < theirRnd ? 0 : 1;
+
+            mNextId = new AtomicInteger(ourRnd < theirRnd ? 0 : 1);
         } catch (InterruptedIOException e) {
             if (writer.mEx != null) {
                 throw writer.mEx;
@@ -196,28 +194,30 @@ public class Multiplexer implements Broker {
             }
         }
 
+        mAckQueue = new ConcurrentBlockingQueue<Object>();
+
+        executor.execute(new AckDrainer());
+
         // Start first worker.
-        executor.execute(new Worker());
+        // FIXME: design allows only one command reader
+        executor.execute(new CommandReader());
     }
 
     public Connection connect() throws IOException {
-        mConnectionsLock.writeLock().lock();
-        try {
-            checkClosed();
-
-            int id;
-            do {
-                id = mNextId;
-                if ((mNextId += 2) >= 0x40000000) {
-                    mNextId -= 0x40000000;
-                }
-            } while (mConnections.containsKey(id));
-            
+        while (true) {
+            int id = mNextId.getAndAdd(2) & 0x3fffffff;
             Con con = new Con(this, id, false);
-            mConnections.put(id, con);
-            return con;
-        } finally {
-            mConnectionsLock.writeLock().unlock();
+            Lock consWriteLock = mConnectionsLock.writeLock();
+            consWriteLock.lock();
+            try {
+                checkClosed();
+                if (!mConnections.containsKey(id)) {
+                    mConnections.put(id, con);
+                    return con;
+                }
+            } finally {
+                consWriteLock.unlock();
+            }
         }
     }
 
@@ -230,7 +230,7 @@ public class Multiplexer implements Broker {
         try {
             Connection con = mAcceptQueue.take();
             if (con == Unconnection.THE) {
-                mAcceptQueue.add(con);
+                mAcceptQueue.offer(con);
                 checkClosed();
             }
             return con;
@@ -244,7 +244,7 @@ public class Multiplexer implements Broker {
         try {
             Connection con = mAcceptQueue.poll(time, unit);
             if (con == Unconnection.THE) {
-                mAcceptQueue.add(con);
+                mAcceptQueue.offer(con);
                 checkClosed();
             }
             return con;
@@ -261,6 +261,57 @@ public class Multiplexer implements Broker {
         close(null);
     }
 
+    OutputStream tryLockMasterOut() throws IOException {
+        if (mMasterOutLock.tryLock()) {
+            try {
+                return drainAckQueue(false);
+            } catch (IOException e) {
+                mMasterOutLock.unlock();
+                throw e;
+            }
+        }
+        return null;
+    }
+
+    OutputStream lockMasterOut() throws IOException {
+        mMasterOutLock.lock();
+        try {
+            return drainAckQueue(false);
+        } catch (IOException e) {
+            mMasterOutLock.unlock();
+            throw e;
+        }
+    }
+
+    void unlockMasterOut(Boolean flush) throws IOException {
+        try {
+            OutputStream out = drainAckQueue(flush);
+        } finally {
+            mMasterOutLock.unlock();
+        }
+    }
+
+    // Caller must hold mMasterOutLock.
+    private OutputStream drainAckQueue(Boolean flush) throws IOException {
+        OutputStream out = mMasterOut;
+        ConcurrentBlockingQueue<Object> ackQueue = mAckQueue;
+        Object obj;
+        boolean any = false;
+        while ((obj = ackQueue.poll()) != null) {
+            if (obj == CLOSE_MESSAGE) {
+                ackQueue.offer(obj);
+                break;
+            } else {
+                ((Con) obj).writeAck(out);
+                any = true;
+            }
+        }
+        if ((flush != null && flush) || (flush == null && any)) {
+            out.flush();
+        }
+        return out;
+    }
+
     void close(IOException cause) throws IOException {
         boolean closed;
 
@@ -273,8 +324,9 @@ public class Multiplexer implements Broker {
 
             if (!mClosed) {
                 mClosed = true;
-                // Wake up accepter.
-                mAcceptQueue.add(Unconnection.THE);
+                // Wake up blocked threads.
+                mAckQueue.offer(CLOSE_MESSAGE);
+                mAcceptQueue.offer(Unconnection.THE);
             }
 
             // Clone to prevent concurrent modification exception.
@@ -310,179 +362,39 @@ public class Multiplexer implements Broker {
         }
     }
 
-    // Caller must hold mMasterInLock.
-    int readInt(BufferedInputStream in) throws IOException {
-        byte[] b = mInBuf;
-        if (in.readFully(b, 0, 4) <= 0) {
+    int readInt(BufferedInputStream in, byte[] inBuf) throws IOException {
+        if (in.readFully(inBuf, 0, 4) <= 0) {
             throw new IOException("Master connection closed");
         }
-        return (b[0] << 24) | ((b[1] & 0xff) << 16) | ((b[2] & 0xff) << 8) | (b[3] & 0xff);
+        return (inBuf[0] << 24) | ((inBuf[1] & 0xff) << 16) |
+            ((inBuf[2] & 0xff) << 8) | (inBuf[3] & 0xff);
     }
 
-    // Caller must hold mMasterInLock.
-    int readUnsignedShort(BufferedInputStream in) throws IOException {
-        byte[] b = mInBuf;
-        if (in.readFully(b, 0, 2) <= 0) {
+    int readUnsignedShort(BufferedInputStream in, byte[] inBuf) throws IOException {
+        if (in.readFully(inBuf, 0, 2) <= 0) {
             throw new IOException("Master connection closed");
         }
-        return ((b[0] & 0xff) << 8) | (b[1] & 0xff);
+        return ((inBuf[0] & 0xff) << 8) | (inBuf[1] & 0xff);
     }
 
-    private class Worker implements Runnable {
-        Worker() {
+    private class AckDrainer implements Runnable {
+        AckDrainer() {
         }
 
         public void run() {
             try {
-                BufferedInputStream in = mMasterIn;
-                boolean replaced = false;
-                while (!replaced) {
-                    mMasterInLock.lock();
-                    boolean releasedLock = false;
+                while (!mClosed) {
                     try {
-                        // Read command and id.
-                        int id = readInt(in);
-                        int command = id >>> 30;
-                        id &= ~(3 << 30);
-
-                        Con con;
-
-                        switch (command) {
-                        case CLOSE:
-                            mConnectionsLock.writeLock().lock();
-                            try {
-                                con = mConnections.remove(id);
-                            } finally {
-                                mConnectionsLock.writeLock().unlock();
-                            }
-
-                            if (con != null) {
-                                if (!con.getInputLock().tryLock()) {
-                                    // If lock is not immediately available, then
-                                    // another thread is likely trying to feed
-                                    // buffer. Create a replacement worker to
-                                    // handle incoming commands while this thread
-                                    // potentially blocks.
-                                    mExecutor.execute(new Worker());
-                                    replaced = true;
-                                    con.getInputLock().lock();
-                                }
-                                try {
-                                    con.disconnect();
-                                } finally {
-                                    con.getInputLock().unlock();
-                                }
-                            }
-                            break;
-
-                        case ACK:
-                            mConnectionsLock.readLock().lock();
-                            try {
-                                con = mConnections.get(id);
-                            } finally {
-                                mConnectionsLock.readLock().unlock();
-                            }
-                            if (con != null) {
-                                con.ackReceived();
-                            }
-                            break;
-
-                        case OPEN:
-                            Con oldCon;
-                            mConnectionsLock.writeLock().lock();
-                            try {
-                                con = new Con(Multiplexer.this, id, true);
-                                oldCon = mConnections.put(id, con);
-                            } finally {
-                                mConnectionsLock.writeLock().unlock();
-                            }
-                            mAcceptQueue.add(con);
-                            if (oldCon != null) {
-                                oldCon.disconnect();
-                            }
-                            break;
-
-                        case SEND:
-                            mConnectionsLock.readLock().lock();
-                            try {
-                                con = mConnections.get(id);
-                            } finally {
-                                mConnectionsLock.readLock().unlock();
-                            }
-
-                            int len = readUnsignedShort(in) + 1;
-
-                            if (con == null) {
-                                while (len > 0) {
-                                    long amt = in.skip(len);
-                                    if (amt <= 0) {
-                                        break;
-                                    }
-                                    len -= amt;
-                                }
-                                break;
-                            }
-
-                            FifoBuffer buffer = con.getInputBuffer();
-
-                            if (!con.getInputLock().tryLock()) {
-                                // If lock is not immediately available, then
-                                // another thread is likely trying to feed
-                                // buffer. Create a replacement worker to
-                                // handle incoming commands while this thread
-                                // potentially blocks.
-                                mExecutor.execute(new Worker());
-                                replaced = true;
-
-                                con.getInputLock().lock();
-                            }
-                            try {
-                                int amt = buffer.writeTransfer(in, len);
-
-                                // Send ack eagerly to improve throughput.
-                                con.sendAck();
-
-                                if (amt < len) {
-                                    if (amt < 0) {
-                                        throw new IOException("Master connection closed");
-                                    }
-
-                                    // Buffer was unable to consume entire
-                                    // packet. Copy remaining into a temp
-                                    // buffer to free master input and then
-                                    // block while feeding the buffer.
-
-                                    len -= amt;
-                                    byte[] temp = new byte[len];
-                                    amt = in.readFully(temp);
-
-                                    // Don't need master input anymore.
-                                    mMasterInLock.unlock();
-                                    releasedLock = true;
-
-                                    if (amt < 0) {
-                                        throw new IOException("Master connection closed");
-                                    }
-
-                                    if (!replaced) {
-                                        // Create a replacement worker to handle incoming
-                                        // commands while this thread blocks.
-                                        mExecutor.execute(new Worker());
-                                        replaced = true;
-                                    }
-
-                                    buffer.writeFully(temp, 0, temp.length);
-                                }
-                            } finally {
-                                con.getInputLock().unlock();
-                            }
-
-                            break;
+                        mAckQueue.await();
+                        // Simply locking and unlocking causes queue to drain.
+                        mMasterOutLock.lock();
+                        try {
+                            drainAckQueue(null);
+                        } finally {
+                            mMasterOutLock.unlock();
                         }
-                    } finally {
-                        if (!releasedLock) {
-                            mMasterInLock.unlock();
-                        }
+                    } catch (InterruptedException e) {
+                        throw new InterruptedIOException();
                     }
                 }
             } catch (IOException e) {
@@ -495,6 +407,101 @@ public class Multiplexer implements Broker {
         }
     }
 
+    private class CommandReader implements Runnable {
+        CommandReader() {
+        }
+
+        public void run() {
+            try {
+                final BufferedInputStream in = mMasterIn;
+                final byte[] inBuf = new byte[4];
+                final Lock consReadLock = mConnectionsLock.readLock();
+                final Lock consWriteLock = mConnectionsLock.writeLock();
+
+                while (true) {
+                    // Read command and id.
+                    int id = readInt(in, inBuf);
+                    int command = id >>> 30;
+                    id &= ~(3 << 30);
+
+                    Con con;
+
+                    switch (command) {
+                    case CLOSE:
+                        consWriteLock.lock();
+                        try {
+                            con = mConnections.remove(id);
+                        } finally {
+                            consWriteLock.unlock();
+                        }
+                        if (con != null) {
+                            con.disconnect();
+                        }
+                        break;
+
+                    case ACK:
+                        consReadLock.lock();
+                        try {
+                            con = mConnections.get(id);
+                        } finally {
+                            consReadLock.unlock();
+                        }
+                        if (con != null) {
+                            con.ackReceived();
+                        }
+                        break;
+
+                    case OPEN:
+                        con = new Con(Multiplexer.this, id, true);
+                        Con oldCon;
+                        consWriteLock.lock();
+                        try {
+                            oldCon = mConnections.put(id, con);
+                        } finally {
+                            consWriteLock.unlock();
+                        }
+                        mAcceptQueue.offer(con);
+                        if (oldCon != null) {
+                            oldCon.disconnect();
+                        }
+                        break;
+
+                    case SEND:
+                        consReadLock.lock();
+                        try {
+                            con = mConnections.get(id);
+                        } finally {
+                            consReadLock.unlock();
+                        }
+                        int len = readUnsignedShort(in, inBuf) + 1;
+                        if (con != null) {
+                            con.sendReceived(in, len);
+                        } else {
+                            while (len > 0) {
+                                long amt = in.skip(len);
+                                if (amt <= 0) {
+                                    break;
+                                }
+                                len -= amt;
+                            }
+                        }
+                        break;
+                    }
+                }
+            } catch (IOException e) {
+                try {
+                    close(e);
+                } catch (IOException e2) {
+                    // Don't care.
+                }
+            }
+        }
+    }
+
+    static final Object ACK_MESSAGE = new Object();
+    static final Object TRANSFER_MESSAGE = new Object();
+    static final Object CLOSE_MESSAGE = new Object();
+
     private static class Con implements Connection {
         private static final int
             NOT_OPENED = 0,
@@ -506,15 +513,20 @@ public class Multiplexer implements Broker {
         private final Multiplexer mMux;
         private final int mId;
 
-        private final Lock mInputLock;
-        private final FifoBuffer mInputBuffer;
-        private final InputStream mIn;
-
-        private final OutputStream mOut;
-        private final Semaphore mFlowControl;
-
-        // Can only access while synchronizing on master output.
+        // Can only access when mMasterOutLock is held.
         private final byte[] mCommandBuffer;
+
+        private final ReentrantLock mReadLock;
+        private final ConcurrentBlockingQueue<Object> mReadQueue;
+
+        private byte[] mReadBuffer;
+        private int mReadStart;
+        private int mReadSize;
+
+        private final ConcurrentBlockingQueue<Object> mWriteQueue;
+
+        private final InputStream mIn;
+        private final OutputStream mOut;
 
         private static final AtomicIntegerFieldUpdater<Con> cStateUpdater =
             AtomicIntegerFieldUpdater.newUpdater(Con.class, "mState");
@@ -526,12 +538,6 @@ public class Multiplexer implements Broker {
             mMux = mux;
             mId = id;
 
-            mInputLock = new ReentrantLock();
-            mIn = new In(this, mInputBuffer = new FifoBuffer(8192));
-
-            mOut = new Out(this);
-            mFlowControl = new Semaphore(1);
-
             // Need 4 bytes for id, 2 for send length.
             byte[] commandBuffer = new byte[6];
             commandBuffer[0] = (byte) (id >> 24);
@@ -539,6 +545,22 @@ public class Multiplexer implements Broker {
             commandBuffer[2] = (byte) (id >> 8);
             commandBuffer[3] = (byte) id;
             mCommandBuffer = commandBuffer;
+
+            mReadLock = new ReentrantLock();
+            mReadQueue = new ConcurrentBlockingQueue<Object>(mReadLock);
+
+            mReadLock.lock();
+            try {
+                mReadBuffer = new byte[8192];
+            } finally {
+                mReadLock.unlock();
+            }
+
+            mWriteQueue = new ConcurrentBlockingQueue<Object>();
+            mWriteQueue.offer(ACK_MESSAGE);
+
+            mIn = new In(this);
+            mOut = new Out(this);
 
             mState = opened ? OPENED : NOT_OPENED;
         }
@@ -564,11 +586,13 @@ public class Multiplexer implements Broker {
                 synchronized (mOut) {
                     if (cStateUpdater.compareAndSet(this, NOT_OPENED, OPENED)) {
                         // Never opened, so explicitly open now.
-                        OutputStream out = mMux.mMasterOut;
                         byte[] buf = mCommandBuffer;
-                        synchronized (out) {
+                        OutputStream out = mMux.lockMasterOut();
+                        try {
                             buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (OPEN << 6));
                             out.write(buf, 0, 4);
+                        } finally {
+                            mMux.unlockMasterOut(Boolean.FALSE);
                         }
                     }
 
@@ -577,12 +601,13 @@ public class Multiplexer implements Broker {
 
                         if (cStateUpdater.compareAndSet(this, CLOSE_IN_PROGRESS, CLOSED)) {
                             // If not closed after flushing, close explicitly here.
-                            OutputStream out = mMux.mMasterOut;
                             byte[] buf = mCommandBuffer;
-                            synchronized (out) {
+                            OutputStream out = mMux.lockMasterOut();
+                            try {
                                 buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (CLOSE << 6));
                                 out.write(buf, 0, 4);
-                                out.flush();
+                            } finally {
+                                mMux.unlockMasterOut(Boolean.TRUE);
                             }
                         }
                     }
@@ -599,35 +624,71 @@ public class Multiplexer implements Broker {
             }
         }
 
-        FifoBuffer getInputBuffer() {
-            return mInputBuffer;
-        }
-
-        Lock getInputLock() {
-            return mInputLock;
-        }
-
-        void disconnect() {
-            if (cStateUpdater.getAndSet(this, REMOVED) != REMOVED) {
-                mMux.removeConnection(mId);
+        void sendReceived(BufferedInputStream in, int len) throws IOException {
+            ReentrantLock lock = mReadLock;
+            if (lock.tryLock()) {
+                try {
+                    byte[] buf = mReadBuffer;
+                    int size = mReadSize;
+                    int space = buf.length - size;
+                    if (space > 0 && mReadQueue.isEmpty()) {
+                        writeOrEnqueueAck();
+                        int transfer = Math.min(space, len);
+                        int pos = mReadStart + size;
+                        if (pos >= buf.length) {
+                            pos -= buf.length;
+                        }
+                        if (pos + transfer > buf.length) {
+                            int first = buf.length - pos;
+                            if (in.readFully(buf, pos, first) < 0) {
+                                throw new IOException("Master connection closed");
+                            }
+                            mReadSize = (size += first);
+                            len -= first;
+                            transfer -= first;
+                            pos = 0;
+                        }
+                        if (in.readFully(buf, pos, transfer) < 0) {
+                            throw new IOException("Master connection closed");
+                        }
+                        mReadSize = size + transfer;
+                        mReadQueue.offer(TRANSFER_MESSAGE);
+                        if (transfer >= len) {
+                            return;
+                        }
+                        len -= transfer;
+                    }
+                } finally {
+                    lock.unlock();
+                }
             }
 
-            // Unblock any thread waiting to write.
-            mFlowControl.release();
-
-            // Unblock any thread waiting to read.
-            mInputBuffer.close();
+            byte[] packet = new byte[len];
+            if (in.readFully(packet) < 0) {
+                throw new IOException("Master connection closed");
+            }
+            mReadQueue.offer(packet);
         }
 
-        void sendAck() throws IOException {
-            OutputStream out = mMux.mMasterOut;
-            byte[] buf = mCommandBuffer;
-            try {
-                synchronized (out) {
-                    buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (ACK << 6));
-                    out.write(buf, 0, 4);
-                    out.flush();
+        void writeOrEnqueueAck() throws IOException {
+            OutputStream out;
+            if ((out = mMux.tryLockMasterOut()) == null) {
+                mMux.mAckQueue.offer(this);
+            } else {
+                try {
+                    writeAck(out);
+                } finally {
+                    mMux.unlockMasterOut(Boolean.TRUE);
                 }
+            }
+        }
+
+        // Caller must hold mMasterOutLock.
+        void writeAck(OutputStream out) throws IOException {
+            try {
+                byte[] buf = mCommandBuffer;
+                buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (ACK << 6));
+                out.write(buf, 0, 4);
             } catch (IOException e) {
                 try {
                     mMux.close();
@@ -638,19 +699,136 @@ public class Multiplexer implements Broker {
             }
         }
 
-        void ackReceived() throws IOException {
-            mFlowControl.release();
+        void ackReceived() {
+            mWriteQueue.offer(ACK_MESSAGE);
         }
 
+        void disconnect() {
+            if (cStateUpdater.getAndSet(this, REMOVED) != REMOVED) {
+                mMux.removeConnection(mId);
+            }
+            mReadQueue.offer(CLOSE_MESSAGE);
+            mWriteQueue.offer(CLOSE_MESSAGE);
+        }
+
+        int doRead() throws IOException {
+            ReentrantLock lock = mReadLock;
+            lock.lock();
+            try {
+                int size = mReadSize;
+                if (size <= 0) {
+                    size = fill();
+                }
+                byte[] buf = mReadBuffer;
+                int start = mReadStart;
+                int next = start + 1;
+                if (next >= buf.length) {
+                    next = 0;
+                }
+                mReadStart = next;
+                mReadSize = size - 1;
+                return buf[start] & 0xff;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        int doRead(byte[] b, int off, int len) throws IOException {
+            if (len <= 0) {
+                return 0;
+            }
+            ReentrantLock lock = mReadLock;
+            lock.lock();
+            try {
+                int size = mReadSize;
+                if (size <= 0) {
+                    size = fill();
+                }
+                len = Math.min(size, len);
+                byte[] buf = mReadBuffer;
+                int start = mReadStart;
+                int next = start + len;
+                if (next >= buf.length) {
+                    next -= buf.length;
+                }
+                if (next > start || next == 0) {
+                    System.arraycopy(buf, start, b, off, len);
+                } else {
+                    if (off + len > b.length) {
+                        throw new IndexOutOfBoundsException();
+                    }
+                    int first = buf.length - start;
+                    System.arraycopy(buf, start, b, off, first);
+                    System.arraycopy(buf, 0, b, off + first, next);
+                }
+                mReadStart = next;
+                mReadSize = size - len;
+                return len;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        int readAvailable() {
+            ReentrantLock lock = mReadLock;
+            lock.lock();
+            try {
+                return mReadSize;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        // Assumes mReadLock is held and mReadBuffer is empty.
+        private int fill() throws IOException {
+            Object obj;
+            while (true) {
+                try {
+                    obj = mReadQueue.take();
+                } catch (InterruptedException e) {
+                    throw new InterruptedIOException();
+                }
+                if (obj == CLOSE_MESSAGE) {
+                    mReadQueue.offer(obj);
+                    throw new IOException("Closed");
+                } else if (obj == TRANSFER_MESSAGE) {
+                    int size = mReadSize;
+                    if (size > 0) {
+                        return size;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            writeOrEnqueueAck();
+
+            byte[] packet = (byte[]) obj;
+            int length = packet.length;
+
+            if (length >= mReadBuffer.length) {
+                mReadBuffer = packet;
+            } else {
+                System.arraycopy(packet, 0, mReadBuffer, 0, length);
+            }
+
+            mReadStart = 0;
+            mReadSize = length;
+
+            return length;
+        }
+
+        // Is called via BufferedOutputStream, with synchronization lock held.
         void ensureOpen() throws IOException {
             if (cStateUpdater.compareAndSet(this, NOT_OPENED, OPENED)) {
-                OutputStream out = mMux.mMasterOut;
-                byte[] buf = mCommandBuffer;
                 try {
-                    synchronized (out) {
+                    OutputStream out = mMux.lockMasterOut();
+                    byte[] buf = mCommandBuffer;
+                    try {
                         buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (OPEN << 6));
                         out.write(buf, 0, 4);
-                        out.flush();
+                    } finally {
+                        mMux.unlockMasterOut(Boolean.TRUE);
                     }
                 } catch (IOException e) {
                     try {
@@ -664,29 +842,26 @@ public class Multiplexer implements Broker {
         }
 
         // Is called via BufferedOutputStream, with synchronization lock held.
-        void doWrite(byte[] b, int offset, int length) throws IOException {
+        void doWrite(byte[] b, int offset, int length, boolean flush) throws IOException {
             while (length > 0) {
                 try {
-                    mFlowControl.acquire();
-                } catch (InterruptedException e) {
-                    if (mState == CLOSED) {
+                    Object obj = mWriteQueue.take();
+                    if (obj == CLOSE_MESSAGE) {
+                        mWriteQueue.offer(obj);
                         throw new IOException("Closed");
                     }
+                } catch (InterruptedException e) {
                     throw new InterruptedIOException();
                 }
-                if (mState == CLOSED) {
-                    mFlowControl.release();
-                    throw new IOException("Closed");
-                }
 
-                OutputStream out = mMux.mMasterOut;
                 byte[] buf = mCommandBuffer;
 
                 // Limit to max packet size.
                 int amount = Math.min(0x10000, length);
 
                 try {
-                    synchronized (out) {
+                    OutputStream out = mMux.lockMasterOut();
+                    try {
                         if (cStateUpdater.compareAndSet(this, NOT_OPENED, OPENED)) {
                             buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (OPEN << 6));
                             out.write(buf, 0, 4);
@@ -698,15 +873,16 @@ public class Multiplexer implements Broker {
                         out.write(buf, 0, 6);
                         out.write(b, offset, amount);
 
-                        if (amount >= length &&
-                            cStateUpdater.compareAndSet(this, CLOSE_IN_PROGRESS, CLOSED))
-                        {
-                            // Piggyback close command.
-                            buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (CLOSE << 6));
-                            out.write(buf, 0, 4);
+                        if (amount >= length) {
+                            if (cStateUpdater.compareAndSet(this, CLOSE_IN_PROGRESS, CLOSED)) {
+                                // Piggyback close command.
+                                buf[0] = (byte) ((buf[0] & ~(3 << 6)) | (CLOSE << 6));
+                                out.write(buf, 0, 4);
+                                flush = true;
+                            }
                         }
-
-                        out.flush();
+                    } finally {
+                        mMux.unlockMasterOut(flush);
                     }
                 } catch (IOException e) {
                     try {
@@ -722,65 +898,68 @@ public class Multiplexer implements Broker {
             }
         }
 
-        private static class In extends AbstractBufferedInputStream {
+        private static class In extends InputStream {
             private final Con mCon;
-            private final FifoBuffer mBuffer;
 
-            In(Con con, FifoBuffer buffer) {
-                super(8192);
+            In(Con con) {
+                super();
                 mCon = con;
-                mBuffer = buffer;
             }
 
             @Override
+            public int read() throws IOException {
+                return mCon.doRead();
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                return mCon.doRead(b, off, len);
+            }
+
+            /*
+            @Override
+            public long skip(long n) throws IOException {
+                // FIXME
+                return -1;
+            }
+            */
+
+            @Override
             public int available() throws IOException {
-                return super.available() + mBuffer.readAvailable();
+                return mCon.readAvailable();
             }
 
             @Override
             public void close() throws IOException {
                 mCon.close();
-            }
-
-            @Override
-            protected int doRead(byte[] bytes, int offset, int length) throws IOException {
-                mCon.ensureOpen();
-                return mBuffer.readAny(bytes, offset, length);
-            }
-
-            @Override
-            protected long doSkip(long n) throws IOException {
-                if (n > Integer.MAX_VALUE) {
-                    n = Integer.MAX_VALUE;
-                }
-                return mBuffer.readSkipAny((int) n);
             }
         }
 
         private static class Out extends AbstractBufferedOutputStream {
             private final Con mCon;
 
-            private int mSendCount = 1;
-
             Out(Con con) {
-                super(8192);
+                super();
                 mCon = con;
             }
 
             @Override
-            public void flush() throws IOException {
-                drain();
+            public synchronized void flush() throws IOException {
+                super.flush();
                 mCon.ensureOpen();
             }
 
             @Override
-            public void close() throws IOException {
+            public synchronized void close() throws IOException {
+                super.flush();
                 mCon.close();
             }
 
             @Override
-            protected void doWrite(byte[] b, int offset, int length) throws IOException {
-                mCon.doWrite(b, offset, length);
+            protected void doWrite(byte[] b, int offset, int length, boolean flush)
+                throws IOException
+            {
+                mCon.doWrite(b, offset, length, flush);
             }
         }
     }

@@ -38,14 +38,14 @@ import java.rmi.RemoteException;
  * @see InvocationOutputStream
  */
 public class InvocationInputStream extends InputStream implements InvocationInput {
-    private volatile InputStream mIn;
+    private final ObjectInputStream mIn;
     private final String mLocalAddress;
     private final String mRemoteAddress;
 
     /**
      * @param in stream to wrap
      */
-    public InvocationInputStream(InputStream in) {
+    public InvocationInputStream(ObjectInputStream in) {
         mIn = in;
         mLocalAddress = null;
         mRemoteAddress = null;
@@ -56,117 +56,62 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
      * @param localAddress optional local address to stitch into stack traces from server.
      * @param remoteAddress optional remote address to stitch into stack traces from server.
      */
-    public InvocationInputStream(InputStream in, String localAddress, String remoteAddress) {
+    public InvocationInputStream(ObjectInputStream in, String localAddress, String remoteAddress) {
         mIn = in;
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
     }
 
     public void readFully(byte b[]) throws IOException {
-        readFully(b, 0, b.length);
+        mIn.readFully(b);
     }
 
     public void readFully(byte b[], int offset, int length) throws IOException {
-        if (length < 0) {
-            throw new IndexOutOfBoundsException();
-        }
-        int n = 0;
-        InputStream in = mIn;
-        while (n < length) {
-            int count = in.read(b, offset + n, length - n);
-            if (count < 0) {
-                throw new EOFException();
-            }
-            n += count;
-        }
+        mIn.readFully(b, offset, length);
     }
 
     public int skipBytes(int n) throws IOException {
-        int total = 0;
-        int cur = 0;
-        InputStream in = mIn;
-        while ((total < n) && ((cur = (int) in.skip(n - total)) > 0)) {
-            total += cur;
-        }
-        return total;
+        return mIn.skipBytes(n);
     }
 
     public boolean readBoolean() throws IOException {
-        int b = mIn.read();
-        if (b < 0) {
-            throw new EOFException();
-        }
-        return b != InvocationOutputStream.FALSE;
+        return mIn.readBoolean();
     }
 
     public byte readByte() throws IOException {
-        int b = mIn.read();
-        if (b < 0) {
-            throw new EOFException();
-        }
-        return (byte) b;
+        return mIn.readByte();
     }
 
     public int readUnsignedByte() throws IOException {
-        int b = mIn.read();
-        if (b < 0) {
-            throw new EOFException();
-        }
-        return b;
+        return mIn.readUnsignedByte();
     }
 
     public short readShort() throws IOException {
-        InputStream in = mIn;
-        int b1 = in.read();
-        int b2 = in.read();
-        if ((b1 | b2) < 0) {
-            throw new EOFException();
-        }
-        return (short) ((b1 << 8) | b2);
+        return mIn.readShort();
     }
 
     public int readUnsignedShort() throws IOException {
-        InputStream in = mIn;
-        int b1 = in.read();
-        int b2 = in.read();
-        if ((b1 | b2) < 0) {
-            throw new EOFException();
-        }
-        return (b1 << 8) | b2;
+        return mIn.readUnsignedShort();
     }
 
     public char readChar() throws IOException {
-        InputStream in = mIn;
-        int b1 = in.read();
-        int b2 = in.read();
-        if ((b1 | b2) < 0) {
-            throw new EOFException();
-        }
-        return (char) ((b1 << 8) | b2);
+        return mIn.readChar();
     }
 
     public int readInt() throws IOException {
-        InputStream in = mIn;
-        int b1 = in.read();
-        int b2 = in.read();
-        int b3 = in.read();
-        int b4 = in.read();
-        if ((b1 | b2 | b3 | b4) < 0) {
-            throw new EOFException();
-        }
-        return (b1 << 24) | (b2 << 16) | (b3 << 8) | b4;
+        return mIn.readInt();
     }
 
     public long readLong() throws IOException {
-        return (((long) readInt()) << 32) | (readInt() & 0xffffffffL);
+        return mIn.readLong();
     }
 
     public float readFloat() throws IOException {
-        return Float.intBitsToFloat(readInt());
+        return mIn.readFloat();
     }
 
     public double readDouble() throws IOException {
-        return Double.longBitsToDouble(readLong());
+        return mIn.readDouble();
     }
 
     /**
@@ -178,67 +123,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
     }
 
     public String readUTF() throws IOException {
-        int utflen = readUnsignedShort();
-        byte[] bytearr = new byte[utflen];
-        char[] chararr = new char[utflen];
-
-        int c, char2, char3;
-        int count = 0;
-        int chararr_count = 0;
-
-        readFully(bytearr, 0, utflen);
-
-        while (count < utflen) {
-            c = (int) bytearr[count] & 0xff;      
-            if (c > 127) {
-                break;
-            }
-            count++;
-            chararr[chararr_count++] = (char) c;
-        }
-
-        while (count < utflen) {
-            c = (int) bytearr[count] & 0xff;
-            switch (c >> 4) {
-            case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
-                /* 0xxxxxxx*/
-                count++;
-                chararr[chararr_count++] = (char) c;
-                break;
-            case 12: case 13:
-                /* 110x xxxx   10xx xxxx*/
-                count += 2;
-                if (count > utflen) {
-                    throw new UTFDataFormatException("malformed input: partial character at end");
-                }
-                char2 = (int) bytearr[count-1];
-                if ((char2 & 0xC0) != 0x80) {
-                    throw new UTFDataFormatException("malformed input around byte " + count); 
-                }
-                chararr[chararr_count++] = (char) (((c & 0x1F) << 6) | (char2 & 0x3F));  
-                break;
-            case 14:
-                /* 1110 xxxx  10xx xxxx  10xx xxxx */
-                count += 3;
-                if (count > utflen) {
-                    throw new UTFDataFormatException("malformed input: partial character at end");
-                }
-                char2 = (int) bytearr[count-2];
-                char3 = (int) bytearr[count-1];
-                if (((char2 & 0xC0) != 0x80) || ((char3 & 0xC0) != 0x80)) {
-                    throw new UTFDataFormatException("malformed input around byte " + (count - 1));
-                }
-                chararr[chararr_count++] = (char)(((c     & 0x0F) << 12) |
-                                                  ((char2 & 0x3F) << 6)  |
-                                                  ((char3 & 0x3F) << 0));
-                break;
-            default:
-                /* 10xx xxxx,  1111 xxxx */
-                throw new UTFDataFormatException("malformed input around byte " + count);
-            }
-        }
-
-        return new String(chararr, 0, chararr_count);
+        return mIn.readUTF();
     }
 
     public String readUnsharedString() throws IOException {
@@ -303,11 +188,11 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
     }
 
     public Object readUnshared() throws IOException, ClassNotFoundException {
-        return getObjectInputStream().readUnshared();
+        return mIn.readUnshared();
     }
 
     public Object readObject() throws IOException, ClassNotFoundException {
-        return getObjectInputStream().readObject();
+        return mIn.readObject();
     }
 
     public int read() throws IOException {
@@ -328,13 +213,6 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
 
     public int available() throws IOException {
         return mIn.available();
-    }
-
-    private ObjectInputStream getObjectInputStream() throws IOException {
-        if (!(mIn instanceof ObjectInputStream)) {
-            mIn = createObjectInputStream(mIn);
-        }
-        return (ObjectInputStream) mIn;
     }
 
     private int readVarUnsignedInteger() throws IOException {
@@ -388,7 +266,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         String serverRemoteAddress = null;
         Throwable t;
         try {
-            ObjectInput in = getObjectInputStream();
+            ObjectInput in = mIn;
             serverLocalAddress = (String) in.readObject();
             serverRemoteAddress = (String) in.readObject();
 
@@ -483,13 +361,6 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
 
     public void close() throws IOException {
         mIn.close();
-    }
-
-    /**
-     * Override this method to return a subclassed ObjectInputStream.
-     */
-    protected ObjectInputStream createObjectInputStream(InputStream in) throws IOException {
-        return new ObjectInputStream(in);
     }
 
     private static class ThrowableInfo {
