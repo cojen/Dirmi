@@ -49,13 +49,10 @@ import java.util.concurrent.Executor;
 public class SocketProcessor {
     final Executor mExecutor;
 
-    final ReentrantLock mWriteLock;
-    final ByteBuffer mWritePrefixBuffer;
-
     final ConcurrentLinkedQueue<Registerable> mReadQueue;
-
     final ReentrantLock mReadLock;
     final Selector mReadSelector;
+
     int mReadTaskCount;
 
     public SocketProcessor(Executor executor) throws IOException {
@@ -65,12 +62,7 @@ public class SocketProcessor {
 
         mExecutor = executor;
 
-        // Use fair lock because caller blocks when sending message.
-        mWriteLock = new ReentrantLock(true);
-        mWritePrefixBuffer = ByteBuffer.allocate(2);
-
         mReadQueue = new ConcurrentLinkedQueue<Registerable>();
-
         // Use unfair lock since arbitrary worker threads do reads.
         mReadLock = new ReentrantLock(false);
         mReadSelector = Selector.open();
@@ -127,29 +119,37 @@ public class SocketProcessor {
         serverChannel.socket().bind(bindpoint);
         serverChannel.configureBlocking(false);
 
-        class Accept implements Registerable, Selectable {
+        class Accept implements Registerable, Selectable<SocketChannel> {
             private final MessageReceiver mReceiver;
 
             Accept(MessageReceiver receiver) {
                 mReceiver = receiver;
             }
 
-            public void register(Selector selector) {
-                try {
-                    serverChannel.register(selector, SelectionKey.OP_ACCEPT, this);
-                } catch (ClosedChannelException e) {
-                    mReceiver.closed(e);
-                }
+            public void register(Selector selector) throws IOException {
+                serverChannel.register(selector, SelectionKey.OP_ACCEPT, this);
             }
 
-            public void selected(SelectionKey key) {
+            public void registerException(IOException e) {
+                mReceiver.closed(e);
+            }
+
+            public SocketChannel selected(SelectionKey key) throws IOException {
                 key.cancel();
+                SocketChannel channel = serverChannel.accept();
+                if (channel != null) {
+                    channel.configureBlocking(false);
+                }
+                return channel;
+            }
+
+            public void selectedException(IOException e) {
+                mReceiver.closed(e);
+            }
+
+            public void selectedExecute(SocketChannel channel) {
                 try {
-                    SocketChannel channel = serverChannel.accept();
-                    if (channel != null) {
-                        channel.configureBlocking(false);
-                        new Sender(SocketProcessor.this, channel, mReceiver);
-                    }
+                    new Sender(SocketProcessor.this, channel, mReceiver);
                 } catch (IOException e) {
                     mReceiver.closed(e);
                 }
@@ -173,18 +173,51 @@ public class SocketProcessor {
         mReadSelector.wakeup();
     }
 
-    private static interface Registerable {
-        /**
-         * Called to allow a selector to be registered to a socket.
-         */
-        void register(Selector selector);
+    void executeTask(Runnable task) {
+        try {
+            mExecutor.execute(task);
+        } catch (RejectedExecutionException e) {
+            task.run();
+        }
     }
 
-    private static interface Selectable {
+    private static interface Registerable {
         /**
-         * Called when a non-blocking operation is ready.
+         * Called to allow a selector to be registered to a socket. Only one
+         * thread at a time will call this method, and implementation should
+         * not block.
          */
-        void selected(SelectionKey key);
+        void register(Selector selector) throws IOException;
+
+        /**
+         * Called to pass exception which was thrown by register method. This
+         * method may block.
+         */
+        void registerException(IOException e);
+    }
+
+    private static interface Selectable<S> {
+        /**
+         * Called when a non-blocking operation is ready. Only one thread at a
+         * time will call this method, and implementation should not block.
+         *
+         * @return non-null state object if selectedExecute method should be called
+         */
+        S selected(SelectionKey key) throws IOException;
+
+        /**
+         * Called to pass exception which was thrown by selected method. This
+         * method may block.
+         */
+        void selectedException(IOException e);
+
+        /**
+         * Perform task, possibly blocking. Is guaranteed to be called by same
+         * thread that called selected.
+         *
+         * @param state non-null object which was returned from selected method
+         */
+        void selectedExecute(S state);
     }
 
     private class ReadTask implements Runnable {
@@ -211,7 +244,17 @@ public class SocketProcessor {
 
                     Registerable r;
                     while ((r = queue.poll()) != null) {
-                        r.register(selector);
+                        try {
+                            r.register(selector);
+                        } catch (final IOException e) {
+                            // Launch separate thread to allow it to block.
+                            final Registerable fr = r;
+                            executeTask(new Runnable() {
+                                public void run() {
+                                    fr.registerException(e);
+                                }
+                            });
+                        }
                     }
 
                     while (true) {
@@ -225,11 +268,33 @@ public class SocketProcessor {
                             it.remove();
                         }
 
+                        final Selectable selectable = (Selectable) key.attachment();
+
+                        Object state;
+                        try {
+                            if ((state = selectable.selected(key)) == null) {
+                                continue;
+                            }
+                        } catch (final IOException e) {
+                            key.cancel();
+                            // Launch separate thread to allow it to block.
+                            executeTask(new Runnable() {
+                                public void run() {
+                                    selectable.selectedException(e);
+                                }
+                            });
+                            continue;
+                        } catch (Throwable e) {
+                            Thread t = Thread.currentThread();
+                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                            continue;
+                        }
+
                         if (--mReadTaskCount == 0) {
-                            // Ensure another thread is ready to select in
-                            // case selectable object blocks.
+                            // Ensure another thread is ready to select in case
+                            // execute method blocks.
                             try {
-                                mExecutor.execute(new ReadTask());
+                                mExecutor.execute(this);
                                 mReadTaskCount++;
                             } catch (RejectedExecutionException e) {
                             }
@@ -239,7 +304,7 @@ public class SocketProcessor {
                         lock.unlock();
                         hasLock = false;
                         try {
-                            ((Selectable) key.attachment()).selected(key);
+                            selectable.selectedExecute(state);
                         } catch (Throwable e) {
                             Thread t = Thread.currentThread();
                             t.getUncaughtExceptionHandler().uncaughtException(t, e);
@@ -280,8 +345,9 @@ public class SocketProcessor {
             mChannel = channel;
             mReceiver = receiver;
 
-            mLock = processor.mWriteLock;
-            mBuffers = new ByteBuffer[] {processor.mWritePrefixBuffer, null};
+            // Use fair lock because caller blocks when sending message.
+            mLock = new ReentrantLock(true);
+            mBuffers = new ByteBuffer[] {ByteBuffer.allocate(2), null};
             channel.register(mSelector = Selector.open(), SelectionKey.OP_WRITE);
 
             processor.enqueueRead(new Read(channel, this, receiver));
@@ -399,14 +465,13 @@ public class SocketProcessor {
 
     private static class Read implements Registerable, Selectable {
         // Allocate extra two for size prefix.
-        private static final int INITIAL_BUFFER_SIZE = 2 + 1024;
-        private static final int MAX_BUFFER_SIZE = 2 + 65536;
+        private static final int BUFFER_SIZE = 2 + 8192;
 
         private final SocketChannel mChannel;
         private final Sender mSender;
         private final MessageReceiver mReceiver;
 
-        private ByteBuffer mBuffer;
+        private final ByteBuffer mBuffer;
 
         /*
          * Size of message to receive. Is zero when no message is being
@@ -415,123 +480,109 @@ public class SocketProcessor {
          */
         private int mSize;
 
-        /*
-         * Amount of message read so far.
-         */
+        // Amount of message read so far.
         private int mAmount;
+
+        // Receiver's state object.
+        private Object mReceiverState;
 
         Read(SocketChannel channel, Sender sender, MessageReceiver receiver) {
             mChannel = channel;
             mSender = sender;
             mReceiver = receiver;
 
-            mBuffer = ByteBuffer.allocate(INITIAL_BUFFER_SIZE);
+            mBuffer = ByteBuffer.allocate(BUFFER_SIZE);
         }
 
-        public void register(Selector selector) {
-            try {
-                mChannel.register(selector, SelectionKey.OP_READ, this);
-            } catch (ClosedChannelException e) {
-                handleException(e);
+        public void register(Selector selector) throws IOException {
+            mChannel.register(selector, SelectionKey.OP_READ, this);
+        }
+
+        public void registerException(IOException e) {
+            handleException(e);
+        }
+
+        public Object selected(SelectionKey key) throws IOException {
+            ByteBuffer buffer = mBuffer;
+
+            int amt = mChannel.read(buffer);
+
+            if (amt <= 0) {
+                if (amt != 0) {
+                    // Throw exception so that the sender close may safely block.
+                    throw new EOF();
+                }
+                return null;
             }
-        }
 
-        public synchronized void selected(SelectionKey key) {
-            try {
-                ByteBuffer buffer = mBuffer;
+            int size = mSize;
 
-                int amt = mChannel.read(buffer);
+            if (size <= 0) {
+                if (size == 0) {
+                    // Nothing is known about message yet.
+                    if (amt == 1) {
+                        // Only first byte of size known so far.
+                        mSize = ~(buffer.get(0) & 0xff) << 8;
+                        return null;
+                    } 
+                    // Size is fully known.
+                    mSize = size = ((buffer.get(0) & 0xff) << 8) | (buffer.get(1) & 0xff);
+                    amt -= 2;
+                } else {
+                    // Size is partially known, but now is fully known.
+                    mSize = size = (~size) | (buffer.get(1) & 0xff);
+                    amt--;
+                }
+
+                // Prepare for passing to receiver and skip size prefix.
+                buffer.position(2);
 
                 if (amt <= 0) {
-                    if (amt != 0) {
-                        try {
-                            mSender.close();
-                        } catch (IOException e2) {
-                            // Don't care.
-                        }
-                    }
-                    return;
+                    return null;
                 }
-
-                int size = mSize;
-
-                while (true) {
-                    if (size <= 0) {
-                        if (size == 0) {
-                            // Nothing is known about message yet.
-                            if (amt == 1) {
-                                // Only first byte of size known so far.
-                                mSize = ~(buffer.get(0) & 0xff) << 8;
-                                return;
-                            } 
-                            // Size is fully known.
-                            mSize = size = ((buffer.get(0) & 0xff) << 8) | (buffer.get(1) & 0xff);
-                            amt -= 2;
-                        } else {
-                            // Size is partially known, but now is fully known.
-                            mSize = size = (~size) | (buffer.get(1) & 0xff);
-                            amt--;
-                        }
-                        if (amt <= 0) {
-                            return;
-                        }
-                    }
-
-                    if (amt < (size - mAmount)) {
-                        // Partially read message.
-                        mAmount += amt;
-
-                        // Ensure room in buffer to read rest of message.
-                        if (!buffer.hasRemaining()) {
-                            int newCapacity = ((buffer.capacity() - 2) << 1) + 2;
-                            if (newCapacity < size) {
-                                newCapacity = size;
-                            } else if (newCapacity > MAX_BUFFER_SIZE) {
-                                newCapacity = MAX_BUFFER_SIZE;
-                            }
-                            ByteBuffer newBuffer = ByteBuffer.allocate(newCapacity);
-                            buffer.position(0);
-                            buffer.put(newBuffer);
-                            mBuffer = newBuffer;
-                        }
-
-                        return;
-                    }
-
-                    // Message has been fully read so call receiver.
-                    amt -= size;
-                    buffer.position(2); // skip size prefix
-                    int originalLimit = buffer.limit();
-                    buffer.limit(2 + size);
-                    mReceiver.received(buffer);
-
-                    // Prepare for next message.
-
-                    mSize = size = 0;
-                    mAmount = 0;
-
-                    if (amt <= 0) {
-                        buffer.clear();
-                        return;
-                    }
-
-                    buffer.limit(2 + size + amt);
-                    buffer.position(2 + size);
-                    buffer.compact();
-                }
-            } catch (IOException e) {
-                handleException(e);
             }
+
+            Object receiverState = mReceiver.receive(mReceiverState, size, mAmount, buffer);
+
+            if ((mAmount += amt) < size) {
+                mReceiverState = receiverState;
+                // Prepare for next read.
+                buffer.position(2);
+                return null;
+            }
+
+            // Message fully received. Prepare for next message and return
+            // receiver state object for message processing.
+            buffer.clear();
+            mSize = 0;
+            mAmount = 0;
+            mReceiverState = null;
+
+            return receiverState;
+        }
+
+        public void selectedException(IOException e) {
+            handleException(e);
+        }
+
+        public void selectedExecute(Object state) {
+            mReceiver.process(state, mSender);
         }
 
         private void handleException(IOException e) {
             try {
+                if (e instanceof EOF) {
+                    e = null;
+                }
                 mSender.close(e);
             } catch (IOException e2) {
                 // Don't care.
             } finally {
                 mReceiver.closed(e);
             }
+        }
+
+        private static class EOF extends IOException {
         }
     }
 }

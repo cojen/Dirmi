@@ -30,7 +30,7 @@ import dirmi.core.ThreadPool;
  *
  * @author Brian S O'Neill
  */
-public class TestServer implements MessageReceiver {
+public class TestServer implements MessageReceiver<byte[]> {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(Integer.parseInt(args[0]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
@@ -43,8 +43,6 @@ public class TestServer implements MessageReceiver {
 
     private final MessageAcceptor mAcceptor;
 
-    private MessageSender mSender;
-
     private TestServer(MessageAcceptor acceptor) {
         mAcceptor = acceptor;
         acceptor.accept(this);
@@ -53,19 +51,18 @@ public class TestServer implements MessageReceiver {
     public void established(MessageSender sender) {
         System.out.println("Accepted: " + sender);
         mAcceptor.accept(new TestServer(mAcceptor));
-        mSender = sender;
     }
 
-    public void received(ByteBuffer buffer) {
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
-        System.out.println("Received: " + new String(bytes));
-        /*
-        try {
-            mSender.close();
-        } catch (IOException e) {
+    public byte[] receive(byte[] message, int totalSize, int offset, ByteBuffer buffer) {
+        if (message == null) {
+            message = new byte[totalSize];
         }
-        */
+        buffer.get(message, offset, totalSize);
+        return message;
+    }
+
+    public void process(byte[] message, MessageSender sender) {
+        System.out.println("Received: " + new String(message));
     }
 
     public void closed() {

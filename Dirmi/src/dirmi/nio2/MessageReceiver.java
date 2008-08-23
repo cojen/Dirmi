@@ -25,30 +25,51 @@ import java.nio.ByteBuffer;
  *
  * @author Brian S O'Neill
  */
-public interface MessageReceiver {
+public interface MessageReceiver<S> {
     /**
      * Called at most once as soon as message channel has been established.
+     * This method may safely block, and it can interact with the sender too.
      */
     void established(MessageSender sender);
 
     /**
-     * Called as messages are received. Only one message is received at a time,
-     * and message delivery is in the correct order. This method may safely
-     * block, and it can interact with the sender too.
+     * Called when a message is fully or partially received. In either case,
+     * this method must not block -- it may only copy the message from the
+     * buffer. Only when the process method is called may the receiver process
+     * the message and potentially block. Only one thread at a time will call
+     * receive, and it will be the exact same thread as partial pieces are
+     * received.
      *
-     * @param buffer shared buffer whose position is set at the start of the
-     * message and the remaining amount is the message size
+     * @param state state which was returned by previous invocation of receive,
+     * or null if start of message
+     * @param totalSize total size of message
+     * @param offset message offset; is zero if start of message
+     * @param buffer position is set at the start or continuation of the
+     * message and the remaining amount is the full or partial message data
+     * @return state object which is passed again to receive and process
+     * methods
      */
-    void received(ByteBuffer buffer);
+    S receive(S state, int totalSize, int offset, ByteBuffer buffer);
 
     /**
-     * Called when message channel is closed.
+     * Called after a message has been completely received. This method may
+     * safely block, and it can interact with the sender too. While this method
+     * is executing, other messages may be received and processed concurrently.
+     * The thread which calls process will be the same one that called receive.
+     *
+     * @param state object which was returned by receive method
+     * @param sender use to send reply messages
+     */
+    void process(S state, MessageSender sender);
+
+    /**
+     * Called when message channel is closed. This method may safely block.
      */
     void closed();
 
     /**
      * Called when message channel is closed due to an exception. It may be
-     * closed before it is established.
+     * closed before it is established. This method may safely block.
      */
     void closed(IOException e);
 }
