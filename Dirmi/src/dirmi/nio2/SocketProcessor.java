@@ -25,6 +25,7 @@ import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.Set;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 
 import java.util.concurrent.locks.ReentrantLock;
@@ -350,7 +351,7 @@ public class SocketProcessor {
             mBuffers = new ByteBuffer[] {ByteBuffer.allocate(2), null};
             channel.register(mSelector = Selector.open(), SelectionKey.OP_WRITE);
 
-            processor.enqueueRead(new Read(channel, this, receiver));
+            processor.enqueueRead(new Read(processor.mExecutor, channel, this, receiver));
 
             receiver.established(this);
         }
@@ -463,15 +464,19 @@ public class SocketProcessor {
         }
     }
 
-    private static class Read implements Registerable, Selectable {
+    private static class Read implements Registerable, Selectable, Runnable {
         // Allocate extra two for size prefix.
         private static final int BUFFER_SIZE = 2 + 8192;
+
+        private final Executor mExecutor;
 
         private final SocketChannel mChannel;
         private final Sender mSender;
         private final MessageReceiver mReceiver;
 
         private final ByteBuffer mBuffer;
+
+        private final ConcurrentLinkedQueue mReceiverStateQueue;
 
         /*
          * Size of message to receive. Is zero when no message is being
@@ -481,17 +486,21 @@ public class SocketProcessor {
         private int mSize;
 
         // Amount of message read so far.
-        private int mAmount;
+        private int mOffset;
 
         // Receiver's state object.
         private Object mReceiverState;
 
-        Read(SocketChannel channel, Sender sender, MessageReceiver receiver) {
+        Read(Executor executor, SocketChannel channel, Sender sender, MessageReceiver receiver) {
+            mExecutor = executor;
+
             mChannel = channel;
             mSender = sender;
             mReceiver = receiver;
 
             mBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+
+            mReceiverStateQueue = new ConcurrentLinkedQueue();
         }
 
         public void register(Selector selector) throws IOException {
@@ -504,61 +513,70 @@ public class SocketProcessor {
 
         public Object selected(SelectionKey key) throws IOException {
             ByteBuffer buffer = mBuffer;
-
             int amt = mChannel.read(buffer);
 
             if (amt <= 0) {
                 if (amt != 0) {
-                    // Throw exception so that the sender close may safely block.
+                    // Throw exception so that closing the sender may safely block.
                     throw new EOF();
                 }
-                return null;
+            } else {
+                buffer.position(buffer.position() - amt);
+                int size = mSize;
+
+                do {
+                    if (size <= 0) {
+                        if (size == 0) {
+                            // Nothing is known about message yet.
+                            if (amt == 1) {
+                                // Only first byte of size known so far.
+                                mSize = ~(buffer.get() & 0xff);
+                                break;
+                            } 
+                            // Size is fully known.
+                            mSize = size = ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                            amt -= 2;
+                        } else {
+                            // Size is partially known, but now is fully known.
+                            mSize = size = ((~size) << 8) | (buffer.get() & 0xff);
+                            amt--;
+                        }
+                        if (amt <= 0) {
+                            break;
+                        }
+                    }
+
+                    int len = Math.min(size - mOffset, amt);
+                    int originalPos = buffer.position();
+                    buffer.limit(originalPos + len);
+
+                    Object receiverState =
+                        mReceiver.receive(mReceiverState, size, mOffset, buffer);
+
+                    buffer.limit(buffer.capacity());
+
+                    if ((mOffset += len) < size) {
+                        // Buffer fully drained. Save state for next select.
+                        mReceiverState = receiverState;
+                        break;
+                    }
+
+                    amt -= len;
+                    buffer.position(originalPos + len);
+
+                    // Message fully received.
+                    mReceiverStateQueue.add(receiverState);
+                    mReceiverState = null;
+
+                    // Prepare for next message.
+                    mSize = size = 0;
+                    mOffset = 0;
+                } while (amt > 0);
+
+                buffer.clear();
             }
 
-            int size = mSize;
-
-            if (size <= 0) {
-                if (size == 0) {
-                    // Nothing is known about message yet.
-                    if (amt == 1) {
-                        // Only first byte of size known so far.
-                        mSize = ~(buffer.get(0) & 0xff) << 8;
-                        return null;
-                    } 
-                    // Size is fully known.
-                    mSize = size = ((buffer.get(0) & 0xff) << 8) | (buffer.get(1) & 0xff);
-                    amt -= 2;
-                } else {
-                    // Size is partially known, but now is fully known.
-                    mSize = size = (~size) | (buffer.get(1) & 0xff);
-                    amt--;
-                }
-
-                // Prepare for passing to receiver and skip size prefix.
-                buffer.position(2);
-
-                if (amt <= 0) {
-                    return null;
-                }
-            }
-
-            Object receiverState = mReceiver.receive(mReceiverState, size, mAmount, buffer);
-
-            if ((mAmount += amt) < size) {
-                mReceiverState = receiverState;
-                // Prepare for next read.
-                buffer.position(2);
-                return null;
-            }
-
-            // Message fully received. Prepare for next message and return
-            // receiver state object for message processing.
-            buffer.clear();
-            mSize = 0;
-            mAmount = 0;
-            mReceiverState = null;
-
-            return receiverState;
+            return mReceiverStateQueue.isEmpty() ? null : this;
         }
 
         public void selectedException(IOException e) {
@@ -566,7 +584,21 @@ public class SocketProcessor {
         }
 
         public void selectedExecute(Object state) {
-            mReceiver.process(state, mSender);
+            Object receiverState;
+            while ((receiverState = mReceiverStateQueue.poll()) != null) {
+                if (!mReceiverStateQueue.isEmpty()) {
+                    try {
+                        // Allow messages to be processed concurrently.
+                        mExecutor.execute(this);
+                    } catch (RejectedExecutionException e) {
+                    }
+                }
+                mReceiver.process(receiverState, mSender);
+            }
+        }
+
+        public void run() {
+            selectedExecute(null);
         }
 
         private void handleException(IOException e) {

@@ -34,12 +34,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Custom thread pool implementation which performs better than the default
- * JDK1.6 thread pool. A test program using the StandardSession and the default
- * thread pool performed at about 10,040 messages per second. With this thread
- * pool, the performance was about 10,440 messages per second, which is
- * slightly better. More importantly, the overall CPU utilization is lower,
- * by about 10%.
+ * Custom thread pool implementation which is slightly more efficient than the
+ * default JDK1.6 thread pool and also provides scheduling services.
  *
  * @author Brian S O'Neill
  */

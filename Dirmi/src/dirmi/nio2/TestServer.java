@@ -57,12 +57,16 @@ public class TestServer implements MessageReceiver<byte[]> {
         if (message == null) {
             message = new byte[totalSize];
         }
-        buffer.get(message, offset, totalSize);
+        buffer.get(message, offset, buffer.remaining());
         return message;
     }
 
     public void process(byte[] message, MessageSender sender) {
         System.out.println("Received: " + new String(message));
+        try {
+            Thread.sleep(1000);
+        } catch (Exception e) {
+        }
     }
 
     public void closed() {

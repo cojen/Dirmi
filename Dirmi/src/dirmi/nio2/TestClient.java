@@ -43,7 +43,7 @@ public class TestClient implements MessageReceiver<byte[]> {
 
         int count = 0;
         while (true) {
-            byte[] message = ("hello " + new org.joda.time.DateTime()).getBytes();
+            byte[] message = ("" + count + "/hello " + new org.joda.time.DateTime() + "@" + count).getBytes();
             sender.send(ByteBuffer.wrap(message));
             count++;
             System.out.println("sent message " + count);
@@ -67,7 +67,7 @@ public class TestClient implements MessageReceiver<byte[]> {
         if (message == null) {
             message = new byte[totalSize];
         }
-        buffer.get(message, offset, totalSize);
+        buffer.get(message, offset, buffer.remaining());
         return message;
     }
 
