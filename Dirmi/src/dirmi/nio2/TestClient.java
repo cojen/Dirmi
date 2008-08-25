@@ -34,23 +34,23 @@ public class TestClient implements MessageReceiver<byte[]> {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
-        SocketProcessor processor = new SocketProcessor(pool);
+        SocketMessageProcessor processor = new SocketMessageProcessor(pool);
         MessageConnector connector = processor.newConnector(address);
         System.out.println(connector);
 
-        MessageSender sender = connector.connect(new TestClient());
-        System.out.println(sender);
+        MessageConnection con = connector.connect(new TestClient());
+        System.out.println(con);
 
         int count = 0;
         while (true) {
             byte[] message = ("" + count + "/hello " + new org.joda.time.DateTime() + "@" + count).getBytes();
-            sender.send(ByteBuffer.wrap(message));
+            con.send(ByteBuffer.wrap(message));
             count++;
             System.out.println("sent message " + count);
             Thread.sleep(10);
             /*
             if (count > 2) {
-                sender.close();
+                con.close();
             }
             */
         }
@@ -59,8 +59,8 @@ public class TestClient implements MessageReceiver<byte[]> {
     private TestClient() {
     }
 
-    public void established(MessageSender sender) {
-        System.out.println("Connected: " + sender);
+    public void established(MessageConnection con) {
+        System.out.println("Connected: " + con);
     }
 
     public byte[] receive(byte[] message, int totalSize, int offset, ByteBuffer buffer) {
@@ -71,7 +71,7 @@ public class TestClient implements MessageReceiver<byte[]> {
         return message;
     }
 
-    public void process(byte[] message, MessageSender sender) {
+    public void process(byte[] message, MessageConnection con) {
         System.out.println("Received: " + new String(message));
     }
 

@@ -34,7 +34,7 @@ public class TestServer implements MessageReceiver<byte[]> {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(Integer.parseInt(args[0]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
-        SocketProcessor processor = new SocketProcessor(pool);
+        SocketMessageProcessor processor = new SocketMessageProcessor(pool);
         MessageAcceptor acceptor = processor.newAcceptor(address);
         System.out.println(acceptor);
 
@@ -48,8 +48,8 @@ public class TestServer implements MessageReceiver<byte[]> {
         acceptor.accept(this);
     }
 
-    public void established(MessageSender sender) {
-        System.out.println("Accepted: " + sender);
+    public void established(MessageConnection con) {
+        System.out.println("Accepted: " + con);
         mAcceptor.accept(new TestServer(mAcceptor));
     }
 
@@ -61,7 +61,7 @@ public class TestServer implements MessageReceiver<byte[]> {
         return message;
     }
 
-    public void process(byte[] message, MessageSender sender) {
+    public void process(byte[] message, MessageConnection con) {
         System.out.println("Received: " + new String(message));
         try {
             Thread.sleep(1000);
