@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
  *
  * @author Brian S O'Neill
  */
-public interface MessageSender extends Closeable {
+public interface MessageConnection extends Closeable {
     /**
      * Send a fixed size message, possibly blocking if send buffer is full.
      *
@@ -38,7 +38,7 @@ public interface MessageSender extends Closeable {
     void send(ByteBuffer buffer) throws IOException;
 
     /**
-     * Returns the constant maximum message size supported by the message channel.
+     * Returns the constant maximum message size supported by the connection.
      */
     int getMaximumMessageSize();
 

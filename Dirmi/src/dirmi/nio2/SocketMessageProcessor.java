@@ -47,7 +47,7 @@ import java.util.concurrent.Executor;
  *
  * @author Brian S O'Neill
  */
-public class SocketProcessor {
+public class SocketMessageProcessor {
     final Executor mExecutor;
 
     final ConcurrentLinkedQueue<Registerable> mReadQueue;
@@ -56,7 +56,7 @@ public class SocketProcessor {
 
     int mReadTaskCount;
 
-    public SocketProcessor(Executor executor) throws IOException {
+    public SocketMessageProcessor(Executor executor) throws IOException {
         if (executor == null) {
             throw new IllegalArgumentException();
         }
@@ -64,7 +64,8 @@ public class SocketProcessor {
         mExecutor = executor;
 
         mReadQueue = new ConcurrentLinkedQueue<Registerable>();
-        // Use unfair lock since arbitrary worker threads do reads.
+        // Use unfair lock since arbitrary worker threads do reads, and so
+        // waiting on a queue is not necessary.
         mReadLock = new ReentrantLock(false);
         mReadSelector = Selector.open();
 
@@ -90,7 +91,7 @@ public class SocketProcessor {
         }
 
         return new MessageConnector() {
-            public MessageSender connect(MessageReceiver receiver) throws IOException {
+            public MessageConnection connect(MessageReceiver receiver) throws IOException {
                 final SocketChannel channel = SocketChannel.open();
 
                 if (bindpoint != null) {
@@ -101,7 +102,7 @@ public class SocketProcessor {
                 channel.socket().connect(endpoint);
                 channel.configureBlocking(false);
 
-                return new Sender(SocketProcessor.this, channel, receiver);
+                return new Sender(SocketMessageProcessor.this, channel, receiver);
             }
 
             @Override
@@ -150,7 +151,7 @@ public class SocketProcessor {
 
             public void selectedExecute(SocketChannel channel) {
                 try {
-                    new Sender(SocketProcessor.this, channel, mReceiver);
+                    new Sender(SocketMessageProcessor.this, channel, mReceiver);
                 } catch (IOException e) {
                     mReceiver.closed(e);
                 }
@@ -328,7 +329,7 @@ public class SocketProcessor {
         }
     }
 
-    private static class Sender implements MessageSender {
+    private static class Sender implements MessageConnection {
         private static final int MAX_MESSAGE_SIZE = 65536;
 
         private final SocketChannel mChannel;
@@ -340,7 +341,7 @@ public class SocketProcessor {
 
         private volatile IOException mCause;
 
-        Sender(SocketProcessor processor, SocketChannel channel, MessageReceiver receiver)
+        Sender(SocketMessageProcessor processor, SocketChannel channel, MessageReceiver receiver)
             throws IOException
         {
             mChannel = channel;
@@ -415,7 +416,7 @@ public class SocketProcessor {
 
         @Override
         public String toString() {
-            return "MessageSender {localAddress=" + getLocalAddress() +
+            return "MessageConnection {localAddress=" + getLocalAddress() +
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 
