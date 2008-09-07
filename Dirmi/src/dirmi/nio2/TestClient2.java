@@ -16,7 +16,7 @@
 
 package dirmi.nio2;
 
-import java.io.IOException;
+import java.io.*;
 
 import java.nio.ByteBuffer;
 
@@ -32,7 +32,7 @@ import dirmi.core.ThreadPool;
  *
  * @author Brian S O'Neill
  */
-public class TestClient implements MessageReceiver {
+public class TestClient2 {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
         ThreadPool pool = new ThreadPool(100, true, "dirmi");
@@ -40,42 +40,39 @@ public class TestClient implements MessageReceiver {
         MessageConnector connector = processor.newConnector(address);
         System.out.println(connector);
 
-        MessageConnection con = connector.connect();
+        MessageConnection messCon = connector.connect();
+        System.out.println(messCon);
+
+        StreamBroker broker = new MultiplexedStreamBroker(messCon);
+
+        StreamConnection con = broker.connect();
         System.out.println(con);
-        con.receive(new TestClient());
+        con.getOutputStream().write("hello world".getBytes());
+        con.getOutputStream().close();
 
-        int count = 0;
-        while (true) {
-            byte[] message = ("" + count + "/hello " + new DateTime() + "@" + count).getBytes();
-            con.send(ByteBuffer.wrap(message));
-            count++;
-            System.out.println("sent message " + count);
-            Thread.sleep(10);
-            /*
-            if (count > 2) {
-                con.close();
+        if (args.length > 2) {
+            while (true) {
+                System.out.println("Sleeping");
+                Thread.sleep(1000);
+
+                InputStream in = new FileInputStream(args[2]);
+                byte[] buf = new byte[8192];
+                con = broker.connect();
+                System.out.println(con);
+                OutputStream out = con.getOutputStream();
+                int amt;
+                while ((amt = in.read(buf)) > 0) {
+                    out.write(buf, 0, amt);
+                }
+                out.close();
+                in.close();
             }
-            */
         }
+
+        System.out.println("Sleeping");
+        Thread.sleep(10000);
     }
 
-    private TestClient() {
-    }
-
-    public MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer) {
-        return this;//new TestClient();
-    }
-
-    public void process() {
-    }
-
-    public void closed() {
-    }
-
-    public void closed(IOException e) {
-        /*
-        System.out.println("Closed");
-        e.printStackTrace(System.out);
-        */
+    private TestClient2() {
     }
 }

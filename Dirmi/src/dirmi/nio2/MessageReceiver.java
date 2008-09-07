@@ -48,7 +48,8 @@ public interface MessageReceiver {
     /**
      * Called after the message has been completely received and can be
      * processed. This method may safely block, and it can interact with the
-     * connection too.
+     * connection too. Also note that this method may be called by a different
+     * thread than receive was called by.
      */
     void process();
 

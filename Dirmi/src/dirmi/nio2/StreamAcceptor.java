@@ -16,23 +16,16 @@
 
 package dirmi.nio2;
 
-import java.io.IOException;
-
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface MessageListener {
+public interface StreamAcceptor {
     /**
-     * Called at most once as soon as connection has been established. This
-     * method may safely block, and it can interact with the connection too.
+     * Returns immediately and calls established method on listener
+     * asynchronously. Only one connection is accepted per invocation of this
+     * method.
      */
-    void established(MessageConnection con);
-
-    /**
-     * Called when connection cannot be established. This method may safely
-     * block.
-     */
-    void failed(IOException e);
+    void accept(StreamListener listener);
 }

@@ -23,16 +23,10 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface MessageListener {
+public interface StreamConnector {
     /**
-     * Called at most once as soon as connection has been established. This
-     * method may safely block, and it can interact with the connection too.
+     * Returns a new connection, possibly blocking until it has been
+     * established.
      */
-    void established(MessageConnection con);
-
-    /**
-     * Called when connection cannot be established. This method may safely
-     * block.
-     */
-    void failed(IOException e);
+    StreamConnection connect() throws IOException;
 }

@@ -16,23 +16,28 @@
 
 package dirmi.nio2;
 
+import java.io.Closeable;
+import java.io.InputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
 /**
- * 
+ * Basic interface for a blocking bidirectional I/O connection.
  *
  * @author Brian S O'Neill
  */
-public interface MessageListener {
-    /**
-     * Called at most once as soon as connection has been established. This
-     * method may safely block, and it can interact with the connection too.
-     */
-    void established(MessageConnection con);
+public interface StreamConnection extends Closeable {
+    InputStream getInputStream() throws IOException;
+
+    OutputStream getOutputStream() throws IOException;
 
     /**
-     * Called when connection cannot be established. This method may safely
-     * block.
+     * @return local address or null if unknown
      */
-    void failed(IOException e);
+    Object getLocalAddress();
+
+    /**
+     * @return remote address or null if unknown
+     */
+    Object getRemoteAddress();
 }

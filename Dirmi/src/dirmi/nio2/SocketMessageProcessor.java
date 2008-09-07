@@ -374,8 +374,8 @@ public class SocketMessageProcessor {
             lock.lock();
             try {
                 prefix.clear();
-                prefix.put((byte) (size >> 8));
-                prefix.put((byte) size);
+                prefix.put((byte) ((size - 1) >> 8));
+                prefix.put((byte) (size - 1));
                 prefix.flip();
 
                 buffers[1] = buffer;
@@ -497,8 +497,7 @@ public class SocketMessageProcessor {
             mChannel = channel;
             mCon = con;
 
-            mBuffer = ByteBuffer.allocate(BUFFER_SIZE);
-            mBuffer.limit(0);
+            (mBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE)).limit(0);
 
             mReceiverQueue = new ConcurrentLinkedQueue<MessageReceiver>();
         }
@@ -524,8 +523,7 @@ public class SocketMessageProcessor {
 
         public MessageReceiver selected(SelectionKey key) throws IOException {
             ByteBuffer buffer = mBuffer;
-            buffer.mark();
-            buffer.limit(buffer.capacity());
+            buffer.mark().limit(buffer.capacity());
 
             int amt = mChannel.read(buffer);
 
@@ -537,8 +535,7 @@ public class SocketMessageProcessor {
                 return null;
             }
 
-            buffer.limit(buffer.position());
-            buffer.reset();
+            buffer.limit(buffer.position()).reset();
 
             return doReceive(key);
         }
@@ -549,10 +546,7 @@ public class SocketMessageProcessor {
         private MessageReceiver doReceive(SelectionKey key) throws IOException {
             MessageReceiver receiver = mReceiver;
             if (receiver == null) {
-                if ((mReceiver = receiver = dequeue()) == null) {
-                    if (key != null) {
-                        key.cancel();
-                    }
+                if ((mReceiver = receiver = dequeue(key)) == null) {
                     return null;
                 }
             }
@@ -567,18 +561,18 @@ public class SocketMessageProcessor {
                         if (buffer.remaining() == 1) {
                             // Only first byte of size known so far.
                             mSize = ~(buffer.get() & 0xff);
-                            buffer.clear();
+                            buffer.position(0).limit(0);
                             return null;
                         } 
                         // Size is fully known.
-                        mSize = size = ((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff);
+                        mSize = size = (((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff)) + 1;
                     } else {
                         // Size is partially known, but now is fully known.
-                        mSize = size = ((~size) << 8) | (buffer.get() & 0xff);
+                        mSize = size = (((~size) << 8) | (buffer.get() & 0xff)) + 1;
                     }
                     if (!buffer.hasRemaining()) {
                         // Buffer fully drained, but no message received yet.
-                        buffer.clear();
+                        buffer.position(0).limit(0);
                         return null;
                     }
                 }
@@ -592,7 +586,7 @@ public class SocketMessageProcessor {
 
                 if ((mOffset += len) < size) {
                     // Buffer fully drained, but message is not fully received.
-                    buffer.clear();
+                    buffer.position(0).limit(0);
                     return null;
                 }
 
@@ -604,22 +598,18 @@ public class SocketMessageProcessor {
 
                 if ((originalLimit - originalPos - len) <= 0) {
                     // Buffer fully drained, so return receiver for processing.
-                    mReceiver = dequeue();
-                    buffer.clear();
+                    mReceiver = dequeue(key);
+                    buffer.position(0).limit(0);
                     return receiver;
                 }
 
-                buffer.position(originalPos + len);
-                buffer.limit(originalLimit);
+                buffer.position(originalPos + len).limit(originalLimit);
 
                 final MessageReceiver nextReceiver;
-                if ((nextReceiver = dequeue()) == null) {
+                if ((nextReceiver = dequeue(key)) == null) {
                     // No more receivers, so stop selecting and return current
                     // receiver for processing.
                     mReceiver = null;
-                    if (key != null) {
-                        key.cancel();
-                    }
                     return receiver;
                 }
 
@@ -640,8 +630,12 @@ public class SocketMessageProcessor {
             selectedExecute(null);
         }
 
-        private MessageReceiver dequeue() {
-            return mReceiverQueue.poll();
+        private MessageReceiver dequeue(SelectionKey key) {
+            MessageReceiver receiver = mReceiverQueue.poll();
+            if (receiver == null && key != null) {
+                key.cancel();
+            }
+            return receiver;
         }
 
         private void enqueue(MessageReceiver receiver) {
