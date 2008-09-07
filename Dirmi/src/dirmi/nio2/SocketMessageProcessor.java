@@ -102,7 +102,7 @@ public class SocketMessageProcessor {
                 channel.socket().connect(endpoint);
                 channel.configureBlocking(false);
 
-                return new Con(SocketMessageProcessor.this, channel);
+                return new Con(channel);
             }
 
             @Override
@@ -151,7 +151,7 @@ public class SocketMessageProcessor {
 
             public void selectedExecute(SocketChannel channel) {
                 try {
-                    mListener.established(new Con(SocketMessageProcessor.this, channel));
+                    mListener.established(new Con(channel));
                 } catch (IOException e) {
                     mListener.failed(e);
                 }
@@ -180,6 +180,15 @@ public class SocketMessageProcessor {
             mExecutor.execute(task);
         } catch (RejectedExecutionException e) {
             task.run();
+        }
+    }
+
+    void uncaughtException(Throwable e) {
+        try {
+            Thread t = Thread.currentThread();
+            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+        } catch (Throwable e2) {
+            // I give up.
         }
     }
 
@@ -238,8 +247,7 @@ public class SocketMessageProcessor {
                     try {
                         selector.select();
                     } catch (IOException e) {
-                        Thread t = Thread.currentThread();
-                        t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                        uncaughtException(e);
                         --mReadTaskCount;
                         return;
                     }
@@ -287,8 +295,7 @@ public class SocketMessageProcessor {
                             });
                             continue;
                         } catch (Throwable e) {
-                            Thread t = Thread.currentThread();
-                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                            uncaughtException(e);
                             continue;
                         }
 
@@ -308,8 +315,7 @@ public class SocketMessageProcessor {
                         try {
                             selectable.selectedExecute(state);
                         } catch (Throwable e) {
-                            Thread t = Thread.currentThread();
-                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                            uncaughtException(e);
                         } finally {
                             if (lock.tryLock()) {
                                 hasLock = true;
@@ -329,7 +335,7 @@ public class SocketMessageProcessor {
         }
     }
 
-    private static class Con implements MessageConnection {
+    private class Con implements MessageConnection {
         private static final int MAX_MESSAGE_SIZE = 65536;
 
         private final SocketChannel mChannel;
@@ -342,7 +348,7 @@ public class SocketMessageProcessor {
 
         private volatile IOException mCause;
 
-        Con(SocketMessageProcessor processor, SocketChannel channel) throws IOException {
+        Con(SocketChannel channel) throws IOException {
             mChannel = channel;
 
             // Use fair lock because caller blocks when sending message.
@@ -350,7 +356,7 @@ public class SocketMessageProcessor {
             mBuffers = new ByteBuffer[] {ByteBuffer.allocate(2), null};
             channel.register(mSelector = Selector.open(), SelectionKey.OP_WRITE);
 
-            mReader = new Reader(processor, channel, this);
+            mReader = new Reader(channel, this);
         }
 
         public void send(ByteBuffer buffer) throws IOException {
@@ -399,7 +405,7 @@ public class SocketMessageProcessor {
         }
 
         public void receive(MessageReceiver receiver) {
-            mReader.enqueue(receiver);
+            mReader.enqueueAndRegister(receiver);
         }
 
         public int getMaximumMessageSize() {
@@ -437,7 +443,7 @@ public class SocketMessageProcessor {
                         try {
                             mSelector.close();
                         } catch (IOException e) {
-                            // Don't care.
+                            uncaughtException(e);
                         }
                     }
                 }
@@ -449,7 +455,7 @@ public class SocketMessageProcessor {
                 try {
                     close(e);
                 } catch (IOException e2) {
-                    // Don't care.
+                    uncaughtException(e2);
                 }
                 IOException cause = mCause;
                 if (cause != null) {
@@ -461,11 +467,10 @@ public class SocketMessageProcessor {
         }
     }
 
-    private static class Reader implements Registerable, Selectable<MessageReceiver>, Runnable {
+    private class Reader implements Registerable, Selectable<MessageReceiver>, Runnable {
         // Allocate extra two for size prefix.
         private static final int BUFFER_SIZE = 2 + 8192;
 
-        private final SocketMessageProcessor mProcessor;
         private final Executor mExecutor;
 
         private final SocketChannel mChannel;
@@ -476,7 +481,7 @@ public class SocketMessageProcessor {
         private final ConcurrentLinkedQueue<MessageReceiver> mReceiverQueue;
 
         // Current receiver of message.
-        private MessageReceiver mReceiver;
+        private volatile MessageReceiver mReceiver;
 
         // Size of message to receive. Is zero when no message is being
         // received, is negative when size is partially known, and is
@@ -486,9 +491,8 @@ public class SocketMessageProcessor {
         // Amount of message read so far.
         private int mOffset;
 
-        Reader(SocketMessageProcessor processor, SocketChannel channel, Con con) {
-            mProcessor = processor;
-            mExecutor = processor.mExecutor;
+        Reader(SocketChannel channel, Con con) {
+            mExecutor = SocketMessageProcessor.this.mExecutor;
 
             mChannel = channel;
             mCon = con;
@@ -499,9 +503,9 @@ public class SocketMessageProcessor {
             mReceiverQueue = new ConcurrentLinkedQueue<MessageReceiver>();
         }
 
-        public void enqueue(MessageReceiver receiver) {
-            mReceiverQueue.add(receiver);
-            mProcessor.enqueueRegister(this);
+        public void enqueueAndRegister(MessageReceiver receiver) {
+            enqueue(receiver);
+            enqueueRegister(this);
         }
 
         public void register(Selector selector) throws IOException {
@@ -545,7 +549,7 @@ public class SocketMessageProcessor {
         private MessageReceiver doReceive(SelectionKey key) throws IOException {
             MessageReceiver receiver = mReceiver;
             if (receiver == null) {
-                if ((mReceiver = receiver = mReceiverQueue.poll()) == null) {
+                if ((mReceiver = receiver = dequeue()) == null) {
                     if (key != null) {
                         key.cancel();
                     }
@@ -584,10 +588,7 @@ public class SocketMessageProcessor {
                 int len = Math.min(size - mOffset, originalLimit - originalPos);
                 buffer.limit(originalPos + len);
 
-                MessageReceiver newReceiver = receiver.receive(size, mOffset, buffer);
-                if (newReceiver != null) {
-                    mReceiverQueue.add(newReceiver);
-                }
+                enqueue(receiver.receive(size, mOffset, buffer));
 
                 if ((mOffset += len) < size) {
                     // Buffer fully drained, but message is not fully received.
@@ -598,12 +599,12 @@ public class SocketMessageProcessor {
                 // If this point is reached, message has been fully received.
 
                 // Prepare for next message.
-                mReceiver = null;
                 mSize = size = 0;
                 mOffset = 0;
 
                 if ((originalLimit - originalPos - len) <= 0) {
                     // Buffer fully drained, so return receiver for processing.
+                    mReceiver = dequeue();
                     buffer.clear();
                     return receiver;
                 }
@@ -612,9 +613,10 @@ public class SocketMessageProcessor {
                 buffer.limit(originalLimit);
 
                 final MessageReceiver nextReceiver;
-                if ((nextReceiver = mReceiverQueue.poll()) == null) {
+                if ((nextReceiver = dequeue()) == null) {
                     // No more receivers, so stop selecting and return current
                     // receiver for processing.
+                    mReceiver = null;
                     if (key != null) {
                         key.cancel();
                     }
@@ -638,6 +640,16 @@ public class SocketMessageProcessor {
             selectedExecute(null);
         }
 
+        private MessageReceiver dequeue() {
+            return mReceiverQueue.poll();
+        }
+
+        private void enqueue(MessageReceiver receiver) {
+            if (receiver != null) {
+                mReceiverQueue.add(receiver);
+            }
+        }
+
         private void handleException(IOException e) {
             try {
                 if (e instanceof EOF) {
@@ -645,20 +657,22 @@ public class SocketMessageProcessor {
                 }
                 mCon.close(e);
             } catch (IOException e2) {
-                // Don't care.
+                uncaughtException(e2);
             } finally {
                 MessageReceiver receiver = mReceiver;
                 if (receiver != null) {
-                    receiver.closed(e);
-                } else {
-                    // Not expected to happen, but report anyhow.
-                    Thread t = Thread.currentThread();
-                    t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                    if (e == null) {
+                        receiver.closed();
+                    } else {
+                        receiver.closed(e);
+                    }
+                } else if (e != null) {
+                    uncaughtException(e);
                 }
             }
         }
 
-        private static class EOF extends IOException {
+        private class EOF extends IOException {
         }
     }
 

@@ -32,7 +32,7 @@ import dirmi.core.ThreadPool;
  *
  * @author Brian S O'Neill
  */
-public class TestClient {
+public class TestClient implements MessageReceiver {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
@@ -42,6 +42,7 @@ public class TestClient {
 
         MessageConnection con = connector.connect();
         System.out.println(con);
+        con.receive(new TestClient());
 
         int count = 0;
         while (true) {
@@ -49,7 +50,7 @@ public class TestClient {
             con.send(ByteBuffer.wrap(message));
             count++;
             System.out.println("sent message " + count);
-            Thread.sleep(100);
+            Thread.sleep(10);
             /*
             if (count > 2) {
                 con.close();
@@ -59,5 +60,18 @@ public class TestClient {
     }
 
     private TestClient() {
+    }
+
+    public MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer) {
+        return this;//new TestClient();
+    }
+
+    public void process() {
+    }
+
+    public void closed() {
+    }
+
+    public void closed(IOException e) {
     }
 }

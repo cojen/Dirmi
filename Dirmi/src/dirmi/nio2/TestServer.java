@@ -65,6 +65,11 @@ public class TestServer implements MessageListener {
 
             public void process() {
                 System.out.println("Received: " + new String(mMessage));
+                try {
+                    con.send(ByteBuffer.wrap("Thanks!".getBytes()));
+                } catch (IOException e) {
+                    e.printStackTrace(System.out);
+                }
                 /*
                 try {
                     Thread.sleep(1000);
