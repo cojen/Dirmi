@@ -30,7 +30,7 @@ import dirmi.core.ThreadPool;
  *
  * @author Brian S O'Neill
  */
-public class TestServer implements MessageReceiver<byte[]> {
+public class TestServer implements MessageListener {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(Integer.parseInt(args[0]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
@@ -48,33 +48,46 @@ public class TestServer implements MessageReceiver<byte[]> {
         acceptor.accept(this);
     }
 
-    public void established(MessageConnection con) {
+    public void established(final MessageConnection con) {
         System.out.println("Accepted: " + con);
         mAcceptor.accept(new TestServer(mAcceptor));
+
+        class Receiver implements MessageReceiver {
+            private byte[] mMessage;
+
+            public MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer) {
+                if (offset == 0) {
+                    mMessage = new byte[totalSize];
+                }
+                buffer.get(mMessage, offset, buffer.remaining());
+                return offset == 0 ? new Receiver() : null;
+            }
+
+            public void process() {
+                System.out.println("Received: " + new String(mMessage));
+                /*
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                }
+                */
+            }
+
+            public void closed() {
+                System.out.println("Closed");
+            }
+
+            public void closed(IOException e) {
+                System.out.println("Closed");
+                e.printStackTrace(System.out);
+            }
+        };
+
+        con.receive(new Receiver());
     }
 
-    public byte[] receive(byte[] message, int totalSize, int offset, ByteBuffer buffer) {
-        if (message == null) {
-            message = new byte[totalSize];
-        }
-        buffer.get(message, offset, buffer.remaining());
-        return message;
-    }
-
-    public void process(byte[] message, MessageConnection con) {
-        System.out.println("Received: " + new String(message));
-        try {
-            Thread.sleep(1000);
-        } catch (Exception e) {
-        }
-    }
-
-    public void closed() {
-        System.out.println("Closed");
-    }
-
-    public void closed(IOException e) {
-        System.out.println("Closed");
+    public void failed(IOException e) {
+        System.out.println("Failed");
         e.printStackTrace(System.out);
     }
 }

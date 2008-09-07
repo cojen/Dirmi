@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import org.joda.time.DateTime;
+
 import dirmi.core.ThreadPool;
 
 /**
@@ -30,7 +32,7 @@ import dirmi.core.ThreadPool;
  *
  * @author Brian S O'Neill
  */
-public class TestClient implements MessageReceiver<byte[]> {
+public class TestClient {
     public static void main(String[] args) throws Exception {
         SocketAddress address = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
@@ -38,16 +40,16 @@ public class TestClient implements MessageReceiver<byte[]> {
         MessageConnector connector = processor.newConnector(address);
         System.out.println(connector);
 
-        MessageConnection con = connector.connect(new TestClient());
+        MessageConnection con = connector.connect();
         System.out.println(con);
 
         int count = 0;
         while (true) {
-            byte[] message = ("" + count + "/hello " + new org.joda.time.DateTime() + "@" + count).getBytes();
+            byte[] message = ("" + count + "/hello " + new DateTime() + "@" + count).getBytes();
             con.send(ByteBuffer.wrap(message));
             count++;
             System.out.println("sent message " + count);
-            Thread.sleep(10);
+            Thread.sleep(100);
             /*
             if (count > 2) {
                 con.close();
@@ -57,30 +59,5 @@ public class TestClient implements MessageReceiver<byte[]> {
     }
 
     private TestClient() {
-    }
-
-    public void established(MessageConnection con) {
-        System.out.println("Connected: " + con);
-    }
-
-    public byte[] receive(byte[] message, int totalSize, int offset, ByteBuffer buffer) {
-        if (message == null) {
-            message = new byte[totalSize];
-        }
-        buffer.get(message, offset, buffer.remaining());
-        return message;
-    }
-
-    public void process(byte[] message, MessageConnection con) {
-        System.out.println("Received: " + new String(message));
-    }
-
-    public void closed() {
-        System.out.println("Closed");
-    }
-
-    public void closed(IOException e) {
-        System.out.println("Closed");
-        e.printStackTrace(System.out);
     }
 }

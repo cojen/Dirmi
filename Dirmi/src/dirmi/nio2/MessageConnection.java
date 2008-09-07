@@ -38,6 +38,12 @@ public interface MessageConnection extends Closeable {
     void send(ByteBuffer buffer) throws IOException;
 
     /**
+     * Returns immediately and receives a single message asynchronously. This method
+     * may be called multiple times, and each receiver is called in FIFO order.
+     */
+    void receive(MessageReceiver receiver);
+
+    /**
      * Returns the constant maximum message size supported by the connection.
      */
     int getMaximumMessageSize();

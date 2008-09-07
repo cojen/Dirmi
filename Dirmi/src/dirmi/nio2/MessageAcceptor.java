@@ -23,9 +23,9 @@ package dirmi.nio2;
  */
 public interface MessageAcceptor {
     /**
-     * Returns immediately and calls established method on receiver
+     * Returns immediately and calls established method on listener
      * asynchronously. Only one connection is accepted per invocation of this
      * method.
      */
-    void accept(MessageReceiver receiver);
+    void accept(MessageListener receiver);
 }

@@ -25,13 +25,7 @@ import java.nio.ByteBuffer;
  *
  * @author Brian S O'Neill
  */
-public interface MessageReceiver<S> {
-    /**
-     * Called at most once as soon as connection has been established. This
-     * method may safely block, and it can interact with the connection too.
-     */
-    void established(MessageConnection connection);
-
+public interface MessageReceiver {
     /**
      * Called when a message is fully or partially received. In either case,
      * this method must not block -- it may only copy the message from the
@@ -39,30 +33,24 @@ public interface MessageReceiver<S> {
      * the message and potentially block. Messages are received in order, but
      * they may be processed out of order.
      *
-     * <p>Only one thread at a time will call receive, and it will hold a lock
-     * while doing so. Multiple messages may received before being processed.
+     * <p>This method may optionally return a new MessageReceiver in order to
+     * immediately receive more messages from connection. This is generally
+     * done only once per received message.
      *
-     * @param state state which was returned by previous invocation of receive,
-     * or null if start of message
      * @param totalSize total size of message
      * @param offset message offset; is zero if start of message
      * @param buffer position is set at the start or continuation of the
      * message, remaining is amount received
-     * @return state object which is passed again to receive and process
-     * methods
+     * @return receiver of next message, or null
      */
-    S receive(S state, int totalSize, int offset, ByteBuffer buffer);
+    MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer);
 
     /**
-     * Called after a message has been completely received. This method may
-     * safely block, and it can interact with the connection too. While this
-     * method is executing, other messages may be received and processed
-     * concurrently.
-     *
-     * @param state object which was returned by receive method
-     * @param connection use to send reply messages
+     * Called after the message has been completely received and can be
+     * processed. This method may safely block, and it can interact with the
+     * connection too.
      */
-    void process(S state, MessageConnection connection);
+    void process();
 
     /**
      * Called when connection is closed. This method may safely block.
@@ -70,9 +58,8 @@ public interface MessageReceiver<S> {
     void closed();
 
     /**
-     * Called when connection is closed due to an exception. It may be closed
-     * before it is established, in which case the connection is null. This
-     * method may safely block.
+     * Called when connection is closed due to an exception. This method may
+     * safely block.
      */
     void closed(IOException e);
 }
