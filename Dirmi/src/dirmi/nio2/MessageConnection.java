@@ -21,12 +21,14 @@ import java.io.IOException;
 
 import java.nio.ByteBuffer;
 
+import java.util.concurrent.Executor;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface MessageConnection extends Closeable {
+public interface MessageConnection extends Closeable, Executor {
     /**
      * Send a fixed size message, possibly blocking if send buffer is full.
      *

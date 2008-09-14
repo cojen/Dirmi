@@ -45,16 +45,16 @@ public class TestClient2 {
 
         StreamBroker broker = new MultiplexedStreamBroker(messCon);
 
+        StreamConnection con;
+        /*
         StreamConnection con = broker.connect();
         System.out.println(con);
         con.getOutputStream().write("hello world".getBytes());
         con.getOutputStream().close();
+        */
 
         if (args.length > 2) {
             while (true) {
-                System.out.println("Sleeping");
-                Thread.sleep(1000);
-
                 InputStream in = new FileInputStream(args[2]);
                 byte[] buf = new byte[8192];
                 con = broker.connect();
@@ -66,6 +66,9 @@ public class TestClient2 {
                 }
                 out.close();
                 in.close();
+
+                //System.out.println("Sleeping");
+                //Thread.sleep(1000);
             }
         }
 

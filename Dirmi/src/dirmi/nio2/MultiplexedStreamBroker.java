@@ -192,8 +192,35 @@ public class MultiplexedStreamBroker implements StreamBroker {
     }
 
     void sendMessage(ByteBuffer buffer) throws IOException {
-        // FIXME: If IOException, close all connections.
-        mMessCon.send(buffer);
+        try {
+            mMessCon.send(buffer);
+        } catch (IOException e) {
+            closed(e);
+            throw e;
+        }
+    }
+
+    void closed(IOException exception) {
+        mConnectionsLock.writeLock().lock();
+        try {
+            for (Con con : mConnections.values()) {
+                try {
+                    con.close(true, exception);
+                } catch (IOException e) {
+                    // Ignore.
+                }
+            }
+            mConnections.clear();
+
+            if (exception != null) {
+                StreamListener listener;
+                while ((listener = mListeners.poll()) != null) {
+                    listener.failed(exception);
+                }
+            }
+        } finally {
+            mConnectionsLock.writeLock().unlock();
+        }
     }
 
     private class Receiver implements MessageReceiver {
@@ -262,6 +289,8 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     try {
                         if ((con = mConnections.get(id)) != null) {
                             newCon = false;
+                        } else if (command == ACK) {
+                            return;
                         } else {
                             con = new Con(id);
                             mConnections.put(con.getId(), con);
@@ -279,7 +308,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 con.acknowledged();
             } else if (command == CLOSE) {
                 try {
-                    con.close(true);
+                    con.close(true, null);
                 } catch (IOException e) {
                     // Ignore.
                 }
@@ -298,7 +327,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
                 // Not accepted in time, so close it.
                 try {
-                    con.close(true);
+                    con.close(true, null);
                 } catch (IOException e) {
                     // Ignore.
                 }
@@ -306,14 +335,11 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         public void closed() {
-            // FIXME: Close all connections; drain all StreamListeners.
-            System.out.println("Closed in Receiver");
+            MultiplexedStreamBroker.this.closed(null);
         }
 
         public void closed(IOException e) {
-            // FIXME: Close all connections; drain and notify all StreamListeners.
-            System.out.println("Closed in Receiver");
-            e.printStackTrace(System.out);
+            MultiplexedStreamBroker.this.closed(e);
         }
     }
 
@@ -327,22 +353,28 @@ public class MultiplexedStreamBroker implements StreamBroker {
         private boolean mOutBlocked;
 
         private final InputStream mIn;
-        private final ConcurrentLinkedQueue<ByteBuffer> mInBuffers;
+        private ByteBuffer mInBuffer;
+        private ByteBuffer mNextInBuffer;
 
         private boolean mClosed;
+        private IOException mClosedException;
 
         private Object mLocalAddress;
         private Object mRemoteAddress;
+
+        // FIXME: Use queue optimized for zero or one elements.
+        private final ConcurrentLinkedQueue<StreamTask> mReadTasks;
 
         Con(int id) {
             mId = id;
 
             mOut = new Out();
-            mOutBuffer = mBufferPool.get(Math.min(8192, mMessCon.getMaximumMessageSize()));
+            mOutBuffer = mBufferPool.get(Math.min(65536, mMessCon.getMaximumMessageSize()));
             mOutBuffer.putInt(id);
 
             mIn = new In();
-            mInBuffers = new ConcurrentLinkedQueue<ByteBuffer>();
+
+            mReadTasks = new ConcurrentLinkedQueue<StreamTask>();
         }
 
         public InputStream getInputStream() throws IOException {
@@ -377,26 +409,52 @@ public class MultiplexedStreamBroker implements StreamBroker {
             return mRemoteAddress;
         }
 
-        public void close() throws IOException {
-            close(false);
+        public void executeWhenReadable(StreamTask task) {
+            synchronized (mIn) {
+                if (readAvailable() > 0) {
+                    mMessCon.execute(task);
+                } else {
+                    mReadTasks.add(task);
+                }
+            }
         }
 
-        void close(boolean force) throws IOException {
-            synchronized (mOut) {
-                synchronized (mIn) {
+        public void execute(Runnable task) {
+            mMessCon.execute(task);
+        }
+
+        public void close() throws IOException {
+            close(false, null);
+        }
+
+        void close(boolean force, IOException exception) throws IOException {
+            // Must lock mIn before mOut to avoid deadlock with getReadBuffer method.
+            synchronized (mIn) {
+                synchronized (mOut) {
                     if (!mClosed) {
                         if (!force) {
-                            mOutBlocked = false;
                             ByteBuffer buffer = mOutBuffer;
                             buffer.put(0, (byte) ((CLOSE << 6) | buffer.get(0)));
                             flush(buffer);
                         }
                         mClosed = true;
+                        mClosedException = exception;
                         mConnections.remove(mId);
                         mBufferPool.yield(mOutBuffer);
                     }
-                    mIn.notifyAll();
                     mOut.notifyAll();
+                }
+                mIn.notifyAll();
+            }
+
+            if (force) {
+                StreamTask task;
+                while ((task = mReadTasks.poll()) != null) {
+                    if (exception == null) {
+                        task.closed();
+                    } else {
+                        task.closed(exception);
+                    }
                 }
             }
         }
@@ -480,10 +538,13 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 if (mOutBlocked) {
                     mOutBlocked = false;
                     if (!mClosed) {
-                        try {
-                            flush();
-                        } catch (IOException e) {
-                            // Ignore and assume all connections are now closed.
+                        ByteBuffer buffer = mOutBuffer;
+                        if (!buffer.hasRemaining()) {
+                            try {
+                                flush(buffer);
+                            } catch (IOException e) {
+                                // Ignore and assume all connections are now closed.
+                            }
                         }
                     }
                     mOut.notifyAll();
@@ -492,27 +553,54 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         void received(ByteBuffer buffer) {
-            if (buffer != null) {
-                buffer.flip();
-                mInBuffers.add(buffer);
-                synchronized (mIn) {
-                    mIn.notify();
+            if (buffer == null) {
+                return;
+            }
+
+            buffer.flip();
+            boolean doSendAck;
+            synchronized (mIn) {
+                if (mInBuffer == null) {
+                    doSendAck = true;
+                    if (mNextInBuffer == null) {
+                        mInBuffer = buffer;
+                    } else {
+                        mInBuffer = mNextInBuffer;
+                        mNextInBuffer = buffer;
+                    }
+                } else {
+                    doSendAck = false;
+                    assert mNextInBuffer == null;
+                    mNextInBuffer = buffer;
                 }
-                synchronized (mOut) {
-                    if (!mClosed) {
-                        // Send acknowledgment.
-                        buffer = mOutBuffer;
-                        int header = buffer.get(0) & 0x3f;
-                        buffer.put(0, (byte) ((ACK << 6) | header));
-                        int originalPos = buffer.position();
-                        buffer.position(0).limit(4);
-                        try {
-                            sendMessage(buffer);
-                        } catch (IOException e) {
-                            // Ignore and assume all connections are now closed.
-                        } finally {
-                            buffer.position(originalPos).limit(buffer.capacity());
-                        }
+                mIn.notify();
+            }
+
+            if (doSendAck) {
+                sendAck();
+            }
+
+            StreamTask task = mReadTasks.poll();
+            if (task != null) {
+                task.run();
+            }
+        }
+
+        private void sendAck() {
+            synchronized (mOut) {
+                if (!mClosed) {
+                    ByteBuffer buffer = mOutBuffer;
+                    int header = buffer.get(0) & 0x3f;
+                    buffer.put(0, (byte) ((ACK << 6) | header));
+                    int originalPos = buffer.position();
+                    buffer.position(0).limit(4);
+                    try {
+                        // FIXME: if !mOutBlocked, piggyback with flush
+                        sendMessage(buffer);
+                    } catch (IOException e) {
+                        // Ignore and assume all connections are now closed.
+                    } finally {
+                        buffer.position(originalPos).limit(buffer.capacity());
                     }
                 }
             }
@@ -523,7 +611,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
             ByteBuffer buffer = getReadBuffer();
             byte b = buffer.get();
             if (!buffer.hasRemaining()) {
-                mInBuffers.poll();
+                mInBuffer = null;
                 mBufferPool.yield(buffer);
             }
             return b & 0xff;
@@ -535,29 +623,60 @@ public class MultiplexedStreamBroker implements StreamBroker {
             len = Math.min(len, buffer.remaining());
             buffer.get(b, off, len);
             if (!buffer.hasRemaining()) {
-                mInBuffers.poll();
+                mInBuffer = null;
                 mBufferPool.yield(buffer);
             }
             return len;
         }
 
+        // Caller must synchronize on mIn.
+        int readAvailable() {
+            ByteBuffer buffer = mInBuffer;
+            int avail = buffer == null ? 0 : buffer.remaining();
+            if ((buffer = mNextInBuffer) != null) {
+                avail += mNextInBuffer.remaining();
+            }
+            return avail;
+        }
+
+        // Caller must synchronize on mIn.
         private ByteBuffer getReadBuffer() throws IOException {
-            ByteBuffer buffer;
-            while ((buffer = mInBuffers.peek()) == null) {
-                checkClosed();
-                try {
-                    mIn.wait();
-                } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
+            ByteBuffer buffer = mInBuffer;
+            if (buffer == null) {
+                if ((buffer = mNextInBuffer) != null) {
+                    mInBuffer = buffer;
+                    mNextInBuffer = null;
+                    // This locks mOut while mIn lock is held. For this reason,
+                    // double lock in close method must lock mIn and then mOut.
+
+                    // TODO: More investigation required here. Can send buffer
+                    // be full? If so, reads are blocked.
+                    sendAck();
+                } else {
+                    do {
+                        checkClosed();
+                        try {
+                            mIn.wait();
+                        } catch (InterruptedException e) {
+                            throw new InterruptedIOException();
+                        }
+                    } while ((buffer = mInBuffer) == null);
                 }
             }
             return buffer;
         }
 
-        // Caller must synchronize on mOut or mIn.
+        // Caller must synchronize on mIn or mOut.
         private void checkClosed() throws IOException {
             if (mClosed) {
-                throw new IOException("Closed");
+                String message = "Connection closed";
+                if (mClosedException != null) {
+                    if (mClosedException.getMessage() != null) {
+                        message = mClosedException.getMessage();
+                    }
+                    throw new IOException(message, mClosedException);
+                }
+                throw new IOException(message);
             }
         }
 
@@ -582,8 +701,8 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
             @Override
             public void close() throws IOException {
-                // Note: This method is not synchronized. Con does the
-                // synchronization, to avoid deadlock.
+                // Note: This method is not synchronized. The Con method does
+                // the synchronization.
                 Con.this.close();
             }
         }
@@ -603,13 +722,18 @@ public class MultiplexedStreamBroker implements StreamBroker {
             }
 
             @Override
+            public synchronized int available() throws IOException {
+                return Con.this.readAvailable();
+            }
+
+            @Override
             public void close() throws IOException {
-                // Note: This method is not synchronized. Con does the
-                // synchronization, to avoid deadlock.
+                // Note: This method is not synchronized. The Con method does
+                // the synchronization.
                 Con.this.close();
             }
 
-            // FIXME: override skip and available
+            // FIXME: override skip
         }
     }
 }

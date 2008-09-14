@@ -61,22 +61,48 @@ public class TestServer2 implements MessageListener {
             return;
         }
 
+        class ReadTask implements StreamTask {
+            public void run() {
+                System.out.println("yo!");
+            }
+
+            public void closed() {
+                System.out.println("Closed!");
+            }
+
+            public void closed(IOException e) {
+                System.out.println("Closed! " + e);
+            }
+        }
+
         class Listener implements StreamListener {
             public void established(StreamConnection con) {
                 broker.accept(new Listener());
 
-                System.out.println("established: " + con);
+                //con.executeWhenReadable(new ReadTask());
+
+                //System.out.println("established: " + con);
+                long start = System.currentTimeMillis();
+                long size = 0;
+                byte[] buf = new byte[8192];
                 try {
                     InputStream in = con.getInputStream();
-                    int c;
-                    while ((c = in.read()) >= 0) {
-                        System.out.print((char) c);
+                    int amt;
+                    while ((amt = in.read(buf)) > 0) {
+                        size += amt;
                     }
-                    System.out.println();
                     con.close();
                 } catch (IOException e) {
-                    e.printStackTrace(System.out);
+                    //e.printStackTrace(System.out);
                 }
+                long end = System.currentTimeMillis();
+                System.out.println("Transfer time: " + (end - start) + ", size: " + size);
+                /*
+                try {
+                    Thread.sleep(5000);
+                } catch (Exception e) {
+                }
+                */
             }
 
             public void failed(IOException e) {

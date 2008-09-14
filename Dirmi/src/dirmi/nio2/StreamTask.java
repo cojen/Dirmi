@@ -16,36 +16,22 @@
 
 package dirmi.nio2;
 
-import java.io.Closeable;
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-
-import java.util.concurrent.Executor;
 
 /**
- * Basic interface for a blocking bidirectional I/O connection.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamConnection extends Closeable, Executor {
-    InputStream getInputStream() throws IOException;
-
-    OutputStream getOutputStream() throws IOException;
+public interface StreamTask extends Runnable {
+    /**
+     * Called when connection is closed. This method may safely block.
+     */
+    void closed();
 
     /**
-     * Asynchronously calls the given task as soon as data can be read from the
-     * connection.
+     * Called when connection is closed due to an exception. This method may
+     * safely block.
      */
-    void executeWhenReadable(StreamTask task);
-
-    /**
-     * @return local address or null if unknown
-     */
-    Object getLocalAddress();
-
-    /**
-     * @return remote address or null if unknown
-     */
-    Object getRemoteAddress();
+    void closed(IOException e);
 }

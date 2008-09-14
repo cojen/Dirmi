@@ -93,6 +93,7 @@ public class SocketMessageProcessor {
         return new MessageConnector() {
             public MessageConnection connect() throws IOException {
                 final SocketChannel channel = SocketChannel.open();
+                channel.socket().setTcpNoDelay(true);
 
                 if (bindpoint != null) {
                     channel.socket().bind(bindpoint);
@@ -140,6 +141,7 @@ public class SocketMessageProcessor {
                 key.cancel();
                 SocketChannel channel = serverChannel.accept();
                 if (channel != null) {
+                    channel.socket().setTcpNoDelay(true);
                     channel.configureBlocking(false);
                 }
                 return channel;
@@ -240,6 +242,7 @@ public class SocketMessageProcessor {
             final ReentrantLock lock = mReadLock;
             final Selector selector = mReadSelector;
 
+            // FIXME: put timeout on lock acquisition, perhaps a minute
             lock.lock();
             boolean hasLock = true;
             try {
@@ -426,6 +429,10 @@ public class SocketMessageProcessor {
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 
+        public void execute(Runnable task) {
+            mExecutor.execute(task);
+        }
+
         public void close() throws IOException {
             close(null);
         }
@@ -478,6 +485,7 @@ public class SocketMessageProcessor {
 
         private final ByteBuffer mBuffer;
 
+        // FIXME: Consider using queue which is optimized for zero or one elements.
         private final ConcurrentLinkedQueue<MessageReceiver> mReceiverQueue;
 
         // Current receiver of message.
