@@ -295,10 +295,8 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     try {
                         if ((con = mConnections.get(id)) != null) {
                             newCon = false;
-                        } else if (command == ACK ||
-                                   (command == CLOSE && (id & 1) == mIdBit)) {
-                            // Don't create connection for acknowledgment.
-                            // Don't create connection if peer is closing
+                        } else if ((id & 1) == mIdBit) {
+                            // Ignore command if peer is using a non-existent
                             // connection created by this broker.
                             return;
                         } else {
