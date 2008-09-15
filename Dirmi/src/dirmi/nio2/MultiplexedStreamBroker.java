@@ -23,6 +23,9 @@ import java.io.OutputStream;
 
 import java.nio.ByteBuffer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -62,6 +65,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
     final BlockingQueue<StreamListener> mListeners;
 
+    final int mIdBit;
     final AtomicInteger mNextId;
 
     public MultiplexedStreamBroker(MessageConnection con) throws IOException {
@@ -162,7 +166,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
             throw new IOException("Negotiation failure");
         }
 
-        mNextId = new AtomicInteger(ourRnd < theirRnd ? 0 : 1);
+        mNextId = new AtomicInteger(mIdBit = (ourRnd < theirRnd ? 0 : 1));
 
         con.receive(new Receiver());
     }
@@ -203,7 +207,9 @@ public class MultiplexedStreamBroker implements StreamBroker {
     void closed(IOException exception) {
         mConnectionsLock.writeLock().lock();
         try {
-            for (Con con : mConnections.values()) {
+            // Clone to prevent concurrent modification.
+            List<Con> cons = new ArrayList<Con>(mConnections.values());
+            for (Con con : cons) {
                 try {
                     con.close(true, exception);
                 } catch (IOException e) {
@@ -289,7 +295,11 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     try {
                         if ((con = mConnections.get(id)) != null) {
                             newCon = false;
-                        } else if (command == ACK) {
+                        } else if (command == ACK ||
+                                   (command == CLOSE && (id & 1) == mIdBit)) {
+                            // Don't create connection for acknowledgment.
+                            // Don't create connection if peer is closing
+                            // connection created by this broker.
                             return;
                         } else {
                             con = new Con(id);
@@ -600,7 +610,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     } catch (IOException e) {
                         // Ignore and assume all connections are now closed.
                     } finally {
-                        buffer.position(originalPos).limit(buffer.capacity());
+                        buffer.limit(buffer.capacity()).position(originalPos);
                     }
                 }
             }
