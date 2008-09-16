@@ -91,7 +91,7 @@ public class SocketMessageProcessor {
         }
 
         return new MessageConnector() {
-            public MessageConnection connect() throws IOException {
+            public MessageChannel connect() throws IOException {
                 final SocketChannel channel = SocketChannel.open();
                 channel.socket().setTcpNoDelay(true);
 
@@ -103,7 +103,7 @@ public class SocketMessageProcessor {
                 channel.socket().connect(endpoint);
                 channel.configureBlocking(false);
 
-                return new Con(channel);
+                return new Chan(channel);
             }
 
             @Override
@@ -153,7 +153,7 @@ public class SocketMessageProcessor {
 
             public void selectedExecute(SocketChannel channel) {
                 try {
-                    mListener.established(new Con(channel));
+                    mListener.established(new Chan(channel));
                 } catch (IOException e) {
                     mListener.failed(e);
                 }
@@ -338,7 +338,7 @@ public class SocketMessageProcessor {
         }
     }
 
-    private class Con implements MessageConnection {
+    private class Chan implements MessageChannel {
         private static final int MAX_MESSAGE_SIZE = 65536;
 
         private final SocketChannel mChannel;
@@ -351,7 +351,7 @@ public class SocketMessageProcessor {
 
         private volatile IOException mCause;
 
-        Con(SocketChannel channel) throws IOException {
+        Chan(SocketChannel channel) throws IOException {
             mChannel = channel;
 
             // Use fair lock because caller blocks when sending message.
@@ -425,7 +425,7 @@ public class SocketMessageProcessor {
 
         @Override
         public String toString() {
-            return "MessageConnection {localAddress=" + getLocalAddress() +
+            return "MessageChannel {localAddress=" + getLocalAddress() +
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 
@@ -435,6 +435,10 @@ public class SocketMessageProcessor {
 
         public void close() throws IOException {
             close(null);
+        }
+
+        public boolean isOpen() {
+            return mChannel.isOpen();
         }
 
         // Called directly by Reader.
@@ -481,7 +485,7 @@ public class SocketMessageProcessor {
         private final Executor mExecutor;
 
         private final SocketChannel mChannel;
-        private final Con mCon;
+        private final Chan mChan;
 
         private final ByteBuffer mBuffer;
 
@@ -499,11 +503,11 @@ public class SocketMessageProcessor {
         // Amount of message read so far.
         private int mOffset;
 
-        Reader(SocketChannel channel, Con con) {
+        Reader(SocketChannel channel, Chan chan) {
             mExecutor = SocketMessageProcessor.this.mExecutor;
 
             mChannel = channel;
-            mCon = con;
+            mChan = chan;
 
             (mBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE)).limit(0);
 
@@ -537,7 +541,7 @@ public class SocketMessageProcessor {
 
             if (amt <= 0) {
                 if (amt != 0) {
-                    // Throw exception so that closing the connection may safely block.
+                    // Throw exception so that closing the channel may safely block.
                     throw new EOF();
                 }
                 return null;
@@ -657,7 +661,7 @@ public class SocketMessageProcessor {
                 if (e instanceof EOF) {
                     e = null;
                 }
-                mCon.close(e);
+                mChan.close(e);
             } catch (IOException e2) {
                 uncaughtException(e2);
             } finally {

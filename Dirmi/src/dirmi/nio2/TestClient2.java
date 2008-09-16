@@ -40,26 +40,26 @@ public class TestClient2 {
         MessageConnector connector = processor.newConnector(address);
         System.out.println(connector);
 
-        MessageConnection messCon = connector.connect();
-        System.out.println(messCon);
+        MessageChannel messChannel = connector.connect();
+        System.out.println(messChannel);
 
-        StreamBroker broker = new MultiplexedStreamBroker(messCon);
+        StreamBroker broker = new MultiplexedStreamBroker(messChannel);
 
-        StreamConnection con;
+        StreamChannel channel;
         /*
-        StreamConnection con = broker.connect();
-        System.out.println(con);
-        con.getOutputStream().write("hello world".getBytes());
-        con.getOutputStream().close();
+        StreamChannel channel = broker.connect();
+        System.out.println(channel);
+        channel.getOutputStream().write("hello world".getBytes());
+        channel.getOutputStream().close();
         */
 
         if (args.length > 2) {
             while (true) {
                 InputStream in = new FileInputStream(args[2]);
                 byte[] buf = new byte[8192];
-                con = broker.connect();
-                System.out.println(con);
-                OutputStream out = con.getOutputStream();
+                channel = broker.connect();
+                System.out.println(channel);
+                OutputStream out = channel.getOutputStream();
                 int amt;
                 while ((amt = in.read(buf)) > 0) {
                     out.write(buf, 0, amt);

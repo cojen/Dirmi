@@ -25,8 +25,8 @@ import java.io.IOException;
  */
 public interface StreamConnector {
     /**
-     * Returns a new connection, possibly blocking until it has been
+     * Returns a new channel, possibly blocking until it has been
      * established.
      */
-    StreamConnection connect() throws IOException;
+    StreamChannel connect() throws IOException;
 }

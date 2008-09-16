@@ -20,14 +20,14 @@ import java.io.IOException;
 
 import dirmi.Pipe;
 
-import dirmi.nio2.StreamConnection;
+import dirmi.nio2.StreamChannel;
 
 /**
- * Basic interface for a bidirectional method invocation I/O connection.
+ * Basic interface for a bidirectional method invocation I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface InvocationConnection extends StreamConnection, Pipe {
+public interface InvocationChannel extends StreamChannel, Pipe {
     InvocationInputStream getInputStream() throws IOException;
 
     InvocationOutputStream getOutputStream() throws IOException;

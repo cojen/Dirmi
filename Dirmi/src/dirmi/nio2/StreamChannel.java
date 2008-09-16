@@ -16,26 +16,27 @@
 
 package dirmi.nio2;
 
-import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
 import java.util.concurrent.Executor;
 
+import java.nio.channels.Channel;
+
 /**
- * Basic interface for a blocking bidirectional I/O connection.
+ * Basic interface for a blocking bidirectional I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface StreamConnection extends Closeable, Executor {
+public interface StreamChannel extends Channel, Executor {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;
 
     /**
      * Asynchronously calls the given task as soon as data can be read from the
-     * connection.
+     * channel.
      */
     void executeWhenReadable(StreamTask task);
 
@@ -48,4 +49,6 @@ public interface StreamConnection extends Closeable, Executor {
      * @return remote address or null if unknown
      */
     Object getRemoteAddress();
+
+    boolean isOpen();
 }

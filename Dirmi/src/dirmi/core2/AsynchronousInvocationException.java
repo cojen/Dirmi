@@ -18,7 +18,7 @@ package dirmi.core2;
 
 /**
  * If an exception is thrown from a skeleton-invoked method which is
- * asynchronous, it cannot write the exception to the connection. Instead it
+ * asynchronous, it cannot write the exception to the channel. Instead it
  * wraps the exception in an AsynchronousInvocationException for the server to
  * log.
  *

@@ -25,8 +25,7 @@ import java.io.IOException;
  */
 public interface MessageConnector {
     /**
-     * Returns a new connection, possibly blocking until it has been
-     * established.
+     * Returns a new channel, possibly blocking until it has been established.
      */
-    MessageConnection connect() throws IOException;
+    MessageChannel connect() throws IOException;
 }

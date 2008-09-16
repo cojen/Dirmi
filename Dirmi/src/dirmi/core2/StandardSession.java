@@ -58,7 +58,7 @@ import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;
 
 import dirmi.nio2.StreamBroker;
-import dirmi.nio2.StreamConnection;
+import dirmi.nio2.StreamChannel;
 import dirmi.nio2.StreamListener;
 import dirmi.nio2.StreamTask;
 
@@ -74,7 +74,7 @@ public class StandardSession implements Session {
     static final int PROTOCOL_VERSION = 1;
 
     private static final int DEFAULT_HEARTBEAT_CHECK_MILLIS = 10000;
-    private static final int DEFAULT_CONNECTION_IDLE_MILLIS = 60000;
+    private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
 
     final StreamBroker mBroker;
@@ -113,9 +113,9 @@ public class StandardSession implements Session {
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
 
-    // Pool of connections for client calls.
+    // Pool of channels for client calls.
     // FIXME: consider using concurrent queue
-    final LinkedList<InvocationCon> mConnectionPool;
+    final LinkedList<InvocationChan> mChannelPool;
 
     final ScheduledFuture<?> mBackgroundTask;
 
@@ -127,7 +127,7 @@ public class StandardSession implements Session {
     volatile boolean mClosing;
 
     /**
-     * @param broker connection broker must always connect to same remote server
+     * @param broker channel broker must always connect to same remote server
      * @param server optional server object to export
      * @param executor shared executor for remote methods
      */
@@ -139,7 +139,7 @@ public class StandardSession implements Session {
     }
 
     /**
-     * @param broker connection broker must always connect to same remote server
+     * @param broker channel broker must always connect to same remote server
      * @param server optional server object to export
      * @param executor shared executor for remote methods
      * @param log message log; pass null for default
@@ -168,7 +168,7 @@ public class StandardSession implements Session {
         mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
         mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
 
-        mConnectionPool = new LinkedList<InvocationCon>();
+        mChannelPool = new LinkedList<InvocationChan>();
 
         mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_CHECK_MILLIS));
 
@@ -182,12 +182,12 @@ public class StandardSession implements Session {
             Object mRemoteServer;
             Hidden.Admin mRemoteAdmin;
 
-            public synchronized void established(StreamConnection con) {
+            public synchronized void established(StreamChannel channel) {
                 try {
                     InvocationInputStream in = new InvocationInputStream
-                        (new ResolvingObjectInputStream(con.getInputStream()),
-                         con.getLocalAddress(),
-                         con.getRemoteAddress());
+                        (new ResolvingObjectInputStream(channel.getInputStream()),
+                         channel.getLocalAddress(),
+                         channel.getRemoteAddress());
 
                     int magic = in.readInt();
                     if (magic != MAGIC_NUMBER) {
@@ -213,7 +213,7 @@ public class StandardSession implements Session {
                     mDone = true;
                     notifyAll();
                     try {
-                        con.close();
+                        channel.close();
                     } catch (IOException e) {
                         // Ignore.
                     }
@@ -246,12 +246,12 @@ public class StandardSession implements Session {
 
         // Transmit bootstrap information.
         {
-            StreamConnection con = broker.connect();
+            StreamChannel channel = broker.connect();
             try {
                 InvocationOutputStream out = new InvocationOutputStream
-                    (new ReplacingObjectOutputStream(con.getOutputStream()),
-                     con.getLocalAddress(),
-                     con.getRemoteAddress());
+                    (new ReplacingObjectOutputStream(channel.getOutputStream()),
+                     channel.getLocalAddress(),
+                     channel.getRemoteAddress());
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
@@ -259,7 +259,7 @@ public class StandardSession implements Session {
                 out.writeObject(new AdminImpl());
                 out.flush();
             } finally {
-                con.close();
+                channel.close();
             }
         }
 
@@ -342,13 +342,11 @@ public class StandardSession implements Session {
                 }
             }
 
-            /* FIXME
             try {
                 mBroker.close();
             } catch (IOException e) {
-                throw new RemoteException("Failed to close connection broker", e);
+                throw new RemoteException("Failed to close channel broker", e);
             }
-            */
         } finally {
             clearCollections();
         }
@@ -410,13 +408,13 @@ public class StandardSession implements Session {
             TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
     }
 
-    void handleRequests(InvocationConnection invCon) {
-        while (handleRequest(invCon)) {
+    void handleRequests(InvocationChannel invChannel) {
+        while (handleRequest(invChannel)) {
             try {
-                invCon.getOutputStream().reset();
+                invChannel.getOutputStream().reset();
             } catch (IOException e) {
                 try {
-                    invCon.close();
+                    invChannel.close();
                 } catch (IOException e2) {
                     // Don't care.
                 }
@@ -425,15 +423,15 @@ public class StandardSession implements Session {
     }
 
     /**
-     * @return true if connection is still open and can be reused.
+     * @return true if channel is still open and can be reused.
      */
-    boolean handleRequest(InvocationConnection invCon) {
+    boolean handleRequest(InvocationChannel invChannel) {
         final Identifier id;
         try {
-            id = Identifier.read((DataInput) invCon.getInputStream());
+            id = Identifier.read((DataInput) invChannel.getInputStream());
         } catch (IOException e) {
             try {
-                invCon.close();
+                invChannel.close();
             } catch (IOException e2) {
                 // Don't care.
             }
@@ -446,8 +444,8 @@ public class StandardSession implements Session {
         if (skeleton == null) {
             Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
             try {
-                invCon.getOutputStream().writeThrowable(t);
-                invCon.close();
+                invChannel.getOutputStream().writeThrowable(t);
+                invChannel.close();
             } catch (IOException e) {
                 error("Failure processing request. " +
                       "Server cannot find remote object and " +
@@ -461,7 +459,7 @@ public class StandardSession implements Session {
 
             try {
                 try {
-                    return skeleton.invoke(invCon);
+                    return skeleton.invoke(invChannel);
                 } catch (AsynchronousInvocationException e) {
                     throwable = null;
                     Throwable cause = e.getCause();
@@ -481,7 +479,7 @@ public class StandardSession implements Session {
                 throwable = e;
             }
 
-            InvocationOutputStream out = invCon.getOutputStream();
+            InvocationOutputStream out = invChannel.getOutputStream();
             out.writeThrowable(throwable);
             out.flush();
             
@@ -489,7 +487,7 @@ public class StandardSession implements Session {
         } catch (IOException e) {
             error("Failure processing request", e);
             try {
-                invCon.close();
+                invChannel.close();
             } catch (IOException e2) {
                 // Don't care.
             }
@@ -497,14 +495,14 @@ public class StandardSession implements Session {
         }
     }
 
-    InvocationConnection getConnection() throws IOException {
-        synchronized (mConnectionPool) {
-            if (mConnectionPool.size() > 0) {
-                InvocationConnection con = mConnectionPool.removeLast();
-                return con;
+    InvocationChannel getChannel() throws IOException {
+        synchronized (mChannelPool) {
+            if (mChannelPool.size() > 0) {
+                InvocationChannel channel = mChannelPool.removeLast();
+                return channel;
             }
         }
-        return new InvocationCon(mBroker.connect());
+        return new InvocationChan(mBroker.connect());
     }
 
     void warn(String message) {
@@ -617,7 +615,7 @@ public class StandardSession implements Session {
         }
 
         public void closedOnFailure(String message, Throwable exception) {
-            String prefix = "Connection closed by peer due to unexpected failure";
+            String prefix = "Channel closed by peer due to unexpected failure";
             message = message == null ? prefix : (prefix + ": " + message);
             mLog.error(message, exception);
             peerClosed();
@@ -633,11 +631,9 @@ public class StandardSession implements Session {
             if (nowMillis > mNextExpectedHeartbeatMillis) {
                 // Didn't get a heartbeat from peer, so close session.
                 String message = "No heartbeat received; closing session";
-                /* FIXME
-                if (!mBroker.isClosed()) {
+                if (mBroker.isOpen()) {
                     mLog.error(message);
                 }
-                */
                 try {
                     closeOnFailure(message, null);
                 } catch (IOException e) {
@@ -651,11 +647,9 @@ public class StandardSession implements Session {
                 sendDisposedStubs();
             } catch (IOException e) {
                 String message = "Unable to send heartbeat; closing session: " + e;
-                /* FIXME
-                if (!mBroker.isClosed()) {
+                if (mBroker.isOpen()) {
                     mLog.error(message);
                 }
-                */
                 try {
                     closeOnFailure(message, null);
                 } catch (IOException e2) {
@@ -664,22 +658,22 @@ public class StandardSession implements Session {
                 return;
             }
 
-            // Close idle connections.
+            // Close idle channels.
             while (true) {
-                InvocationCon pooledCon;
-                synchronized (mConnectionPool) {
-                    pooledCon = mConnectionPool.peek();
-                    if (pooledCon == null) {
+                InvocationChan pooledChannel;
+                synchronized (mChannelPool) {
+                    pooledChannel = mChannelPool.peek();
+                    if (pooledChannel == null) {
                         break;
                     }
-                    long age = System.currentTimeMillis() - pooledCon.getIdleTimestamp();
-                    if (age < DEFAULT_CONNECTION_IDLE_MILLIS) {
+                    long age = System.currentTimeMillis() - pooledChannel.getIdleTimestamp();
+                    if (age < DEFAULT_CHANNEL_IDLE_MILLIS) {
                         break;
                     }
-                    mConnectionPool.remove();
+                    mChannelPool.remove();
                 }
                 try {
-                    pooledCon.close();
+                    pooledChannel.close();
                 } catch (IOException e) {
                     // Don't care.
                 }
@@ -688,18 +682,18 @@ public class StandardSession implements Session {
     }
 
     private class Handler implements StreamListener {
-        public void established(StreamConnection con) {
+        public void established(StreamChannel channel) {
             mBroker.accept(this);
 
-            final InvocationConnection invCon;
+            final InvocationChannel invChannel;
             try {
-                invCon = new InvocationCon(con);
+                invChannel = new InvocationChan(channel);
             } catch (IOException e) {
                 if (!mClosing) {
                     error("Failure reading request", e);
                 }
                 try {
-                    con.close();
+                    channel.close();
                 } catch (IOException e2) {
                     // Don't care.
                 }
@@ -708,16 +702,14 @@ public class StandardSession implements Session {
 
             // FIXME: Don't use loop to handle multiple requests - instead use
             // executeWhenReadable method.
-            handleRequests(invCon);
+            handleRequests(invChannel);
         }
 
         public void failed(IOException e) {
-            String message = "Failure accepting connection; closing session";
-            /* FIXME
-               if (!mBroker.isClosed()) {
-               mLog.error(message, e);
-               }
-            */
+            String message = "Failure accepting channel; closing session";
+            if (mBroker.isOpen()) {
+                mLog.error(message, e);
+            }
             try {
                 closeOnFailure(message, e);
             } catch (IOException e2) {
@@ -726,18 +718,18 @@ public class StandardSession implements Session {
         }
     }
 
-    private class InvocationCon extends AbstractInvocationConnection {
-        private final StreamConnection mCon;
+    private class InvocationChan extends AbstractInvocationChannel {
+        private final StreamChannel mChannel;
         private final InvocationInputStream mInvIn;
         private final InvocationOutputStream mInvOut;
 
         private volatile long mTimestamp;
 
-        InvocationCon(StreamConnection con) throws IOException {
-            mCon = con;
+        InvocationChan(StreamChannel channel) throws IOException {
+            mChannel = channel;
 
             mInvOut = new InvocationOutputStream
-                (new ReplacingObjectOutputStream(con.getOutputStream()),
+                (new ReplacingObjectOutputStream(channel.getOutputStream()),
                  getLocalAddress(),
                  getRemoteAddress());
 
@@ -746,14 +738,18 @@ public class StandardSession implements Session {
             mInvOut.flush();
 
             mInvIn = new InvocationInputStream
-                (new ResolvingObjectInputStream(con.getInputStream()),
+                (new ResolvingObjectInputStream(channel.getInputStream()),
                  getLocalAddress(),
                  getRemoteAddress());
         }
 
         public void close() throws IOException {
             mInvOut.close();
-            mCon.close();
+            mChannel.close();
+        }
+
+        public boolean isOpen() {
+            return mChannel.isOpen();
         }
 
         public InvocationInputStream getInputStream() throws IOException {
@@ -765,19 +761,19 @@ public class StandardSession implements Session {
         }
 
         public void executeWhenReadable(StreamTask task) {
-            mCon.executeWhenReadable(task);
+            mChannel.executeWhenReadable(task);
         }
 
         public void execute(Runnable task) {
-            mCon.execute(task);
+            mChannel.execute(task);
         }
 
         public Object getLocalAddress() {
-            return mCon.getLocalAddress();
+            return mChannel.getLocalAddress();
         }
 
         public Object getRemoteAddress() {
-            return mCon.getRemoteAddress();
+            return mChannel.getRemoteAddress();
         }
 
         public Throwable readThrowable() throws IOException {
@@ -792,8 +788,8 @@ public class StandardSession implements Session {
             try {
                 getOutputStream().reset();
                 mTimestamp = System.currentTimeMillis();
-                synchronized (mConnectionPool) {
-                    mConnectionPool.add(this);
+                synchronized (mChannelPool) {
+                    mChannelPool.add(this);
                 }
             } catch (Exception e) {
                 try {
@@ -931,25 +927,25 @@ public class StandardSession implements Session {
             mObjID = id;
         }
 
-        public <T extends Throwable> InvocationConnection invoke(Class<T> remoteFailureEx)
+        public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx)
             throws T
         {
-            InvocationConnection con = null;
+            InvocationChannel channel = null;
             try {
-                con = getConnection();
-                mObjID.write((DataOutput) con.getOutputStream());
-                return con;
+                channel = getChannel();
+                mObjID.write((DataOutput) channel.getOutputStream());
+                return channel;
             } catch (IOException e) {
-                throw failed(remoteFailureEx, con, e);
+                throw failed(remoteFailureEx, channel, e);
             }
         }
 
-        public void finished(InvocationConnection con) {
-            if (con instanceof InvocationCon) {
-                ((InvocationCon) con).recycle();
+        public void finished(InvocationChannel channel) {
+            if (channel instanceof InvocationChan) {
+                ((InvocationChan) channel).recycle();
             } else {
                 try {
-                    con.close();
+                    channel.close();
                 } catch (IOException e2) {
                     // Don't care.
                 }
@@ -957,11 +953,11 @@ public class StandardSession implements Session {
         }
 
         public <T extends Throwable> T failed(Class<T> remoteFailureEx,
-                                              InvocationConnection con, Throwable cause)
+                                              InvocationChannel channel, Throwable cause)
         {
-            if (con != null) {
+            if (channel != null) {
                 try {
-                    con.close();
+                    channel.close();
                 } catch (IOException e) {
                     // Don't care.
                 }

@@ -34,7 +34,7 @@ public interface MessageReceiver {
      * they may be processed out of order.
      *
      * <p>This method may optionally return a new MessageReceiver in order to
-     * immediately receive more messages from connection. This is generally
+     * immediately receive more messages from channel. This is generally
      * done only once per received message.
      *
      * @param totalSize total size of message
@@ -48,18 +48,18 @@ public interface MessageReceiver {
     /**
      * Called after the message has been completely received and can be
      * processed. This method may safely block, and it can interact with the
-     * connection too. Also note that this method may be called by a different
+     * channel too. Also note that this method may be called by a different
      * thread than receive was called by.
      */
     void process();
 
     /**
-     * Called when connection is closed. This method may safely block.
+     * Called when channel is closed. This method may safely block.
      */
     void closed();
 
     /**
-     * Called when connection is closed due to an exception. This method may
+     * Called when channel is closed due to an exception. This method may
      * safely block.
      */
     void closed(IOException e);

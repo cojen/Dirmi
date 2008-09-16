@@ -48,8 +48,8 @@ public class TestServer implements MessageListener {
         acceptor.accept(this);
     }
 
-    public void established(final MessageConnection con) {
-        System.out.println("Accepted: " + con);
+    public void established(final MessageChannel channel) {
+        System.out.println("Accepted: " + channel);
         mAcceptor.accept(new TestServer(mAcceptor));
 
         class Receiver implements MessageReceiver {
@@ -66,7 +66,7 @@ public class TestServer implements MessageListener {
             public void process() {
                 System.out.println("Received: " + new String(mMessage));
                 try {
-                    con.send(ByteBuffer.wrap("Thanks!".getBytes()));
+                    channel.send(ByteBuffer.wrap("Thanks!".getBytes()));
                 } catch (IOException e) {
                     e.printStackTrace(System.out);
                 }
@@ -88,7 +88,7 @@ public class TestServer implements MessageListener {
             }
         };
 
-        con.receive(new Receiver());
+        channel.receive(new Receiver());
     }
 
     public void failed(IOException e) {

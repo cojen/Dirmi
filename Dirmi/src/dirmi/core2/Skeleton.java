@@ -32,14 +32,14 @@ import java.rmi.Remote;
 public interface Skeleton {
     /**
      * Invoke method in server-side instance. Any exception thrown from the
-     * invoked method is written to the connection, unless method is
+     * invoked method is written to the channel, unless method is
      * asynchronous. Any other exception thrown from this method indicates a
-     * communication failure, and so the connection should be closed.
+     * communication failure, and so the channel should be closed.
      *
-     * @param con InvocationConnection for reading method identifier and arguments,
+     * @param channel InvocationChannel for reading method identifier and arguments,
      * and for writing response.
-     * @return true if connection can be reused
-     * @throws IOException if thrown from connection
+     * @return true if channel can be reused
+     * @throws IOException if thrown from channel
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
      * @throws ClassNotFoundException if unmarshalling an object parameter
@@ -47,7 +47,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    boolean invoke(InvocationConnection con)
+    boolean invoke(InvocationChannel channel)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

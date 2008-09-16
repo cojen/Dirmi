@@ -16,10 +16,10 @@
 
 package dirmi.nio2;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.Channel;
 
 import java.util.concurrent.Executor;
 
@@ -28,9 +28,9 @@ import java.util.concurrent.Executor;
  *
  * @author Brian S O'Neill
  */
-public interface MessageConnection extends Closeable, Executor {
+public interface MessageChannel extends Channel, Executor {
     /**
-     * Send a fixed size message, possibly blocking if send buffer is full.
+     * Fully sends a fixed size message, blocking if send buffer is full.
      *
      * @param buffer buffer whose position is set to the start of the message
      * and the remaining amount is the message size
@@ -46,7 +46,7 @@ public interface MessageConnection extends Closeable, Executor {
     void receive(MessageReceiver receiver);
 
     /**
-     * Returns the constant maximum message size supported by the connection.
+     * Returns the constant maximum message size supported by the channel.
      */
     int getMaximumMessageSize();
 
@@ -59,4 +59,6 @@ public interface MessageConnection extends Closeable, Executor {
      * @return remote address or null if unknown
      */
     Object getRemoteAddress();
+
+    boolean isOpen();
 }

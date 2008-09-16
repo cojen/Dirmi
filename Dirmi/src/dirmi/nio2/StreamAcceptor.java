@@ -24,7 +24,7 @@ package dirmi.nio2;
 public interface StreamAcceptor {
     /**
      * Returns immediately and calls established method on listener
-     * asynchronously. Only one connection is accepted per invocation of this
+     * asynchronously. Only one channel is accepted per invocation of this
      * method.
      */
     void accept(StreamListener listener);

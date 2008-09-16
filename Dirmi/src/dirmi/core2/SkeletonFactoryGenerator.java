@@ -126,7 +126,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
-        final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
+        final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
         final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc noSuchMethodExType = TypeDesc.forClass(NoSuchMethodException.class);
@@ -159,14 +159,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
-                                     new TypeDesc[] {invConnectionType});
+                                     new TypeDesc[] {invChannelType});
         CodeBuilder b = new CodeBuilder(mi);
 
-        // Read method identifier from connection.
+        // Read method identifier from channel.
         LocalVariable conVar = b.getParameter(0);
 
         b.loadLocal(conVar);
-        b.invokeInterface(invConnectionType, "getInputStream", invInType, null);
+        b.invokeInterface(invChannelType, "getInputStream", invInType, null);
         LocalVariable invInVar = b.createLocalVariable(null, invInType);
         b.storeLocal(invInVar);
 
@@ -266,7 +266,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     for (RemoteParameter paramType : paramTypes) {
                         if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
                             lookForPipe = false;
-                            // Use connection as Pipe.
+                            // Use channel as Pipe.
                             b.loadLocal(conVar);
                             reuseCon = false;
                         } else {
@@ -309,7 +309,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                     b.loadLocal(conVar);
                     b.invokeInterface
-                        (invConnectionType, "getOutputStream", invOutType, null);
+                        (invChannelType, "getOutputStream", invOutType, null);
                     LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
                     b.storeLocal(invOutVar);
 
@@ -377,7 +377,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.throwObject();
         }
 
-        // Handler for synchronous methods (if any). Write exception to connection.
+        // Handler for synchronous methods (if any). Write exception to channel.
         if (caseCount - asyncCount > 0) {
             for (ordinal=0; ordinal<methodCount; ordinal++) {
                 if (isAsync[ordinal]) {
@@ -390,7 +390,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.storeLocal(throwableVar);
 
             b.loadLocal(conVar);
-            b.invokeInterface(invConnectionType, "getOutputStream", invOutType, null);
+            b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
             LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
             b.storeLocal(invOutVar);
 
@@ -439,10 +439,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         public Skeleton createSkeleton(Remote remoteServer) {
             return new Skeleton() {
-                public boolean invoke(InvocationConnection con)
+                public boolean invoke(InvocationChannel channel)
                     throws IOException, NoSuchMethodException
                 {
-                    Identifier id = Identifier.read((DataInput) con.getInputStream());
+                    Identifier id = Identifier.read((DataInput) channel.getInputStream());
                     throw new NoSuchMethodException(String.valueOf(id));
                 }
             };

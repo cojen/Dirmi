@@ -134,7 +134,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-        final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
+        final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
         final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
         final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
@@ -209,20 +209,20 @@ public class StubFactoryGenerator<R extends Remote> {
 
             CodeBuilder b = new CodeBuilder(mi);
 
-            // Create connection for invoking remote method.
+            // Create channel for invoking remote method.
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.loadConstant(remoteFailureExType);
-            b.invokeInterface(stubSupportType, "invoke", invConnectionType,
+            b.invokeInterface(stubSupportType, "invoke", invChannelType,
                               new TypeDesc[] {classType});
-            LocalVariable conVar = b.createLocalVariable(null, invConnectionType);
-            b.storeLocal(conVar);
+            LocalVariable channelVar = b.createLocalVariable(null, invChannelType);
+            b.storeLocal(channelVar);
 
             Label invokeStart = b.createLabel().setLocation();
 
-            // Write method identifier to connection.
-            b.loadLocal(conVar);
-            b.invokeInterface(invConnectionType, "getOutputStream", invOutType, null);
+            // Write method identifier to channel.
+            b.loadLocal(channelVar);
+            b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
             LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
             b.storeLocal(invOutVar);
 
@@ -232,7 +232,7 @@ public class StubFactoryGenerator<R extends Remote> {
                             new TypeDesc[] {TypeDesc.forClass(DataOutput.class)});
 
             if (paramDescs.length > 0) {
-                // Write parameters to connection.
+                // Write parameters to channel.
 
                 boolean lookForPipe = method.isAsynchronous();
 
@@ -257,12 +257,12 @@ public class StubFactoryGenerator<R extends Remote> {
                 invokeEnd = b.createLabel().setLocation();
 
                 if (returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass())) {
-                    // Return connection as a Pipe.
-                    b.loadLocal(conVar);
+                    // Return channel; as a Pipe.
+                    b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
                 } else {
-                    // Finished with connection.
-                    genFinished(b, conVar);
+                    // Finished with channel.
+                    genFinished(b, channelVar);
 
                     if (returnDesc == null) {
                         b.returnVoid();
@@ -296,8 +296,8 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             } else {
                 // Read response.
-                b.loadLocal(conVar);
-                b.invokeInterface(invConnectionType, "getInputStream", invInType, null);
+                b.loadLocal(channelVar);
+                b.invokeInterface(invChannelType, "getInputStream", invInType, null);
                 LocalVariable invInVar = b.createLocalVariable(null, invInType);
                 b.storeLocal(invInVar);
 
@@ -313,25 +313,25 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 if (returnDesc == null) {
                     invokeEnd = b.createLabel().setLocation();
-                    // Finished with connection.
-                    genFinished(b, conVar);
+                    // Finished with channel.
+                    genFinished(b, channelVar);
                     b.returnVoid();
                 } else {
                     CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
                     invokeEnd = b.createLabel().setLocation();
-                    // Finished with connection.
-                    genFinished(b, conVar);
+                    // Finished with channel.
+                    genFinished(b, channelVar);
                     b.returnValue(returnDesc);
                 }
 
                 abnormalResponse.setLocation();
-                // Finished with connection.
-                genFinished(b, conVar);
+                // Finished with channel.
+                genFinished(b, channelVar);
                 b.loadLocal(throwableVar);
                 b.throwObject();
             }
 
-            // If any invocation exception, indicate connection failed.
+            // If any invocation exception, indicate channel failed.
             {
                 b.exceptionHandler(invokeStart, invokeEnd, Throwable.class.getName());
                 LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
@@ -340,10 +340,10 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.loadThis();
                 b.loadField(STUB_SUPPORT_NAME, stubSupportType);
                 b.loadConstant(remoteFailureExType);
-                b.loadLocal(conVar);
+                b.loadLocal(channelVar);
                 b.loadLocal(throwableVar);
                 b.invokeInterface(stubSupportType, "failed", throwableType,
-                                  new TypeDesc[] {classType, invConnectionType, throwableType});
+                                  new TypeDesc[] {classType, invChannelType, throwableType});
                 b.throwObject();
             }
         }
@@ -477,15 +477,15 @@ public class StubFactoryGenerator<R extends Remote> {
         return ci.defineClass(cf);
     }
 
-    private void genFinished(CodeBuilder b, LocalVariable conVar) {
+    private void genFinished(CodeBuilder b, LocalVariable channelVar) {
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-        final TypeDesc invConnectionType = TypeDesc.forClass(InvocationConnection.class);
+        final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
 
         b.loadThis();
         b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-        b.loadLocal(conVar);
+        b.loadLocal(channelVar);
         b.invokeInterface(stubSupportType, "finished", null,
-                          new TypeDesc[] {invConnectionType});
+                          new TypeDesc[] {invChannelType});
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {

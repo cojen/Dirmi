@@ -25,13 +25,13 @@ import java.io.IOException;
  */
 public interface StreamListener {
     /**
-     * Called at most once as soon as connection has been established. This
-     * method may safely block, and it can interact with the connection too.
+     * Called at most once as soon as channel has been established. This
+     * method may safely block, and it can interact with the channel too.
      */
-    void established(StreamConnection con);
+    void established(StreamChannel channel);
 
     /**
-     * Called when connection cannot be established. This method may safely
+     * Called when channel cannot be established. This method may safely
      * block.
      */
     void failed(IOException e);

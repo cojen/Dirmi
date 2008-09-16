@@ -20,7 +20,7 @@ import java.net.InetSocketAddress;
 
 import dirmi.Session;
 
-import dirmi.nio2.MessageConnection;
+import dirmi.nio2.MessageChannel;
 import dirmi.nio2.MessageConnector;
 import dirmi.nio2.MultiplexedStreamBroker;
 import dirmi.nio2.SocketMessageProcessor;
@@ -37,8 +37,8 @@ public class TestClient {
         SocketMessageProcessor processor = new SocketMessageProcessor(pool);
         MessageConnector connector = processor.newConnector
             (new InetSocketAddress(args[0], Integer.parseInt(args[1])));
-        MessageConnection con = connector.connect();
-        StreamBroker broker = new MultiplexedStreamBroker(con);
+        MessageChannel channel = connector.connect();
+        StreamBroker broker = new MultiplexedStreamBroker(channel);
         Session session = new StandardSession(broker, null, pool);
         System.out.println(session);
 

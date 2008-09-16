@@ -23,6 +23,8 @@ import java.io.OutputStream;
 
 import java.nio.ByteBuffer;
 
+import java.nio.channels.ClosedChannelException;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,16 +52,16 @@ public class MultiplexedStreamBroker implements StreamBroker {
     private static final long MAGIC_NUMBER = 0x1dca09fe04baafbeL;
 
     // Each command is encoded with 4 byte header. Upper 2 bits encode the
-    // opcode, and remaining 30 bits encode the connection id.
+    // opcode, and remaining 30 bits encode the channel id.
 
     static final int SEND  = 0; // all bits must be clear
     static final int ACK   = 1;
     static final int CLOSE = 3; // all bits must be set
 
-    final MessageConnection mMessCon;
+    final MessageChannel mMessChannel;
 
-    final IntHashMap<Con> mConnections;
-    final ReadWriteLock mConnectionsLock;
+    final IntHashMap<Chan> mChannels;
+    final ReadWriteLock mChannelsLock;
 
     final BufferPool mBufferPool;
 
@@ -68,14 +70,14 @@ public class MultiplexedStreamBroker implements StreamBroker {
     final int mIdBit;
     final AtomicInteger mNextId;
 
-    public MultiplexedStreamBroker(MessageConnection con) throws IOException {
-        if (con == null) {
+    public MultiplexedStreamBroker(MessageChannel channel) throws IOException {
+        if (channel == null) {
             throw new IllegalArgumentException();
         }
-        mMessCon = con;
+        mMessChannel = channel;
 
-        mConnections = new IntHashMap<Con>();
-        mConnectionsLock = new ReentrantReadWriteLock();
+        mChannels = new IntHashMap<Chan>();
+        mChannelsLock = new ReentrantReadWriteLock();
 
         mBufferPool = new BufferPool();
 
@@ -130,7 +132,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
                 if (mClosed) {
                     if (mClosedException == null) {
-                        throw new IOException("Connection closed");
+                        throw new ClosedChannelException();
                     }
                     throw mClosedException;
                 }
@@ -147,7 +149,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
         };
 
         Bootstrap bootstrap = new Bootstrap();
-        con.receive(bootstrap);
+        channel.receive(bootstrap);
 
         // Write magic number, followed by random number.
         long ourRnd = new SecureRandom().nextLong();
@@ -155,11 +157,11 @@ public class MultiplexedStreamBroker implements StreamBroker {
         buffer.putLong(MAGIC_NUMBER);
         buffer.putLong(ourRnd);
         buffer.flip();
-        con.send(buffer);
+        channel.send(buffer);
 
         long theirRnd = bootstrap.getNumber();
 
-        // The random numbers determine whether our connection ids are even or odd.
+        // The random numbers determine whether our channel ids are even or odd.
             
         if (ourRnd == theirRnd) {
             // What are the odds?
@@ -168,7 +170,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
         mNextId = new AtomicInteger(mIdBit = (ourRnd < theirRnd ? 0 : 1));
 
-        con.receive(new Receiver());
+        channel.receive(new Receiver());
     }
 
     public void accept(StreamListener listener) {
@@ -176,18 +178,18 @@ public class MultiplexedStreamBroker implements StreamBroker {
     }
 
     /**
-     * Returned connection is not established until first written to.
+     * Returned channel is not established until first written to.
      */
-    public StreamConnection connect() {
+    public StreamChannel connect() {
         while (true) {
             int id = mNextId.getAndAdd(2) & 0x3fffffff;
-            Con con = new Con(id);
-            Lock consWriteLock = mConnectionsLock.writeLock();
+            Chan chan = new Chan(id);
+            Lock consWriteLock = mChannelsLock.writeLock();
             consWriteLock.lock();
             try {
-                if (!mConnections.containsKey(id)) {
-                    mConnections.put(id, con);
-                    return con;
+                if (!mChannels.containsKey(id)) {
+                    mChannels.put(id, chan);
+                    return chan;
                 }
             } finally {
                 consWriteLock.unlock();
@@ -195,9 +197,23 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
     }
 
+    public void close() throws IOException {
+        mChannelsLock.writeLock().lock();
+        try {
+            closed(null);
+            mMessChannel.close();
+        } finally {
+            mChannelsLock.writeLock().unlock();
+        }
+    }
+
+    public boolean isOpen() {
+        return mMessChannel.isOpen();
+    }
+
     void sendMessage(ByteBuffer buffer) throws IOException {
         try {
-            mMessCon.send(buffer);
+            mMessChannel.send(buffer);
         } catch (IOException e) {
             closed(e);
             throw e;
@@ -205,18 +221,18 @@ public class MultiplexedStreamBroker implements StreamBroker {
     }
 
     void closed(IOException exception) {
-        mConnectionsLock.writeLock().lock();
+        mChannelsLock.writeLock().lock();
         try {
             // Clone to prevent concurrent modification.
-            List<Con> cons = new ArrayList<Con>(mConnections.values());
-            for (Con con : cons) {
+            List<Chan> chans = new ArrayList<Chan>(mChannels.values());
+            for (Chan chan : chans) {
                 try {
-                    con.close(true, exception);
+                    chan.close(true, exception);
                 } catch (IOException e) {
                     // Ignore.
                 }
             }
-            mConnections.clear();
+            mChannels.clear();
 
             if (exception != null) {
                 StreamListener listener;
@@ -225,7 +241,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 }
             }
         } finally {
-            mConnectionsLock.writeLock().unlock();
+            mChannelsLock.writeLock().unlock();
         }
     }
 
@@ -273,61 +289,61 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         public synchronized void process() {
-            Con con;
-            boolean newCon;
+            Chan chan;
+            boolean newChan;
             int command;
 
             {
                 int id = mHeader & 0x3fffffff;
                 command = mHeader >>> 30;
-                Lock consReadLock = mConnectionsLock.readLock();
-                consReadLock.lock();
+                Lock chansReadLock = mChannelsLock.readLock();
+                chansReadLock.lock();
                 try {
-                    con = mConnections.get(id);
+                    chan = mChannels.get(id);
                 } finally {
-                    consReadLock.unlock();
+                    chansReadLock.unlock();
                 }
-                if (con != null) {
-                    newCon = false;
+                if (chan != null) {
+                    newChan = false;
                 } else {
-                    Lock consWriteLock = mConnectionsLock.writeLock();
-                    consWriteLock.lock();
+                    Lock chansWriteLock = mChannelsLock.writeLock();
+                    chansWriteLock.lock();
                     try {
-                        if ((con = mConnections.get(id)) != null) {
-                            newCon = false;
+                        if ((chan = mChannels.get(id)) != null) {
+                            newChan = false;
                         } else if ((id & 1) == mIdBit) {
                             // Ignore command if peer is using a non-existent
-                            // connection created by this broker.
+                            // channel created by this broker.
                             return;
                         } else {
-                            con = new Con(id);
-                            mConnections.put(con.getId(), con);
-                            newCon = true;
+                            chan = new Chan(id);
+                            mChannels.put(chan.getId(), chan);
+                            newChan = true;
                         }
                     } finally {
-                        consWriteLock.unlock();
+                        chansWriteLock.unlock();
                     }
                 }
             }
 
-            con.received(mReceived);
+            chan.received(mReceived);
 
             if (command == ACK) {
-                con.acknowledged();
+                chan.acknowledged();
             } else if (command == CLOSE) {
                 try {
-                    con.close(true, null);
+                    chan.close(true, null);
                 } catch (IOException e) {
                     // Ignore.
                 }
             }
 
-            if (newCon) {
+            if (newChan) {
                 try {
                     // FIXME: configurable timeout
                     StreamListener listener = mListeners.poll(10, TimeUnit.SECONDS);
                     if (listener != null) {
-                        listener.established(con);
+                        listener.established(chan);
                         return;
                     }
                 } catch (InterruptedException e) {
@@ -335,7 +351,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
                 // Not accepted in time, so close it.
                 try {
-                    con.close(true, null);
+                    chan.close(true, null);
                 } catch (IOException e) {
                     // Ignore.
                 }
@@ -351,7 +367,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
     }
 
-    private class Con implements StreamConnection {
+    private class Chan implements StreamChannel {
         private static final int HEADER_SIZE = 4;
 
         final int mId;
@@ -373,11 +389,11 @@ public class MultiplexedStreamBroker implements StreamBroker {
         // FIXME: Use queue optimized for zero or one elements.
         private final ConcurrentLinkedQueue<StreamTask> mReadTasks;
 
-        Con(int id) {
+        Chan(int id) {
             mId = id;
 
             mOut = new Out();
-            mOutBuffer = mBufferPool.get(Math.min(65536, mMessCon.getMaximumMessageSize()));
+            mOutBuffer = mBufferPool.get(Math.min(65536, mMessChannel.getMaximumMessageSize()));
             mOutBuffer.putInt(id);
 
             mIn = new In();
@@ -398,7 +414,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 mLocalAddress = new Object() {
                     @Override
                     public String toString() {
-                        return String.valueOf(mMessCon.getLocalAddress()) + '@' + mId;
+                        return String.valueOf(mMessChannel.getLocalAddress()) + '@' + mId;
                     }
                 };
             }
@@ -410,7 +426,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 mRemoteAddress = new Object() {
                     @Override
                     public String toString() {
-                        return String.valueOf(mMessCon.getRemoteAddress()) + '@' + mId;
+                        return String.valueOf(mMessChannel.getRemoteAddress()) + '@' + mId;
                     }
                 };
             }
@@ -420,15 +436,25 @@ public class MultiplexedStreamBroker implements StreamBroker {
         public void executeWhenReadable(StreamTask task) {
             synchronized (mIn) {
                 if (readAvailable() > 0) {
-                    mMessCon.execute(task);
+                    mMessChannel.execute(task);
                 } else {
                     mReadTasks.add(task);
                 }
             }
         }
 
+        public boolean isOpen() {
+            if (mClosed) {
+                return false;
+            }
+            // Try again synchronized, since mClosed is not volatile.
+            synchronized (mIn) {
+                return !mClosed;
+            }
+        }
+
         public void execute(Runnable task) {
-            mMessCon.execute(task);
+            mMessChannel.execute(task);
         }
 
         public void close() throws IOException {
@@ -447,7 +473,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                         }
                         mClosed = true;
                         mClosedException = exception;
-                        mConnections.remove(mId);
+                        mChannels.remove(mId);
                         mBufferPool.yield(mOutBuffer);
                     }
                     mOut.notifyAll();
@@ -469,7 +495,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
         @Override
         public String toString() {
-            return "StreamConnection {localAddress=" + getLocalAddress() +
+            return "StreamChannel {localAddress=" + getLocalAddress() +
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 
@@ -551,7 +577,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                             try {
                                 flush(buffer);
                             } catch (IOException e) {
-                                // Ignore and assume all connections are now closed.
+                                // Ignore and assume all channels are now closed.
                             }
                         }
                     }
@@ -606,7 +632,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                         // FIXME: if !mOutBlocked, piggyback with flush
                         sendMessage(buffer);
                     } catch (IOException e) {
-                        // Ignore and assume all connections are now closed.
+                        // Ignore and assume all channels are now closed.
                     } finally {
                         buffer.limit(buffer.capacity()).position(originalPos);
                     }
@@ -675,16 +701,11 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         // Caller must synchronize on mIn or mOut.
-        private void checkClosed() throws IOException {
+        private void checkClosed() throws ClosedChannelException {
             if (mClosed) {
-                String message = "Connection closed";
-                if (mClosedException != null) {
-                    if (mClosedException.getMessage() != null) {
-                        message = mClosedException.getMessage();
-                    }
-                    throw new IOException(message, mClosedException);
-                }
-                throw new IOException(message);
+                ClosedChannelException e = new ClosedChannelException();
+                e.initCause(mClosedException);
+                throw e;
             }
         }
 
@@ -694,24 +715,24 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
             @Override
             public synchronized void write(int b) throws IOException {
-                Con.this.write(b);
+                Chan.this.write(b);
             }
 
             @Override
             public synchronized void write(byte[] b, int off, int len) throws IOException {
-                Con.this.write(b, off, len);
+                Chan.this.write(b, off, len);
             }
 
             @Override
             public synchronized void flush() throws IOException {
-                Con.this.flush();
+                Chan.this.flush();
             }
 
             @Override
             public void close() throws IOException {
-                // Note: This method is not synchronized. The Con method does
+                // Note: This method is not synchronized. The Chan method does
                 // the synchronization.
-                Con.this.close();
+                Chan.this.close();
             }
         }
 
@@ -721,24 +742,24 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
             @Override
             public synchronized int read() throws IOException {
-                return Con.this.read();
+                return Chan.this.read();
             }
 
             @Override
             public synchronized int read(byte[] b, int off, int len) throws IOException {
-                return Con.this.read(b, off, len);
+                return Chan.this.read(b, off, len);
             }
 
             @Override
             public synchronized int available() throws IOException {
-                return Con.this.readAvailable();
+                return Chan.this.readAvailable();
             }
 
             @Override
             public void close() throws IOException {
-                // Note: This method is not synchronized. The Con method does
+                // Note: This method is not synchronized. The Chan method does
                 // the synchronization.
-                Con.this.close();
+                Chan.this.close();
             }
 
             // FIXME: override skip

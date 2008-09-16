@@ -16,13 +16,14 @@
 
 package dirmi;
 
-import java.io.Closeable;
 import java.io.Flushable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
+
+import java.nio.channels.Channel;
 
 /**
  * A pipe is a bidirectional stream which can be passed via an {@link
@@ -40,7 +41,7 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
+public interface Pipe extends Flushable, Channel, ObjectInput, ObjectOutput {
     /**
      * Returns the Pipe's InputStream which also implements ObjectInput.
      */
@@ -67,6 +68,4 @@ public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
      * them to get freed.
      */
     void reset() throws IOException;
-
-    void close() throws IOException;
 }

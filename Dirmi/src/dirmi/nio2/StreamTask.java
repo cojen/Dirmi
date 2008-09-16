@@ -25,12 +25,12 @@ import java.io.IOException;
  */
 public interface StreamTask extends Runnable {
     /**
-     * Called when connection is closed. This method may safely block.
+     * Called when channel is closed. This method may safely block.
      */
     void closed();
 
     /**
-     * Called when connection is closed due to an exception. This method may
+     * Called when channel is closed due to an exception. This method may
      * safely block.
      */
     void closed(IOException e);

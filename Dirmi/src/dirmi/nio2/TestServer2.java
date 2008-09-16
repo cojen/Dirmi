@@ -49,13 +49,13 @@ public class TestServer2 implements MessageListener {
         acceptor.accept(this);
     }
 
-    public void established(final MessageConnection messCon) {
-        System.out.println("Accepted: " + messCon);
+    public void established(final MessageChannel messChannel) {
+        System.out.println("Accepted: " + messChannel);
         mAcceptor.accept(new TestServer2(mAcceptor));
 
         final StreamBroker broker;
         try {
-            broker = new MultiplexedStreamBroker(messCon);
+            broker = new MultiplexedStreamBroker(messChannel);
         } catch (IOException e) {
             e.printStackTrace(System.out);
             return;
@@ -76,22 +76,22 @@ public class TestServer2 implements MessageListener {
         }
 
         class Listener implements StreamListener {
-            public void established(StreamConnection con) {
+            public void established(StreamChannel channel) {
                 broker.accept(new Listener());
 
-                //con.executeWhenReadable(new ReadTask());
+                //channel.executeWhenReadable(new ReadTask());
 
-                //System.out.println("established: " + con);
+                //System.out.println("established: " + channel);
                 long start = System.currentTimeMillis();
                 long size = 0;
                 byte[] buf = new byte[8192];
                 try {
-                    InputStream in = con.getInputStream();
+                    InputStream in = channel.getInputStream();
                     int amt;
                     while ((amt = in.read(buf)) > 0) {
                         size += amt;
                     }
-                    con.close();
+                    channel.close();
                 } catch (IOException e) {
                     //e.printStackTrace(System.out);
                 }

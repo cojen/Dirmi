@@ -23,7 +23,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public abstract class AbstractInvocationConnection implements InvocationConnection {
+public abstract class AbstractInvocationChannel implements InvocationChannel {
     public void reset() throws IOException {
         getOutputStream().reset();
     }

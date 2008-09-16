@@ -40,14 +40,14 @@ public class TestClient implements MessageReceiver {
         MessageConnector connector = processor.newConnector(address);
         System.out.println(connector);
 
-        MessageConnection con = connector.connect();
-        System.out.println(con);
-        con.receive(new TestClient());
+        MessageChannel channel = connector.connect();
+        System.out.println(channel);
+        channel.receive(new TestClient());
 
         int count = 0;
         while (true) {
             byte[] message = ("" + count + "/hello " + new DateTime() + "@" + count).getBytes();
-            con.send(ByteBuffer.wrap(message));
+            channel.send(ByteBuffer.wrap(message));
             count++;
             System.out.println("sent message " + count);
             Thread.sleep(10);

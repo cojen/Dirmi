@@ -770,6 +770,11 @@ public class StandardSession implements Session {
             mCon.close();
         }
 
+        public boolean isOpen() {
+            // FIXME
+            return true;
+        }
+
         public InvocationInputStream getInputStream() throws IOException {
             return mInvIn;
         }

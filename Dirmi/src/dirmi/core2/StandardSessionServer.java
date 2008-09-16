@@ -34,7 +34,7 @@ import dirmi.Session;
 import dirmi.SessionServer;
 
 import dirmi.nio2.MessageAcceptor;
-import dirmi.nio2.MessageConnection;
+import dirmi.nio2.MessageChannel;
 import dirmi.nio2.MessageListener;
 import dirmi.nio2.MultiplexedStreamBroker;
 import dirmi.nio2.SocketMessageProcessor;
@@ -139,21 +139,21 @@ public class StandardSessionServer implements SessionServer {
     }
 
     private class Handler implements MessageListener {
-        public void established(MessageConnection con) {
+        public void established(MessageChannel channel) {
             if (!mClosing) {
                 mAcceptor.accept(this);
             }
             try {
-                StreamBroker broker = new MultiplexedStreamBroker(con);
+                StreamBroker broker = new MultiplexedStreamBroker(channel);
                 Session session = new StandardSession(broker, mServer, mExecutor);
                 mSessions.put(session);
             } catch (IOException e) {
-                warn("Unable to create session on connection: " + con, e);
+                warn("Unable to create session on channel: " + channel, e);
             }
         }
 
         public void failed(IOException e) {
-            String message = "Failure accepting connection";
+            String message = "Failure accepting channel";
             error(message, e);
         }
     }
