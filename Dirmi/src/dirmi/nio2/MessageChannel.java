@@ -59,6 +59,4 @@ public interface MessageChannel extends Channel, Executor {
      * @return remote address or null if unknown
      */
     Object getRemoteAddress();
-
-    boolean isOpen();
 }

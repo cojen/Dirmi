@@ -49,6 +49,4 @@ public interface StreamChannel extends Channel, Executor {
      * @return remote address or null if unknown
      */
     Object getRemoteAddress();
-
-    boolean isOpen();
 }
