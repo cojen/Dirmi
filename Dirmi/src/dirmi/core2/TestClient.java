@@ -47,7 +47,7 @@ public class TestClient {
 
         while (true) {
             server.doIt(new org.joda.time.DateTime().toString());
-            Thread.sleep(1000);
+            Thread.sleep(100);
         }
     }
 }

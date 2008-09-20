@@ -32,5 +32,9 @@ public class TestServer implements TestRemote {
 
     public void doIt(String message) {
         System.out.println("hello: " + message);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+        }
     }
 }

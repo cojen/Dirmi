@@ -242,7 +242,6 @@ public class SocketMessageProcessor {
             final ReentrantLock lock = mReadLock;
             final Selector selector = mReadSelector;
 
-            // FIXME: put timeout on lock acquisition, perhaps a minute
             lock.lock();
             boolean hasLock = true;
             try {

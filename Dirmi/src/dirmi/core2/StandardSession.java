@@ -78,7 +78,6 @@ public class StandardSession implements Session {
     private static final int DISPOSE_BATCH = 1000;
 
     final StreamBroker mBroker;
-    final ScheduledExecutorService mExecutor;
     final Log mLog;
 
     // Strong references to SkeletonFactories. SkeletonFactories are created as
@@ -114,7 +113,6 @@ public class StandardSession implements Session {
     final Hidden.Admin mRemoteAdmin;
 
     // Pool of channels for client calls.
-    // FIXME: consider using concurrent queue
     final LinkedList<InvocationChan> mChannelPool;
 
     final ScheduledFuture<?> mBackgroundTask;
@@ -159,7 +157,6 @@ public class StandardSession implements Session {
         }
 
         mBroker = broker;
-        mExecutor = executor;
         mLog = log;
 
         mSkeletonFactories = new ConcurrentHashMap<Identifier, SkeletonFactory>();
@@ -178,7 +175,9 @@ public class StandardSession implements Session {
         // Receives magic number and remote object.
         class Bootstrap implements StreamListener {
             private boolean mDone;
-            private IOException mException;
+            private IOException mIOException;
+            private RuntimeException mRuntimeException;
+            private Error mError;
             Object mRemoteServer;
             Hidden.Admin mRemoteAdmin;
 
@@ -208,7 +207,11 @@ public class StandardSession implements Session {
                         throw io;
                     }
                 } catch (IOException e) {
-                    mException = e;
+                    mIOException = e;
+                } catch (RuntimeException e) {
+                    mRuntimeException = e;
+                } catch (Error e) {
+                    mError = e;
                 } finally {
                     mDone = true;
                     notifyAll();
@@ -221,12 +224,12 @@ public class StandardSession implements Session {
             }
 
             public synchronized void failed(IOException e) {
-                mException = e;
+                mIOException = e;
                 mDone = true;
                 notifyAll();
             }
 
-            public synchronized void waitUntilDone() throws IOException {
+            public synchronized void complete() throws IOException {
                 while (!mDone) {
                     try {
                         wait();
@@ -234,9 +237,16 @@ public class StandardSession implements Session {
                         throw new InterruptedIOException();
                     }
                 }
-                if (mException != null) {
-                    mException.fillInStackTrace();
-                    throw mException;
+                if (mError != null) {
+                    throw mError;
+                }
+                if (mIOException != null) {
+                    mIOException.fillInStackTrace();
+                    throw mIOException;
+                }
+                if (mRuntimeException != null) {
+                    mRuntimeException.fillInStackTrace();
+                    throw mRuntimeException;
                 }
             }
         };
@@ -263,7 +273,7 @@ public class StandardSession implements Session {
             }
         }
 
-        bootstrap.waitUntilDone();
+        bootstrap.complete();
 
         mRemoteServer = bootstrap.mRemoteServer;
         mRemoteAdmin = bootstrap.mRemoteAdmin;
@@ -271,14 +281,14 @@ public class StandardSession implements Session {
         try {
             // Start background task.
             long delay = DEFAULT_HEARTBEAT_CHECK_MILLIS >> 1;
-            mBackgroundTask = mExecutor.scheduleWithFixedDelay
+            mBackgroundTask = executor.scheduleWithFixedDelay
                 (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
             String message = "Unable to start background task";
             try {
                 closeOnFailure(message, e);
             } catch (IOException e2) {
-                // Don't care.
+                // Ignore.
             }
             IOException io = new IOException(message);
             io.initCause(e);
@@ -301,7 +311,7 @@ public class StandardSession implements Session {
         try {
             close(false, true, null, null);
         } catch (RemoteException e) {
-            // Don't care.
+            // Ignore.
         }
     }
 
@@ -334,7 +344,7 @@ public class StandardSession implements Session {
                             try {
                                 mRemoteAdmin.closedOnFailure(message, null);
                             } catch (RemoteException e2) {
-                                // Don't care.
+                                // Ignore.
                             }
                         }
                         throw e;
@@ -408,20 +418,6 @@ public class StandardSession implements Session {
             TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
     }
 
-    void handleRequests(InvocationChannel invChannel) {
-        while (handleRequest(invChannel)) {
-            try {
-                invChannel.getOutputStream().reset();
-            } catch (IOException e) {
-                try {
-                    invChannel.close();
-                } catch (IOException e2) {
-                    // Don't care.
-                }
-            }
-        }
-    }
-
     /**
      * @return true if channel is still open and can be reused.
      */
@@ -433,7 +429,7 @@ public class StandardSession implements Session {
             try {
                 invChannel.close();
             } catch (IOException e2) {
-                // Don't care.
+                // Ignore.
             }
             return false;
         }
@@ -489,7 +485,7 @@ public class StandardSession implements Session {
             try {
                 invChannel.close();
             } catch (IOException e2) {
-                // Don't care.
+                // Ignore.
             }
             return false;
         }
@@ -637,7 +633,7 @@ public class StandardSession implements Session {
                 try {
                     closeOnFailure(message, null);
                 } catch (IOException e) {
-                    // Don't care.
+                    // Ignore.
                 }
                 return;
             }
@@ -653,7 +649,7 @@ public class StandardSession implements Session {
                 try {
                     closeOnFailure(message, null);
                 } catch (IOException e2) {
-                    // Don't care.
+                    // Ignore.
                 }
                 return;
             }
@@ -675,7 +671,7 @@ public class StandardSession implements Session {
                 try {
                     pooledChannel.close();
                 } catch (IOException e) {
-                    // Don't care.
+                    // Ignore.
                 }
             }
         }
@@ -695,14 +691,54 @@ public class StandardSession implements Session {
                 try {
                     channel.close();
                 } catch (IOException e2) {
-                    // Don't care.
+                    // Ignore.
                 }
                 return;
             }
 
-            // FIXME: Don't use loop to handle multiple requests - instead use
-            // executeWhenReadable method.
-            handleRequests(invChannel);
+            if (!handleRequest(invChannel)) {
+                return;
+            }
+
+            try {
+                invChannel.getOutputStream().reset();
+            } catch (IOException e) {
+                try {
+                    invChannel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                return;
+            }
+
+            invChannel.executeWhenReadable(new StreamTask() {
+                public void run() {
+                    if (!handleRequest(invChannel)) {
+                        return;
+                    }
+
+                    try {
+                        invChannel.getOutputStream().reset();
+                    } catch (IOException e) {
+                        try {
+                            invChannel.close();
+                        } catch (IOException e2) {
+                            // Ignore.
+                        }
+                        return;
+                    }
+
+                    invChannel.executeWhenReadable(this);
+                }
+
+                public void closed() {
+                    // Ignore.
+                }
+
+                public void closed(IOException e) {
+                    // Ignore.
+                }
+            });
         }
 
         public void failed(IOException e) {
@@ -713,7 +749,7 @@ public class StandardSession implements Session {
             try {
                 closeOnFailure(message, e);
             } catch (IOException e2) {
-                // Don't care.
+                // Ignore.
             }
         }
     }
@@ -795,9 +831,9 @@ public class StandardSession implements Session {
                 try {
                     close();
                 } catch (IOException e2) {
-                    // Don't care.
+                    // Ignore.
                 }
-                // Don't care.
+                // Ignore.
             }
         }
 
@@ -947,7 +983,7 @@ public class StandardSession implements Session {
                 try {
                     channel.close();
                 } catch (IOException e2) {
-                    // Don't care.
+                    // Ignore.
                 }
             }
         }
@@ -959,7 +995,7 @@ public class StandardSession implements Session {
                 try {
                     channel.close();
                 } catch (IOException e) {
-                    // Don't care.
+                    // Ignore.
                 }
             }
 
@@ -967,7 +1003,11 @@ public class StandardSession implements Session {
             if (cause == null) {
                 ex = new RemoteException();
             } else {
-                ex = new RemoteException(cause.getMessage(), cause);
+                String message = cause.getMessage();
+                if (message == null || (message = message.trim()).length() == 0) {
+                    message = cause.toString();
+                }
+                ex = new RemoteException(message, cause);
             }
 
             if (!remoteFailureEx.isAssignableFrom(RemoteException.class)) {
