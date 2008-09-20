@@ -36,8 +36,8 @@ public interface StubSupport {
     <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureException) throws T;
 
     /**
-     * Called after invocation is finished and channel can be reused. This
-     * method should not throw any exception.
+     * Called after channel usage is finished and can be reused for sending
+     * new requests. This method should not throw any exception.
      */
     void finished(InvocationChannel channel);
 

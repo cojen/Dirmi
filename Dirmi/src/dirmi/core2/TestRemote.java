@@ -24,6 +24,5 @@ import java.rmi.*;
  * @author Brian S O'Neill
  */
 public interface TestRemote extends Remote {
-    @dirmi.Asynchronous
     void doIt(String message) throws RemoteException;
 }

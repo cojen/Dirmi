@@ -56,6 +56,7 @@ import dirmi.core.Identifier;
  * @author Brian S O'Neill
  */
 public class SkeletonFactoryGenerator<R extends Remote> {
+    private static final String SUPPORT_FIELD_NAME = "support";
     private static final String REMOTE_FIELD_NAME = "remote";
 
     private static final Map<Class<?>, SkeletonFactory<?>> cCache;
@@ -99,7 +100,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         Class<? extends Skeleton> skeletonClass = generateSkeleton();
 
         try {
-            SkeletonFactory<R> factory = new Factory<R>(skeletonClass.getConstructor(mType));
+            SkeletonFactory<R> factory = new Factory<R>
+                (skeletonClass.getConstructor(SkeletonSupport.class, mType));
             CodeBuilderUtil.invokeInitMethod(skeletonClass, factory, mInfo);
             return factory;
         } catch (IllegalAccessException e) {
@@ -124,6 +126,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         cf.markSynthetic();
         cf.setTarget("1.5");
 
+        final TypeDesc supportType = TypeDesc.forClass(SkeletonSupport.class);
         final TypeDesc remoteType = TypeDesc.forClass(mType);
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
@@ -134,6 +137,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Add fields
         {
+            cf.addField(Modifiers.PRIVATE.toFinal(true), SUPPORT_FIELD_NAME, supportType);
             cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_FIELD_NAME, remoteType);
         }
 
@@ -143,7 +147,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add constructor
         {
             MethodInfo mi = cf.addConstructor
-                (Modifiers.PUBLIC, new TypeDesc[] {remoteType});
+                (Modifiers.PUBLIC, new TypeDesc[] {supportType, remoteType});
 
             CodeBuilder b = new CodeBuilder(mi);
 
@@ -152,20 +156,23 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadLocal(b.getParameter(0));
+            b.storeField(SUPPORT_FIELD_NAME, supportType);
+            b.loadThis();
+            b.loadLocal(b.getParameter(1));
             b.storeField(REMOTE_FIELD_NAME, remoteType);
 
             b.returnVoid();
         }
 
         // Add the all-important invoke method
-        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
+        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
                                      new TypeDesc[] {invChannelType});
         CodeBuilder b = new CodeBuilder(mi);
 
         // Read method identifier from channel.
-        LocalVariable conVar = b.getParameter(0);
+        LocalVariable channelVar = b.getParameter(0);
 
-        b.loadLocal(conVar);
+        b.loadLocal(channelVar);
         b.invokeInterface(invChannelType, "getInputStream", invInType, null);
         LocalVariable invInVar = b.createLocalVariable(null, invInType);
         b.storeLocal(invInVar);
@@ -256,7 +263,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
 
-                boolean reuseCon = true;
+                boolean reuseChannel = true;
 
                 if (paramTypes.size() != 0) {
                     // Read parameters onto stack.
@@ -267,12 +274,21 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
                             lookForPipe = false;
                             // Use channel as Pipe.
-                            b.loadLocal(conVar);
-                            reuseCon = false;
+                            b.loadLocal(channelVar);
+                            reuseChannel = false;
                         } else {
                             CodeBuilderUtil.readParam(b, paramType, invInVar);
                         }
                     }
+                }
+
+                if (method.isAsynchronous() && reuseChannel) {
+                    // Call finished method before invocation.
+                    b.loadThis();
+                    b.loadField(SUPPORT_FIELD_NAME, supportType);
+                    b.loadLocal(channelVar);
+                    b.invokeInterface(supportType, "finished", null,
+                                      new TypeDesc[] {invChannelType});
                 }
 
                 TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
@@ -307,7 +323,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         b.storeLocal(retVar);
                     }
 
-                    b.loadLocal(conVar);
+                    b.loadLocal(channelVar);
                     b.invokeInterface
                         (invChannelType, "getOutputStream", invOutType, null);
                     LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
@@ -325,10 +341,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadLocal(invOutVar);
                     b.invokeVirtual(invOutType, "flush", null, null);
 
+                    // Call finished method.
+                    b.loadThis();
+                    b.loadField(SUPPORT_FIELD_NAME, supportType);
+                    b.loadLocal(channelVar);
+                    b.invokeInterface(supportType, "finished", null,
+                                      new TypeDesc[] {invChannelType});
                 }
 
-                b.loadConstant(reuseCon);
-                b.returnValue(TypeDesc.BOOLEAN);
+                b.returnVoid();
 
                 ordinal++;
 
@@ -389,7 +410,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
             b.storeLocal(throwableVar);
 
-            b.loadLocal(conVar);
+            b.loadLocal(channelVar);
             b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
             LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
             b.storeLocal(invOutVar);
@@ -400,8 +421,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.invokeVirtual(invOutType, "flush", null, null);
 
-            b.loadConstant(true);
-            b.returnValue(TypeDesc.BOOLEAN);
+            // Call finished method.
+            b.loadThis();
+            b.loadField(SUPPORT_FIELD_NAME, supportType);
+            b.loadLocal(channelVar);
+            b.invokeInterface(supportType, "finished", null,
+                              new TypeDesc[] {invChannelType});
+
+            b.returnVoid();
         }
 
         return ci.defineClass(cf);
@@ -414,10 +441,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             mSkeletonCtor = ctor;
         }
 
-        public Skeleton createSkeleton(R remoteServer) {
+        public Skeleton createSkeleton(SkeletonSupport support, R remoteServer) {
             Throwable error;
             try {
-                return mSkeletonCtor.newInstance(remoteServer);
+                return mSkeletonCtor.newInstance(support, remoteServer);
             } catch (InstantiationException e) {
                 error = e;
             } catch (IllegalAccessException e) {
@@ -437,9 +464,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         private EmptySkeletonFactory() {
         }
 
-        public Skeleton createSkeleton(Remote remoteServer) {
+        public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
             return new Skeleton() {
-                public boolean invoke(InvocationChannel channel)
+                public void invoke(InvocationChannel channel)
                     throws IOException, NoSuchMethodException
                 {
                     Identifier id = Identifier.read((DataInput) channel.getInputStream());

@@ -90,6 +90,8 @@ public class StandardSession implements Session {
     // sharable Skeleton instances.
     final ConcurrentMap<Identifier, Skeleton> mSkeletons;
 
+    final SkeletonSupport mSkeletonSupport;
+
     // Strong references to PhantomReferences to StubFactories.
     // PhantomReferences need to be strongly reachable or else they will be
     // reclaimed sooner than the referent becomes unreachable. When the
@@ -161,6 +163,7 @@ public class StandardSession implements Session {
 
         mSkeletonFactories = new ConcurrentHashMap<Identifier, SkeletonFactory>();
         mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
+        mSkeletonSupport = new SkeletonSupportImpl();
         mStubFactoryRefs = new ConcurrentHashMap<Identifier, StubFactoryRef>();
         mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
         mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
@@ -418,10 +421,7 @@ public class StandardSession implements Session {
             TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
     }
 
-    /**
-     * @return true if channel is still open and can be reused.
-     */
-    boolean handleRequest(InvocationChannel invChannel) {
+    void handleRequest(InvocationChannel invChannel) {
         final Identifier id;
         try {
             id = Identifier.read((DataInput) invChannel.getInputStream());
@@ -431,7 +431,7 @@ public class StandardSession implements Session {
             } catch (IOException e2) {
                 // Ignore.
             }
-            return false;
+            return;
         }
 
         // Find a Skeleton to invoke.
@@ -447,7 +447,7 @@ public class StandardSession implements Session {
                       "Server cannot find remote object and " +
                       "cannot send error to client. Object id: " + id, e);
             }
-            return false;
+            return;
         }
 
         try {
@@ -455,7 +455,7 @@ public class StandardSession implements Session {
 
             try {
                 try {
-                    return skeleton.invoke(invChannel);
+                    skeleton.invoke(invChannel);
                 } catch (AsynchronousInvocationException e) {
                     throwable = null;
                     Throwable cause = e.getCause();
@@ -463,8 +463,8 @@ public class StandardSession implements Session {
                         cause = e;
                     }
                     warn("Unhandled exception in asynchronous server method", cause);
-                    return false;
                 }
+                return;
             } catch (NoSuchMethodException e) {
                 throwable = e;
             } catch (NoSuchObjectException e) {
@@ -477,9 +477,7 @@ public class StandardSession implements Session {
 
             InvocationOutputStream out = invChannel.getOutputStream();
             out.writeThrowable(throwable);
-            out.flush();
-            
-            return false;
+            invChannel.close();
         } catch (IOException e) {
             error("Failure processing request", e);
             try {
@@ -487,7 +485,6 @@ public class StandardSession implements Session {
             } catch (IOException e2) {
                 // Ignore.
             }
-            return false;
         }
     }
 
@@ -696,49 +693,7 @@ public class StandardSession implements Session {
                 return;
             }
 
-            if (!handleRequest(invChannel)) {
-                return;
-            }
-
-            try {
-                invChannel.getOutputStream().reset();
-            } catch (IOException e) {
-                try {
-                    invChannel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                return;
-            }
-
-            invChannel.executeWhenReadable(new StreamTask() {
-                public void run() {
-                    if (!handleRequest(invChannel)) {
-                        return;
-                    }
-
-                    try {
-                        invChannel.getOutputStream().reset();
-                    } catch (IOException e) {
-                        try {
-                            invChannel.close();
-                        } catch (IOException e2) {
-                            // Ignore.
-                        }
-                        return;
-                    }
-
-                    invChannel.executeWhenReadable(this);
-                }
-
-                public void closed() {
-                    // Ignore.
-                }
-
-                public void closed(IOException e) {
-                    // Ignore.
-                }
-            });
+            handleRequest(invChannel);
         }
 
         public void failed(IOException e) {
@@ -946,13 +901,43 @@ public class StandardSession implements Session {
                         }
                     }
 
-                    mSkeletons.putIfAbsent(objID, factory.createSkeleton(remote));
+                    mSkeletons.putIfAbsent
+                        (objID, factory.createSkeleton(mSkeletonSupport, remote));
                 }
 
                 obj = new MarshalledRemote(objID, typeID, info);
             }
 
             return obj;
+        }
+    }
+
+    private class SkeletonSupportImpl implements SkeletonSupport {
+        public void finished(final InvocationChannel channel) {
+            try {
+                channel.getOutputStream().reset();
+            } catch (IOException e) {
+                try {
+                    channel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                return;
+            }
+
+            channel.executeWhenReadable(new StreamTask() {
+                public void run() {
+                    handleRequest(channel);
+                }
+
+                public void closed() {
+                    // Ignore.
+                }
+
+                public void closed(IOException e) {
+                    // Ignore.
+                }
+            });
         }
     }
 
