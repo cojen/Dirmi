@@ -16,6 +16,7 @@
 
 package dirmi.nio2;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.net.ServerSocket;
@@ -47,7 +48,7 @@ import java.util.concurrent.Executor;
  *
  * @author Brian S O'Neill
  */
-public class SocketMessageProcessor {
+public class SocketMessageProcessor implements Closeable {
     final Executor mExecutor;
 
     final ConcurrentLinkedQueue<Registerable> mReadQueue;
@@ -170,6 +171,10 @@ public class SocketMessageProcessor {
                 return "MessageAcceptor {bindpoint=" + bindpoint + '}';
             }
         };
+    }
+
+    public void close() throws IOException {
+        mReadSelector.close();
     }
 
     void enqueueRegister(Registerable registerable) {
@@ -328,6 +333,10 @@ public class SocketMessageProcessor {
                             }
                         }
                     }
+                }
+            } catch (ClosedSelectorException e) {
+                if (hasLock) {
+                    --mReadTaskCount;
                 }
             } finally {
                 if (hasLock) {

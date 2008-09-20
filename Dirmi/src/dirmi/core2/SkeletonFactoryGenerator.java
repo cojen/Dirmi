@@ -338,15 +338,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                             (b, method.getReturnType(), invOutVar, retVar);
                     }
 
-                    b.loadLocal(invOutVar);
-                    b.invokeVirtual(invOutType, "flush", null, null);
-
                     // Call finished method.
                     b.loadThis();
                     b.loadField(SUPPORT_FIELD_NAME, supportType);
                     b.loadLocal(channelVar);
                     b.invokeInterface(supportType, "finished", null,
                                       new TypeDesc[] {invChannelType});
+
+                    // Flush after calling finished as an optimization to include the
+                    // object stream reset command in the same packet.
+                    b.loadLocal(invOutVar);
+                    b.invokeVirtual(invOutType, "flush", null, null);
                 }
 
                 b.returnVoid();
@@ -418,8 +420,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.loadLocal(throwableVar);
             b.invokeVirtual(invOutType, "writeThrowable", null, new TypeDesc[] {throwableType});
-            b.loadLocal(invOutVar);
-            b.invokeVirtual(invOutType, "flush", null, null);
 
             // Call finished method.
             b.loadThis();
@@ -427,6 +427,11 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadLocal(channelVar);
             b.invokeInterface(supportType, "finished", null,
                               new TypeDesc[] {invChannelType});
+
+            // Flush after calling finished as an optimization to include the
+            // object stream reset command in the same packet.
+            b.loadLocal(invOutVar);
+            b.invokeVirtual(invOutType, "flush", null, null);
 
             b.returnVoid();
         }

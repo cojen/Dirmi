@@ -479,7 +479,9 @@ public class StandardSession implements Session {
             out.writeThrowable(throwable);
             invChannel.close();
         } catch (IOException e) {
-            error("Failure processing request", e);
+            if (!mClosing) {
+                error("Failure processing request", e);
+            }
             try {
                 invChannel.close();
             } catch (IOException e2) {

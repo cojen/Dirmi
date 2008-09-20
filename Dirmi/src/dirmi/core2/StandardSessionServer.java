@@ -100,11 +100,10 @@ public class StandardSessionServer implements SessionServer {
     }
 
     public void close() throws RemoteException {
-        /* FIXME
         mClosing = true;
 
         try {
-            mServerSocket.close();
+            mProcessor.close();
         } catch (IOException e) {
             throw new RemoteException(e.getMessage(), e);
         }
@@ -117,9 +116,7 @@ public class StandardSessionServer implements SessionServer {
                     warn("Failed to close session: " + session, e);
                 }
             }
-            mSessions.clear();
         }
-        */
     }
 
     void warn(String message) {

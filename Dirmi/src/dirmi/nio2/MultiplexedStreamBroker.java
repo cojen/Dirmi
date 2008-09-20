@@ -51,6 +51,8 @@ import org.cojen.util.IntHashMap;
 public class MultiplexedStreamBroker implements StreamBroker {
     private static final long MAGIC_NUMBER = 0x1dca09fe04baafbeL;
 
+    static final int HEADER_SIZE = 4;
+
     // Each command is encoded with 4 byte header. Upper 2 bits encode the
     // opcode, and remaining 30 bits encode the channel id.
 
@@ -254,16 +256,16 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
         public synchronized MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer) {
             MessageReceiver newReceiver;
-            if (offset >= 4) {
+            if (offset >= HEADER_SIZE) {
                 newReceiver = null;
             } else {
                 readHeader: {
                     if (offset == 0) {
-                        if (totalSize > 4) {
-                            mReceived = mBufferPool.get(totalSize - 4);
+                        if (totalSize > HEADER_SIZE) {
+                            mReceived = mBufferPool.get(totalSize - HEADER_SIZE);
                         }
                         newReceiver = new Receiver();
-                        if (buffer.remaining() >= 4) {
+                        if (buffer.remaining() >= HEADER_SIZE) {
                             mHeader = buffer.getInt();
                             break readHeader;
                         }
@@ -275,7 +277,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     do {
                         header = (header << 8) | (buffer.get() & 0xff);
                         offset++;
-                    } while (offset < 4 && buffer.remaining() > 0);
+                    } while (offset < HEADER_SIZE && buffer.remaining() > 0);
 
                     mHeader = header;
                 }
@@ -326,11 +328,13 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 }
             }
 
-            chan.received(mReceived);
-
             if (command == ACK) {
                 chan.acknowledged();
-            } else if (command == CLOSE) {
+            }
+
+            chan.received(mReceived);
+
+            if (command == CLOSE) {
                 try {
                     chan.close(true, null);
                 } catch (IOException e) {
@@ -368,8 +372,6 @@ public class MultiplexedStreamBroker implements StreamBroker {
     }
 
     private class Chan implements StreamChannel {
-        private static final int HEADER_SIZE = 4;
-
         final int mId;
 
         private final OutputStream mOut;
@@ -462,7 +464,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         void close(boolean force, IOException exception) throws IOException {
-            // Must lock mIn before mOut to avoid deadlock with getReadBuffer method.
+            // Must lock mIn before mOut to avoid deadlock with readBuffer method.
             synchronized (mIn) {
                 synchronized (mOut) {
                     if (!mClosed) {
@@ -563,7 +565,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
                 sendMessage(buffer);
                 mOutBlocked = true;
             } finally {
-                buffer.position(HEADER_SIZE).limit(buffer.capacity());
+                buffer.limit(buffer.capacity()).position(HEADER_SIZE);
             }
         }
 
@@ -627,14 +629,21 @@ public class MultiplexedStreamBroker implements StreamBroker {
                     int header = buffer.get(0) & 0x3f;
                     buffer.put(0, (byte) ((ACK << 6) | header));
                     int originalPos = buffer.position();
-                    buffer.position(0).limit(4);
+                    if (originalPos > HEADER_SIZE && !mOutBlocked) {
+                        // Piggyback flush with acknowledgment.
+                        buffer.flip();
+                        originalPos = HEADER_SIZE;
+                        mOutBlocked = true;
+                    } else {
+                        buffer.position(0).limit(HEADER_SIZE);
+                    }
                     try {
-                        // FIXME: if !mOutBlocked, piggyback with flush
                         sendMessage(buffer);
                     } catch (IOException e) {
                         // Ignore and assume all channels are now closed.
                     } finally {
-                        buffer.limit(buffer.capacity()).position(originalPos);
+                        buffer.put(0, (byte) header)
+                            .limit(buffer.capacity()).position(originalPos);
                     }
                 }
             }
@@ -642,7 +651,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
         // Caller must synchronize on mIn.
         int read() throws IOException {
-            ByteBuffer buffer = getReadBuffer();
+            ByteBuffer buffer = readBuffer();
             byte b = buffer.get();
             if (!buffer.hasRemaining()) {
                 mInBuffer = null;
@@ -653,7 +662,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
 
         // Caller must synchronize on mIn.
         int read(byte[] b, int off, int len) throws IOException {
-            ByteBuffer buffer = getReadBuffer();
+            ByteBuffer buffer = readBuffer();
             len = Math.min(len, buffer.remaining());
             buffer.get(b, off, len);
             if (!buffer.hasRemaining()) {
@@ -674,7 +683,7 @@ public class MultiplexedStreamBroker implements StreamBroker {
         }
 
         // Caller must synchronize on mIn.
-        private ByteBuffer getReadBuffer() throws IOException {
+        private ByteBuffer readBuffer() throws IOException {
             ByteBuffer buffer = mInBuffer;
             if (buffer == null) {
                 if ((buffer = mNextInBuffer) != null) {
