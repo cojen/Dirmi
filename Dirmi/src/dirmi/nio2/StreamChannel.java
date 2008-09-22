@@ -38,7 +38,7 @@ public interface StreamChannel extends Channel, Executor {
      * Asynchronously calls the given task as soon as data can be read from the
      * channel.
      */
-    void executeWhenReadable(StreamTask task);
+    void executeWhenReadable(StreamTask task) throws IOException;
 
     /**
      * @return local address or null if unknown
