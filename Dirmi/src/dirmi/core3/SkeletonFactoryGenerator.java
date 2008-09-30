@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.core2;
+package dirmi.core3;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;

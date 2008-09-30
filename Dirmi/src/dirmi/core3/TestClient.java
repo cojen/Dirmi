@@ -14,17 +14,13 @@
  *  limitations under the License.
  */
 
-package dirmi.core2;
+package dirmi.core3;
 
 import java.net.InetSocketAddress;
 
 import dirmi.Session;
 
-import dirmi.nio2.MessageChannel;
-import dirmi.nio2.MessageConnector;
-import dirmi.nio2.MultiplexedStreamBroker;
-import dirmi.nio2.SocketMessageProcessor;
-import dirmi.nio2.StreamBroker;
+import dirmi.io2.*;
 
 /**
  * 
@@ -33,21 +29,27 @@ import dirmi.nio2.StreamBroker;
  */
 public class TestClient {
     public static void main(String[] args) throws Exception {
+        InetSocketAddress endpoint = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
+
         ThreadPool pool = new ThreadPool(100, true, "dirmi");
+        // Note: The message processor should be globally shared and have an
+        // unbounded pool.
         SocketMessageProcessor processor = new SocketMessageProcessor(pool);
-        MessageConnector connector = processor.newConnector
-            (new InetSocketAddress(args[0], Integer.parseInt(args[1])));
-        MessageChannel channel = connector.connect();
-        StreamBroker broker = new MultiplexedStreamBroker(channel);
+        MessageChannel channel = processor.newConnector(endpoint).connect();
+        StreamConnector connector = new SocketStreamConnector(endpoint);
+        
+        StreamBroker broker = new StreamConnectorBroker(channel, connector);
+
         Session session = new StandardSession(broker, null, pool);
-        System.out.println(session);
+        System.out.println("Connected: " + session);
 
         TestRemote server = (TestRemote) session.getRemoteServer();
-        System.out.println(server);
+        System.out.println("Remote server: " + server);
 
         while (true) {
+            System.out.println("yo!");
             server.doIt(new org.joda.time.DateTime().toString());
-            //Thread.sleep(10);
+            Thread.sleep(1000);
         }
     }
 }

@@ -14,20 +14,20 @@
  *  limitations under the License.
  */
 
-package dirmi;
-
-import java.io.Closeable;
+package dirmi.core3;
 
 /**
- * Remote method invocation session.
+ * If an exception is thrown from a skeleton-invoked method which is
+ * asynchronous, it cannot write the exception to the channel. Instead it
+ * wraps the exception in an AsynchronousInvocationException for the server to
+ * log.
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
-    /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
-     */
-    Object getRemoteServer();
+public class AsynchronousInvocationException extends Exception {
+    private static final long serialVersionUID = 1;
+
+    public AsynchronousInvocationException(Throwable cause) {
+        super(cause);
+    }
 }

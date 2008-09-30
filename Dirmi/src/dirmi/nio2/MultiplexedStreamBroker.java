@@ -213,6 +213,10 @@ public class MultiplexedStreamBroker implements StreamBroker {
         return mMessChannel.isOpen();
     }
 
+    public void execute(Runnable task) {
+        mMessChannel.execute(task);
+    }
+
     void sendMessage(ByteBuffer buffer) throws IOException {
         try {
             mMessChannel.send(buffer);

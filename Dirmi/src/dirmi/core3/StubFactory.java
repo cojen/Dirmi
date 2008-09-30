@@ -14,20 +14,24 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core3;
 
-import java.io.Closeable;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+import dirmi.info.RemoteInfo;
 
 /**
- * Remote method invocation session.
+ * Produces new Stub instances for client-side Remote objects. A Stub instance
+ * marshalls requests to a remote {@link Skeleton} which in turn calls the real
+ * method. Any response is marshalled back for the Stub to decode.
  *
  * @author Brian S O'Neill
+ * @see StubFactoryGenerator
  */
-public interface Session extends Closeable {
+public interface StubFactory<R extends Remote> {
     /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
+     * @param support for invoking remote methods
      */
-    Object getRemoteServer();
+    R createStub(StubSupport support);
 }

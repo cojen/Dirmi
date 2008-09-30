@@ -18,12 +18,14 @@ package dirmi.nio2;
 
 import java.io.IOException;
 
+import java.util.concurrent.Executor;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamConnector {
+public interface StreamConnector extends Executor {
     /**
      * Returns a new channel, possibly blocking until it has been
      * established.

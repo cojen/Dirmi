@@ -26,6 +26,8 @@ public interface SkeletonSupport {
     /**
      * Called after channel usage is finished and can be reused for receiving
      * new requests. This method should not throw any exception.
+     *
+     * @param flush pass true for synchronous method
      */
-    void finished(InvocationChannel channel);
+    void finished(InvocationChannel channel, boolean flush);
 }

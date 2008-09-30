@@ -16,12 +16,14 @@
 
 package dirmi.nio2;
 
+import java.util.concurrent.Executor;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamAcceptor {
+public interface StreamAcceptor extends Executor {
     /**
      * Returns immediately and calls established method on listener
      * asynchronously. Only one channel is accepted per invocation of this

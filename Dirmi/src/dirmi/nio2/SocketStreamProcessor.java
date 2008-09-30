@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
@@ -84,7 +85,7 @@ public class SocketStreamProcessor implements Closeable {
     }
 
     public StreamConnector newConnector(final SocketAddress endpoint,
-					final SocketAddress bindpoint)
+                                        final SocketAddress bindpoint)
     {
         if (endpoint == null) {
             throw new IllegalArgumentException();
@@ -103,6 +104,10 @@ public class SocketStreamProcessor implements Closeable {
                 channel.socket().connect(endpoint);
 
                 return new Chan(channel);
+            }
+
+            public void execute(Runnable task) {
+                mExecutor.execute(task);
             }
 
             @Override
@@ -162,6 +167,10 @@ public class SocketStreamProcessor implements Closeable {
         return new StreamAcceptor() {
             public void accept(StreamListener listener) {
                 enqueueRegister(new Accept(listener));
+            }
+
+            public void execute(Runnable task) {
+                mExecutor.execute(task);
             }
 
             @Override
@@ -346,28 +355,28 @@ public class SocketStreamProcessor implements Closeable {
 
     private class Chan implements StreamChannel {
         private final SocketChannel mChannel;
-	private final Input mIn;
-	private final Output mOut;
-	private final Reader mReader;
+        private final Input mIn;
+        private final Output mOut;
+        final Reader mReader;
 
         Chan(SocketChannel channel) throws IOException {
             mChannel = channel;
-	    mIn = new Input(channel.socket().getInputStream());
-	    mOut = new Output(channel.socket().getOutputStream());
-	    mReader = new Reader(channel, this);
+            mIn = new Input(channel.socket().getInputStream());
+            mOut = new Output(channel.socket().getOutputStream());
+            mReader = new Reader(channel, this);
         }
 
-	public InputStream getInputStream() throws IOException {
-	    return mIn;
-	}
+        public InputStream getInputStream() throws IOException {
+            return mIn;
+        }
 
-	public OutputStream getOutputStream() throws IOException {
-	    return mOut;
-	}
+        public OutputStream getOutputStream() throws IOException {
+            return mOut;
+        }
 
-	public void executeWhenReadable(StreamTask task) throws IOException {
-	    mReader.enqueueAndRegister(task);
-	}
+        public void executeWhenReadable(StreamTask task) throws IOException {
+            mReader.enqueueAndRegister(task);
+        }
 
         public Object getLocalAddress() {
             return mChannel.socket().getLocalSocketAddress();
@@ -388,158 +397,190 @@ public class SocketStreamProcessor implements Closeable {
         }
 
         public void close() throws IOException {
-	    mChannel.close();
+            mChannel.close();
         }
 
         public boolean isOpen() {
             return mChannel.isOpen();
         }
 
-	void suspendReader() throws IOException {
-	    mReader.suspend();
-	}
+        private class Input extends AbstractBufferedInputStream {
+            private final InputStream mIn;
 
-	void resumeReader() throws IOException {
-	    mReader.resume();
-	}
+            Input(InputStream in) {
+                mIn = in;
+            }
 
-	private class Input extends AbstractBufferedInputStream {
-	    private final InputStream mIn;
+            @Override
+            public synchronized int available() throws IOException {
+                int available = super.available();
+                if (available > 0) {
+                    return available;
+                }
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    return mIn.available();
+                } finally {
+                    reader.resume(b);
+                }
+            }
 
-	    Input(InputStream in) {
-		mIn = in;
-	    }
+            @Override
+            protected int doRead(byte[] buffer, int offset, int length) throws IOException {
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    return mIn.read(buffer, offset, length);
+                } finally {
+                    reader.resume(b);
+                }
+            }
 
-	    @Override
-	    public synchronized int available() throws IOException {
-		int available = super.available();
-		if (available > 0) {
-		    return available;
-		}
-		suspendReader();
-		try {
-		    return mIn.available();
-		} finally {
-		    resumeReader();
-		}
-	    }
+            @Override
+            protected long doSkip(long n) throws IOException {
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    return mIn.skip(n);
+                } finally {
+                    reader.resume(b);
+                }
+            }
+        }
 
-	    @Override
-	    protected int doRead(byte[] buffer, int offset, int length) throws IOException {
-		suspendReader();
-		try {
-		    return mIn.read(buffer, offset, length);
-		} finally {
-		    resumeReader();
-		}
-	    }
+        private class Output extends AbstractBufferedOutputStream {
+            private final OutputStream mOut;
 
-	    @Override
-	    protected long doSkip(long n) throws IOException {
-		suspendReader();
-		try {
-		    return mIn.skip(n);
-		} finally {
-		    resumeReader();
-		}
-	    }
-	}
+            Output(OutputStream out) {
+                mOut = out;
+            }
 
-	private class Output extends AbstractBufferedOutputStream {
-	    private final OutputStream mOut;
+            @Override
+            public synchronized void flush() throws IOException {
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    super.flush();
+                    mOut.flush();
+                } finally {
+                    reader.resume(b);
+                }
+            }
 
-	    Output(OutputStream out) {
-		mOut = out;
-	    }
+            @Override
+            public synchronized void close() throws IOException {
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    super.flush();
+                    mOut.close();
+                } finally {
+                    reader.resume(b);
+                }
+            }
 
-	    @Override
-	    public synchronized void flush() throws IOException {
-		suspendReader();
-		try {
-		    super.flush();
-		    mOut.flush();
-		} finally {
-		    resumeReader();
-		}
-	    }
-
-	    @Override
-	    public synchronized void close() throws IOException {
-		suspendReader();
-		try {
-		    super.flush();
-		    mOut.close();
-		} finally {
-		    resumeReader();
-		}
-	    }
-
-	    @Override
-	    protected void doWrite(byte[] buffer, int offset, int length)
-		throws IOException
-	    {
-		suspendReader();
-		try {
-		    mOut.write(buffer, offset, length);
-		} finally {
-		    resumeReader();
-		}
-	    }
-	}
+            @Override
+            protected void doWrite(byte[] buffer, int offset, int length)
+                throws IOException
+            {
+                Reader reader = mReader;
+                boolean b = reader.suspend();
+                try {
+                    mOut.write(buffer, offset, length);
+                } finally {
+                    reader.resume(b);
+                }
+            }
+        }
     }
 
+    /**
+     * Asynchronous stream reader. When suspended, channel is in blocking mode.
+     */
     private class Reader implements Registerable, Selectable<StreamTask> {
         private final Executor mExecutor;
         private final SocketChannel mChannel;
         private final Chan mChan;
         private final ConcurrentLinkedQueue<StreamTask> mTaskQueue;
-	private final ReentrantLock mModeLock;
+        private final ReentrantReadWriteLock mModeLock;
 
         Reader(SocketChannel channel, Chan chan) {
             mExecutor = SocketStreamProcessor.this.mExecutor;
             mChannel = channel;
             mChan = chan;
             mTaskQueue = new ConcurrentLinkedQueue<StreamTask>();
-	    mModeLock = new ReentrantLock(true);
+            mModeLock = new ReentrantReadWriteLock();
         }
 
         void enqueueAndRegister(StreamTask task) throws IOException {
-	    if (task == null) {
-		throw new IllegalArgumentException();
-	    }
-	    mModeLock.lock();
-	    try {
-		mChannel.configureBlocking(false);
-		mTaskQueue.add(task);
-		enqueueRegister(this);
-	    } finally {
-		mModeLock.unlock();
-	    }
+            if (task == null) {
+                throw new IllegalArgumentException();
+            }
+
+            ReentrantReadWriteLock modeLock = mModeLock;
+            // This will wait for any blocking I/O to complete.
+            modeLock.writeLock().lock();
+            try {
+                mTaskQueue.add(task);
+                if (mChannel.isBlocking()) {
+                    mChannel.configureBlocking(false);
+                    enqueueRegister(this);
+                }
+            } finally {
+                modeLock.writeLock().unlock();
+            }
         }
 
-	void suspend() throws IOException {
-	    mModeLock.lock();
-	    try {
-		mChannel.configureBlocking(true);
-	    } catch (IOException e) {
-		mModeLock.unlock();
-		throw e;
-	    }
-	}
+        boolean suspend() throws IOException {
+            ReentrantReadWriteLock modeLock = mModeLock;
 
-	void resume() throws IOException {
-	    try {
-		if (!mTaskQueue.isEmpty()) {
-		    mChannel.configureBlocking(false);
-		    enqueueRegister(this);
-		}
-	    } finally {
-		mModeLock.unlock();
-	    }
-	}
+            modeLock.readLock().lock();
+            if (mChannel.isBlocking()) {
+                return false;
+            }
+
+            // Release and acquire write lock.
+            modeLock.readLock().unlock();
+            modeLock.writeLock().lock();
+            modeLock.readLock().lock();
+
+            if (mChannel.isBlocking()) {
+                // Release write lock but keep read lock.
+                modeLock.writeLock().unlock();
+                return false;
+            }
+
+            try {
+                mChannel.configureBlocking(true);
+            } catch (IOException e) {
+                modeLock.readLock().unlock();
+                modeLock.writeLock().unlock();
+                throw e;
+            }
+
+            // Keep write and read locks held to prevent reader from resuming.
+            return true;
+        }
+
+        void resume(boolean suspended) throws IOException {
+            ReentrantReadWriteLock modeLock = mModeLock;
+            modeLock.readLock().unlock();
+            if (suspended) {
+                // Write lock is still held.
+                try {
+                    if (mChannel.isBlocking() && !mTaskQueue.isEmpty()) {
+                        mChannel.configureBlocking(false);
+                        enqueueRegister(this);
+                    }
+                } finally {
+                    modeLock.writeLock().unlock();
+                }
+            }
+        }
 
         public void register(Selector selector) throws IOException {
-	    mChannel.register(selector, SelectionKey.OP_READ, this);
+            mChannel.register(selector, SelectionKey.OP_READ, this);
         }
 
         public void registerException(IOException e) {
@@ -547,10 +588,10 @@ public class SocketStreamProcessor implements Closeable {
         }
 
         public StreamTask selected(SelectionKey key) throws IOException {
-	    key.cancel();
-	    mChannel.configureBlocking(true);
-	    return mTaskQueue.poll();
-	}
+            key.cancel();
+            mChannel.configureBlocking(true);
+            return mTaskQueue.poll();
+        }
 
         public void selectedException(IOException e) {
             handleException(e);
@@ -566,10 +607,10 @@ public class SocketStreamProcessor implements Closeable {
             } catch (IOException e2) {
                 uncaughtException(e2);
             } finally {
-		StreamTask task;
-		while ((task = mTaskQueue.poll()) != null) {
-		    task.closed(e);
-		}
+                StreamTask task;
+                while ((task = mTaskQueue.poll()) != null) {
+                    task.closed(e);
+                }
             }
         }
     }

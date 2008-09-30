@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,20 +14,20 @@
  *  limitations under the License.
  */
 
-package dirmi;
-
-import java.io.Closeable;
+package dirmi.core3;
 
 /**
- * Remote method invocation session.
+ * Object passed to a Skeleton instance in order for it to decide when channels
+ * can be reused.
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface SkeletonSupport {
     /**
-     * Returns the main remote server object, which may be null.
+     * Called after channel usage is finished and can be reused for receiving
+     * new requests. This method should not throw any exception.
      *
-     * @return main remote server object, or null 
+     * @param synchronous pass true for synchronous method
      */
-    Object getRemoteServer();
+    void finished(InvocationChannel channel, boolean synchronous);
 }

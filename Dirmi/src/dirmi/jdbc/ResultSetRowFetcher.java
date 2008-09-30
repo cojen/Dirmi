@@ -35,7 +35,6 @@ public interface ResultSetRowFetcher extends Remote {
      * Fetches rows from result set, which might supply less than the requested
      * maximum amount.
      *
-     * @param max maximum number of rows to fetch
      * @return null if no rows left
      */
     @Asynchronous

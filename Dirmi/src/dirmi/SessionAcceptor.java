@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,17 +17,26 @@
 package dirmi;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
- * Remote method invocation session.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface SessionAcceptor extends Closeable {
     /**
-     * Returns the main remote server object, which may be null.
+     * Returns immediately and calls established method on listener
+     * asynchronously. Only one session is accepted per invocation of this
+     * method.
      *
-     * @return main remote server object, or null 
+     * @param server optional server object to export
+     * @param listener listener of session creation
      */
-    Object getRemoteServer();
+    void accept(Object server, SessionListener listener);
+
+    /**
+     * Closes the session acceptor, but does not close established sessions.
+     */
+    void close() throws IOException;
 }

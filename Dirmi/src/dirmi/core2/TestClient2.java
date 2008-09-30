@@ -20,34 +20,30 @@ import java.net.InetSocketAddress;
 
 import dirmi.Session;
 
-import dirmi.nio2.MessageChannel;
-import dirmi.nio2.MessageConnector;
-import dirmi.nio2.MultiplexedStreamBroker;
-import dirmi.nio2.SocketMessageProcessor;
-import dirmi.nio2.StreamBroker;
+import dirmi.nio2.*;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public class TestClient {
+public class TestClient2 {
     public static void main(String[] args) throws Exception {
         ThreadPool pool = new ThreadPool(100, true, "dirmi");
-        SocketMessageProcessor processor = new SocketMessageProcessor(pool);
-        MessageConnector connector = processor.newConnector
+        SocketStreamProcessor2 processor = new SocketStreamProcessor2(pool);
+        StreamConnector connector = processor.newConnector
             (new InetSocketAddress(args[0], Integer.parseInt(args[1])));
-        MessageChannel channel = connector.connect();
-        StreamBroker broker = new MultiplexedStreamBroker(channel);
+        StreamBroker broker = new StreamConnectorBroker(connector);
+
         Session session = new StandardSession(broker, null, pool);
-        System.out.println(session);
+        System.out.println("Connected: " + session);
 
         TestRemote server = (TestRemote) session.getRemoteServer();
-        System.out.println(server);
+        System.out.println("Remote server: " + server);
 
         while (true) {
             server.doIt(new org.joda.time.DateTime().toString());
-            //Thread.sleep(10);
+            Thread.sleep(1000);
         }
     }
 }

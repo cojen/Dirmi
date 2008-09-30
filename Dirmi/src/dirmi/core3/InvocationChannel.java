@@ -14,20 +14,21 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core3;
 
-import java.io.Closeable;
+import java.io.IOException;
+
+import dirmi.Pipe;
+
+import dirmi.io2.StreamChannel;
 
 /**
- * Remote method invocation session.
+ * Basic interface for a bidirectional method invocation I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
-    /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
-     */
-    Object getRemoteServer();
+public interface InvocationChannel extends StreamChannel, Pipe {
+    InvocationInputStream getInputStream() throws IOException;
+
+    InvocationOutputStream getOutputStream() throws IOException;
 }

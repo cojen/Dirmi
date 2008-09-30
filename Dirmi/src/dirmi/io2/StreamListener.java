@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,20 +14,25 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.io2;
 
-import java.io.Closeable;
+import java.io.IOException;
 
 /**
- * Remote method invocation session.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface StreamListener {
     /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
+     * Called at most once as soon as channel has been established. This
+     * method may safely block, and it can interact with the channel too.
      */
-    Object getRemoteServer();
+    void established(StreamChannel channel);
+
+    /**
+     * Called when channel cannot be established. This method may safely
+     * block.
+     */
+    void failed(IOException e);
 }

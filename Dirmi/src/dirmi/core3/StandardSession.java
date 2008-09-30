@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.core2;
+package dirmi.core3;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -57,10 +57,9 @@ import dirmi.Session;
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;
 
-import dirmi.nio2.StreamBroker;
-import dirmi.nio2.StreamChannel;
-import dirmi.nio2.StreamListener;
-import dirmi.nio2.StreamTask;
+import dirmi.io2.StreamBroker;
+import dirmi.io2.StreamChannel;
+import dirmi.io2.StreamListener;
 
 import dirmi.core.Identifier;
 
@@ -73,11 +72,11 @@ public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 1;
 
-    private static final int DEFAULT_HEARTBEAT_CHECK_MILLIS = 10000;
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
 
     final StreamBroker mBroker;
+    final ScheduledExecutorService mExecutor;
     final Log mLog;
 
     // Strong references to SkeletonFactories. SkeletonFactories are created as
@@ -119,11 +118,6 @@ public class StandardSession implements Session {
 
     final ScheduledFuture<?> mBackgroundTask;
 
-    volatile long mHeartbeatCheckNanos;
-
-    // Instant (in millis) for next expected heartbeat. If not received, session closes.
-    volatile long mNextExpectedHeartbeatMillis;
-
     volatile boolean mClosing;
 
     /**
@@ -159,6 +153,7 @@ public class StandardSession implements Session {
         }
 
         mBroker = broker;
+        mExecutor = executor;
         mLog = log;
 
         mSkeletonFactories = new ConcurrentHashMap<Identifier, SkeletonFactory>();
@@ -169,11 +164,6 @@ public class StandardSession implements Session {
         mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
 
         mChannelPool = new LinkedList<InvocationChan>();
-
-        mHeartbeatCheckNanos = TimeUnit.MILLISECONDS.toNanos((DEFAULT_HEARTBEAT_CHECK_MILLIS));
-
-        // Initialize next expected heartbeat.
-        heartbeatReceived();
 
         // Receives magic number and remote object.
         class Bootstrap implements StreamListener {
@@ -218,17 +208,20 @@ public class StandardSession implements Session {
                 } finally {
                     mDone = true;
                     notifyAll();
-                    try {
-                        channel.close();
-                    } catch (IOException e) {
-                        // Ignore.
+                    if (channel != null) {
+                        // FIXME: recycle
+                        try {
+                            channel.close();
+                        } catch (IOException e) {
+                            // Ignore.
+                        }
                     }
                 }
             }
 
             public synchronized void failed(IOException e) {
-                mIOException = e;
                 mDone = true;
+                mIOException = e;
                 notifyAll();
             }
 
@@ -255,7 +248,7 @@ public class StandardSession implements Session {
         };
 
         Bootstrap bootstrap = new Bootstrap();
-        broker.accept(bootstrap);
+        mBroker.accept(bootstrap);
 
         // Transmit bootstrap information.
         {
@@ -272,6 +265,7 @@ public class StandardSession implements Session {
                 out.writeObject(new AdminImpl());
                 out.flush();
             } finally {
+                // FIXME: recycle
                 channel.close();
             }
         }
@@ -283,7 +277,7 @@ public class StandardSession implements Session {
 
         try {
             // Start background task.
-            long delay = DEFAULT_HEARTBEAT_CHECK_MILLIS >> 1;
+            long delay = 5000; // FIXME: configurable?
             mBackgroundTask = executor.scheduleWithFixedDelay
                 (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
@@ -299,7 +293,7 @@ public class StandardSession implements Session {
         }
 
         // Begin accepting requests.
-        broker.accept(new Handler());
+        mBroker.accept(new Handler());
     }
 
     public void close() throws IOException {
@@ -378,26 +372,19 @@ public class StandardSession implements Session {
             return;
         }
 
-        boolean finished = false;
-        do {
+
+        while (true) {
             ArrayList<Identifier> disposedStubsList = new ArrayList<Identifier>();
             for (int i = 0; i < DISPOSE_BATCH; i++) {
                 Identifier id = mDisposedObjects.poll();
                 if (id == null) {
-                    finished = true;
-                    break;
+                    return;
                 }
                 disposedStubsList.add(id);
             }
 
-            Identifier[] disposedStubs;
-
-            if (disposedStubsList.size() == 0) {
-                disposedStubs = null;
-            } else {
-                disposedStubs = disposedStubsList
-                    .toArray(new Identifier[disposedStubsList.size()]);
-            }
+            Identifier[] disposedStubs = disposedStubsList
+                .toArray(new Identifier[disposedStubsList.size()]);
 
             try {
                 mRemoteAdmin.disposed(disposedStubs);
@@ -409,12 +396,7 @@ public class StandardSession implements Session {
                     error("Unable to dispose remote stubs", e);
                 }
             }
-        } while (!finished);
-    }
-
-    void heartbeatReceived() {
-        mNextExpectedHeartbeatMillis = System.currentTimeMillis() +
-            TimeUnit.NANOSECONDS.toMillis(mHeartbeatCheckNanos);
+        }
     }
 
     void handleRequest(InvocationChannel invChannel) {
@@ -547,12 +529,6 @@ public class StandardSession implements Session {
             RemoteInfo getRemoteInfo(Identifier id) throws RemoteException;
 
             /**
-             * Notification from client when it has disposed of an identified object.
-             */
-            @Asynchronous
-            void disposed(Identifier id) throws RemoteException;
-
-            /**
              * Notification from client when it has disposed of identified objects.
              */
             @Asynchronous
@@ -582,13 +558,7 @@ public class StandardSession implements Session {
             return RemoteIntrospector.examine(remoteType);
         }
 
-        public void disposed(Identifier id) {
-            heartbeatReceived();
-            dispose(id);
-        }
-
         public void disposed(Identifier[] ids) {
-            heartbeatReceived();
             if (ids != null) {
                 for (Identifier id : ids) {
                     dispose(id);
@@ -618,22 +588,7 @@ public class StandardSession implements Session {
         }
 
         public void run() {
-            long nowMillis = System.currentTimeMillis();
-            if (nowMillis > mNextExpectedHeartbeatMillis) {
-                // Didn't get a heartbeat from peer, so close session.
-                String message = "No heartbeat received; closing session";
-                if (mBroker.isOpen()) {
-                    mLog.error(message);
-                }
-                try {
-                    closeOnFailure(message, null);
-                } catch (IOException e) {
-                    // Ignore.
-                }
-                return;
-            }
-
-            // Send disposed ids to peer, which also serves as a heartbeat.
+            // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
             } catch (IOException e) {
@@ -674,35 +629,27 @@ public class StandardSession implements Session {
 
     private class Handler implements StreamListener {
         public void established(StreamChannel channel) {
-            mBroker.accept(this);
-
-            final InvocationChannel invChannel;
             try {
-                invChannel = new InvocationChan(channel);
+                mBroker.accept(this);
+                InvocationChannel invChannel = new InvocationChan(channel);
+                handleRequest(invChannel);
             } catch (IOException e) {
                 if (!mClosing) {
                     error("Failure reading request", e);
                 }
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
+                if (channel != null) {
+                    try {
+                        channel.close();
+                    } catch (IOException e2) {
+                        // Ignore.
+                    }
                 }
-                return;
             }
-
-            handleRequest(invChannel);
         }
 
         public void failed(IOException e) {
-            String message = "Failure accepting channel; closing session";
-            if (mBroker.isOpen()) {
-                mLog.error(message, e);
-            }
-            try {
-                closeOnFailure(message, e);
-            } catch (IOException e2) {
-                // Ignore.
+            if (!mClosing) {
+                error("Failure reading request", e);
             }
         }
     }
@@ -747,14 +694,6 @@ public class StandardSession implements Session {
 
         public InvocationOutputStream getOutputStream() throws IOException {
             return mInvOut;
-        }
-
-        public void executeWhenReadable(StreamTask task) throws IOException {
-            mChannel.executeWhenReadable(task);
-        }
-
-        public void execute(Runnable task) {
-            mChannel.execute(task);
         }
 
         public Object getLocalAddress() {
@@ -911,8 +850,8 @@ public class StandardSession implements Session {
     }
 
     private class SkeletonSupportImpl implements SkeletonSupport {
-        public void finished(final InvocationChannel channel, boolean flush) {
-            if (flush) {
+        public void finished(final InvocationChannel channel, boolean synchronous) {
+            if (synchronous) {
                 try {
                     channel.getOutputStream().flush();
                     channel.getOutputStream().reset();
@@ -928,26 +867,15 @@ public class StandardSession implements Session {
             }
 
             try {
-                channel.executeWhenReadable(new StreamTask() {
+                mExecutor.execute(new Runnable() {
                     public void run() {
                         handleRequest(channel);
                     }
-
-                    public void closed() {
-                        // Ignore.
-                    }
-
-                    public void closed(IOException e) {
-                        // Ignore.
-                    }
                 });
-            } catch (IOException e) {
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                error("Unable to enqueue for next request", e);
+            } catch (RejectedExecutionException e) {
+                // FIXME: This is incorrect behavior for asynchronous method
+                // and it creates a StackOverflowError potential.
+                handleRequest(channel);
             }
         }
     }

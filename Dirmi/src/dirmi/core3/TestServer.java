@@ -14,11 +14,16 @@
  *  limitations under the License.
  */
 
-package dirmi.core2;
+package dirmi.core3;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import dirmi.SessionServer;
+import dirmi.Session;
+import dirmi.SessionAcceptor;
+import dirmi.SessionListener;
+
+import dirmi.io2.*;
 
 /**
  * 
@@ -28,12 +33,25 @@ import dirmi.SessionServer;
 public class TestServer implements TestRemote {
     public static void main(String[] args) throws Exception {
         ThreadPool pool = new ThreadPool(100, false, "dirmi");
-        SessionServer ss = new StandardSessionServer
-            (new InetSocketAddress(Integer.parseInt(args[0])),
-             new TestServer(), pool);
 
-        //Thread.sleep(10000);
-        //ss.close();
+        StreamAcceptor acceptor = new SocketStreamAcceptor
+            (new InetSocketAddress(Integer.parseInt(args[0])), pool);
+
+        StreamBrokerAcceptor brokerAcceptor = new StreamBrokerAcceptor(acceptor, pool);
+
+        final SessionAcceptor sessionAcceptor = new StandardSessionAcceptor(brokerAcceptor, pool);
+        final TestServer exportedServer = new TestServer();
+
+        sessionAcceptor.accept(exportedServer, new SessionListener() {
+            public void established(Session session) {
+                System.out.println("Accepted: " + session);
+                sessionAcceptor.accept(exportedServer, this);
+            }
+
+            public void failed(IOException e) {
+                e.printStackTrace(System.out);
+            }
+        });
     }
 
     public void doIt(String message) {

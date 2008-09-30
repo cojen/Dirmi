@@ -176,7 +176,7 @@ public class ClientDriver implements Driver {
                     mSessions.remove(key);
                     try {
                         session.close();
-                    } catch (RemoteException e) {
+                    } catch (IOException e) {
                         // Don't care.
                     }
                 } else {

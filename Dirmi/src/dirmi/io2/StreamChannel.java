@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,20 +14,31 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.io2;
 
-import java.io.Closeable;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
+import java.nio.channels.Channel;
 
 /**
- * Remote method invocation session.
+ * Basic interface for a blocking bidirectional I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface StreamChannel extends Channel {
+    InputStream getInputStream() throws IOException;
+
+    OutputStream getOutputStream() throws IOException;
+
     /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
+     * @return local address or null if unknown
      */
-    Object getRemoteServer();
+    Object getLocalAddress();
+
+    /**
+     * @return remote address or null if unknown
+     */
+    Object getRemoteAddress();
 }

@@ -14,20 +14,22 @@
  *  limitations under the License.
  */
 
-package dirmi;
+package dirmi.core3;
 
-import java.io.Closeable;
+import java.rmi.Remote;
+
+import dirmi.info.RemoteInfo;
 
 /**
- * Remote method invocation session.
+ * Produces new {@link Skeleton} instances for server-side Remote objects.
  *
  * @author Brian S O'Neill
+ * @see SkeletonFactoryGenerator
  */
-public interface Session extends Closeable {
+public interface SkeletonFactory<R extends Remote> {
     /**
-     * Returns the main remote server object, which may be null.
-     *
-     * @return main remote server object, or null 
+     * @param support for reusing channels
+     * @param remoteServer server implementation of Remote object
      */
-    Object getRemoteServer();
+    Skeleton createSkeleton(SkeletonSupport support, R remoteServer);
 }

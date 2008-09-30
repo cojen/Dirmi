@@ -112,7 +112,7 @@ public class StandardSessionServer implements SessionServer {
             for (Session session : mSessions) {
                 try {
                     session.close();
-                } catch (RemoteException e) {
+                } catch (IOException e) {
                     warn("Failed to close session: " + session, e);
                 }
             }

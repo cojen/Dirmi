@@ -16,38 +16,38 @@
 
 package dirmi.core2;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import dirmi.Session;
+import dirmi.SessionServer2;
 
-import dirmi.nio2.MessageChannel;
-import dirmi.nio2.MessageConnector;
-import dirmi.nio2.MultiplexedStreamBroker;
-import dirmi.nio2.SocketMessageProcessor;
-import dirmi.nio2.StreamBroker;
+import dirmi.nio2.*;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public class TestClient {
+public class TestServer2 implements TestRemote {
     public static void main(String[] args) throws Exception {
         ThreadPool pool = new ThreadPool(100, true, "dirmi");
-        SocketMessageProcessor processor = new SocketMessageProcessor(pool);
-        MessageConnector connector = processor.newConnector
-            (new InetSocketAddress(args[0], Integer.parseInt(args[1])));
-        MessageChannel channel = connector.connect();
-        StreamBroker broker = new MultiplexedStreamBroker(channel);
-        Session session = new StandardSession(broker, null, pool);
-        System.out.println(session);
+        final SocketStreamProcessor2 processor = new SocketStreamProcessor2(pool);
+        final StreamAcceptor acceptor = processor.newAcceptor
+            (new InetSocketAddress(Integer.parseInt(args[0])));
 
-        TestRemote server = (TestRemote) session.getRemoteServer();
-        System.out.println(server);
+        StreamBrokerAcceptor brokerAcceptor = new StreamBrokerAcceptor(acceptor);
+
+        SessionServer2 server = new StandardSessionServer2
+            (brokerAcceptor, new TestServer2(), pool);
 
         while (true) {
-            server.doIt(new org.joda.time.DateTime().toString());
-            //Thread.sleep(10);
+            Session session = server.accept();
+            System.out.println("Accepted: " + session);
         }
+    }
+
+    public void doIt(String message) {
+        System.out.println("hello: " + message);
     }
 }
