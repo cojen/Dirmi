@@ -38,7 +38,7 @@ public class TestClient {
         MessageChannel channel = processor.newConnector(endpoint).connect();
         StreamConnector connector = new SocketStreamConnector(endpoint);
         
-        StreamBroker broker = new StreamConnectorBroker(channel, connector);
+        StreamBroker broker = new StreamConnectorBroker(channel, connector, pool);
 
         Session session = new StandardSession(broker, null, pool);
         System.out.println("Connected: " + session);

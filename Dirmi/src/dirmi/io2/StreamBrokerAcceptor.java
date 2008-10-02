@@ -31,6 +31,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.util.IntHashMap;
+import org.cojen.util.WeakIdentityMap;
 
 /**
  * Paired with {@link StreamConnectorBroker} to adapt an acceptor into a broker
@@ -179,6 +180,12 @@ public class StreamBrokerAcceptor implements Closeable {
         }
     }
 
+    void closed(Broker broker) {
+        synchronized (mBrokerMap) {
+            mBrokerMap.remove(broker.mId);
+        }
+    }
+
     private class Broker implements StreamBroker {
         final StreamChannel mControlChannel;
         final DataOutputStream mControlOut;
@@ -187,10 +194,15 @@ public class StreamBrokerAcceptor implements Closeable {
 
         final ScheduledExecutorService mExecutor;
 
+        final WeakIdentityMap<StreamChannel, Object> mChannels;
+
         final LinkedBlockingQueue<StreamChannel> mConnectQueue;
         final LinkedBlockingQueue<StreamListener> mListenerQueue;
 
+        final ScheduledFuture<?> mPingCheckTask;
         final ScheduledFuture<?> mPingTask;
+
+        volatile boolean mPinged;
 
         /**
          * @param controlChannel accepted channel
@@ -205,6 +217,8 @@ public class StreamBrokerAcceptor implements Closeable {
             mId = id;
 
             mExecutor = executor;
+
+            mChannels = new WeakIdentityMap<StreamChannel, Object>();
 
             mConnectQueue = new LinkedBlockingQueue<StreamChannel>();
             mListenerQueue = new LinkedBlockingQueue<StreamListener>();
@@ -221,15 +235,19 @@ public class StreamBrokerAcceptor implements Closeable {
             }
 
             try {
+                // Start ping check task.
+                long checkRate = DEFAULT_PING_CHECK_MILLIS;
+                PingCheckTask checkTask = new PingCheckTask(this);
+                mPingCheckTask = executor.scheduleAtFixedRate
+                    (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
+                checkTask.setFuture(mPingCheckTask);
+
                 // Start ping task.
-                long delay = DEFAULT_PING_CHECK_MILLIS >> 1;
+                long delay = checkRate >> 1;
+                PingTask task = new PingTask(this);
                 mPingTask = executor.scheduleWithFixedDelay
-                    (new Runnable() {
-                         public void run() {
-                             doPing();
-                         }
-                     },
-                     delay, delay, TimeUnit.MILLISECONDS);
+                    (task, delay, delay, TimeUnit.MILLISECONDS);
+                task.setFuture(mPingTask);
             } catch (RejectedExecutionException e) {
                 try {
                     close();
@@ -258,21 +276,50 @@ public class StreamBrokerAcceptor implements Closeable {
                 return mConnectQueue.take();
             } catch (InterruptedException e) {
                 // FIXME: The queue might get a connection later. Perhaps this
-                // broker should be closed?
+                // broker should be closed? Keep a counter of connect requests?
                 throw new InterruptedIOException();
             }
         }
 
         public void close() throws IOException {
+            closed(this);
+
+            try {
+                mPingCheckTask.cancel(true);
+            } catch (NullPointerException e) {
+                // mPingCheckTask might not have been assigned.
+            }
             try {
                 mPingTask.cancel(true);
             } catch (NullPointerException e) {
                 // mPingTask might not have been assigned.
             }
 
-            mControlChannel.close();
+            IOException exception = null;
 
-            // FIXME: close all channels
+            try {
+                mControlChannel.close();
+            } catch (IOException e) {
+                exception = e;
+            }
+
+            synchronized (mChannels) {
+                for (StreamChannel channel : mChannels.keySet()) {
+                    try {
+                        channel.close();
+                    } catch (IOException e) {
+                        if (exception == null) {
+                            exception = e;
+                        }
+                    }
+                }
+
+                mChannels.clear();
+            }
+
+            if (exception != null) {
+                throw exception;
+            }
         }
 
         public boolean isOpen() {
@@ -285,10 +332,13 @@ public class StreamBrokerAcceptor implements Closeable {
         }
 
         void connected(StreamChannel channel) {
+            register(channel);
             mConnectQueue.add(channel);
         }
 
         void accepted(StreamChannel channel) {
+            register(channel);
+
             try {
                 StreamListener listener = mListenerQueue.poll(10, TimeUnit.SECONDS);
                 if (listener != null) {
@@ -298,6 +348,8 @@ public class StreamBrokerAcceptor implements Closeable {
             } catch (InterruptedException e) {
             }
 
+            unregister(channel);
+
             try {
                 channel.close();
             } catch (IOException e) {
@@ -305,20 +357,33 @@ public class StreamBrokerAcceptor implements Closeable {
             }
         }
 
+        private void register(StreamChannel channel) {
+            synchronized (mChannels) {
+                mChannels.put(channel, "");
+            }
+        }
+
+        private void unregister(StreamChannel channel) {
+            synchronized (mChannels) {
+                mChannels.remove(channel);
+            }
+        }
+
+        void doPingCheck() {
+            if (!mPinged) {
+                // FIXME: give a reason
+                try {
+                    close();
+                } catch (IOException e) {
+                    // Ignore.
+                }
+            } else {
+                mPinged = false;
+            }
+        }
+
         void doPing() {
             try {
-                long delay = DEFAULT_PING_CHECK_MILLIS;
-                ScheduledFuture<?> closer = mExecutor.schedule(new Runnable() {
-                    public void run() {
-                        // FIXME: give a reason
-                        try {
-                            close();
-                        } catch (IOException e) {
-                            // Ignore.
-                        }
-                    }
-                }, delay, TimeUnit.MILLISECONDS);
-
                 DataOutputStream out = mControlOut;
                 synchronized (out) {
                     out.writeShort(0); // length of message minus one
@@ -328,6 +393,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
                 DataInputStream in = mControlIn;
                 synchronized (in) {
+                    // Read pong response.
                     int length = in.readUnsignedShort() + 1;
                     while (length > 0) {
                         int amt = (int) in.skip(length);
@@ -338,7 +404,7 @@ public class StreamBrokerAcceptor implements Closeable {
                     }
                 }
 
-                closer.cancel(false);
+                mPinged = true;
             } catch (IOException e) {
                 // FIXME
                 try {
@@ -347,6 +413,32 @@ public class StreamBrokerAcceptor implements Closeable {
                     // Ignore.
                 }
                 e.printStackTrace(System.out);
+            }
+        }
+    }
+
+    private static class PingCheckTask extends AbstractPingTask<Broker> {
+        PingCheckTask(Broker broker) {
+            super(broker);
+        }
+
+        public void run() {
+            Broker broker = broker();
+            if (broker != null) {
+                broker.doPingCheck();
+            }
+        }
+    }
+
+    private static class PingTask extends AbstractPingTask<Broker> {
+        PingTask(Broker broker) {
+            super(broker);
+        }
+
+        public void run() {
+            Broker broker = broker();
+            if (broker != null) {
+                broker.doPing();
             }
         }
     }

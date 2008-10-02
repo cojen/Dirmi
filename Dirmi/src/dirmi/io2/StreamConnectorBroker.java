@@ -25,6 +25,9 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +37,8 @@ import java.util.concurrent.TimeUnit;
  * @author Brian S O'Neill
  */
 public class StreamConnectorBroker implements StreamBroker {
+    static final int DEFAULT_PING_CHECK_MILLIS = 10000;
+
     static final byte OP_OPEN = 1;
     static final byte OP_OPENED = 2;
     static final byte OP_CONNECT = 3;
@@ -47,7 +52,12 @@ public class StreamConnectorBroker implements StreamBroker {
 
     final LinkedBlockingQueue<StreamListener> mListenerQueue;
 
-    public StreamConnectorBroker(final MessageChannel controlChannel, StreamConnector connector)
+    final ScheduledFuture<?> mPingCheckTask;
+
+    volatile boolean mPinged;
+
+    public StreamConnectorBroker(final MessageChannel controlChannel, StreamConnector connector,
+                                 ScheduledExecutorService executor)
         throws IOException
     {
         mControlChannel = controlChannel;
@@ -56,6 +66,24 @@ public class StreamConnectorBroker implements StreamBroker {
         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_OPEN}));
 
         mListenerQueue = new LinkedBlockingQueue<StreamListener>();
+
+        try {
+            // Start ping check task.
+            long checkRate = DEFAULT_PING_CHECK_MILLIS;
+            PingCheckTask checkTask = new PingCheckTask(this);
+            mPingCheckTask = executor.scheduleAtFixedRate
+                (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
+            checkTask.setFuture(mPingCheckTask);
+        } catch (RejectedExecutionException e) {
+            try {
+                close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            IOException io = new IOException("Unable to start ping task");
+            io.initCause(e);
+            throw io;
+        }
 
         class ControlReceiver implements MessageReceiver {
             private byte[] mMessage;
@@ -120,7 +148,7 @@ public class StreamConnectorBroker implements StreamBroker {
                     break;
 
                 case OP_PING:
-                    // FIXME: cancel close task
+                    mPinged = true;
                     try {
                         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_PONG}));
                     } catch (IOException e) {
@@ -190,7 +218,15 @@ public class StreamConnectorBroker implements StreamBroker {
     }
 
     public void close() throws IOException {
+        try {
+            mPingCheckTask.cancel(true);
+        } catch (NullPointerException e) {
+            // mPingCheckTask might not have been assigned.
+        }
+
         mControlChannel.close();
+
+        // FIXME: close all channels
     }
 
     public boolean isOpen() {
@@ -207,6 +243,32 @@ public class StreamConnectorBroker implements StreamBroker {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             return null;
+        }
+    }
+
+    void doPingCheck() {
+        if (!mPinged) {
+            // FIXME: give a reason
+            try {
+                close();
+            } catch (IOException e) {
+                // Ignore.
+            }
+        } else {
+            mPinged = false;
+        }
+    }
+
+    private static class PingCheckTask extends AbstractPingTask<StreamConnectorBroker> {
+        PingCheckTask(StreamConnectorBroker broker) {
+            super(broker);
+        }
+
+        public void run() {
+            StreamConnectorBroker broker = broker();
+            if (broker != null) {
+                broker.doPingCheck();
+            }
         }
     }
 }

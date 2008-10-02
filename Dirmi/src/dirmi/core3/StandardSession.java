@@ -615,6 +615,9 @@ public class StandardSession implements Session {
         }
 
         public void run() {
+            // FIXME: not cleaned up
+            System.out.println("session task for: " + StandardSession.this);
+
             // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
