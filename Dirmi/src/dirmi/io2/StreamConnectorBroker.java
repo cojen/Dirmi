@@ -197,6 +197,11 @@ public class StreamConnectorBroker implements StreamBroker {
         return mControlChannel.isOpen();
     }
 
+    @Override
+    public String toString() {
+        return "StreamConnectorBroker{channel=" + mControlChannel + '}';
+    }
+
     StreamListener pollListener() {
         try {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);

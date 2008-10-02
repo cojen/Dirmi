@@ -54,6 +54,6 @@ public class SocketStreamConnector implements StreamConnector {
 
     @Override
     public String toString() {
-        return "StreamConnector {endpoint=" + mEndpoint + ", bindpoint=" + mBindpoint + '}';
+        return "StreamConnector{endpoint=" + mEndpoint + ", bindpoint=" + mBindpoint + '}';
     }
 }

@@ -109,7 +109,7 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageConnector {endpoint=" + endpoint + ", bindpoint=" + bindpoint + '}';
+                return "MessageConnector{endpoint=" + endpoint + ", bindpoint=" + bindpoint + '}';
             }
         };
     }
@@ -168,7 +168,7 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageAcceptor {bindpoint=" + bindpoint + '}';
+                return "MessageAcceptor{bindpoint=" + bindpoint + '}';
             }
         };
     }
@@ -433,7 +433,7 @@ public class SocketMessageProcessor implements Closeable {
 
         @Override
         public String toString() {
-            return "MessageChannel {localAddress=" + getLocalAddress() +
+            return "MessageChannel{localAddress=" + getLocalAddress() +
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 

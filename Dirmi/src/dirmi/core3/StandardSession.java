@@ -380,11 +380,15 @@ public class StandardSession implements Session {
         return mRemoteServer;
     }
 
+    @Override
+    public String toString() {
+        return "Session{broker=" + mBroker + '}';
+    }
+
     void sendDisposedStubs() throws IOException {
         if (mRemoteAdmin == null) {
             return;
         }
-
 
         while (true) {
             ArrayList<Identifier> disposedStubsList = new ArrayList<Identifier>();

@@ -279,6 +279,11 @@ public class StreamBrokerAcceptor implements Closeable {
             return mControlChannel.isOpen();
         }
 
+        @Override
+        public String toString() {
+            return "StreamBrokerAcceptor.Broker{channel=" + mControlChannel + '}';
+        }
+
         void connected(StreamChannel channel) {
             mConnectQueue.add(channel);
         }

@@ -95,7 +95,7 @@ public class SocketStreamAcceptor implements StreamAcceptor {
 
     @Override
     public String toString() {
-        return "StreamAcceptor {bindpoint=" + mBindpoint + '}';
+        return "StreamAcceptor{bindpoint=" + mBindpoint + '}';
     }
 
     StreamListener pollListener() {

@@ -56,7 +56,7 @@ public class SocketChannel implements StreamChannel {
 
     @Override
     public String toString() {
-        return "StreamChannel {localAddress=" + getLocalAddress() +
+        return "StreamChannel{localAddress=" + getLocalAddress() +
             ", remoteAddress=" + getRemoteAddress() + '}';
     }
 

@@ -26,7 +26,7 @@ import java.io.IOException;
 public interface SessionListener {
     /**
      * Called at most once as soon as session has been established. This
-     * method may safely block, and it can interact with the channel too.
+     * method may safely block, and it can interact with the session too.
      */
     void established(Session session);
 
