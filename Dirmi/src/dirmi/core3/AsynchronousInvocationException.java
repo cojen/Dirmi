@@ -27,7 +27,17 @@ package dirmi.core3;
 public class AsynchronousInvocationException extends Exception {
     private static final long serialVersionUID = 1;
 
-    public AsynchronousInvocationException(Throwable cause) {
+    private final boolean mRequestPending;
+
+    /**
+     * @param requestPending true if caller should read another request from channel
+     */
+    public AsynchronousInvocationException(Throwable cause, boolean requestPending) {
         super(cause);
+        mRequestPending = requestPending;
+    }
+
+    public boolean isRequestPending() {
+        return mRequestPending;
     }
 }

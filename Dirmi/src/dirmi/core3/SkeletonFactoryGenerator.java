@@ -165,7 +165,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         }
 
         // Add the all-important invoke method
-        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", null,
+        MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
                                      new TypeDesc[] {invChannelType});
         CodeBuilder b = new CodeBuilder(mi);
 
@@ -213,6 +213,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 i++;
             }
         }
+
+        LocalVariable pendingRequestVar = b.createLocalVariable(null, TypeDesc.BOOLEAN);
+        b.loadConstant(false);
+        b.storeLocal(pendingRequestVar);
 
         // Each case operates on the remote server first, so put it on the stack early.
         b.loadThis();
@@ -288,8 +292,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadField(SUPPORT_FIELD_NAME, supportType);
                     b.loadLocal(channelVar);
                     b.loadConstant(false);
-                    b.invokeInterface(supportType, "finished", null,
+                    b.invokeInterface(supportType, "finished", TypeDesc.BOOLEAN,
                                       new TypeDesc[] {invChannelType, TypeDesc.BOOLEAN});
+                    b.storeLocal(pendingRequestVar);
                 }
 
                 TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
@@ -344,11 +349,13 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadField(SUPPORT_FIELD_NAME, supportType);
                     b.loadLocal(channelVar);
                     b.loadConstant(true);
-                    b.invokeInterface(supportType, "finished", null,
+                    b.invokeInterface(supportType, "finished", TypeDesc.BOOLEAN,
                                       new TypeDesc[] {invChannelType, TypeDesc.BOOLEAN});
+                    b.storeLocal(pendingRequestVar);
                 }
 
-                b.returnVoid();
+                b.loadLocal(pendingRequestVar);
+                b.returnValue(TypeDesc.BOOLEAN);
 
                 ordinal++;
 
@@ -393,7 +400,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.newObject(asyncExType);
             b.dup();
             b.loadLocal(throwableVar);
-            b.invokeConstructor(asyncExType, new TypeDesc[] {throwableType});
+            b.loadLocal(pendingRequestVar);
+            b.invokeConstructor(asyncExType, new TypeDesc[] {throwableType, TypeDesc.BOOLEAN});
             b.throwObject();
         }
 
@@ -423,10 +431,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadField(SUPPORT_FIELD_NAME, supportType);
             b.loadLocal(channelVar);
             b.loadConstant(true);
-            b.invokeInterface(supportType, "finished", null,
+            b.invokeInterface(supportType, "finished", TypeDesc.BOOLEAN,
                               new TypeDesc[] {invChannelType, TypeDesc.BOOLEAN});
-
-            b.returnVoid();
+            b.returnValue(TypeDesc.BOOLEAN);
         }
 
         return ci.defineClass(cf);
@@ -464,7 +471,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
             return new Skeleton() {
-                public void invoke(InvocationChannel channel)
+                public boolean invoke(InvocationChannel channel)
                     throws IOException, NoSuchMethodException
                 {
                     Identifier id = Identifier.read((DataInput) channel.getInputStream());

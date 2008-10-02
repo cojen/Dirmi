@@ -28,6 +28,7 @@ public interface SkeletonSupport {
      * new requests. This method should not throw any exception.
      *
      * @param synchronous pass true for synchronous method
+     * @return true if caller should read another request from channel
      */
-    void finished(InvocationChannel channel, boolean synchronous);
+    boolean finished(InvocationChannel channel, boolean synchronous);
 }

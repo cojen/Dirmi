@@ -174,49 +174,58 @@ public class StandardSession implements Session {
             Object mRemoteServer;
             Hidden.Admin mRemoteAdmin;
 
-            public synchronized void established(StreamChannel channel) {
-                try {
-                    InvocationInputStream in = new InvocationInputStream
-                        (new ResolvingObjectInputStream(channel.getInputStream()),
-                         channel.getLocalAddress(),
-                         channel.getRemoteAddress());
-
-                    int magic = in.readInt();
-                    if (magic != MAGIC_NUMBER) {
-                        throw new IOException("Incorrect magic number: " + magic);
-                    }
-
-                    int version = in.readInt();
-                    if (version != PROTOCOL_VERSION) {
-                        throw new IOException("Unsupported protocol version: " + version);
-                    }
-
+            public void established(StreamChannel channel) {
+                InvocationChan chan;
+                doBoot: synchronized (this) {
                     try {
-                        mRemoteServer = in.readObject();
-                        mRemoteAdmin = (Hidden.Admin) in.readObject();
-                    } catch (ClassNotFoundException e) {
-                        IOException io = new IOException();
-                        io.initCause(e);
-                        throw io;
+                        chan = new InvocationChan(channel);
+                        InvocationInputStream in = chan.getInputStream();
+
+                        int magic = in.readInt();
+                        if (magic != MAGIC_NUMBER) {
+                            throw new IOException("Incorrect magic number: " + magic);
+                        }
+
+                        int version = in.readInt();
+                        if (version != PROTOCOL_VERSION) {
+                            throw new IOException("Unsupported protocol version: " + version);
+                        }
+
+                        try {
+                            mRemoteServer = in.readObject();
+                            mRemoteAdmin = (Hidden.Admin) in.readObject();
+                        } catch (ClassNotFoundException e) {
+                            IOException io = new IOException();
+                            io.initCause(e);
+                            throw io;
+                        }
+
+                        // Reached only upon successful bootstrap.
+                        break doBoot;
+                    } catch (IOException e) {
+                        mIOException = e;
+                    } catch (RuntimeException e) {
+                        mRuntimeException = e;
+                    } catch (Error e) {
+                        mError = e;
+                    } finally {
+                        mDone = true;
+                        notifyAll();
                     }
-                } catch (IOException e) {
-                    mIOException = e;
-                } catch (RuntimeException e) {
-                    mRuntimeException = e;
-                } catch (Error e) {
-                    mError = e;
-                } finally {
-                    mDone = true;
-                    notifyAll();
+
                     if (channel != null) {
-                        // FIXME: recycle
                         try {
                             channel.close();
                         } catch (IOException e) {
                             // Ignore.
                         }
                     }
+
+                    return;
                 }
+
+                // Reuse initial connection for handling incoming requests.
+                handleRequest(chan);
             }
 
             public synchronized void failed(IOException e) {
@@ -254,19 +263,23 @@ public class StandardSession implements Session {
         {
             StreamChannel channel = broker.connect();
             try {
-                InvocationOutputStream out = new InvocationOutputStream
-                    (new ReplacingObjectOutputStream(channel.getOutputStream()),
-                     channel.getLocalAddress(),
-                     channel.getRemoteAddress());
+                InvocationChan chan = new InvocationChan(channel);
+                InvocationOutputStream out = chan.getOutputStream();
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
                 out.writeObject(server);
                 out.writeObject(new AdminImpl());
                 out.flush();
-            } finally {
-                // FIXME: recycle
-                channel.close();
+
+                chan.recycle();
+            } catch (IOException e) {
+                try {
+                    channel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                throw e;
             }
         }
 
@@ -400,71 +413,81 @@ public class StandardSession implements Session {
     }
 
     void handleRequest(InvocationChannel invChannel) {
-        final Identifier id;
-        try {
-            id = Identifier.read((DataInput) invChannel.getInputStream());
-        } catch (IOException e) {
+        while (true) {
+            final Identifier id;
             try {
-                invChannel.close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
-            return;
-        }
-
-        // Find a Skeleton to invoke.
-        Skeleton skeleton = mSkeletons.get(id);
-
-        if (skeleton == null) {
-            Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
-            try {
-                invChannel.getOutputStream().writeThrowable(t);
-                invChannel.close();
+                id = Identifier.read((DataInput) invChannel.getInputStream());
             } catch (IOException e) {
-                error("Failure processing request. " +
-                      "Server cannot find remote object and " +
-                      "cannot send error to client. Object id: " + id, e);
-            }
-            return;
-        }
-
-        try {
-            Throwable throwable;
-
-            try {
                 try {
-                    skeleton.invoke(invChannel);
-                } catch (AsynchronousInvocationException e) {
-                    throwable = null;
-                    Throwable cause = e.getCause();
-                    if (cause == null) {
-                        cause = e;
-                    }
-                    warn("Unhandled exception in asynchronous server method", cause);
+                    invChannel.close();
+                } catch (IOException e2) {
+                    // Ignore.
                 }
                 return;
-            } catch (NoSuchMethodException e) {
-                throwable = e;
-            } catch (NoSuchObjectException e) {
-                throwable = e;
-            } catch (ClassNotFoundException e) {
-                throwable = e;
-            } catch (NotSerializableException e) {
-                throwable = e;
             }
 
-            InvocationOutputStream out = invChannel.getOutputStream();
-            out.writeThrowable(throwable);
-            invChannel.close();
-        } catch (IOException e) {
-            if (!mClosing) {
-                error("Failure processing request", e);
+            // Find a Skeleton to invoke.
+            Skeleton skeleton = mSkeletons.get(id);
+
+            if (skeleton == null) {
+                Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
+                try {
+                    invChannel.getOutputStream().writeThrowable(t);
+                    invChannel.close();
+                } catch (IOException e) {
+                    error("Failure processing request. " +
+                          "Server cannot find remote object and " +
+                          "cannot send error to client. Object id: " + id, e);
+                }
+                return;
             }
+
             try {
+                Throwable throwable;
+
+                try {
+                    try {
+                        if (skeleton.invoke(invChannel)) {
+                            // Handle another request.
+                            continue;
+                        }
+                    } catch (AsynchronousInvocationException e) {
+                        throwable = null;
+                        Throwable cause = e.getCause();
+                        if (cause == null) {
+                            cause = e;
+                        }
+                        warn("Unhandled exception in asynchronous server method", cause);
+                        if (e.isRequestPending()) {
+                            continue;
+                        }
+                    }
+                    return;
+                } catch (NoSuchMethodException e) {
+                    throwable = e;
+                } catch (NoSuchObjectException e) {
+                    throwable = e;
+                } catch (ClassNotFoundException e) {
+                    throwable = e;
+                } catch (NotSerializableException e) {
+                    throwable = e;
+                }
+
+                InvocationOutputStream out = invChannel.getOutputStream();
+                out.writeThrowable(throwable);
                 invChannel.close();
-            } catch (IOException e2) {
-                // Ignore.
+            } catch (IOException e) {
+                if (!mClosing) {
+                    error("Failure processing request", e);
+                }
+                try {
+                    invChannel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
             }
+
+            return;
         }
     }
 
@@ -850,11 +873,12 @@ public class StandardSession implements Session {
     }
 
     private class SkeletonSupportImpl implements SkeletonSupport {
-        public void finished(final InvocationChannel channel, boolean synchronous) {
+        public boolean finished(final InvocationChannel channel, boolean synchronous) {
             if (synchronous) {
                 try {
                     channel.getOutputStream().flush();
                     channel.getOutputStream().reset();
+                    return true;
                 } catch (IOException e) {
                     try {
                         channel.close();
@@ -862,20 +886,21 @@ public class StandardSession implements Session {
                         // Ignore.
                     }
                     error("Unable to flush response", e);
-                    return;
+                    return false;
                 }
-            }
-
-            try {
-                mExecutor.execute(new Runnable() {
-                    public void run() {
-                        handleRequest(channel);
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                // FIXME: This is incorrect behavior for asynchronous method
-                // and it creates a StackOverflowError potential.
-                handleRequest(channel);
+            } else {
+                try {
+                    // Let another thread process next request while this
+                    // thread continues to process active request.
+                    mExecutor.execute(new Runnable() {
+                        public void run() {
+                            handleRequest(channel);
+                        }
+                    });
+                    return false;
+                } catch (RejectedExecutionException e) {
+                    return true;
+                }
             }
         }
     }

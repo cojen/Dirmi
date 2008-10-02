@@ -38,6 +38,7 @@ public interface Skeleton {
      *
      * @param channel InvocationChannel for reading method identifier and arguments,
      * and for writing response.
+     * @return true if caller should read another request from channel
      * @throws IOException if thrown from channel
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
@@ -46,7 +47,7 @@ public interface Skeleton {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    void invoke(InvocationChannel channel)
+    boolean invoke(InvocationChannel channel)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,
