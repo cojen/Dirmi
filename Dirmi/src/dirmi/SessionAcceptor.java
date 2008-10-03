@@ -16,27 +16,33 @@
 
 package dirmi;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * 
+ * Callback invoked by {@link Environment} as sessions are accepted.
  *
  * @author Brian S O'Neill
  */
-public interface SessionAcceptor extends Closeable {
+public interface SessionAcceptor {
     /**
-     * Returns immediately and calls established method on listener
-     * asynchronously. Only one session is accepted per invocation of this
-     * method.
+     * Called by multiple threads as a session is being
+     * established. Implementation should return a Remote or Serializable
+     * object which is exported to remote endpoint. The object returned by this
+     * method is available as the session's local server.
      *
-     * @param server optional server object to export
-     * @param listener listener of session creation
+     * @return primary local server object
      */
-    void accept(Object server, SessionListener listener);
+    Object createServer();
 
     /**
-     * Closes the session acceptor, but does not close established sessions.
+     * Called by multiple threads as session are established. This method may
+     * safely block, and it can interact with the session too.
      */
-    void close() throws IOException;
+    void established(Session session);
+
+    /**
+     * Called by multiple threads as sessions cannot be established. This
+     * method may safely block.
+     */
+    void failed(IOException e);
 }

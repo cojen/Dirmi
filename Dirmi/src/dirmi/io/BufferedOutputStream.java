@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,43 +24,29 @@ import java.io.OutputStream;
  * of buffer packing. The intent is to reduce the amount of packets sent over a
  * network.
  *
- * <p>An additional feature is the ability to efficiently transfer bytes from
- * an InputStream to the buffer, without requiring an intermediate buffer.
- *
  * @author Brian S O'Neill
  */
 public class BufferedOutputStream extends AbstractBufferedOutputStream {
     private final OutputStream mOut;
-    
-    public BufferedOutputStream(OutputStream out) {
-        super();
-        mOut = out;
-    }
 
-    public BufferedOutputStream(OutputStream out, int size) {
-        super(size);
+    BufferedOutputStream(OutputStream out) {
         mOut = out;
     }
 
     @Override
     public synchronized void flush() throws IOException {
-        super.drain();
+        super.flush();
         mOut.flush();
     }
 
     @Override
     public synchronized void close() throws IOException {
-        super.drain();
+        super.flush();
         mOut.close();
     }
 
     @Override
-    protected void doWrite(byte[] buffer, int offset, int length, boolean flush)
-        throws IOException
-    {
+    protected void doWrite(byte[] buffer, int offset, int length) throws IOException {
         mOut.write(buffer, offset, length);
-        if (flush) {
-            mOut.flush();
-        }
     }
 }

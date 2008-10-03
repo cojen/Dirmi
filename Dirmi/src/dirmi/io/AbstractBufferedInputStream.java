@@ -18,10 +18,10 @@ package dirmi.io;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 /**
- * 
+ * Abstract replacement for {@link java.io.BufferedInputStream} which does not
+ * have the block forever on read bug. Marking is not supported.
  *
  * @author Brian S O'Neill
  */
@@ -109,45 +109,6 @@ public abstract class AbstractBufferedInputStream extends InputStream {
 
     public synchronized int available() throws IOException {
         return mEnd - mStart;
-    }
-
-    /**
-     * @return actual amount read; is negative if EOF reached.
-     */
-    public int readFully(byte[] b) throws IOException {
-        return readFully(b, 0, b.length);
-    }
-
-    /**
-     * @return actual amount read; is negative if EOF reached.
-     */
-    public synchronized int readFully(byte[] b, int off, int len) throws IOException {
-        if (len < 0) {
-            throw new IndexOutOfBoundsException();
-        }
-        int total = 0;
-        while (len > 0) {
-            int amt = read(b, off, len);
-            if (amt <= 0) {
-                return ~total;
-            } else {
-                off += amt;
-                len -= amt;
-                total += amt;
-            }
-        }
-        return total;
-    }
-
-    public void mark(int readlimit) {
-    }
-
-    public void reset() throws IOException {
-        throw new IOException("unsupported");
-    }
-
-    public boolean markSupported() {
-        return false;
     }
 
     protected abstract int doRead(byte[] buffer, int offset, int length) throws IOException;

@@ -16,20 +16,19 @@
 
 package dirmi.core;
 
-import java.rmi.Remote;
+import java.io.IOException;
 
-import dirmi.info.RemoteInfo;
+import dirmi.Pipe;
+
+import dirmi.io.StreamChannel;
 
 /**
- * Produces new {@link Skeleton} instances for server-side Remote objects.
+ * Basic interface for a bidirectional method invocation I/O channel.
  *
  * @author Brian S O'Neill
- * @see SkeletonFactoryGenerator
  */
-public interface SkeletonFactory<R extends Remote> {
-    /**
-     * @param support for reusing channels
-     * @param remoteServer server implementation of Remote object
-     */
-    Skeleton createSkeleton(SkeletonSupport support, R remoteServer);
+public interface InvocationChannel extends StreamChannel, Pipe {
+    InvocationInputStream getInputStream() throws IOException;
+
+    InvocationOutputStream getOutputStream() throws IOException;
 }

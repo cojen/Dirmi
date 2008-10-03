@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package dirmi.io;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 
 /**
  * Replacement for {@link java.io.BufferedInputStream} which does not have the
@@ -28,19 +28,17 @@ import java.io.InputStream;
 public class BufferedInputStream extends AbstractBufferedInputStream {
     private final InputStream mIn;
 
-    public BufferedInputStream(InputStream in) {
-        super();
-        mIn = in;
-    }
-
-    public BufferedInputStream(InputStream in, int size) {
-        super(size);
+    BufferedInputStream(InputStream in) {
         mIn = in;
     }
 
     @Override
-    public synchronized void close() throws IOException {
-        mIn.close();
+    public synchronized int available() throws IOException {
+        int available = super.available();
+        if (available > 0) {
+            return available;
+        }
+        return mIn.available();
     }
 
     @Override

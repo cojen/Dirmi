@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,161 +16,89 @@
 
 package dirmi.core;
 
+import java.io.Closeable;
 import java.io.IOException;
 
-import java.net.ServerSocket;
-import java.net.Socket;
-
-import java.rmi.RemoteException;
-
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.cojen.util.WeakCanonicalSet;
-
 import dirmi.Session;
-import dirmi.Sessions;
-import dirmi.SessionServer;
+import dirmi.SessionAcceptor;
+
+import dirmi.io.StreamBroker;
+import dirmi.io.StreamBrokerAcceptor;
+import dirmi.io.StreamBrokerListener;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public class StandardSessionServer implements SessionServer {
-    final ServerSocket mServerSocket;
-    final Object mServer;
-    final ScheduledExecutorService mExecutor;
-    final Log mLog;
+public class StandardSessionServer implements Closeable {
+    private final StreamBrokerAcceptor mAcceptor;
+    private final ScheduledExecutorService mExecutor;
+    private final Log mLog;
 
-    final WeakCanonicalSet<Session> mSessions;
-
-    volatile boolean mClosing;
-
-    /**
-     * @param server optional server object to export
-     * @param executor shared executor for remote methods
-     */
-    public StandardSessionServer(ServerSocket ss, Object server,
+    public StandardSessionServer(StreamBrokerAcceptor acceptor,
                                  ScheduledExecutorService executor)
-        throws IOException
     {
-        this(ss, server, executor, null);
+        this(acceptor, executor, null);
     }
 
     /**
-     * @param server optional server object to export
      * @param executor shared executor for remote methods
      * @param log message log; pass null for default
      */
-    public StandardSessionServer(ServerSocket ss, Object server,
+    public StandardSessionServer(StreamBrokerAcceptor acceptor,
                                  ScheduledExecutorService executor, Log log)
-        throws IOException
     {
-        if (ss == null) {
-            throw new IllegalArgumentException("ServerSocket is null");
+        if (acceptor == null) {
+            throw new IllegalArgumentException("Broker acceptor is null");
         }
         if (executor == null) {
             throw new IllegalArgumentException("Executor is null");
         }
         if (log == null) {
-            log = LogFactory.getLog(SessionServer.class);
+            log = LogFactory.getLog(SessionAcceptor.class);
         }
 
-        mServerSocket = ss;
-        mServer = server;
+        mAcceptor = acceptor;
         mExecutor = executor;
         mLog = log;
-
-        mSessions = new WeakCanonicalSet<Session>();
-
-        try {
-            // Start first accept thread.
-            mExecutor.execute(new Accepter());
-        } catch (RejectedExecutionException e) {
-            String message = "Unable to start accept thread";
-            IOException io = new IOException(message);
-            io.initCause(e);
-            throw io;
-        }
     }
 
-    public void close() throws RemoteException {
-        mClosing = true;
+    public void accept(final SessionAcceptor acceptor) {
+        mAcceptor.accept(new StreamBrokerListener() {
+            public void established(StreamBroker broker) {
+                mAcceptor.accept(this);
 
-        try {
-            mServerSocket.close();
-        } catch (IOException e) {
-            throw new RemoteException(e.getMessage(), e);
-        }
-
-        synchronized (mSessions) {
-            for (Session session : mSessions) {
-                try {
-                    session.close();
-                } catch (IOException e) {
-                    warn("Failed to close session: " + session, e);
-                }
-            }
-            mSessions.clear();
-        }
-    }
-
-    void warn(String message) {
-        mLog.warn(message);
-    }
-
-    void warn(String message, Throwable e) {
-        mLog.warn(message, e);
-    }
-
-    void error(String message) {
-        mLog.error(message);
-    }
-
-    void error(String message, Throwable e) {
-        mLog.error(message, e);
-    }
-
-    private class Accepter implements Runnable {
-        public void run() {
-            boolean spawned;
-            do {
-                Socket s;
-                try {
-                    s = mServerSocket.accept();
-                    if (mClosing) {
-                        s.close();
-                        return;
-                    }
-                } catch (IOException e) {
-                    if (!mClosing && !mServerSocket.isClosed()) {
-                        error("Unable to accept socket; exiting thread: " + mServerSocket, e);
-                    }
-                    return;
-                }
-
-                // Spawn a replacement accepter.
-                try {
-                    mExecutor.execute(new Accepter());
-                    spawned = true;
-                } catch (RejectedExecutionException e) {
-                    spawned = false;
-                }
+                Object server = acceptor.createServer();
 
                 Session session;
                 try {
-                    session = Sessions.createSession(s, mServer, mExecutor);
+                    session = new StandardSession(broker, server, mExecutor, mLog);
                 } catch (IOException e) {
-                    warn("Unable to create session on socket: " + s, e);
+                    try {
+                        broker.close();
+                    } catch (IOException e2) {
+                        // Ignore.
+                    }
+                    failed(e);
                     return;
                 }
 
-                mSessions.put(session);
-            } while (!spawned);
-        }
+                acceptor.established(session);
+            }
+
+            public void failed(IOException e) {
+                acceptor.failed(e);
+            }
+        });
+    }
+
+    public void close() throws IOException {
+        mAcceptor.close();
     }
 }

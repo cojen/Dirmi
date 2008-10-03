@@ -39,8 +39,8 @@ import java.rmi.RemoteException;
  */
 public class InvocationInputStream extends InputStream implements InvocationInput {
     private final ObjectInputStream mIn;
-    private final String mLocalAddress;
-    private final String mRemoteAddress;
+    private final Object mLocalAddress;
+    private final Object mRemoteAddress;
 
     /**
      * @param in stream to wrap
@@ -56,7 +56,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
      * @param localAddress optional local address to stitch into stack traces from server.
      * @param remoteAddress optional remote address to stitch into stack traces from server.
      */
-    public InvocationInputStream(ObjectInputStream in, String localAddress, String remoteAddress) {
+    public InvocationInputStream(ObjectInputStream in, Object localAddress, Object remoteAddress) {
         mIn = in;
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
@@ -317,9 +317,9 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             String pseudo = "Remote Method Invocation";
             mid = new StackTraceElement[] {
                 new StackTraceElement(pseudo, "address", serverLocalAddress, -1),
-                new StackTraceElement(pseudo, "address", mRemoteAddress, -1),
+                new StackTraceElement(pseudo, "address", toString(mRemoteAddress), -1),
                 new StackTraceElement(pseudo, "address", serverRemoteAddress, -1),
-                new StackTraceElement(pseudo, "address", mLocalAddress, -1),
+                new StackTraceElement(pseudo, "address", toString(mLocalAddress), -1),
             };
         }
         
@@ -361,6 +361,10 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
 
     public void close() throws IOException {
         mIn.close();
+    }
+
+    static String toString(Object obj) {
+        return obj == null ? null : obj.toString();
     }
 
     private static class ThrowableInfo {

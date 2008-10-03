@@ -39,8 +39,8 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     static final byte NOT_NULL = 3;
 
     private final ObjectOutputStream mOut;
-    private final String mLocalAddress;
-    private final String mRemoteAddress;
+    private final Object mLocalAddress;
+    private final Object mRemoteAddress;
 
     /**
      * @param out stream to wrap
@@ -57,7 +57,7 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
      * @param remoteAddress optional remote address to stitch into stack traces sent to client.
      */
     public InvocationOutputStream(ObjectOutputStream out,
-                                  String localAddress, String remoteAddress)
+                                  Object localAddress, Object remoteAddress)
     {
         mOut = out;
         mLocalAddress = localAddress;
@@ -218,8 +218,8 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         collectChain(chain, t);
 
         ObjectOutput out = mOut;
-        out.writeObject(mLocalAddress);
-        out.writeObject(mRemoteAddress);
+        out.writeObject(InvocationInputStream.toString(mLocalAddress));
+        out.writeObject(InvocationInputStream.toString(mRemoteAddress));
 
         writeVarUnsignedInt(chain.size());
 

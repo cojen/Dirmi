@@ -18,7 +18,7 @@ package dirmi.core;
 
 /**
  * If an exception is thrown from a skeleton-invoked method which is
- * asynchronous, it cannot write the exception to the connection. Instead it
+ * asynchronous, it cannot write the exception to the channel. Instead it
  * wraps the exception in an AsynchronousInvocationException for the server to
  * log.
  *
@@ -27,7 +27,17 @@ package dirmi.core;
 public class AsynchronousInvocationException extends Exception {
     private static final long serialVersionUID = 1;
 
-    public AsynchronousInvocationException(Throwable cause) {
+    private final boolean mRequestPending;
+
+    /**
+     * @param requestPending true if caller should read another request from channel
+     */
+    public AsynchronousInvocationException(Throwable cause, boolean requestPending) {
         super(cause);
+        mRequestPending = requestPending;
+    }
+
+    public boolean isRequestPending() {
+        return mRequestPending;
     }
 }

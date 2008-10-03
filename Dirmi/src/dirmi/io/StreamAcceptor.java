@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -14,22 +14,18 @@
  *  limitations under the License.
  */
 
-package dirmi.core;
-
-import java.rmi.Remote;
-
-import dirmi.info.RemoteInfo;
+package dirmi.io;
 
 /**
- * Produces new {@link Skeleton} instances for server-side Remote objects.
+ * 
  *
  * @author Brian S O'Neill
- * @see SkeletonFactoryGenerator
  */
-public interface SkeletonFactory<R extends Remote> {
+public interface StreamAcceptor {
     /**
-     * @param support for reusing channels
-     * @param remoteServer server implementation of Remote object
+     * Returns immediately and calls established method on listener
+     * asynchronously. Only one channel is accepted per invocation of this
+     * method.
      */
-    Skeleton createSkeleton(SkeletonSupport support, R remoteServer);
+    void accept(StreamListener listener);
 }

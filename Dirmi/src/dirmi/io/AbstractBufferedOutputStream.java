@@ -16,12 +16,13 @@
 
 package dirmi.io;
 
-import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * 
+ * Abstract replacement for {@link java.io.BufferedOutputStream} which does a
+ * better job of buffer packing. The intent is to reduce the amount of packets
+ * sent over a network.
  *
  * @author Brian S O'Neill
  */
@@ -46,7 +47,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         int pos = mPos;
         buffer[pos++] = (byte) b;
         if (pos >= buffer.length) {
-            doWrite(buffer, 0, buffer.length, false);
+            doWrite(buffer, 0, buffer.length);
             mPos = 0;
         } else {
             mPos = pos;
@@ -60,7 +61,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         if (avail >= len) {
             System.arraycopy(b, off, buffer, pos, len);
             if (avail == len) {
-                doWrite(buffer, 0, buffer.length, false);
+                doWrite(buffer, 0, buffer.length);
                 mPos = 0;
             } else {
                 mPos = pos + len;
@@ -68,7 +69,7 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
         } else {
             // Fill remainder of buffer and flush it.
             System.arraycopy(b, off, buffer, pos, avail);
-            doWrite(buffer, 0, buffer.length, false);
+            doWrite(buffer, 0, buffer.length);
             off += avail;
             len -= avail;
             if (len < buffer.length) {
@@ -76,108 +77,30 @@ public abstract class AbstractBufferedOutputStream extends OutputStream {
                 mPos = len;
             } else {
                 mPos = 0;
-                doWrite(b, off, len, false);
+                doWrite(b, off, len);
             }
         }
     }
 
     /**
-     * Transfer bytes from a byte array into this BufferedOutputStream. This
-     * method is guaranteed to never block. The actual amount transferred might
-     * be less than requested amount because the buffer is full. If zero is
-     * returned, the buffer is full and drain should be called before another
-     * transfer is attempted.
-     *
-     * @param len amount to transfer
-     * @return actual amount transferred
+     * Subclass should override this implementation, which just drains the
+     * buffer.
      */
-    public synchronized int transfer(byte[] b, int off, int len) throws IOException {
-        byte[] buffer = mBuffer;
-        int pos = mPos;
-        len = Math.min(buffer.length - pos, len);
-        System.arraycopy(b, off, buffer, pos, len);
-        return len;
-    }
-
-    /**
-     * Transfer bytes from an InputStream into this BufferedOutputStream. This
-     * method is guaranteed to block only on the InputStream. The actual amount
-     * transferred might be less than requested amount because the buffer is
-     * full or if the InputStream provided less. If zero is returned, the
-     * buffer is full and drain should be called before another transfer is
-     * attempted. If EOF is reached, the returned value is negative. Compute
-     * the ones' compliment to determine the amount transferred.
-     *
-     * @param len amount to transfer
-     * @return actual amount transferred; is negative if EOF reached.
-     */
-    public synchronized int transfer(InputStream in, int len) throws IOException {
-        byte[] buffer = mBuffer;
-        int pos = mPos;
-        len = Math.min(buffer.length - pos, len);
-        int total = 0;
-        while (len > 0) {
-            int amt = in.read(buffer, pos, len);
-            if (amt <= 0) {
-                return ~total;
-            }
-            mPos = pos + amt;
-            len -= amt;
-            total += amt;
-        }
-        return total;
-    }
-
-    /**
-     * Fully transfer bytes from an InputStream into this BufferedOutputStream.
-     * The actual amount transferred is less than requested amount only if the
-     * InputStream EOF is reached. In this case, the returned value is
-     * negative. Compute the ones' compliment to determine the amount
-     * transferred.
-     *
-     * @param len amount to transfer
-     * @return actual amount transferred; is negative if EOF reached.
-     */
-    public synchronized int transferFully(InputStream in, int len) throws IOException {
-        int total = 0;
-        while (len > 0) {
-            int amt = transfer(in, len);
-            if (amt <= 0) {
-                if (amt < 0) {
-                    return ~total;
-                }
-                drain();
-            } else {
-                len -= amt;
-                total += amt;
-            }
-        }
-        return total;
-    }
-
-    public synchronized void drain() throws IOException {
-        int pos = mPos;
-        if (pos != 0) {
-            doWrite(mBuffer, 0, pos, false);
-            mPos = 0;
-        }
-    }
-
     public synchronized void flush() throws IOException {
         int pos = mPos;
         if (pos != 0) {
-            doWrite(mBuffer, 0, pos, true);
+            doWrite(mBuffer, 0, pos);
             mPos = 0;
         }
     }
 
     /**
-     * Just calls flush.
+     * Subclass should override this implementation, which just calls flush.
      */
     public void close() throws IOException {
         flush();
     }
 
-    protected abstract void doWrite(byte[] buffer, int offset, int length, boolean flush)
+    protected abstract void doWrite(byte[] buffer, int offset, int length)
         throws IOException;
 }

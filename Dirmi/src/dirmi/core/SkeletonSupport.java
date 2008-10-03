@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,20 +16,19 @@
 
 package dirmi.core;
 
-import java.rmi.Remote;
-
-import dirmi.info.RemoteInfo;
-
 /**
- * Produces new {@link Skeleton} instances for server-side Remote objects.
+ * Object passed to a Skeleton instance in order for it to decide when channels
+ * can be reused.
  *
  * @author Brian S O'Neill
- * @see SkeletonFactoryGenerator
  */
-public interface SkeletonFactory<R extends Remote> {
+public interface SkeletonSupport {
     /**
-     * @param support for reusing channels
-     * @param remoteServer server implementation of Remote object
+     * Called after channel usage is finished and can be reused for receiving
+     * new requests. This method should not throw any exception.
+     *
+     * @param synchronous pass true for synchronous method
+     * @return true if caller should read another request from channel
      */
-    Skeleton createSkeleton(SkeletonSupport support, R remoteServer);
+    boolean finished(InvocationChannel channel, boolean synchronous);
 }

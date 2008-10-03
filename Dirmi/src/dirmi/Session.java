@@ -25,9 +25,18 @@ import java.io.Closeable;
  */
 public interface Session extends Closeable {
     /**
-     * Returns the main remote server object, which may be null.
+     * Returns the primary Remote or Serializable object exported by remote
+     * endpoint.
      *
-     * @return main remote server object, or null 
+     * @return primary remote server object, which can be null
      */
     Object getRemoteServer();
+
+    /**
+     * Returns the primary Remote or Serializable object exported by local
+     * endpoint.
+     *
+     * @return primary local server object, which can be null
+     */
+    Object getLocalServer();
 }

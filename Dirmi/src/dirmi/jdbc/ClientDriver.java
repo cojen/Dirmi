@@ -33,8 +33,8 @@ import java.util.Properties;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import dirmi.Environment;
 import dirmi.Session;
-import dirmi.Sessions;
 
 /**
  * 
@@ -66,10 +66,12 @@ public class ClientDriver implements Driver {
         throw new SQLException("unsupported");
     }
 
+    private final Environment mEnvironment;
     private final Map<String, Session> mSessions;
     private final ReadWriteLock mSessionsLock;
 
     private ClientDriver() {
+        mEnvironment = new Environment();
         mSessions = new HashMap<String, Session>();
         mSessionsLock = new ReentrantReadWriteLock();
     }
@@ -185,7 +187,7 @@ public class ClientDriver implements Driver {
             }
 
             try {
-                session = Sessions.createSession(host, port);
+                session = mEnvironment.createSession(host, port);
             } catch (IOException e) {
                 throw new SQLException
                     ("Unable to connect to remote host: " + host + ':' + port, e);
