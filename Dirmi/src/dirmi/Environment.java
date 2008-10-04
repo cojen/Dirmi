@@ -211,7 +211,9 @@ public class Environment implements Closeable {
                 }
 
                 public void failed(IOException e) {
-                    acceptor.failed(e);
+                    if (!isClosed()) {
+                        acceptor.failed(e);
+                    }
                 }
             };
 
@@ -268,6 +270,16 @@ public class Environment implements Closeable {
             if (exception != null) {
                 throw exception;
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    boolean isClosed() {
+        Lock lock = mCloseLock.readLock();
+        lock.lock();
+        try {
+            return mClosed;
         } finally {
             lock.unlock();
         }
