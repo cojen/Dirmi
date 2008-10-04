@@ -41,14 +41,21 @@ import org.cojen.util.WeakValuedHashMap;
  * @author Brian S O'Neill
  */
 public class Identifier implements Serializable, Comparable<Identifier> {
-    private static final SecureRandom cRandom;
+    private static final MersenneTwisterFast cRandom;
     private static final WeakCanonicalSet<Identifier> cIdentifiers;
 
     private static final Map<Object, Identifier> cObjectsToIdentifiers;
     private static final Map<Identifier, Object> cIdentifiersToObjects;
 
     static {
-        cRandom = new SecureRandom();
+        SecureRandom rnd = new SecureRandom();
+        int[] seed = new int[MersenneTwisterFast.N];
+        for (int i=0; i<seed.length; i++) {
+            seed[i] = rnd.nextInt();
+        }
+
+        cRandom = new MersenneTwisterFast(seed);
+
         cIdentifiers = new WeakCanonicalSet<Identifier>();
 
         cObjectsToIdentifiers = new WeakIdentityMap<Object, Identifier>();
@@ -67,7 +74,6 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         }
         Identifier id = cObjectsToIdentifiers.get(obj);
         if (id == null) {
-            // FIXME: Possibly use a faster generator, like Mersenne twister.
             do {
                 id = new Identifier(cRandom.nextLong());
             } while (cIdentifiersToObjects.containsKey(id));
