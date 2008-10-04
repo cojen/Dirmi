@@ -153,8 +153,13 @@ public class StreamBrokerAcceptor implements Closeable {
             }
 
             public void failed(IOException e) {
-                // FIXME
-                e.printStackTrace(System.out);
+                StreamBrokerListener listener;
+                if ((listener = pollListener()) != null) {
+                    listener.failed(e);
+                }
+                while ((listener = mBrokerListenerQueue.poll()) != null) {
+                    listener.failed(e);
+                }
             }
         });
     }
@@ -169,7 +174,7 @@ public class StreamBrokerAcceptor implements Closeable {
     }
 
     public void close() throws IOException {
-        // FIXME mAcceptor.close();
+        mAcceptor.close();
     }
 
     StreamBrokerListener pollListener() {

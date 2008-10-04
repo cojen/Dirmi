@@ -22,7 +22,14 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import java.util.concurrent.ScheduledExecutorService;
+
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
@@ -49,6 +56,12 @@ public class Environment implements Closeable {
 
     private SocketMessageProcessor mMessageProcessor;
 
+    final Set<Session> mSessions;
+    final Set<StandardSessionServer> mSessionServers;
+
+    private final ReadWriteLock mCloseLock;
+    private boolean mClosed;
+
     /**
      * Construct environment which uses up to 1000 threads.
      */
@@ -68,6 +81,9 @@ public class Environment implements Closeable {
      */
     public Environment(ScheduledExecutorService executor) {
         mExecutor = executor;
+        mSessions = new HashSet<Session>();
+        mSessionServers = new HashSet<StandardSessionServer>();
+        mCloseLock = new ReentrantReadWriteLock(true);
     }
 
     /**
@@ -116,11 +132,22 @@ public class Environment implements Closeable {
     public Session createSession(SocketAddress endpoint, SocketAddress bindpoint, Object server)
         throws IOException
     {
-        SocketMessageProcessor processor = messageProcessor();
-        MessageChannel channel = processor.newConnector(endpoint, bindpoint).connect();
-        StreamConnector connector = new SocketStreamConnector(endpoint, bindpoint);
-        StreamBroker broker = new StreamConnectorBroker(channel, connector, mExecutor);
-        return new StandardSession(broker, server, mExecutor);
+        Lock lock = closeLock();
+        try {
+            SocketMessageProcessor processor = messageProcessor();
+            MessageChannel channel = processor.newConnector(endpoint, bindpoint).connect();
+            StreamConnector connector = new SocketStreamConnector(endpoint, bindpoint);
+            StreamBroker broker = new StreamConnectorBroker(channel, connector, mExecutor);
+            Session session = new StandardSession(broker, server, mExecutor);
+
+            synchronized (mSessions) {
+                mSessions.add(session);
+            }
+
+            return session;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -139,7 +166,7 @@ public class Environment implements Closeable {
      * @param bindpoint address for accepting socket connections
      * @param acceptor called as sessions are accepted
      */
-    public void acceptSessions(SocketAddress bindpoint, SessionAcceptor acceptor)
+    public void acceptSessions(SocketAddress bindpoint, final SessionAcceptor acceptor)
         throws IOException
     {
         if (bindpoint == null) {
@@ -149,10 +176,49 @@ public class Environment implements Closeable {
             throw new IllegalArgumentException("Must provide an acceptor");
         }
 
-        StreamAcceptor streamAcceptor = new SocketStreamAcceptor(bindpoint, mExecutor);
-        StreamBrokerAcceptor brokerAcceptor = new StreamBrokerAcceptor(streamAcceptor, mExecutor);
-        StandardSessionServer server = new StandardSessionServer(brokerAcceptor, mExecutor);
-        server.accept(acceptor);
+        Lock lock = closeLock();
+        try {
+            StreamAcceptor streamAcceptor = new SocketStreamAcceptor(bindpoint, mExecutor);
+            StreamBrokerAcceptor brokerAcceptor =
+                new StreamBrokerAcceptor(streamAcceptor, mExecutor);
+            StandardSessionServer server = new StandardSessionServer(brokerAcceptor, mExecutor);
+
+            synchronized (mSessionServers) {
+                mSessionServers.add(server);
+            }
+
+            SessionAcceptor copyAcceptor = new SessionAcceptor() {
+                public Object createServer() {
+                    return acceptor.createServer();
+                }
+
+                public void established(Session session) {
+                    Lock lock;
+                    try {
+                        lock = closeLock();
+                    } catch (IOException e) {
+                        failed(e);
+                        return;
+                    }
+                    try {
+                        synchronized (mSessions) {
+                            mSessions.add(session);
+                        }
+                    } finally {
+                        lock.unlock();
+                    }
+                    acceptor.established(session);
+                }
+
+                public void failed(IOException e) {
+                    acceptor.failed(e);
+                }
+            };
+
+            server.accept(copyAcceptor);
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -160,7 +226,61 @@ public class Environment implements Closeable {
      * sessions cannot be created.
      */
     public void close() throws IOException {
-        // FIXME
+        Lock lock = mCloseLock.writeLock();
+        lock.lock();
+        try {
+            if (mClosed) {
+                return;
+            }
+
+            IOException exception = null;
+
+            synchronized (mSessionServers) {
+                for (StandardSessionServer server : mSessionServers) {
+                    try {
+                        server.close();
+                    } catch (IOException e) {
+                        if (exception == null) {
+                            exception = e;
+                        }
+                    }
+                }
+                mSessionServers.clear();
+            }
+
+            synchronized (mSessions) {
+                for (Session session : mSessions) {
+                    try {
+                        session.close();
+                    } catch (IOException e) {
+                        if (exception == null) {
+                            exception = e;
+                        }
+                    }
+                }
+                mSessions.clear();
+            }
+
+            mExecutor.shutdownNow();
+
+            mClosed = true;
+
+            if (exception != null) {
+                throw exception;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    Lock closeLock() throws IOException {
+        Lock lock = mCloseLock.readLock();
+        lock.lock();
+        if (mClosed) {
+            lock.unlock();
+            throw new IOException("Environment is closed");
+        }
+        return lock;
     }
 
     private synchronized SocketMessageProcessor messageProcessor() throws IOException {

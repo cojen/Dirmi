@@ -54,8 +54,13 @@ public class SocketStreamAcceptor implements StreamAcceptor {
                     socket = mServerSocket.accept();
                     executor.execute(this);
                 } catch (IOException e) {
-                    // FIXME
-                    e.printStackTrace(System.out);
+                    StreamListener listener;
+                    if ((listener = pollListener()) != null) {
+                        listener.failed(e);
+                    }
+                    while ((listener = mListenerQueue.poll()) != null) {
+                        listener.failed(e);
+                    }
                     return;
                 }
 
@@ -91,6 +96,10 @@ public class SocketStreamAcceptor implements StreamAcceptor {
     
     public void accept(StreamListener listener) {
         mListenerQueue.add(listener);
+    }
+
+    public void close() throws IOException {
+        mServerSocket.close();
     }
 
     @Override

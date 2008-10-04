@@ -16,12 +16,14 @@
 
 package dirmi.io;
 
+import java.io.Closeable;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface MessageAcceptor {
+public interface MessageAcceptor extends Closeable {
     /**
      * Returns immediately and calls established method on listener
      * asynchronously. Only one channel is accepted per invocation of this

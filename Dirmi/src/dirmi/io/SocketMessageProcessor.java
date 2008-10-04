@@ -166,6 +166,10 @@ public class SocketMessageProcessor implements Closeable {
                 enqueueRegister(new Accept(listener));
             }
 
+            public void close() throws IOException {
+                serverChannel.close();
+            }
+
             @Override
             public String toString() {
                 return "MessageAcceptor{bindpoint=" + bindpoint + '}';
