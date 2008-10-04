@@ -625,8 +625,8 @@ public class StandardSession implements Session {
             try {
                 sendDisposedStubs();
             } catch (IOException e) {
-                String message = "Unable to send heartbeat; closing session: " + e;
-                if (mBroker.isOpen()) {
+                String message = "Unable to send disposed stubs; closing session: " + e;
+                if (!mClosing) {
                     mLog.error(message);
                 }
                 try {
@@ -715,10 +715,6 @@ public class StandardSession implements Session {
         public void close() throws IOException {
             mInvOut.close();
             mChannel.close();
-        }
-
-        public boolean isOpen() {
-            return mChannel.isOpen();
         }
 
         public InvocationInputStream getInputStream() throws IOException {

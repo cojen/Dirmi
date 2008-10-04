@@ -441,10 +441,6 @@ public class SocketMessageProcessor implements Closeable {
             close(null);
         }
 
-        public boolean isOpen() {
-            return mChannel.isOpen();
-        }
-
         // Called directly by Reader.
         void close(IOException cause) throws IOException {
             synchronized (mChannel.blockingLock()) {

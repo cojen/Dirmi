@@ -16,12 +16,12 @@
 
 package dirmi.io;
 
-import java.nio.channels.Channel;
+import java.io.Closeable;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamBroker extends StreamAcceptor, StreamConnector, Channel {
+public interface StreamBroker extends StreamAcceptor, StreamConnector, Closeable {
 }

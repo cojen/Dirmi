@@ -229,10 +229,6 @@ public class StreamConnectorBroker implements StreamBroker {
         // FIXME: close all channels
     }
 
-    public boolean isOpen() {
-        return mControlChannel.isOpen();
-    }
-
     @Override
     public String toString() {
         return "StreamConnectorBroker{channel=" + mControlChannel + '}';

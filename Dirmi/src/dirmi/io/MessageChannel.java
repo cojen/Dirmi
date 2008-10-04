@@ -16,17 +16,17 @@
 
 package dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.Channel;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface MessageChannel extends Channel {
+public interface MessageChannel extends Closeable {
     /**
      * Fully sends a fixed size message, blocking if send buffer is full.
      *

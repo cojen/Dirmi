@@ -16,18 +16,17 @@
 
 package dirmi.io;
 
+import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-
-import java.nio.channels.Channel;
 
 /**
  * Basic interface for a blocking bidirectional I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface StreamChannel extends Channel {
+public interface StreamChannel extends Closeable {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;

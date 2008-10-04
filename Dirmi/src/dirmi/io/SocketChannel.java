@@ -63,9 +63,4 @@ public class SocketChannel implements StreamChannel {
     public void close() throws IOException {
         mSocket.close();
     }
-
-    public boolean isOpen() {
-        // FIXME return mSocket.isOpen();
-        return true;
-    }
 }
