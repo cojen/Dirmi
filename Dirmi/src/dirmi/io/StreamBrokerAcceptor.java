@@ -175,6 +175,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
     public void close() throws IOException {
         mAcceptor.close();
+        // FIXME: close all accpeted brokers
     }
 
     StreamBrokerListener pollListener() {
