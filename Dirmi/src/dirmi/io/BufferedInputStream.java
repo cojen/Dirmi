@@ -22,7 +22,8 @@ import java.io.IOException;
 /**
  * Replacement for {@link java.io.BufferedInputStream} which does not have the
  * block forever on read bug. Marking is not supported. Any exception thrown by
- * the underlying stream or EOF causes it to be automatically closed.
+ * the underlying stream causes it to be automatically closed. In addition,
+ * this stream never returns the EOF marker. Instead, it throws an exception.
  *
  * @author Brian S O'Neill
  */
@@ -38,6 +39,7 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
         int b = super.read();
         if (b < 0) {
             forceClose();
+            throw new IOException("Closed");
         }
         return b;
     }
@@ -49,7 +51,7 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
             if (available <= 0) {
                 available = mIn.available();
                 if (available < 0) {
-                    forceClose();
+                    throw new IOException("Closed");
                 }
             }
             return available;
@@ -69,7 +71,7 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
         try {
             int amt = mIn.read(buffer, offset, length);
             if (amt <= 0) {
-                forceClose();
+                throw new IOException("Closed");
             }
             return amt;
         } catch (IOException e) {
@@ -81,7 +83,11 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
     @Override
     protected long doSkip(long n) throws IOException {
         try {
-            return mIn.skip(n);
+            long amt = mIn.skip(n);
+            if (amt < 0) {
+                throw new IOException("Closed");
+            }
+            return amt;
         } catch (IOException e) {
             forceClose();
             throw e;
