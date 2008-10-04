@@ -21,7 +21,8 @@ import java.io.IOException;
 
 /**
  * Replacement for {@link java.io.BufferedInputStream} which does not have the
- * block forever on read bug. Marking is not supported.
+ * block forever on read bug. Marking is not supported. Any exception thrown by
+ * the underlying stream or EOF causes it to be automatically closed.
  *
  * @author Brian S O'Neill
  */
@@ -33,21 +34,65 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
     }
 
     @Override
-    public synchronized int available() throws IOException {
-        int available = super.available();
-        if (available > 0) {
-            return available;
+    public synchronized int read() throws IOException {
+        int b = super.read();
+        if (b < 0) {
+            forceClose();
         }
-        return mIn.available();
+        return b;
+    }
+
+    @Override
+    public synchronized int available() throws IOException {
+        try {
+            int available = super.available();
+            if (available <= 0) {
+                available = mIn.available();
+                if (available < 0) {
+                    forceClose();
+                }
+            }
+            return available;
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
+    }
+
+    @Override
+    public synchronized void close() throws IOException {
+        mIn.close();
     }
 
     @Override
     protected int doRead(byte[] buffer, int offset, int length) throws IOException {
-        return mIn.read(buffer, offset, length);
+        try {
+            int amt = mIn.read(buffer, offset, length);
+            if (amt <= 0) {
+                forceClose();
+            }
+            return amt;
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
     }
 
     @Override
     protected long doSkip(long n) throws IOException {
-        return mIn.skip(n);
+        try {
+            return mIn.skip(n);
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
+    }
+
+    private void forceClose() {
+        try {
+            mIn.close();
+        } catch (IOException e2) {
+            // Ignore.
+        }
     }
 }

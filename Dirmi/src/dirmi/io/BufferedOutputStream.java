@@ -22,7 +22,8 @@ import java.io.OutputStream;
 /**
  * Replacement for {@link java.io.BufferedOutputStream} which does a better job
  * of buffer packing. The intent is to reduce the amount of packets sent over a
- * network.
+ * network. Any exception thrown by the underlying stream causes it to be
+ * automatically closed.
  *
  * @author Brian S O'Neill
  */
@@ -35,8 +36,13 @@ public class BufferedOutputStream extends AbstractBufferedOutputStream {
 
     @Override
     public synchronized void flush() throws IOException {
-        super.flush();
-        mOut.flush();
+        try {
+            super.flush();
+            mOut.flush();
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
     }
 
     @Override
@@ -47,6 +53,19 @@ public class BufferedOutputStream extends AbstractBufferedOutputStream {
 
     @Override
     protected void doWrite(byte[] buffer, int offset, int length) throws IOException {
-        mOut.write(buffer, offset, length);
+        try {
+            mOut.write(buffer, offset, length);
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
+    }
+
+    private void forceClose() {
+        try {
+            mOut.close();
+        } catch (IOException e2) {
+            // Ignore.
+        }
     }
 }
