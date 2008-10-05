@@ -398,9 +398,13 @@ public class StandardSession implements Session {
             for (int i = 0; i < DISPOSE_BATCH; i++) {
                 Identifier id = mDisposedObjects.poll();
                 if (id == null) {
-                    return;
+                    break;
                 }
                 disposedStubsList.add(id);
+            }
+
+            if (disposedStubsList.size() == 0) {
+                return;
             }
 
             Identifier[] disposedStubs = disposedStubsList
@@ -742,6 +746,9 @@ public class StandardSession implements Session {
             mInvOut.writeThrowable(t);
         }
 
+        /**
+         * Recycle the channel to be used for writing new requests.
+         */
         void recycle() {
             try {
                 getOutputStream().reset();
