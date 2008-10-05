@@ -561,7 +561,6 @@ public class StandardSession implements Session {
             /**
              * Notification from client when it has disposed of identified objects.
              */
-            @Asynchronous
             void disposed(Identifier[] ids) throws RemoteException;
 
             /**
