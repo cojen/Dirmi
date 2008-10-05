@@ -17,6 +17,7 @@
 package dirmi.io;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * 
@@ -24,4 +25,8 @@ import java.io.Closeable;
  * @author Brian S O'Neill
  */
 public interface StreamBroker extends StreamAcceptor, StreamConnector, Closeable {
+    /**
+     * Prevents new channels from being created and closes all existing channels.
+     */
+    void close() throws IOException;
 }

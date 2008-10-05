@@ -22,14 +22,13 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import java.util.concurrent.ScheduledExecutorService;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import org.cojen.util.WeakIdentityMap;
 
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
@@ -56,8 +55,8 @@ public class Environment implements Closeable {
 
     private SocketMessageProcessor mMessageProcessor;
 
-    final Set<Session> mSessions;
-    final Set<StandardSessionServer> mSessionServers;
+    final WeakIdentityMap<Session, Object> mSessions;
+    final WeakIdentityMap<StandardSessionServer, Object> mSessionServers;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
@@ -81,8 +80,8 @@ public class Environment implements Closeable {
      */
     public Environment(ScheduledExecutorService executor) {
         mExecutor = executor;
-        mSessions = new HashSet<Session>();
-        mSessionServers = new HashSet<StandardSessionServer>();
+        mSessions = new WeakIdentityMap<Session, Object>();
+        mSessionServers = new WeakIdentityMap<StandardSessionServer, Object>();
         mCloseLock = new ReentrantReadWriteLock(true);
     }
 
@@ -141,7 +140,7 @@ public class Environment implements Closeable {
             Session session = new StandardSession(broker, server, mExecutor);
 
             synchronized (mSessions) {
-                mSessions.add(session);
+                mSessions.put(session, "");
             }
 
             return session;
@@ -184,7 +183,7 @@ public class Environment implements Closeable {
             StandardSessionServer server = new StandardSessionServer(brokerAcceptor, mExecutor);
 
             synchronized (mSessionServers) {
-                mSessionServers.add(server);
+                mSessionServers.put(server, "");
             }
 
             SessionAcceptor copyAcceptor = new SessionAcceptor() {
@@ -202,7 +201,7 @@ public class Environment implements Closeable {
                     }
                     try {
                         synchronized (mSessions) {
-                            mSessions.add(session);
+                            mSessions.put(session, "");
                         }
                     } finally {
                         lock.unlock();
@@ -238,7 +237,7 @@ public class Environment implements Closeable {
             IOException exception = null;
 
             synchronized (mSessionServers) {
-                for (StandardSessionServer server : mSessionServers) {
+                for (StandardSessionServer server : mSessionServers.keySet()) {
                     try {
                         server.close();
                     } catch (IOException e) {
@@ -247,11 +246,12 @@ public class Environment implements Closeable {
                         }
                     }
                 }
+
                 mSessionServers.clear();
             }
 
             synchronized (mSessions) {
-                for (Session session : mSessions) {
+                for (Session session : mSessions.keySet()) {
                     try {
                         session.close();
                     } catch (IOException e) {
@@ -260,6 +260,7 @@ public class Environment implements Closeable {
                         }
                     }
                 }
+
                 mSessions.clear();
             }
 

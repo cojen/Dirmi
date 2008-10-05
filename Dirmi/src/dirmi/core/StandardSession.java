@@ -618,9 +618,6 @@ public class StandardSession implements Session {
         }
 
         public void run() {
-            // FIXME: not cleaned up
-            System.out.println("session task for: " + StandardSession.this);
-
             // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
@@ -682,7 +679,12 @@ public class StandardSession implements Session {
 
         public void failed(IOException e) {
             if (!mClosing) {
-                error("Failure reading request", e);
+                warn("Failure accepting request", e);
+                try {
+                    closeOnFailure(e.getMessage(), e);
+                } catch (IOException e2) {
+                    // Ignore.
+                }
             }
         }
     }

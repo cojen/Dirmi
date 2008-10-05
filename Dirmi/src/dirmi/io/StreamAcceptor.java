@@ -17,6 +17,7 @@
 package dirmi.io;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * 
@@ -30,4 +31,9 @@ public interface StreamAcceptor extends Closeable {
      * method.
      */
     void accept(StreamListener listener);
+
+    /**
+     * Prevents new channels from being accepted.
+     */
+    void close() throws IOException;
 }

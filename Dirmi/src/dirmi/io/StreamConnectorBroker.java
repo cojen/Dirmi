@@ -30,6 +30,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import org.cojen.util.WeakIdentityMap;
+
 /**
  * Paired with {@link StreamBrokerAcceptor} to adapt a connector into a full
  * broker.
@@ -50,11 +56,19 @@ public class StreamConnectorBroker implements StreamBroker {
     final MessageChannel mControlChannel;
     volatile int mId;
 
+    final ScheduledExecutorService mExecutor;
+
+    final WeakIdentityMap<StreamChannel, Object> mChannels;
+
     final LinkedBlockingQueue<StreamListener> mListenerQueue;
 
     final ScheduledFuture<?> mPingCheckTask;
 
     volatile boolean mPinged;
+
+    private final ReadWriteLock mCloseLock;
+    private boolean mClosed;
+    private volatile String mClosedReason;
 
     public StreamConnectorBroker(final MessageChannel controlChannel, StreamConnector connector,
                                  ScheduledExecutorService executor)
@@ -62,6 +76,11 @@ public class StreamConnectorBroker implements StreamBroker {
     {
         mControlChannel = controlChannel;
         mConnector = connector;
+        mCloseLock = new ReentrantReadWriteLock(true);
+
+        mExecutor = executor;
+
+        mChannels = new WeakIdentityMap<StreamChannel, Object>();
 
         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_OPEN}));
 
@@ -121,6 +140,8 @@ public class StreamConnectorBroker implements StreamBroker {
                         out.writeInt(mId);
                         out.flush();
 
+                        register(channel);
+
                         StreamListener listener = pollListener();
                         if (listener != null) {
                             listener.established(channel);
@@ -134,11 +155,7 @@ public class StreamConnectorBroker implements StreamBroker {
                         }
                     } catch (IOException e) {
                         if (channel != null) {
-                            try {
-                                channel.close();
-                            } catch (IOException e2) {
-                                // Ignore.
-                            }
+                            unregisterAndClose(channel);
                         }
                         StreamListener listener = pollListener();
                         if (listener != null) {
@@ -152,13 +169,15 @@ public class StreamConnectorBroker implements StreamBroker {
                     try {
                         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_PONG}));
                     } catch (IOException e) {
+                        String message = "Broker is closed: Ping failure";
+                        if (e.getMessage() != null) {
+                            message = message + ": " + e.getMessage();
+                        }
                         try {
-                            controlChannel.close();
+                            close(message);
                         } catch (IOException e2) {
                             // Ignore.
                         }
-                        // FIXME
-                        e.printStackTrace(System.out);
                     }
                     break;
                 }
@@ -176,8 +195,15 @@ public class StreamConnectorBroker implements StreamBroker {
                     mReceivedId = true;
                     mException = e;
                     notifyAll();
-                    // FIXME
-                    e.printStackTrace(System.out);
+                    String message = "Broker is closed";
+                    if (e.getMessage() != null) {
+                        message = message + ": " + e.getMessage();
+                    }
+                    try {
+                        close(message);
+                    } catch (IOException e2) {
+                        // Ignore.
+                    }
                 }
             }
 
@@ -203,35 +229,125 @@ public class StreamConnectorBroker implements StreamBroker {
         first.waitForId();
     }
 
-    public void accept(StreamListener listener) {
-        mListenerQueue.add(listener);
+    public void accept(final StreamListener listener) {
+        try {
+            Lock lock = closeLock();
+            try {
+                mListenerQueue.add(listener);
+            } finally {
+                lock.unlock();
+            }
+        } catch (final IOException e) {
+            mExecutor.execute(new Runnable() {
+                public void run() {
+                    listener.failed(e);
+                }
+            });
+        }
     }
 
     public StreamChannel connect() throws IOException {
+        // Quick check to see if closed.
+        closeLock().unlock();
+
         StreamChannel channel = mConnector.connect();
         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
         out.writeShort(4); // length of message minus one
         out.write(OP_CONNECT);
         out.writeInt(mId);
         out.flush();
-        return channel;
+
+        try {
+            Lock lock = closeLock();
+            try {
+                register(channel);
+                return channel;
+            } finally {
+                lock.unlock();
+            }
+        } catch (IOException e) {
+            try {
+                channel.close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
+        }
     }
 
     public void close() throws IOException {
+        close(null);
+    }
+
+    void close(String reason) throws IOException {
+        Lock lock = mCloseLock.writeLock();
+        lock.lock();
         try {
-            mPingCheckTask.cancel(true);
-        } catch (NullPointerException e) {
-            // mPingCheckTask might not have been assigned.
+            if (mClosed) {
+                return;
+            }
+
+            mClosed = true;
+
+            if (reason == null) {
+                reason = "Broker is closed";
+            }
+            mClosedReason = reason;
+
+            try {
+                mPingCheckTask.cancel(true);
+            } catch (NullPointerException e) {
+                // mPingCheckTask might not have been assigned.
+            }
+
+            StreamListener listener;
+            while ((listener = mListenerQueue.poll()) != null) {
+                listener.failed(new IOException(reason));
+            }
+
+            IOException exception = null;
+
+            try {
+                mControlChannel.close();
+            } catch (IOException e) {
+                exception = e;
+            }
+
+            synchronized (mChannels) {
+                for (StreamChannel channel : mChannels.keySet()) {
+                    try {
+                        channel.close();
+                    } catch (IOException e) {
+                        if (exception == null) {
+                            exception = e;
+                        }
+                    }
+                }
+
+                mChannels.clear();
+            }
+
+            if (exception != null) {
+                throw exception;
+            }
+        } finally {
+            lock.unlock();
         }
-
-        mControlChannel.close();
-
-        // FIXME: close all channels
     }
 
     @Override
     public String toString() {
         return "StreamConnectorBroker{channel=" + mControlChannel + '}';
+    }
+
+    Lock closeLock() throws IOException {
+        Lock lock = mCloseLock.readLock();
+        lock.lock();
+        if (mClosed) {
+            lock.unlock();
+            throw new IOException(mClosedReason);
+        }
+        return lock;
     }
 
     StreamListener pollListener() {
@@ -242,11 +358,28 @@ public class StreamConnectorBroker implements StreamBroker {
         }
     }
 
+    private void register(StreamChannel channel) {
+        synchronized (mChannels) {
+            mChannels.put(channel, "");
+        }
+    }
+
+    private void unregisterAndClose(StreamChannel channel) {
+        synchronized (mChannels) {
+            mChannels.remove(channel);
+        }
+
+        try {
+            channel.close();
+        } catch (IOException e) {
+            // Ignore.
+        }
+    }
+
     void doPingCheck() {
         if (!mPinged) {
-            // FIXME: give a reason
             try {
-                close();
+                close("Broker is closed: Ping failure");
             } catch (IOException e) {
                 // Ignore.
             }
