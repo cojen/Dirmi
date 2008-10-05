@@ -75,7 +75,16 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         Identifier id = cObjectsToIdentifiers.get(obj);
         if (id == null) {
             do {
-                id = new Identifier(cRandom.nextLong());
+                if (obj instanceof Class) {
+                    long v;
+                    do {
+                        v = cRandom.nextLong();
+                    } while (v == 0);
+                    id = new Identifier(0, v);
+                } else {
+                    Identifier classId = identify(obj.getClass());
+                    id = new Identifier(classId.mLowerBits, cRandom.nextLong());
+                }
             } while (cIdentifiersToObjects.containsKey(id));
             id = (Identifier) cIdentifiers.put(id);
             cObjectsToIdentifiers.put(obj, id);
@@ -89,7 +98,7 @@ public class Identifier implements Serializable, Comparable<Identifier> {
      * registered with it.
      */
     public static Identifier read(DataInput in) throws IOException {
-        return canonicalIdentifier(new Identifier(in.readLong()));
+        return canonicalIdentifier(new Identifier(in.readLong(), in.readLong()));
     }
 
     /**
@@ -98,7 +107,7 @@ public class Identifier implements Serializable, Comparable<Identifier> {
      */
     public static Identifier read(InputStream in) throws IOException {
         int off = 0;
-        int len = 8;
+        int len = 16;
         byte[] buf = new byte[len];
         int amt;
         while ((amt = in.read(buf, off, len)) > 0) {
@@ -108,15 +117,18 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         if (len > 0) {
             throw new EOFException("Unable to fully read identifier");
         }
-        long bits = (((long)buf[0] << 56) +
-                     ((long)(buf[1] & 0xff) << 48) +
-                     ((long)(buf[2] & 0xff) << 40) +
-                     ((long)(buf[3] & 0xff) << 32) +
-                     ((long)(buf[4] & 0xff) << 24) +
-                     ((buf[5] & 0xff) << 16) +
-                     ((buf[6] & 0xff) <<  8) +
-                     (buf[7] & 0xff));
-        return canonicalIdentifier(new Identifier(bits));
+        return canonicalIdentifier(new Identifier(readBits(buf, 0), readBits(buf, 8)));
+    }
+
+    private static long readBits(byte[] buf, int offset) {
+        return (((long)buf[offset] << 56) +
+                ((long)(buf[offset + 1] & 0xff) << 48) +
+                ((long)(buf[offset + 2] & 0xff) << 40) +
+                ((long)(buf[offset + 3] & 0xff) << 32) +
+                ((long)(buf[offset + 4] & 0xff) << 24) +
+                ((buf[offset + 5] & 0xff) << 16) +
+                ((buf[offset + 6] & 0xff) <<  8) +
+                (buf[offset + 7] & 0xff));
     }
 
     private synchronized static Identifier canonicalIdentifier(Identifier id) {
@@ -140,10 +152,12 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         return cIdentifiersToObjects.get(id);
     }
 
-    private final long mBits;
+    private final long mUpperBits;
+    private final long mLowerBits;
 
-    private Identifier(long bits) {
-        mBits = bits;
+    private Identifier(long upperBits, long lowerBits) {
+        mUpperBits = upperBits;
+        mLowerBits = lowerBits;
     }
 
     /**
@@ -183,26 +197,31 @@ public class Identifier implements Serializable, Comparable<Identifier> {
     }
 
     public void write(DataOutput out) throws IOException {
-        out.writeLong(mBits);
+        out.writeLong(mUpperBits);
+        out.writeLong(mLowerBits);
     }
 
     public void write(OutputStream out) throws IOException {
-        long bits = mBits;
-        byte[] buf = new byte[8];
-        buf[0] = (byte)(bits >>> 56);
-        buf[1] = (byte)(bits >>> 48);
-        buf[2] = (byte)(bits >>> 40);
-        buf[3] = (byte)(bits >>> 32);
-        buf[4] = (byte)(bits >>> 24);
-        buf[5] = (byte)(bits >>> 16);
-        buf[6] = (byte)(bits >>>  8);
-        buf[7] = (byte)(bits);
-        out.write(buf, 0, 8);
+        byte[] buf = new byte[16];
+        writeBits(mUpperBits, buf, 0);
+        writeBits(mLowerBits, buf, 8);
+        out.write(buf, 0, 16);
+    }
+
+    private void writeBits(long bits, byte[] buf, int offset) {
+        buf[offset] = (byte)(bits >>> 56);
+        buf[offset + 1] = (byte)(bits >>> 48);
+        buf[offset + 2] = (byte)(bits >>> 40);
+        buf[offset + 3] = (byte)(bits >>> 32);
+        buf[offset + 4] = (byte)(bits >>> 24);
+        buf[offset + 5] = (byte)(bits >>> 16);
+        buf[offset + 6] = (byte)(bits >>>  8);
+        buf[offset + 7] = (byte)(bits);
     }
 
     @Override
     public int hashCode() {
-        return (int) (mBits ^ (mBits >>> 32));
+        return (int) ((mUpperBits ^ (mUpperBits >>> 32)) ^ (mLowerBits ^ (mLowerBits >>> 32)));
     }
 
     @Override
@@ -212,17 +231,26 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         }
         if (obj instanceof Identifier) {
             Identifier other = (Identifier) obj;
-            return mBits == other.mBits;
+            return mUpperBits == other.mUpperBits && mLowerBits == other.mLowerBits;
         }
         return false;
     }
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder("0000000000000000");
-        int end = b.length();
-        String bits = Long.toHexString(mBits);
-        b.replace(end - bits.length(), end, bits);
+        StringBuilder b;
+        if (mUpperBits == 0) {
+            // Identifier for a class.
+            b = new StringBuilder("0000000000000000");
+            String bits = Long.toHexString(mLowerBits);
+            b.replace(16 - bits.length(), 16, bits);
+        } else {
+            b = new StringBuilder("0000000000000000-0000000000000000");
+            String bits = Long.toHexString(mUpperBits);
+            b.replace(16 - bits.length(), 16, bits);
+            bits = Long.toHexString(mLowerBits);
+            b.replace(33 - bits.length(), 33, bits);
+        }
         return b.toString();
     }
 
@@ -231,9 +259,14 @@ public class Identifier implements Serializable, Comparable<Identifier> {
      */
     public int compareTo(Identifier id) {
         if (this != id) {
-            if (mBits < id.mBits) {
+            if (mUpperBits < id.mUpperBits) {
                 return -1;
-            } else if (mBits > id.mBits) {
+            } else if (mUpperBits > id.mUpperBits) {
+                return 1;
+            }
+            if (mLowerBits < id.mLowerBits) {
+                return -1;
+            } else if (mLowerBits > id.mLowerBits) {
                 return 1;
             }
         }
