@@ -85,6 +85,38 @@ public class Identifier implements Serializable, Comparable<Identifier> {
     }
 
     /**
+     * Returns a new or existing unique identifier for the given object. If
+     * new, the given object is automatically registered with the identifier.
+     *
+     * @param andMask optional mask to encode data in LSB of id
+     * @param orMask optional mask to encode data in LSB of id
+     * @throws IllegalArgumentException if object is null
+     * @throws IllegalStateException if data cannot be encoded
+     */
+    public synchronized static Identifier identify(Object obj, byte andMask, byte orMask) {
+        if (obj == null) {
+            throw new IllegalArgumentException("Object cannot be null");
+        }
+        Identifier id = cObjectsToIdentifiers.get(obj);
+        if (id != null) {
+            if ((id.getData() & andMask) != orMask) {
+                throw new IllegalStateException("Unable to encode data in identifier");
+            }
+        } else {
+            do {
+                long v = cRandom.nextLong();
+                v &= (~0xff) | (andMask & 0xff);
+                v |= (orMask & 0xff);
+                id = new Identifier(v);
+            } while (cIdentifiersToObjects.containsKey(id));
+            id = (Identifier) cIdentifiers.put(id);
+            cObjectsToIdentifiers.put(obj, id);
+            cIdentifiersToObjects.put(id, obj);
+        }
+        return id;
+    }
+
+    /**
      * Returns a deserialized identifier, which may or may not have an object
      * registered with it.
      */
@@ -198,6 +230,10 @@ public class Identifier implements Serializable, Comparable<Identifier> {
         buf[6] = (byte)(bits >>>  8);
         buf[7] = (byte)(bits);
         out.write(buf, 0, 8);
+    }
+
+    public byte getData() {
+        return (byte) mBits;
     }
 
     @Override

@@ -426,10 +426,6 @@ public class RemoteIntrospector {
         }
 
         RMethod(Identifier id, Method m) {
-            if (id == null) {
-                id = Identifier.identify(this);
-            }
-            mID = id;
             mName = m.getName();
 
             {
@@ -440,6 +436,12 @@ public class RemoteIntrospector {
                     mAsynchronous = true;
                 }
             }
+
+            if (id == null) {
+                id = Identifier.identify(this, (byte) 0xfe, (byte) (mAsynchronous ? 1 : 0));
+            }
+
+            mID = id;
 
             // First pass, treat all params as serialized. Resolve on second pass.
             // This allows remote methods to pass instances of declaring class without

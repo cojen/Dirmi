@@ -164,22 +164,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod(Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
-                                     new TypeDesc[] {invChannelType});
+                                     new TypeDesc[] {identifierType, invChannelType});
         CodeBuilder b = new CodeBuilder(mi);
 
-        // Read method identifier from channel.
-        LocalVariable channelVar = b.getParameter(0);
+        LocalVariable methodIDVar = b.getParameter(0);
+        LocalVariable channelVar = b.getParameter(1);
 
+        // Have a reference to the InputStream for reading parameters.
         b.loadLocal(channelVar);
         b.invokeInterface(invChannelType, "getInputStream", invInType, null);
         LocalVariable invInVar = b.createLocalVariable(null, invInType);
         b.storeLocal(invInVar);
-
-        b.loadLocal(invInVar);
-        b.invokeStatic(Identifier.class.getName(), "read", identifierType,
-                       new TypeDesc[] {TypeDesc.forClass(DataInput.class)});
-        LocalVariable methodIDVar = b.createLocalVariable(null, identifierType);
-        b.storeLocal(methodIDVar);
 
         Set<? extends RemoteMethod> methods = mInfo.getRemoteMethods();
 
@@ -469,11 +464,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
             return new Skeleton() {
-                public boolean invoke(InvocationChannel channel)
+                public boolean invoke(Identifier methodID, InvocationChannel channel)
                     throws IOException, NoSuchMethodException
                 {
-                    Identifier id = Identifier.read((DataInput) channel.getInputStream());
-                    throw new NoSuchMethodException(String.valueOf(id));
+                    throw new NoSuchMethodException(String.valueOf(methodID));
                 }
             };
         }

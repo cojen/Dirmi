@@ -425,9 +425,12 @@ public class StandardSession implements Session {
 
     void handleRequest(InvocationChannel invChannel) {
         while (true) {
-            final Identifier id;
+            final Identifier objID;
+            final Identifier methodID;
             try {
-                id = Identifier.read((DataInput) invChannel.getInputStream());
+                DataInput din = (DataInput) invChannel.getInputStream();
+                objID = Identifier.read(din);
+                methodID = Identifier.read(din);
             } catch (IOException e) {
                 try {
                     invChannel.close();
@@ -438,18 +441,34 @@ public class StandardSession implements Session {
             }
 
             // Find a Skeleton to invoke.
-            Skeleton skeleton = mSkeletons.get(id);
+            Skeleton skeleton = mSkeletons.get(objID);
 
             if (skeleton == null) {
-                Throwable t = new NoSuchObjectException("Server cannot find remote object: " + id);
-                try {
-                    invChannel.getOutputStream().writeThrowable(t);
-                    invChannel.close();
-                } catch (IOException e) {
-                    error("Failure processing request. " +
-                          "Server cannot find remote object and " +
-                          "cannot send error to client. Object id: " + id, e);
+                boolean synchronous = (methodID.getData() & 0x01) == 0;
+                if (!synchronous) {
+                    error("Cannot find remote object for asynchronous method: " + objID);
+                } else {
+                    Throwable t = new NoSuchObjectException("Cannot find remote object: " + objID);
+                    try {
+                        invChannel.getOutputStream().writeThrowable(t);
+                        invChannel.flush();
+                    } catch (IOException e) {
+                        error("Failure processing request. " +
+                              "Cannot find remote object and " +
+                              "cannot send error to caller. Object id: " + objID, e);
+                        try {
+                            invChannel.close();
+                        } catch (IOException e2) {
+                            // Ignore.
+                        }
+                    }
                 }
+
+                if (mSkeletonSupport.finished(invChannel, synchronous)) {
+                    // Handle another request.
+                    continue;
+                }
+
                 return;
             }
 
@@ -458,7 +477,7 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(invChannel)) {
+                        if (skeleton.invoke(methodID, invChannel)) {
                             // Handle another request.
                             continue;
                         }
@@ -468,7 +487,7 @@ public class StandardSession implements Session {
                         if (cause == null) {
                             cause = e;
                         }
-                        warn("Unhandled exception in asynchronous server method", cause);
+                        warn("Unhandled exception in asynchronous method", cause);
                         if (e.isRequestPending()) {
                             continue;
                         }
@@ -486,7 +505,13 @@ public class StandardSession implements Session {
 
                 InvocationOutputStream out = invChannel.getOutputStream();
                 out.writeThrowable(throwable);
-                invChannel.close();
+                out.flush();
+
+                boolean synchronous = (methodID.getData() & 0x01) == 0;
+                if (mSkeletonSupport.finished(invChannel, synchronous)) {
+                    // Handle another request.
+                    continue;
+                }
             } catch (IOException e) {
                 if (!mClosing) {
                     error("Failure processing request", e);
@@ -625,16 +650,10 @@ public class StandardSession implements Session {
             try {
                 sendDisposedStubs();
             } catch (IOException e) {
-                String message = "Unable to send disposed stubs; closing session: " + e;
+                String message = "Unable to send disposed stubs: " + e;
                 if (!mClosing) {
                     mLog.error(message);
                 }
-                try {
-                    closeOnFailure(message, null);
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                return;
             }
 
             // Close idle channels.

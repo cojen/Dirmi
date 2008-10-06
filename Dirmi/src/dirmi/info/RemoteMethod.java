@@ -36,7 +36,8 @@ public interface RemoteMethod extends Serializable {
     String getName();
 
     /**
-     * Returns a unique identifier for this method.
+     * Returns a unique identifier for this method. The LSB of the identifier's
+     * data is 0 if method is synchronous, 1 if asynchronous.
      */
     Identifier getMethodID();
 
