@@ -411,6 +411,8 @@ public class StandardSession implements Session {
                 .toArray(new Identifier[disposedStubsList.size()]);
 
             try {
+                // FIXME: Race condition when disposing of objects which are
+                // still required by outstanding asynchronous calls.
                 mRemoteAdmin.disposed(disposedStubs);
             } catch (RemoteException e) {
                 if (e.getCause() instanceof IOException) {
@@ -444,29 +446,30 @@ public class StandardSession implements Session {
             Skeleton skeleton = mSkeletons.get(objID);
 
             if (skeleton == null) {
+                String message = "Cannot find remote object: " + objID;
+
+                error(message);
+
                 boolean synchronous = (methodID.getData() & 0x01) == 0;
-                if (!synchronous) {
-                    error("Cannot find remote object for asynchronous method: " + objID);
-                } else {
-                    Throwable t = new NoSuchObjectException("Cannot find remote object: " + objID);
+                if (synchronous) {
+                    // Try to inform caller of error, but no guarantee that
+                    // this will work -- input arguments might exceed the size
+                    // of the send/receive buffers.
+                    Throwable t = new NoSuchObjectException(message);
                     try {
                         invChannel.getOutputStream().writeThrowable(t);
                         invChannel.flush();
                     } catch (IOException e) {
-                        error("Failure processing request. " +
-                              "Cannot find remote object and " +
-                              "cannot send error to caller. Object id: " + objID, e);
-                        try {
-                            invChannel.close();
-                        } catch (IOException e2) {
-                            // Ignore.
-                        }
+                        // Ignore.
                     }
                 }
 
-                if (mSkeletonSupport.finished(invChannel, synchronous)) {
-                    // Handle another request.
-                    continue;
+                try {
+                    // Connection must be closed in order to discard any unread
+                    // input arguments and piled up asynchronous calls.
+                    invChannel.close();
+                } catch (IOException e2) {
+                    // Ignore.
                 }
 
                 return;
@@ -507,10 +510,12 @@ public class StandardSession implements Session {
                 out.writeThrowable(throwable);
                 out.flush();
 
-                boolean synchronous = (methodID.getData() & 0x01) == 0;
-                if (mSkeletonSupport.finished(invChannel, synchronous)) {
-                    // Handle another request.
-                    continue;
+                try {
+                    // Connection must be closed in order to discard any unread
+                    // input arguments and piled up asynchronous calls.
+                    invChannel.close();
+                } catch (IOException e2) {
+                    // Ignore.
                 }
             } catch (IOException e) {
                 if (!mClosing) {
