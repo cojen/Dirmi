@@ -125,13 +125,14 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
      */
     public void writeUnsharedString(String str) throws IOException {
         if (str == null) {
-            mOut.write(NULL);
+            mOut.write(0);
             return;
         }
 
         int length = str.length();
 
-        writeVarUnsignedInt(length);
+        // Add one in order to reserve zero for the null string.
+        writeVarUnsignedInt(length + 1);
 
         // Strings are encoded in a fashion similar to UTF-8, in that ASCII
         // characters are written in one byte. This encoding is more efficient

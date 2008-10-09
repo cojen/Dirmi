@@ -127,13 +127,12 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
     }
 
     public String readUnsharedString() throws IOException {
-        Integer lengthObj = readVarUnsignedInteger();
-        if (lengthObj == null) {
+        int length = readVarUnsignedInteger();
+        if (length == 0) {
             return null;
         }
 
-        int length = lengthObj;
-        if (length == 0) {
+        if (--length == 0) {
             return "";
         }
 
