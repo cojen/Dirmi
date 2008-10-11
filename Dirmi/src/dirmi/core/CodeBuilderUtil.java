@@ -49,7 +49,7 @@ class CodeBuilderUtil {
     static final String METHOD_ID_FIELD_PREFIX = "method_";
 
     // Method name ends with '$' so as not to conflict with user method.
-    static final String INIT_METHOD_NAME = "init$";
+    static final String FACTORY_REF_METHOD_NAME = "factoryRef$";
 
     static boolean equalTypes(RemoteParameter a, RemoteParameter b) {
         return a == null ? b == null : (a.equalTypes(b));
@@ -174,53 +174,35 @@ class CodeBuilderUtil {
     }
 
     static void addInitMethodAndFields(ClassFile cf, RemoteInfo info) {
-        cf.addField(Modifiers.PRIVATE.toStatic(true), FACTORY_FIELD, TypeDesc.OBJECT);
+        cf.addField(Modifiers.PRIVATE.toStatic(true).toVolatile(true),
+                    FACTORY_FIELD, TypeDesc.OBJECT);
         addMethodIDFields(cf, info);
-        addInitMethod(cf, info);
+        addStaticInitMethod(cf, info);
+        addFactoryRefMethod(cf);
     }
 
     private static void addMethodIDFields(ClassFile cf, RemoteInfo info) {
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
-        int methodOrdinal = -1;
-        for (RemoteMethod method : info.getRemoteMethods()) {
-            methodOrdinal++;
-            cf.addField(Modifiers.PRIVATE.toStatic(true),
+        int count = info.getRemoteMethods().size();
+        for (int methodOrdinal = 0; methodOrdinal < count; methodOrdinal++) {
+            cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                         METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
         }
     }
 
-    private static void addInitMethod(ClassFile cf, RemoteInfo info) {
+    private static void addStaticInitMethod(ClassFile cf, RemoteInfo info) {
         final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
         final TypeDesc identifierArrayType = identifierType.toArrayType();
 
-        MethodInfo mi = cf.addMethod
-            (Modifiers.PUBLIC.toStatic(true).toSynchronized(true), INIT_METHOD_NAME,
-             null, new TypeDesc[] {TypeDesc.OBJECT, identifierArrayType});
+        CodeBuilder b = new CodeBuilder(cf.addInitializer());
 
-        CodeBuilder b = new CodeBuilder(mi);
+        b.invokeStatic(TypeDesc.forClass(IdentifierSet.class), "get", identifierArrayType, null);
+        LocalVariable idsVar = b.createLocalVariable(null, identifierArrayType);
+        b.storeLocal(idsVar);
 
-        b.loadLocal(b.getParameter(0));
-        b.storeStaticField(FACTORY_FIELD, TypeDesc.OBJECT);
-
-        int methodOrdinal = -1;
-        for (RemoteMethod method : info.getRemoteMethods()) {
-            methodOrdinal++;
-
-            if (methodOrdinal == 0) {
-                // Crude check to ensure init is called at most once.
-                b.loadStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
-                Label doInit = b.createLabel();
-                b.ifNullBranch(doInit, true);
-
-                b.newObject(TypeDesc.forClass(IllegalStateException.class));
-                b.dup();
-                b.invokeConstructor(TypeDesc.forClass(IllegalStateException.class), null);
-                b.throwObject();
-
-                doInit.setLocation();
-            }
-
-            b.loadLocal(b.getParameter(1));
+        int count = info.getRemoteMethods().size();
+        for (int methodOrdinal = 0; methodOrdinal < count; methodOrdinal++) {
+            b.loadLocal(idsVar);
             b.loadConstant(methodOrdinal);
             b.loadFromArray(identifierType);
             b.storeStaticField(METHOD_ID_FIELD_PREFIX + methodOrdinal, identifierType);
@@ -229,23 +211,60 @@ class CodeBuilderUtil {
         b.returnVoid();
     }
 
+    private static void addFactoryRefMethod(ClassFile cf) {
+        MethodInfo mi = cf.addMethod
+            (Modifiers.PUBLIC.toStatic(true), FACTORY_REF_METHOD_NAME,
+             null, new TypeDesc[] {TypeDesc.OBJECT});
+
+        CodeBuilder b = new CodeBuilder(mi);
+
+        b.loadLocal(b.getParameter(0));
+        b.storeStaticField(FACTORY_FIELD, TypeDesc.OBJECT);
+
+        b.returnVoid();
+    }
+
     /**
      * @param factory Strong reference is kept to this object. As long as stub
      * or skeleton instances exist, the factory will not get reclaimed.
      */
-    static void invokeInitMethod(Class clazz, Object factory, RemoteInfo info)
+    static void invokeFactoryRefMethod(Class clazz, Object factory)
         throws NoSuchMethodException, IllegalAccessException, InvocationTargetException
     {
-        // Prepare identifiers for init method.
-        Identifier[] ids = new Identifier[info.getRemoteMethods().size()];
-        int methodOrdinal = -1;
-        for (RemoteMethod method : info.getRemoteMethods()) {
-            methodOrdinal++;
-            ids[methodOrdinal] = method.getMethodID();
+        clazz.getMethod(FACTORY_REF_METHOD_NAME, Object.class).invoke(null, factory);
+    }
+
+    /**
+     * Hidden class for passing identifiers during stub and skeleton code
+     * generation. It needs to be public to be accessible by generated
+     * code. The purpose of this class is to allow thread safe initialization
+     * of the method ids in the generated stub and skeleton classes. Static
+     * fields set during class initialization are guaranteed to be visible by
+     * all threads according to the java memory model. This class uses a thread
+     * local variable to transfer the ids into a static initializer, which
+     * cannot define any parameters.
+     */
+    public static class IdentifierSet {
+        private static final ThreadLocal<Identifier[]> localIds = new ThreadLocal<Identifier[]>();
+
+        public static Identifier[] get() {
+            return localIds.get();
         }
 
-        // Call static method to initialize method identifiers.
-        clazz.getMethod(INIT_METHOD_NAME, Object.class, Identifier[].class)
-            .invoke(null, factory, ids);
+        static void setMethodIds(RemoteInfo info) {
+            Identifier[] ids = new Identifier[info.getRemoteMethods().size()];
+            int methodOrdinal = 0;
+            for (RemoteMethod method : info.getRemoteMethods()) {
+                ids[methodOrdinal++] = method.getMethodID();
+            }
+            localIds.set(ids);
+        }
+
+        static void clearIds() {
+            localIds.remove();
+        }
+
+        private IdentifierSet() {
+        }
     }
 }

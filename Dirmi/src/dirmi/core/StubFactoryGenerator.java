@@ -102,20 +102,25 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private StubFactory<R> generateFactory() {
-        Class<? extends R> stubClass = generateStub();
-
+        CodeBuilderUtil.IdentifierSet.setMethodIds(mRemoteInfo);
         try {
-            StubFactory<R> factory =  new Factory<R>(stubClass.getConstructor(StubSupport.class));
-            CodeBuilderUtil.invokeInitMethod(stubClass, factory, mRemoteInfo);
-            return factory;
-        } catch (IllegalAccessException e) {
-            throw new Error(e);
-        } catch (InvocationTargetException e) {
-            throw new Error(e);
-        } catch (NoSuchMethodException e) {
-            NoSuchMethodError nsme = new NoSuchMethodError();
-            nsme.initCause(e);
-            throw nsme;
+            Class<? extends R> stubClass = generateStub();
+            try {
+                StubFactory<R> factory = new Factory<R>
+                    (stubClass.getConstructor(StubSupport.class));
+                CodeBuilderUtil.invokeFactoryRefMethod(stubClass, factory);
+                return factory;
+            } catch (IllegalAccessException e) {
+                throw new Error(e);
+            } catch (InvocationTargetException e) {
+                throw new Error(e);
+            } catch (NoSuchMethodException e) {
+                NoSuchMethodError nsme = new NoSuchMethodError();
+                nsme.initCause(e);
+                throw nsme;
+            }
+        } finally {
+            CodeBuilderUtil.IdentifierSet.clearIds();
         }
     }
 

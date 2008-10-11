@@ -95,21 +95,25 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             return EmptySkeletonFactory.THE;
         }
 
-        Class<? extends Skeleton> skeletonClass = generateSkeleton();
-
+        CodeBuilderUtil.IdentifierSet.setMethodIds(mInfo);
         try {
-            SkeletonFactory<R> factory = new Factory<R>
-                (skeletonClass.getConstructor(SkeletonSupport.class, mType));
-            CodeBuilderUtil.invokeInitMethod(skeletonClass, factory, mInfo);
-            return factory;
-        } catch (IllegalAccessException e) {
-            throw new Error(e);
-        } catch (InvocationTargetException e) {
-            throw new Error(e);
-        } catch (NoSuchMethodException e) {
-            NoSuchMethodError nsme = new NoSuchMethodError();
-            nsme.initCause(e);
-            throw nsme;
+            Class<? extends Skeleton> skeletonClass = generateSkeleton();
+            try {
+                SkeletonFactory<R> factory = new Factory<R>
+                    (skeletonClass.getConstructor(SkeletonSupport.class, mType));
+                CodeBuilderUtil.invokeFactoryRefMethod(skeletonClass, factory);
+                return factory;
+            } catch (IllegalAccessException e) {
+                throw new Error(e);
+            } catch (InvocationTargetException e) {
+                throw new Error(e);
+            } catch (NoSuchMethodException e) {
+                NoSuchMethodError nsme = new NoSuchMethodError();
+                nsme.initCause(e);
+                throw nsme;
+            }
+        } finally {
+            CodeBuilderUtil.IdentifierSet.clearIds();
         }
     }
 
