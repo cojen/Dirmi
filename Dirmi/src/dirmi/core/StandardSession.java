@@ -653,6 +653,11 @@ public class StandardSession implements Session {
                 // replacement stub, and so object on server side cannot be
                 // disposed. When new stub is garbage collected, another
                 // disposed message is generated.
+
+                // FIXME: Even if versions match, it doesn't totally prevent
+                // the race condition. A lock must be held on skeleton maps
+                // while this check is made.
+
                 return;
             }
 
