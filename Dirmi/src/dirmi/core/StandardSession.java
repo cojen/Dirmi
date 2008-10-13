@@ -80,12 +80,12 @@ public class StandardSession implements Session {
     // Strong references to SkeletonFactories. SkeletonFactories are created as
     // needed and can be recreated as well. This map just provides quick
     // concurrent access to sharable SkeletonFactory instances.
-    final ConcurrentMap<Identifier, SkeletonFactory> mSkeletonFactories;
+    final ConcurrentMap<VersionedIdentifier, SkeletonFactory> mSkeletonFactories;
 
     // Strong references to Skeletons. Skeletons are created as needed and can
     // be recreated as well. This map just provides quick concurrent access to
     // sharable Skeleton instances.
-    final ConcurrentMap<Identifier, Skeleton> mSkeletons;
+    final ConcurrentMap<VersionedIdentifier, Skeleton> mSkeletons;
 
     final SkeletonSupport mSkeletonSupport;
 
@@ -94,16 +94,16 @@ public class StandardSession implements Session {
     // reclaimed sooner than the referent becomes unreachable. When the
     // referent StubFactory becomes unreachable, its entry in this map must be
     // removed to reclaim memory.
-    final ConcurrentMap<Identifier, StubFactoryRef> mStubFactoryRefs;
+    final ConcurrentMap<VersionedIdentifier, StubFactoryRef> mStubFactoryRefs;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
     // to be strongly reachable or else they will be reclaimed sooner than the
     // referent becomes unreachable. When the referent Stub becomes
     // unreachable, its entry in this map must be removed to reclaim memory.
-    final ConcurrentMap<Identifier, StubRef> mStubRefs;
+    final ConcurrentMap<VersionedIdentifier, StubRef> mStubRefs;
 
     // Automatically disposed objects, pending transmission to server.
-    final ConcurrentLinkedQueue<Identifier> mDisposedObjects;
+    final ConcurrentLinkedQueue<VersionedIdentifier> mDisposedObjects;
 
     final Object mLocalServer;
     final Object mRemoteServer;
@@ -155,12 +155,12 @@ public class StandardSession implements Session {
         mLog = log;
         mLocalServer = server;
 
-        mSkeletonFactories = new ConcurrentHashMap<Identifier, SkeletonFactory>();
-        mSkeletons = new ConcurrentHashMap<Identifier, Skeleton>();
+        mSkeletonFactories = new ConcurrentHashMap<VersionedIdentifier, SkeletonFactory>();
+        mSkeletons = new ConcurrentHashMap<VersionedIdentifier, Skeleton>();
         mSkeletonSupport = new SkeletonSupportImpl();
-        mStubFactoryRefs = new ConcurrentHashMap<Identifier, StubFactoryRef>();
-        mStubRefs = new ConcurrentHashMap<Identifier, StubRef>();
-        mDisposedObjects = new ConcurrentLinkedQueue<Identifier>();
+        mStubFactoryRefs = new ConcurrentHashMap<VersionedIdentifier, StubFactoryRef>();
+        mStubRefs = new ConcurrentHashMap<VersionedIdentifier, StubRef>();
+        mDisposedObjects = new ConcurrentLinkedQueue<VersionedIdentifier>();
 
         mChannelPool = new LinkedList<InvocationChan>();
 
@@ -394,26 +394,34 @@ public class StandardSession implements Session {
         }
 
         while (true) {
-            ArrayList<Identifier> disposedStubsList = new ArrayList<Identifier>();
+            ArrayList<VersionedIdentifier> disposedStubsList =
+                new ArrayList<VersionedIdentifier>();
             for (int i = 0; i < DISPOSE_BATCH; i++) {
-                Identifier id = mDisposedObjects.poll();
+                VersionedIdentifier id = mDisposedObjects.poll();
                 if (id == null) {
                     break;
                 }
                 disposedStubsList.add(id);
             }
 
-            if (disposedStubsList.size() == 0) {
+            int size = disposedStubsList.size();
+            if (size == 0) {
                 return;
             }
 
-            Identifier[] disposedStubs = disposedStubsList
-                .toArray(new Identifier[disposedStubsList.size()]);
+            VersionedIdentifier[] disposedStubs = new VersionedIdentifier[size];
+            int[] localVersions = new int[size];
+            int[] remoteVersions = new int[size];
+
+            for (int i=0; i<size; i++) {
+                VersionedIdentifier id = disposedStubsList.get(i);
+                disposedStubs[i] = id;
+                localVersions[i] = id.localVersion();
+                remoteVersions[i] = id.remoteVersion();
+            }
 
             try {
-                // FIXME: Race condition when disposing of objects which are
-                // still required by outstanding asynchronous calls.
-                mRemoteAdmin.disposed(disposedStubs);
+                mRemoteAdmin.disposed(disposedStubs, localVersions, remoteVersions);
             } catch (RemoteException e) {
                 if (e.getCause() instanceof IOException) {
                     throw (IOException) e.getCause();
@@ -427,11 +435,12 @@ public class StandardSession implements Session {
 
     void handleRequest(InvocationChannel invChannel) {
         while (true) {
-            final Identifier objID;
+            final VersionedIdentifier objID;
             final Identifier methodID;
             try {
                 DataInput din = (DataInput) invChannel.getInputStream();
-                objID = Identifier.read(din);
+                objID = VersionedIdentifier.read(din);
+                objID.updateRemoteVersion(invChannel.readInt());
                 methodID = Identifier.read(din);
             } catch (IOException e) {
                 try {
@@ -559,9 +568,9 @@ public class StandardSession implements Session {
     }
 
     private class StubFactoryRef extends UnreachableReference<StubFactory> {
-        private final Identifier mTypeID;
+        private final VersionedIdentifier mTypeID;
 
-        StubFactoryRef(StubFactory factory, Identifier typeID) {
+        StubFactoryRef(StubFactory factory, VersionedIdentifier typeID) {
             super(factory);
             mTypeID = typeID;
         }
@@ -590,12 +599,13 @@ public class StandardSession implements Session {
             /**
              * Returns RemoteInfo object from server.
              */
-            RemoteInfo getRemoteInfo(Identifier id) throws RemoteException;
+            RemoteInfo getRemoteInfo(VersionedIdentifier id) throws RemoteException;
 
             /**
              * Notification from client when it has disposed of identified objects.
              */
-            void disposed(Identifier[] ids) throws RemoteException;
+            void disposed(VersionedIdentifier[] ids, int[] localVersion, int[] remoteVersions)
+                throws RemoteException;
 
             /**
              * Notification from client when explicitly closed.
@@ -613,7 +623,7 @@ public class StandardSession implements Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public RemoteInfo getRemoteInfo(Identifier id) throws NoSuchClassException {
+        public RemoteInfo getRemoteInfo(VersionedIdentifier id) throws NoSuchClassException {
             Class remoteType = (Class) id.tryRetrieve();
             if (remoteType == null) {
                 throw new NoSuchClassException("No Class found for id: " + id);
@@ -621,15 +631,56 @@ public class StandardSession implements Session {
             return RemoteIntrospector.examine(remoteType);
         }
 
-        public void disposed(Identifier[] ids) {
+        /**
+         * Note: Compared to the Admin interface, the names of version
+         * arguments are swapped. This is because the local and remote
+         * endpoints are now swapped.
+         */
+        public void disposed(VersionedIdentifier[] ids, int[] remoteVersions, int[] localVersions)
+        {
             if (ids != null) {
-                for (Identifier id : ids) {
-                    dispose(id);
+                for (int i=0; i<ids.length; i++) {
+                    dispose(ids[i], remoteVersions[i], localVersions[i]);
                 }
             }
         }
 
-        private void dispose(Identifier id) {
+        private void dispose(VersionedIdentifier id, int remoteVersion, int localVersion) {
+            if (id.localVersion() != localVersion) {
+                // If local version does not match, then stub for remote object
+                // was disposed at the same time that remote object was
+                // transported to the client. Client will generate a
+                // replacement stub, and so object on server side cannot be
+                // disposed. When new stub is garbage collected, another
+                // disposed message is generated.
+                return;
+            }
+
+            int currentRemoteVersion;
+            while ((currentRemoteVersion = id.remoteVersion()) != remoteVersion) {
+                if (currentRemoteVersion > remoteVersion) {
+                    // Disposed message was for an older stub instance. It is
+                    // no longer applicable.
+                    return;
+                }
+
+                // Disposed message arrived too soon. Wait a bit and let
+                // version catch up. This case is not expected to occur when
+                // synchronous calls are being made against the object.
+                // Asynchronous calls don't keep a local reference to the stub
+                // after sending a request, and so it can be garbage collected
+                // before the request is received.
+
+                // FIXME: After a few waits, give up and dispose anyhow.
+                // Although this should not happen, garbage collector is
+                // allowed to continue just in case it does.
+
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                }
+            }
+
             mSkeletonFactories.remove(id);
             mSkeletons.remove(id);
         }
@@ -815,11 +866,11 @@ public class StandardSession implements Session {
             if (obj instanceof MarshalledRemote) {
                 MarshalledRemote mr = (MarshalledRemote) obj;
 
-                Identifier objID = mr.mObjID;
+                VersionedIdentifier objID = mr.mObjID;
                 Remote remote = (Remote) objID.tryRetrieve();
 
                 if (remote == null) {
-                    Identifier typeID = mr.mTypeID;
+                    VersionedIdentifier typeID = mr.mTypeID;
                     StubFactory factory = (StubFactory) typeID.tryRetrieve();
 
                     if (factory == null) {
@@ -865,7 +916,7 @@ public class StandardSession implements Session {
         protected Object replaceObject(Object obj) throws IOException {
             if (obj instanceof Remote && !(obj instanceof Serializable)) {
                 Remote remote = (Remote) obj;
-                Identifier objID = Identifier.identify(remote);
+                VersionedIdentifier objID = VersionedIdentifier.identify(remote);
 
                 Class remoteType;
                 try {
@@ -874,7 +925,7 @@ public class StandardSession implements Session {
                     throw new WriteAbortedException("Malformed Remote object", e);
                 }
 
-                Identifier typeID = Identifier.identify(remoteType);
+                VersionedIdentifier typeID = VersionedIdentifier.identify(remoteType);
                 RemoteInfo info = null;
 
                 if (!mStubRefs.containsKey(objID) && !mSkeletons.containsKey(objID)) {
@@ -944,9 +995,9 @@ public class StandardSession implements Session {
     }
 
     private class StubSupportImpl implements StubSupport {
-        private final Identifier mObjID;
+        private final VersionedIdentifier mObjID;
 
-        StubSupportImpl(Identifier id) {
+        StubSupportImpl(VersionedIdentifier id) {
             mObjID = id;
         }
 
@@ -957,6 +1008,7 @@ public class StandardSession implements Session {
             try {
                 channel = getChannel();
                 mObjID.write((DataOutput) channel.getOutputStream());
+                channel.writeInt(mObjID.nextLocalVersion());
                 return channel;
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
