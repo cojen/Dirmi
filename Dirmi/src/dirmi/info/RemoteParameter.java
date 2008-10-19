@@ -33,5 +33,15 @@ public interface RemoteParameter<T> extends Serializable {
 
     Class<T> getType();
 
+    /**
+     * Returns true if parameter defines the runtime timeout for the method.
+     */
+    boolean isTimeout();
+
+    /**
+     * Returns true if parameter defines the runtime timeout unit for the method.
+     */
+    boolean isTimeoutUnit();
+
     boolean equalTypes(RemoteParameter other);
 }

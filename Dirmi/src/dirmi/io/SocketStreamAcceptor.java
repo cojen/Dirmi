@@ -24,6 +24,7 @@ import java.net.SocketAddress;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -49,47 +50,56 @@ public class SocketStreamAcceptor implements StreamAcceptor {
 
         executor.execute(new Runnable() {
             public void run() {
-                Socket socket;
-                try {
-                    socket = mServerSocket.accept();
-                    executor.execute(this);
-                } catch (IOException e) {
-                    StreamListener listener;
-                    if ((listener = pollListener()) != null) {
-                        listener.failed(e);
+                boolean replaced = false;
+                do {
+                    Socket socket;
+                    try {
+                        socket = mServerSocket.accept();
+                    } catch (IOException e) {
+                        StreamListener listener;
+                        if ((listener = pollListener()) != null) {
+                            listener.failed(e);
+                        }
+                        while ((listener = mListenerQueue.poll()) != null) {
+                            listener.failed(e);
+                        }
+                        return;
                     }
-                    while ((listener = mListenerQueue.poll()) != null) {
-                        listener.failed(e);
+
+                    try {
+                        executor.execute(this);
+                        replaced = true;
+                    } catch (RejectedExecutionException e) {
+                        // Accept next socket in current thread.
                     }
-                    return;
-                }
 
-                try {
-                    socket.setTcpNoDelay(true);
-                    SocketChannel channel = new SocketChannel(socket);
+                    try {
+                        socket.setTcpNoDelay(true);
+                        SocketChannel channel = new SocketChannel(socket);
 
-                    StreamListener listener = pollListener();
-                    if (listener != null) {
-                        listener.established(channel);
-                    } else {
-                        // Not accepted in time, so close it.
+                        StreamListener listener = pollListener();
+                        if (listener != null) {
+                            listener.established(channel);
+                        } else {
+                            // Not accepted in time, so close it.
+                            try {
+                                channel.close();
+                            } catch (IOException e) {
+                                // Ignore.
+                            }
+                        }
+                    } catch (IOException e) {
                         try {
-                            channel.close();
-                        } catch (IOException e) {
+                            socket.close();
+                        } catch (IOException e2) {
                             // Ignore.
                         }
+                        StreamListener listener = pollListener();
+                        if (listener != null) {
+                            listener.failed(e);
+                        }
                     }
-                } catch (IOException e) {
-                    try {
-                        socket.close();
-                    } catch (IOException e2) {
-                        // Ignore.
-                    }
-                    StreamListener listener = pollListener();
-                    if (listener != null) {
-                        listener.failed(e);
-                    }
-                }
+                } while (!replaced);
             }
         });
     }

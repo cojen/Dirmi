@@ -42,6 +42,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -52,6 +53,7 @@ import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
 import dirmi.NoSuchClassException;
+import dirmi.RemoteTimeoutException;
 import dirmi.Session;
 
 import dirmi.info.RemoteInfo;
@@ -177,7 +179,7 @@ public class StandardSession implements Session {
                 InvocationChan chan;
                 doBoot: synchronized (this) {
                     try {
-                        chan = new InvocationChan(channel);
+                        chan = new NewInvocationChan(channel);
                         InvocationInputStream in = chan.getInputStream();
 
                         int magic = in.readInt();
@@ -262,7 +264,7 @@ public class StandardSession implements Session {
         {
             StreamChannel channel = broker.connect();
             try {
-                InvocationChan chan = new InvocationChan(channel);
+                InvocationChan chan = new NewInvocationChan(channel);
                 InvocationOutputStream out = chan.getOutputStream();
 
                 out.writeInt(MAGIC_NUMBER);
@@ -548,7 +550,7 @@ public class StandardSession implements Session {
                 return channel;
             }
         }
-        return new InvocationChan(mBroker.connect());
+        return new NewInvocationChan(mBroker.connect());
     }
 
     void warn(String message) {
@@ -742,22 +744,8 @@ public class StandardSession implements Session {
 
     private class Handler implements StreamListener {
         public void established(StreamChannel channel) {
-            try {
-                mBroker.accept(this);
-                InvocationChannel invChannel = new InvocationChan(channel);
-                handleRequest(invChannel);
-            } catch (IOException e) {
-                if (!mClosing) {
-                    error("Failure reading request", e);
-                }
-                if (channel != null) {
-                    try {
-                        channel.close();
-                    } catch (IOException e2) {
-                        // Ignore.
-                    }
-                }
-            }
+            mBroker.accept(this);
+            handleRequest(new NewInvocationChan(channel));
         }
 
         public void failed(IOException e) {
@@ -772,69 +760,63 @@ public class StandardSession implements Session {
         }
     }
 
-    private class InvocationChan extends AbstractInvocationChannel {
-        private final StreamChannel mChannel;
-        private final InvocationInputStream mInvIn;
-        private final InvocationOutputStream mInvOut;
+    private abstract class InvocationChan extends AbstractInvocationChannel {
+        protected final StreamChannel mChannel;
 
-        private volatile long mTimestamp;
+        private volatile boolean mClosed;
 
-        InvocationChan(StreamChannel channel) throws IOException {
+        InvocationChan(StreamChannel channel) {
             mChannel = channel;
-
-            mInvOut = new InvocationOutputStream
-                (new ReplacingObjectOutputStream(channel.getOutputStream()),
-                 getLocalAddress(),
-                 getRemoteAddress());
-
-            // Hack to ensure ObjectOutputStream header is sent, to prevent
-            // peer from locking up when it constructs ObjectInputStream.
-            mInvOut.flush();
-
-            mInvIn = new InvocationInputStream
-                (new ResolvingObjectInputStream(channel.getInputStream()),
-                 getLocalAddress(),
-                 getRemoteAddress());
         }
 
-        public void close() throws IOException {
-            mInvOut.close();
+        public final void close() throws IOException {
+            mClosed = true;
+
+            OutputStream out = getOutputNow();
+            if (out != null) {
+                try {
+                    out.close();
+                } catch (IOException e) {
+                    try {
+                        mChannel.close();
+                    } catch (IOException e2) {
+                    }
+                    throw e;
+                }
+            }
+
             mChannel.close();
         }
 
-        public InvocationInputStream getInputStream() throws IOException {
-            return mInvIn;
-        }
-
-        public InvocationOutputStream getOutputStream() throws IOException {
-            return mInvOut;
-        }
-
-        public Object getLocalAddress() {
+        public final Object getLocalAddress() {
             return mChannel.getLocalAddress();
         }
 
-        public Object getRemoteAddress() {
+        public final Object getRemoteAddress() {
             return mChannel.getRemoteAddress();
         }
 
-        public Throwable readThrowable() throws IOException {
-            return mInvIn.readThrowable();
+        public final Throwable readThrowable() throws IOException {
+            return getInputStream().readThrowable();
         }
 
-        public void writeThrowable(Throwable t) throws IOException {
-            mInvOut.writeThrowable(t);
+        public final void writeThrowable(Throwable t) throws IOException {
+            getOutputStream().writeThrowable(t);
+        }
+
+        final boolean isClosed() {
+            return mClosed;
         }
 
         /**
          * Recycle the channel to be used for writing new requests.
          */
-        void recycle() {
+        final void recycle() {
             try {
                 getOutputStream().reset();
-                mTimestamp = System.currentTimeMillis();
+                InvocationChan recycled = doRecycle();
                 synchronized (mChannelPool) {
-                    mChannelPool.add(this);
+                    mChannelPool.add(recycled);
                 }
             } catch (Exception e) {
                 try {
@@ -846,6 +828,113 @@ public class StandardSession implements Session {
             }
         }
 
+        /**
+         * Implementation may return null if output not initialized yet.
+         */
+        abstract OutputStream getOutputNow();
+
+        abstract InvocationChan doRecycle() throws IOException;
+
+        abstract long getIdleTimestamp();
+    }
+
+    private class NewInvocationChan extends InvocationChan {
+        private InvocationInputStream mInvIn;
+        private volatile InvocationOutputStream mInvOut;
+
+        NewInvocationChan(StreamChannel channel) {
+            super(channel);
+        }
+
+        public synchronized InvocationInputStream getInputStream() throws IOException {
+            InvocationInputStream in = mInvIn;
+            if (in == null) {
+                connect();
+                in = mInvIn;
+            }
+            return in;
+        }
+
+        public synchronized InvocationOutputStream getOutputStream() throws IOException {
+            InvocationOutputStream out = mInvOut;
+            if (out == null) {
+                connect();
+                out = mInvOut;
+            }
+            return out;
+        }
+
+        private void connect() throws IOException {
+            mInvOut = new InvocationOutputStream
+                (new ReplacingObjectOutputStream(mChannel.getOutputStream()),
+                 getLocalAddress(), getRemoteAddress());
+
+            // Ensure ObjectOutputStream header is sent, to prevent peer from
+            // locking up when it constructs ObjectInputStream.
+            mInvOut.flush();
+
+            mInvIn = new InvocationInputStream
+                (new ResolvingObjectInputStream(mChannel.getInputStream()),
+                 getLocalAddress(), getRemoteAddress());
+        }
+
+        @Override
+        OutputStream getOutputNow() {
+            return mInvOut;
+        }
+
+        @Override
+        InvocationChan doRecycle() throws IOException {
+            InvocationInputStream in;
+            InvocationOutputStream out;
+            synchronized (this) {
+                in = getInputStream();
+                out = getOutputStream();
+            }
+            return new RecycledInvocationChan(mChannel, in, out);
+        }
+
+        @Override
+        long getIdleTimestamp() {
+            return 0;
+        }
+    }
+
+    private class RecycledInvocationChan extends InvocationChan {
+        private final InvocationInputStream mInvIn;
+        private final InvocationOutputStream mInvOut;
+
+        private volatile long mTimestamp;
+
+        RecycledInvocationChan(StreamChannel channel,
+                               InvocationInputStream in, InvocationOutputStream out)
+        {
+            super(channel);
+            mInvIn = in;
+            mInvOut = out;
+            mTimestamp = System.currentTimeMillis();
+        }
+
+        public InvocationInputStream getInputStream() throws IOException {
+            return mInvIn;
+        }
+
+        public InvocationOutputStream getOutputStream() throws IOException {
+            return mInvOut;
+        }
+
+        @Override
+        OutputStream getOutputNow() {
+            return mInvOut;
+        }
+
+        @Override
+        InvocationChan doRecycle() {
+            mTimestamp = System.currentTimeMillis();
+            return this;
+        }
+
+        @Override
         long getIdleTimestamp() {
             return mTimestamp;
         }
@@ -1006,22 +1095,132 @@ public class StandardSession implements Session {
             mObjID = id;
         }
 
-        public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx)
+        public <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureEx)
             throws T
         {
-            InvocationChannel channel = null;
             try {
-                channel = getChannel();
+                return getChannel();
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, null, e);
+            }
+        }
+
+        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
+                                                 InvocationChannel channel)
+            throws T
+        {
+            try {
                 mObjID.write((DataOutput) channel.getOutputStream());
                 channel.writeInt(mObjID.nextLocalVersion());
-                return channel;
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
         }
 
+        public <T extends Throwable> Future<?> invoke(Class<T> remoteFailureEx,
+                                                      InvocationChannel channel,
+                                                      long timeout, TimeUnit unit)
+            throws T
+        {
+            if (timeout <= 0) {
+                if (timeout < 0) {
+                    invoke(remoteFailureEx, channel);
+                    return null;
+                } else {
+                    // Fail immediately if zero timeout.
+                    throw failed(remoteFailureEx, channel,
+                                 new RemoteTimeoutException(timeout, unit));
+                }
+            }
+
+            Future<?> closeTask;
+            try {
+                closeTask = mExecutor.schedule(new CloseTask(channel), timeout, unit);
+            } catch (RejectedExecutionException e) {
+                throw failed(remoteFailureEx, channel, e);
+            }
+
+            try {
+                mObjID.write((DataOutput) channel.getOutputStream());
+                channel.writeInt(mObjID.nextLocalVersion());
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
+            }
+
+            return closeTask;
+        }
+
+        public <T extends Throwable> Future<?> invoke(Class<T> remoteFailureEx,
+                                                      InvocationChannel channel,
+                                                      double timeout, TimeUnit unit)
+            throws T
+        {
+            if (timeout <= 0) {
+                if (timeout < 0) {
+                    invoke(remoteFailureEx, channel);
+                    return null;
+                } else {
+                    // Fail immediately if zero timeout.
+                    throw failed(remoteFailureEx, channel,
+                                 new RemoteTimeoutException(timeout, unit));
+                }
+            }
+
+            // Convert timeout to nanoseconds.
+
+            double factor;
+            switch (unit) {
+            case NANOSECONDS:
+                factor = 1e0;
+                break;
+            case MICROSECONDS:
+                factor = 1e3;
+                break;
+            case MILLISECONDS:
+                factor = 1e6;
+                break;
+            case SECONDS:
+                factor = 1e9;
+                break;
+            case MINUTES:
+                factor = 1e9 * 60;
+                break;
+            case HOURS:
+                factor = 1e9 * 60 * 60;
+                break;
+            case DAYS:
+                factor = 1e9 * 60 * 60 * 24;
+                break;
+            default:
+                throw new IllegalArgumentException(unit.toString());
+            }
+
+            long nanoTimeout = (long) (timeout * factor);
+
+            Future<?> closeTask;
+            try {
+                closeTask = mExecutor.schedule
+                    (new CloseTask(channel), nanoTimeout, TimeUnit.NANOSECONDS);
+            } catch (RejectedExecutionException e) {
+                throw failed(remoteFailureEx, channel, e);
+            }
+
+            try {
+                mObjID.write((DataOutput) channel.getOutputStream());
+                channel.writeInt(mObjID.nextLocalVersion());
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
+            }
+
+            return closeTask;
+        }
+
         public void finished(InvocationChannel channel) {
-            if (channel instanceof InvocationChan) {
+            finished(channel, null);
+        }
+
+        public void finished(InvocationChannel channel, Future<?> closeTask) {
+            if (cancelCloseTask(channel, closeTask) && channel instanceof InvocationChan) {
                 ((InvocationChan) channel).recycle();
             } else {
                 try {
@@ -1033,7 +1232,8 @@ public class StandardSession implements Session {
         }
 
         public <T extends Throwable> T failed(Class<T> remoteFailureEx,
-                                              InvocationChannel channel, Throwable cause)
+                                              InvocationChannel channel,
+                                              Throwable cause)
         {
             if (channel != null) {
                 try {
@@ -1046,12 +1246,20 @@ public class StandardSession implements Session {
             RemoteException ex;
             if (cause == null) {
                 ex = new RemoteException();
+            } else if (cause instanceof RemoteTimeoutException) {
+                ex = (RemoteException) cause;
             } else {
                 String message = cause.getMessage();
                 if (message == null || (message = message.trim()).length() == 0) {
                     message = cause.toString();
                 }
-                ex = new RemoteException(message, cause);
+                if (cause instanceof java.net.ConnectException) {
+                    ex = new java.rmi.ConnectException(message, (Exception) cause);
+                } else if (cause instanceof java.net.UnknownHostException) {
+                    ex = new java.rmi.UnknownHostException(message, (Exception) cause);
+                } else {
+                    ex = new RemoteException(message, cause);
+                }
             }
 
             if (!remoteFailureEx.isAssignableFrom(RemoteException.class)) {
@@ -1071,6 +1279,30 @@ public class StandardSession implements Session {
             }
 
             return (T) ex;
+        }
+
+        public <T extends Throwable> T failed(Class<T> remoteFailureEx,
+                                              InvocationChannel channel,
+                                              Throwable cause,
+                                              long timeout, TimeUnit unit, Future<?> closeTask)
+        {
+            if (!cancelCloseTask(channel, closeTask) && cause instanceof IOException) {
+                // Since close task ran, assume cause is timeout.
+                cause = new RemoteTimeoutException(timeout, unit);
+            }
+            return failed(remoteFailureEx, channel, cause);
+        }
+
+        public <T extends Throwable> T failed(Class<T> remoteFailureEx,
+                                              InvocationChannel channel,
+                                              Throwable cause,
+                                              double timeout, TimeUnit unit, Future<?> closeTask)
+        {
+            if (!cancelCloseTask(channel, closeTask) && cause instanceof IOException) {
+                // Since close task ran, assume cause is timeout.
+                cause = new RemoteTimeoutException(timeout, unit);
+            }
+            return failed(remoteFailureEx, channel, cause);
         }
 
         public int stubHashCode() {
@@ -1094,6 +1326,42 @@ public class StandardSession implements Session {
         void unreachable() {
             if (mStubRefs.remove(mObjID) != null) {
                 mDisposedObjects.add(mObjID);
+            }
+        }
+
+        /**
+         * @return true if channel was not closed
+         */
+        private boolean cancelCloseTask(InvocationChannel channel, Future<?> closeTask) {
+            if (closeTask == null) {
+                return true;
+            }
+            if (closeTask.cancel(false)) {
+                if (channel instanceof InvocationChan) {
+                    // Future interface cannot be queried to determine if task
+                    // is currently running. Confirm that channel was not closed.
+                    if (((InvocationChan) channel).isClosed()) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private static class CloseTask implements Runnable {
+        private final InvocationChannel mChannel;
+
+        CloseTask(InvocationChannel channel) {
+            mChannel = channel;
+        }
+
+        public void run() {
+            try {
+                mChannel.close();
+            } catch (IOException e) {
+                // Ignore.
             }
         }
     }

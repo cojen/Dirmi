@@ -196,11 +196,15 @@ public class StreamBrokerAcceptor implements Closeable {
                 lock.unlock();
             }
         } catch (final IOException e) {
-            mExecutor.execute(new Runnable() {
-                public void run() {
-                    listener.failed(e);
-                }
-            });
+            try {
+                mExecutor.execute(new Runnable() {
+                    public void run() {
+                        listener.failed(e);
+                    }
+                });
+            } catch (RejectedExecutionException e2) {
+                listener.failed(e);
+            }
         }
     }
 

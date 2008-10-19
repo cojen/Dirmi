@@ -30,6 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.concurrent.TimeUnit;
+
+import java.lang.annotation.Annotation;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -42,6 +46,8 @@ import org.cojen.util.WeakIdentityMap;
 import dirmi.Asynchronous;
 import dirmi.Pipe;
 import dirmi.RemoteFailure;
+import dirmi.Timeout;
+import dirmi.TimeoutUnit;
 
 import dirmi.core.Identifier;
 
@@ -259,6 +265,9 @@ public class RemoteIntrospector {
         private final transient RemoteParameter<? extends Throwable> mRemoteFailureException;
         private final transient boolean mRemoteFailureExceptionDeclared;
 
+        private final transient long mTimeout;
+        private final transient TimeUnit mTimeoutUnit;
+
         private transient Map<String, Set<RMethod>> mMethodsByName;
         private transient Map<Identifier, RemoteMethod> mMethodMap;
 
@@ -271,11 +280,31 @@ public class RemoteIntrospector {
             {
                 RemoteFailure ann  = remote.getAnnotation(RemoteFailure.class);
                 if (ann == null) {
-                    mRemoteFailureException = RParameter.make(RemoteException.class, false);
+                    mRemoteFailureException = RParameter.make(RemoteException.class);
                     mRemoteFailureExceptionDeclared = true;
                 } else {
-                    mRemoteFailureException = RParameter.make(ann.exception(), false);
+                    mRemoteFailureException = RParameter.make(ann.exception());
                     mRemoteFailureExceptionDeclared = ann.declared();
+                }
+            }
+
+            {
+                Timeout ann = remote.getAnnotation(Timeout.class);
+                if (ann == null) {
+                    mTimeout = -1;
+                } else {
+                    long timeout = ann.value();
+                    mTimeout = timeout < 0 ? -1 : timeout;
+                }
+            }
+
+            {
+                TimeoutUnit ann = remote.getAnnotation(TimeoutUnit.class);
+                if (ann == null) {
+                    mTimeoutUnit = TimeUnit.MILLISECONDS;
+                } else {
+                    TimeUnit unit = ann.value();
+                    mTimeoutUnit = (unit == null) ? TimeUnit.MILLISECONDS : unit;
                 }
             }
         }
@@ -397,6 +426,14 @@ public class RemoteIntrospector {
             return mRemoteFailureExceptionDeclared;
         }
 
+        long getTimeout() {
+            return mTimeout;
+        }
+
+        TimeUnit getTimeoutUnit() {
+            return mTimeoutUnit;
+        }
+
         void resolve() {
             Set<Class> validExceptions = new HashSet<Class>();
             for (RMethod method : mMethods) {
@@ -418,6 +455,9 @@ public class RemoteIntrospector {
 
         private RemoteParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
+
+        private long mTimeout;
+        private TimeUnit mTimeoutUnit;
 
         private transient Method mMethod;
 
@@ -451,7 +491,7 @@ public class RemoteIntrospector {
             if (returnType == null) {
                 mReturnType = null;
             } else {
-                mReturnType = RParameter.makeTemp(returnType, mAsynchronous);
+                mReturnType = RParameter.make(returnType, mAsynchronous);
             }
 
             Class<?>[] paramsTypes = m.getParameterTypes();
@@ -459,8 +499,74 @@ public class RemoteIntrospector {
                 mParameterTypes = null;
             } else {
                 mParameterTypes = new ArrayList<RParameter<Object>>(paramsTypes.length);
-                for (Class paramType : paramsTypes) {
-                    mParameterTypes.add(RParameter.makeTemp(paramType, mAsynchronous));
+                Annotation[][] paramsAnns = m.getParameterAnnotations();
+
+                // First pass, find any timeout and unit parameters.
+
+                int timeoutParam = -1;
+                int timeoutUnitParam = -1;
+                boolean defaultTimeoutUnitParam = false;
+
+                for (int i=0; i<paramsTypes.length; i++) {
+                    Class paramType = paramsTypes[i];
+                    Annotation[] paramAnns = paramsAnns[i];
+
+                    if (paramAnns != null) {
+                        for (Annotation ann : paramAnns) {
+                            if (ann instanceof Timeout) {
+                                if (timeoutParam >= 0) {
+                                    throw new IllegalArgumentException
+                                        ("At most one timeout parameter allowed: " +
+                                         methodDesc(m));
+                                }
+
+                                TypeDesc desc = TypeDesc.forClass(paramType).toPrimitiveType();
+                                if (desc == null ||
+                                    desc == TypeDesc.BOOLEAN || desc == TypeDesc.CHAR)
+                                {
+                                    throw new IllegalArgumentException
+                                        ("Timeout parameter can only apply to primitive " +
+                                         "numerical types, not " +
+                                         TypeDesc.forClass(paramType).getFullName() +
+                                         ": " + methodDesc(m));
+                                }
+
+                                timeoutParam = i;
+
+                                // If next parameter type is a TimeUnit, it is
+                                // selected to be the timeout unit parameter.
+                                if (timeoutUnitParam < 0 &&
+                                    i + 1 < paramsTypes.length &&
+                                    paramsTypes[i + 1] == TimeUnit.class)
+                                {
+                                    timeoutUnitParam = i + 1;
+                                    defaultTimeoutUnitParam = true;
+                                }
+                            } else if (ann instanceof TimeoutUnit) {
+                                if (timeoutUnitParam >= 0 && !defaultTimeoutUnitParam) {
+                                    throw new IllegalArgumentException
+                                        ("At most one timeout unit parameter allowed: " +
+                                         methodDesc(m));
+                                }
+
+                                if (paramType != TimeUnit.class) {
+                                    throw new IllegalArgumentException
+                                        ("Timeout unit parameter can only be TimeUnit, not " +
+                                         TypeDesc.forClass(paramType).getFullName() +
+                                         ": " + methodDesc(m));
+                                }
+
+                                timeoutUnitParam = i;
+                                defaultTimeoutUnitParam = false;
+                            }
+                        }
+                    }
+                }
+
+                for (int i=0; i<paramsTypes.length; i++) {
+                    Class paramType = paramsTypes[i];
+                    mParameterTypes.add(RParameter.make(paramType, mAsynchronous,
+                                                        timeoutParam == i, timeoutUnitParam == i));
                 }
             }
 
@@ -471,7 +577,7 @@ public class RemoteIntrospector {
                 Set<RemoteParameter<Throwable>> set =
                     new LinkedHashSet<RemoteParameter<Throwable>>();
                 for (Class exceptionType : exceptionTypes) {
-                    set.add(RParameter.makeTemp(exceptionType, false));
+                    set.add(RParameter.make(exceptionType));
                 }
                 mExceptionTypes = Collections.unmodifiableSet(set);
             }
@@ -482,8 +588,31 @@ public class RemoteIntrospector {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called.
                 } else {
-                    mRemoteFailureException = RParameter.make(ann.exception(), false);
+                    mRemoteFailureException = RParameter.make(ann.exception());
                     mRemoteFailureExceptionDeclared = ann.declared();
+                }
+            }
+
+            {
+                Timeout ann = m.getAnnotation(Timeout.class);
+                if (ann == null) {
+                    // Use inherited values from RemoteInfo, filled in when
+                    // resolve is called. Store min value to indicate this.
+                    mTimeout = Long.MIN_VALUE;
+                } else {
+                    long timeout = ann.value();
+                    mTimeout = timeout < 0 ? -1 : timeout;
+                }
+            }
+
+            {
+                TimeoutUnit ann = m.getAnnotation(TimeoutUnit.class);
+                if (ann == null) {
+                    // Use inherited values from RemoteInfo, filled in when
+                    // resolve is called.
+                } else {
+                    TimeUnit unit = ann.value();
+                    mTimeoutUnit = (unit == null) ? TimeUnit.MILLISECONDS : unit;
                 }
             }
 
@@ -549,6 +678,14 @@ public class RemoteIntrospector {
 
         public boolean isRemoteFailureExceptionDeclared() {
             return mRemoteFailureExceptionDeclared;
+        }
+
+        public long getTimeout() {
+            return mTimeout;
+        }
+
+        public TimeUnit getTimeoutUnit() {
+            return mTimeoutUnit;
         }
 
         @Override
@@ -682,11 +819,6 @@ public class RemoteIntrospector {
         }
 
         void resolve(RInfo info, Set<Class> validExceptions) {
-            if (mReturnType != null) {
-                Class<?> type = mReturnType.getType();
-                mReturnType = RParameter.make(type, mReturnType.isUnshared());
-            }
-
             if (mParameterTypes != null) {
                 int size = mParameterTypes.size();
 
@@ -702,7 +834,7 @@ public class RemoteIntrospector {
                 }
 
                 for (int i=0; i<size; i++) {
-                    RemoteParameter param = mParameterTypes.get(i);
+                    RParameter param = mParameterTypes.get(i);
                     Class type = param.getType();
 
                     boolean unshared = !noneUnshared && param.isUnshared();
@@ -719,7 +851,7 @@ public class RemoteIntrospector {
                         }
                     }
 
-                    mParameterTypes.set(i, RParameter.make(type, unshared));
+                    mParameterTypes.set(i, param.toUnshared(unshared));
                 }
 
                 mParameterTypes = Collections.unmodifiableList(mParameterTypes);
@@ -729,6 +861,16 @@ public class RemoteIntrospector {
                 // Inherit from remote interface.
                 mRemoteFailureException = info.getRemoteFailureException();
                 mRemoteFailureExceptionDeclared = info.isRemoteFailureExceptionDeclared();
+            }
+
+            if (mTimeout == Long.MIN_VALUE) {
+                // Inherit from remote interface.
+                mTimeout = info.getTimeout();
+            }
+
+            if (mTimeoutUnit == null) {
+                // Inherit from remote interface.
+                mTimeoutUnit = info.getTimeoutUnit();
             }
 
             Class<? extends Throwable> exClass = mRemoteFailureException.getType();
@@ -772,16 +914,34 @@ public class RemoteIntrospector {
             mMethod = null;
         }
 
+        static String methodDesc(Method m) {
+            String name = m.getDeclaringClass().getName() + '.' + m.getName();
+            return '"' + MethodDesc.forMethod(m).toMethodSignature(name) + '"';
+        }
+
         String methodDesc() {
-            String name = mMethod.getDeclaringClass().getName() + '.' + mMethod.getName();
-            return '"' + MethodDesc.forMethod(mMethod).toMethodSignature(name) + '"';
+            return methodDesc(mMethod);
         }
     }
 
     private static class RParameter<T> implements RemoteParameter<T> {
         private static final long serialVersionUID = 1L;
 
-        static <T> RParameter<T> makeTemp(Class<T> type, boolean asynchronous) {
+        private static final int FLAG_UNSHARED = 1;
+        private static final int FLAG_TIMEOUT = 2;
+        private static final int FLAG_TIMEOUT_UNIT = 4;
+
+        static <T> RParameter<T> make(Class<T> type) {
+            return make(type, false, false, false);
+        }
+
+        static <T> RParameter<T> make(Class<T> type, boolean asynchronous) {
+            return make(type, asynchronous, false, false);
+        }
+
+        static <T> RParameter<T> make(Class<T> type, boolean asynchronous,
+                                      boolean timeout, boolean timeoutUnit)
+        {
             if (type == void.class || type == null) {
                 return null;
             }
@@ -791,31 +951,36 @@ public class RemoteIntrospector {
                 (asynchronous && Pipe.class.isAssignableFrom(type)) ||
                 TypeDesc.forClass(type).toPrimitiveType() != null;
 
-            return intern(new RParameter<T>(type, unshared));
-        }
+            int flags =
+                (unshared ? FLAG_UNSHARED : 0) |
+                (timeout ? FLAG_TIMEOUT : 0) |
+                (timeoutUnit ? FLAG_TIMEOUT_UNIT : 0);
 
-        static <T> RParameter<T> make(Class<T> type, boolean unshared)
-        {
-            if (type == void.class || type == null) {
-                return null;
-            }
-            return intern(new RParameter<T>(type, unshared));
+            return intern(new RParameter<T>(type, flags));
         }
 
         private final Class<T> mType;
-        private final boolean mUnshared;
+        private final int mFlags;
 
-        private RParameter(Class<T> type, boolean unshared) {
+        private RParameter(Class<T> type, int flags) {
             mType = type;
-            mUnshared = unshared;
+            mFlags = flags;
         }
 
         public boolean isUnshared() {
-            return mUnshared;
+            return (mFlags & FLAG_UNSHARED) != 0;
         }
 
         public Class<T> getType() {
             return mType;
+        }
+
+        public boolean isTimeout() {
+            return (mFlags & FLAG_TIMEOUT) != 0;
+        }
+
+        public boolean isTimeoutUnit() {
+            return (mFlags & FLAG_TIMEOUT_UNIT) != 0;
         }
 
         public boolean equalTypes(RemoteParameter other) {
@@ -840,7 +1005,7 @@ public class RemoteIntrospector {
             if (obj instanceof RParameter) {
                 RParameter other = (RParameter) obj;
                 return
-                    (mUnshared == other.mUnshared) &&
+                    (mFlags == other.mFlags) &&
                     ((mType == null) ? (other.mType == null) :
                      (mType.equals(other.mType)));
             }
@@ -853,10 +1018,11 @@ public class RemoteIntrospector {
         }
 
         RParameter toUnshared(boolean unshared) {
-            if (unshared == mUnshared) {
+            int flags = unshared ? (mFlags & ~FLAG_UNSHARED) : (mFlags | FLAG_UNSHARED);
+            if (flags == mFlags) {
                 return this;
             }
-            return intern(new RParameter(mType, unshared));
+            return intern(new RParameter(mType, flags));
         }
     }
 }

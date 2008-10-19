@@ -20,6 +20,8 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 
+import java.util.concurrent.TimeUnit;
+
 import dirmi.Asynchronous;
 
 import dirmi.core.Identifier;
@@ -66,4 +68,17 @@ public interface RemoteMethod extends Serializable {
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 
     boolean isRemoteFailureExceptionDeclared();
+
+    /**
+     * Returns the method timeout, which was either explicitly defined or
+     * inherited from its enclosing interface. The timeout value is negative to
+     * represent infinity.
+     */
+    long getTimeout();
+
+    /**
+     * Returns the method timeout unit, which was either explicitly defined or
+     * inherited from its enclosing interface. The unit is never null.
+     */
+    TimeUnit getTimeoutUnit();
 }

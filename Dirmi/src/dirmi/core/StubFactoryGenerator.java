@@ -43,6 +43,9 @@ import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import dirmi.Pipe;
 import dirmi.UnimplementedMethodException;
 
@@ -143,6 +146,8 @@ public class StubFactoryGenerator<R extends Remote> {
         final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
         final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
         final TypeDesc classType = TypeDesc.forClass(Class.class);
+        final TypeDesc futureType = TypeDesc.forClass(Future.class);
+        final TypeDesc timeUnitType = TypeDesc.forClass(TimeUnit.class);
 
         // Add fields
         {
@@ -210,18 +215,65 @@ public class StubFactoryGenerator<R extends Remote> {
                     (method.getRemoteFailureException().getType());
             }
 
-            CodeBuilder b = new CodeBuilder(mi);
+            final CodeBuilder b = new CodeBuilder(mi);
+
+            // Default timeout for remote method invocation.
+            final long timeout = method.getTimeout();
+            final TimeUnit timeoutUnit = method.getTimeoutUnit();
+            TypeDesc timeoutType = TypeDesc.LONG;
+
+            // Try to find any timeout parameters.
+            LocalVariable timeoutVar = null;
+            LocalVariable timeoutUnitVar = null;
+            {
+                int i = 0;
+                for (RemoteParameter paramType : method.getParameterTypes()) {
+                    if (paramType.isTimeout()) {
+                        timeoutVar = b.getParameter(i);
+                        TypeDesc desc = timeoutVar.getType();
+                        if (desc == TypeDesc.FLOAT || desc == TypeDesc.DOUBLE) {
+                            timeoutType = TypeDesc.DOUBLE;
+                        }
+                    } else if (paramType.isTimeoutUnit()) {
+                        timeoutUnitVar = b.getParameter(i);
+                    }
+                    i++;
+                }
+            }
+
+            final boolean noTimeout = timeout < 0 && timeoutVar == null;
 
             // Create channel for invoking remote method.
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, stubSupportType);
             b.loadConstant(remoteFailureExType);
-            b.invokeInterface(stubSupportType, "invoke", invChannelType,
+            b.invokeInterface(stubSupportType, "prepare", invChannelType,
                               new TypeDesc[] {classType});
             LocalVariable channelVar = b.createLocalVariable(null, invChannelType);
             b.storeLocal(channelVar);
 
-            Label invokeStart = b.createLabel().setLocation();
+            // Call invoke to write to channel.
+            LocalVariable closeTaskVar;
+            b.loadThis();
+            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadConstant(remoteFailureExType);
+            b.loadLocal(channelVar);
+            if (noTimeout) {
+                closeTaskVar = null;
+                b.invokeInterface(stubSupportType, "invoke", null,
+                                  new TypeDesc[] {classType, invChannelType});
+            } else {
+                genLoadTimeoutVars
+                    (b, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
+
+                closeTaskVar = b.createLocalVariable(null, futureType);
+                b.invokeInterface(stubSupportType, "invoke", futureType,
+                                  new TypeDesc[] {classType, invChannelType,
+                                                  timeoutType, timeUnitType});
+                b.storeLocal(closeTaskVar);
+            }
+
+            final Label invokeStart = b.createLabel().setLocation();
 
             // Write method identifier to channel.
             b.loadLocal(channelVar);
@@ -254,7 +306,7 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.invokeVirtual(invOutType, "flush", null, null);
 
-            Label invokeEnd;
+            final Label invokeEnd;
 
             if (method.isAsynchronous()) {
                 invokeEnd = b.createLabel().setLocation();
@@ -265,7 +317,7 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 } else {
                     // Finished with channel.
-                    genFinished(b, channelVar);
+                    genFinished(b, channelVar, closeTaskVar);
 
                     if (returnDesc == null) {
                         b.returnVoid();
@@ -317,19 +369,19 @@ public class StubFactoryGenerator<R extends Remote> {
                 if (returnDesc == null) {
                     invokeEnd = b.createLabel().setLocation();
                     // Finished with channel.
-                    genFinished(b, channelVar);
+                    genFinished(b, channelVar, closeTaskVar);
                     b.returnVoid();
                 } else {
                     CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
                     invokeEnd = b.createLabel().setLocation();
                     // Finished with channel.
-                    genFinished(b, channelVar);
+                    genFinished(b, channelVar, closeTaskVar);
                     b.returnValue(returnDesc);
                 }
 
                 abnormalResponse.setLocation();
                 // Finished with channel.
-                genFinished(b, channelVar);
+                genFinished(b, channelVar, closeTaskVar);
                 b.loadLocal(throwableVar);
                 b.throwObject();
             }
@@ -345,8 +397,17 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.loadConstant(remoteFailureExType);
                 b.loadLocal(channelVar);
                 b.loadLocal(throwableVar);
-                b.invokeInterface(stubSupportType, "failed", throwableType,
-                                  new TypeDesc[] {classType, invChannelType, throwableType});
+                if (noTimeout) {
+                    b.invokeInterface(stubSupportType, "failed", throwableType,
+                                      new TypeDesc[] {classType, invChannelType, throwableType});
+                } else {
+                    genLoadTimeoutVars
+                        (b, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
+                    b.loadLocal(closeTaskVar);
+                    b.invokeInterface(stubSupportType, "failed", throwableType,
+                                      new TypeDesc[] {classType, invChannelType, throwableType,
+                                                      timeoutType, timeUnitType, futureType});
+                }
                 b.throwObject();
             }
         }
@@ -480,15 +541,58 @@ public class StubFactoryGenerator<R extends Remote> {
         return ci.defineClass(cf);
     }
 
-    private void genFinished(CodeBuilder b, LocalVariable channelVar) {
+    private void genLoadTimeoutVars(CodeBuilder b,
+                                    long timeout, TimeUnit timeoutUnit, TypeDesc timeoutType,
+                                    LocalVariable timeoutVar, LocalVariable timeoutUnitVar)
+    {
+        if (timeoutVar == null) {
+            b.loadConstant(timeout);
+        } else {
+            TypeDesc desc = timeoutVar.getType();
+            if (desc.isPrimitive()) {
+                b.loadLocal(timeoutVar);
+                b.convert(desc, timeoutType);
+            } else {
+                b.loadLocal(timeoutVar);
+                Label notNull = b.createLabel();
+                b.ifNullBranch(notNull, false);
+                if (timeoutType == TypeDesc.LONG) {
+                    b.loadConstant(timeout);
+                } else {
+                    b.loadConstant((double) timeout);
+                }
+                Label ready = b.createLabel();
+                b.branch(ready);
+                notNull.setLocation();
+                b.loadLocal(timeoutVar);
+                b.convert(desc, timeoutType);
+                ready.setLocation();
+            }
+        }
+
+        final TypeDesc timeUnitType = TypeDesc.forClass(TimeUnit.class);
+
+        if (timeoutUnitVar == null) {
+            b.loadStaticField(timeUnitType, timeoutUnit.name(), timeUnitType);
+        } else {
+            b.loadLocal(timeoutUnitVar);
+        }
+    }
+
+    private void genFinished(CodeBuilder b, LocalVariable channelVar, LocalVariable closeTaskVar) {
         final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-        final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
 
         b.loadThis();
         b.loadField(STUB_SUPPORT_NAME, stubSupportType);
         b.loadLocal(channelVar);
-        b.invokeInterface(stubSupportType, "finished", null,
-                          new TypeDesc[] {invChannelType});
+        if (closeTaskVar == null) {
+            b.invokeInterface(stubSupportType, "finished", null,
+                              new TypeDesc[] {channelVar.getType()});
+        } else {
+            b.loadLocal(closeTaskVar);
+            b.invokeInterface(stubSupportType, "finished", null,
+                              new TypeDesc[] {channelVar.getType(), closeTaskVar.getType()});
+        }
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {

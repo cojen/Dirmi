@@ -18,6 +18,9 @@ package dirmi.core;
 
 import java.rmi.RemoteException;
 
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Object passed to a Stub instance in order for it to actually communicate
  * with a remote object.
@@ -27,13 +30,40 @@ import java.rmi.RemoteException;
  */
 public interface StubSupport {
     /**
-     * Returns an InvocationChannel for writing method identifier and
-     * arguments, and for reading response. Caller flushes output after
+     * Returns an InvocationChannel which has nothing written to it yet.
+     */
+    <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureException) throws T;
+
+    /**
+     * Writes request header to prepared channel. Caller flushes output after
      * arguments are written, and then channel is read from.
      *
      * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
-    <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureException) throws T;
+    <T extends Throwable> void invoke(Class<T> remoteFailureException,
+                                      InvocationChannel channel) throws T;
+
+    /**
+     * Writes request header to prepared channel. Caller flushes output after
+     * arguments are written, and then channel is read from.
+     *
+     * @throws java.rmi.NoSuchObjectException if support has been disposed
+     * @return task to close channel after provided timeout has elapsed
+     */
+    <T extends Throwable> Future<?> invoke(Class<T> remoteFailureException,
+                                           InvocationChannel channel,
+                                           long timeout, TimeUnit unit) throws T;
+
+    /**
+     * Writes request header to prepared channel. Caller flushes output after
+     * arguments are written, and then channel is read from.
+     *
+     * @throws java.rmi.NoSuchObjectException if support has been disposed
+     * @return task to close channel after provided timeout has elapsed
+     */
+    <T extends Throwable> Future<?> invoke(Class<T> remoteFailureException,
+                                           InvocationChannel channel,
+                                           double timeout, TimeUnit unit) throws T;
 
     /**
      * Called after channel usage is finished and can be reused for sending
@@ -42,12 +72,45 @@ public interface StubSupport {
     void finished(InvocationChannel channel);
 
     /**
+     * Called after channel usage is finished and can be reused for sending
+     * new requests. This method should not throw any exception.
+     *
+     * @param closeTask optional close task for timed requests
+     */
+    void finished(InvocationChannel channel, Future<?> closeTask);
+
+    /**
      * Called if invocation failed due to a problem with the channel, and it
      * should be closed. This method should not throw any exception, however it
      * must return an appropriate Throwable which will get thrown to the client.
      */
     <T extends Throwable> T failed(Class<T> remoteFailureException,
-                                   InvocationChannel channel, Throwable cause);
+                                   InvocationChannel channel,
+                                   Throwable cause);
+
+    /**
+     * Called if invocation failed due to a problem with the channel, and it
+     * should be closed. This method should not throw any exception, however it
+     * must return an appropriate Throwable which will get thrown to the client.
+     *
+     * @param closeTask close task for timed requests
+     */
+    <T extends Throwable> T failed(Class<T> remoteFailureException,
+                                   InvocationChannel channel,
+                                   Throwable cause,
+                                   long timeout, TimeUnit unit, Future<?> closeTask);
+
+    /**
+     * Called if invocation failed due to a problem with the channel, and it
+     * should be closed. This method should not throw any exception, however it
+     * must return an appropriate Throwable which will get thrown to the client.
+     *
+     * @param closeTask close task for timed requests
+     */
+    <T extends Throwable> T failed(Class<T> remoteFailureException,
+                                   InvocationChannel channel,
+                                   Throwable cause,
+                                   double timeout, TimeUnit unit, Future<?> closeTask);
 
     /**
      * Returns a hashCode implementation for the Stub.
