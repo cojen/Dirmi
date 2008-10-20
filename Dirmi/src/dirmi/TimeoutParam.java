@@ -18,21 +18,16 @@ package dirmi;
 
 import java.lang.annotation.*;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * Used in conjunction with the {@link Timeout} annotation to define a remote
- * method timeout policy. If no timeout unit is specified, it defaults to
- * milliseconds.
+ * method timeout policy. This annotation specifies a method parameter as being
+ * a timeout value or unit.
  *
  * @author Brian S O'Neill
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.METHOD, ElementType.TYPE})
-public @interface TimeoutUnit {
-    /**
-     * Specify the timeout unit.
-     */
-    TimeUnit value();
+@Target({ElementType.PARAMETER})
+public @interface TimeoutParam {
 }
+

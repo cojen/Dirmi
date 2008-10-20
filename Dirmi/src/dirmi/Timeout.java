@@ -21,10 +21,11 @@ import java.lang.annotation.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Remote method timeout policy annotation, which can target a remote
- * interface, method or parameter. When annotated at the interface level, it
- * defines default timeout values for all methods. Any method can override the
- * defaults with its own annotation.
+ * Remote method timeout policy annotation, which can target a remote interface
+ * or method. When annotated at the interface level, it defines default timeout
+ * values for all methods. Any method can override the defaults with its own
+ * annotation. The timeout annotation can be used with {@link TimeoutUnit} to
+ * define the unit. If not specified, it defaults to milliseconds.
  *
  * <p>Timeouts only apply to the caller of a remote method. If the timeout has
  * elapsed without a response from the remote endpoint, the connection is
@@ -43,34 +44,37 @@ import java.util.concurrent.TimeUnit;
  * timeout on an asynchronous method only applies to the sending of the
  * request, not its acknowledgment.
  *
- * <p>A method may use a parameter timeout annotation to allow runtime values
- * to determine the effective timeout. This annotation can be applied to a
- * primitive numeric type, which may also be boxed. At most one parameter can
- * be annotated as the timeout value. Remote method implementations may make
- * use of timeout parameters to interrupt any work in progress, under the
- * assumption that the caller has given up after the timeout has elapsed.
+ * <p>Method parameters may use the {@link TimeoutParam} annotation to specify
+ * timeout values and units. When applied to a primitive numeric type (which
+ * can be boxed), it specifies the timeout value. At most one parameter can be
+ * a timeout value. When the annotation is applied to a parameter of type
+ * {@link TimeUnit}, it specifies the timeout unit. Likewise, at most one
+ * parameter can be a timeout unit. If no parameter is annotated as a timeout
+ * unit but the parameter immediately following the timeout value is a {@code
+ * TimeUnit}, it is automatically chosen as the timeout unit parameter.
  *
- * <p>For an annotated timeout value parameter, if the next immediate parameter
- * is a {@link TimeUnit}, it is interpreted to be the associated timeout
- * unit. If the position of the timeout unit parameter is different, another
- * parameter may be explicitly annotated as the {@link TimeoutUnit timeout
- * unit}. This parameter type must be a {@link TimeUnit}.
+ * <p>Remote method implementations may make use of timeout parameters to
+ * interrupt any work in progress, under the assumption that the caller has
+ * given up after the timeout has elapsed.
  *
  * <p>Timeout parameters can have runtime values of null, in which case default
  * timeouts apply. These defaults are defined by any method and interface level
  * timeout annotations. If none, then the default timeout value is infinite and
- * the unit is milliseconds.
+ * the unit is milliseconds. In either case, the remote endpoint sees the
+ * applied values instead of null. If the timeout value cannot be cast to the
+ * parameter type without loss of magnitude, -1 (infinite) is passed instead.
  *
  * @author Brian S O'Neill
  * @see TimeoutUnit
+ * @see TimeoutParam
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.PARAMETER, ElementType.METHOD, ElementType.TYPE})
+@Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Timeout {
     /**
-     * Specify the timeout duration, which defaults to infinite. Any negative
-     * value indicates an infinite timeout.
+     * Specify the timeout duration. Any negative value indicates an infinite
+     * timeout.
      */
-    long value() default -1;
+    long value();
 }

@@ -242,6 +242,7 @@ public class StubFactoryGenerator<R extends Remote> {
             }
 
             final boolean noTimeout = timeout < 0 && timeoutVar == null;
+            final LocalVariable originalTimeoutVar = timeoutVar;
 
             // Create channel for invoking remote method.
             b.loadThis();
@@ -263,8 +264,8 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.invokeInterface(stubSupportType, "invoke", null,
                                   new TypeDesc[] {classType, invChannelType});
             } else {
-                genLoadTimeoutVars
-                    (b, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
+                timeoutVar = genLoadTimeoutVars
+                    (b, true, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
 
                 closeTaskVar = b.createLocalVariable(null, futureType);
                 b.invokeInterface(stubSupportType, "invoke", futureType,
@@ -297,7 +298,12 @@ public class StubFactoryGenerator<R extends Remote> {
                         lookForPipe = false;
                         // Don't pass the Pipe to server.
                     } else {
-                        CodeBuilderUtil.writeParam(b, paramType, invOutVar, b.getParameter(i));
+                        LocalVariable param = b.getParameter(i);
+                        if (param == originalTimeoutVar) {
+                            // Use replacement.
+                            param = timeoutVar;
+                        }
+                        CodeBuilderUtil.writeParam(b, paramType, invOutVar, param);
                     }
                     i++;
                 }
@@ -401,8 +407,8 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.invokeInterface(stubSupportType, "failed", throwableType,
                                       new TypeDesc[] {classType, invChannelType, throwableType});
                 } else {
-                    genLoadTimeoutVars
-                        (b, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
+                    genLoadTimeoutVars(b, false, timeout, timeoutUnit, timeoutType,
+                                       originalTimeoutVar, timeoutUnitVar);
                     b.loadLocal(closeTaskVar);
                     b.invokeInterface(stubSupportType, "failed", throwableType,
                                       new TypeDesc[] {classType, invChannelType, throwableType,
@@ -541,9 +547,15 @@ public class StubFactoryGenerator<R extends Remote> {
         return ci.defineClass(cf);
     }
 
-    private void genLoadTimeoutVars(CodeBuilder b,
-                                    long timeout, TimeUnit timeoutUnit, TypeDesc timeoutType,
-                                    LocalVariable timeoutVar, LocalVariable timeoutUnitVar)
+    /**
+     * @param replaceNull when true, replace nulls and store back
+     * into local variables
+     * @return replacement for timeoutVar
+     */
+    private LocalVariable genLoadTimeoutVars
+        (CodeBuilder b, boolean replaceNull,
+         long timeout, TimeUnit timeoutUnit, TypeDesc timeoutType,
+         LocalVariable timeoutVar, LocalVariable timeoutUnitVar)
     {
         if (timeoutVar == null) {
             b.loadConstant(timeout);
@@ -554,18 +566,34 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.convert(desc, timeoutType);
             } else {
                 b.loadLocal(timeoutVar);
+
+                Label ready = b.createLabel();
                 Label notNull = b.createLabel();
                 b.ifNullBranch(notNull, false);
-                if (timeoutType == TypeDesc.LONG) {
-                    b.loadConstant(timeout);
-                } else {
-                    b.loadConstant((double) timeout);
+
+                final LocalVariable originalTimeoutVar = timeoutVar;
+
+                if (replaceNull) {
+                    if (genLoadConstantTimeoutValue(b, timeout, timeoutType, timeoutVar)) {
+                        // Create a replacement variable if precision loss.
+                        timeoutVar = b.createLocalVariable(null, timeoutVar.getType());
+                    }
+                    b.convert(timeoutVar.getType().toPrimitiveType(), timeoutVar.getType());
+                    b.storeLocal(timeoutVar);
                 }
-                Label ready = b.createLabel();
+
+                // Use the high precision value for the actual timeout.
+                b.loadConstant(timeout);
                 b.branch(ready);
+
                 notNull.setLocation();
-                b.loadLocal(timeoutVar);
+                b.loadLocal(originalTimeoutVar);
+                if (originalTimeoutVar != timeoutVar) {
+                    b.storeLocal(timeoutVar);
+                    b.loadLocal(originalTimeoutVar);
+                }
                 b.convert(desc, timeoutType);
+
                 ready.setLocation();
             }
         }
@@ -576,6 +604,67 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadStaticField(timeUnitType, timeoutUnit.name(), timeUnitType);
         } else {
             b.loadLocal(timeoutUnitVar);
+            if (replaceNull) {
+                Label notNull = b.createLabel();
+                b.ifNullBranch(notNull, false);
+                b.loadStaticField(timeUnitType, timeoutUnit.name(), timeUnitType);
+                b.storeLocal(timeoutUnitVar);
+                notNull.setLocation();
+                b.loadLocal(timeoutUnitVar);
+            }
+        }
+
+        return timeoutVar;
+    }
+
+    /**
+     * @return true if precision loss
+     */
+    private boolean genLoadConstantTimeoutValue(CodeBuilder b, long timeout, TypeDesc timeoutType,
+                                                LocalVariable timeoutVar)
+    {
+        switch (timeoutVar.getType().toPrimitiveType().getTypeCode()) {
+        case TypeDesc.BYTE_CODE:
+            if (((byte) timeout) != timeout) {
+                // Round to infinite.
+                b.loadConstant((byte) -1);
+                return true;
+            } else {
+                b.loadConstant((byte) timeout);
+                return false;
+            }
+
+        case TypeDesc.SHORT_CODE:
+            if (((short) timeout) != timeout) {
+                // Round to infinite.
+                b.loadConstant((short) -1);
+                return true;
+            } else {
+                b.loadConstant((short) timeout);
+                return false;
+            }
+
+        case TypeDesc.INT_CODE:
+            if (((int) timeout) != timeout) {
+                // Round to infinite.
+                b.loadConstant(-1);
+                return true;
+            } else {
+                b.loadConstant((int) timeout);
+                return false;
+            }
+
+        case TypeDesc.LONG_CODE: default:
+            b.loadConstant(timeout);
+            return false;
+
+        case TypeDesc.FLOAT_CODE:
+            b.loadConstant((float) timeout);
+            return ((float) timeout) != timeout;
+
+        case TypeDesc.DOUBLE_CODE:
+            b.loadConstant((double) timeout);
+            return ((double) timeout) != timeout;
         }
     }
 

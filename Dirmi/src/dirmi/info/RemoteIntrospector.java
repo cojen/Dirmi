@@ -47,6 +47,7 @@ import dirmi.Asynchronous;
 import dirmi.Pipe;
 import dirmi.RemoteFailure;
 import dirmi.Timeout;
+import dirmi.TimeoutParam;
 import dirmi.TimeoutUnit;
 
 import dirmi.core.Identifier;
@@ -503,7 +504,7 @@ public class RemoteIntrospector {
 
                 // First pass, find any timeout and unit parameters.
 
-                int timeoutParam = -1;
+                int timeoutValueParam = -1;
                 int timeoutUnitParam = -1;
                 boolean defaultTimeoutUnitParam = false;
 
@@ -513,25 +514,34 @@ public class RemoteIntrospector {
 
                     if (paramAnns != null) {
                         for (Annotation ann : paramAnns) {
-                            if (ann instanceof Timeout) {
-                                if (timeoutParam >= 0) {
+                            if (!(ann instanceof TimeoutParam)) {
+                                continue;
+                            }
+
+                            if (paramType == TimeUnit.class) {
+                                if (timeoutUnitParam >= 0 && !defaultTimeoutUnitParam) {
                                     throw new IllegalArgumentException
-                                        ("At most one timeout parameter allowed: " +
+                                        ("At most one timeout unit parameter allowed: " +
                                          methodDesc(m));
                                 }
 
-                                TypeDesc desc = TypeDesc.forClass(paramType).toPrimitiveType();
-                                if (desc == null ||
-                                    desc == TypeDesc.BOOLEAN || desc == TypeDesc.CHAR)
-                                {
+                                timeoutUnitParam = i;
+                                defaultTimeoutUnitParam = false;
+
+                                continue;
+                            }
+
+                            TypeDesc desc = TypeDesc.forClass(paramType).toPrimitiveType();
+                            if (desc != null &&
+                                desc != TypeDesc.BOOLEAN && desc != TypeDesc.CHAR)
+                            {
+                                if (timeoutValueParam >= 0) {
                                     throw new IllegalArgumentException
-                                        ("Timeout parameter can only apply to primitive " +
-                                         "numerical types, not " +
-                                         TypeDesc.forClass(paramType).getFullName() +
-                                         ": " + methodDesc(m));
+                                        ("At most one timeout value parameter allowed: " +
+                                         methodDesc(m));
                                 }
 
-                                timeoutParam = i;
+                                timeoutValueParam = i;
 
                                 // If next parameter type is a TimeUnit, it is
                                 // selected to be the timeout unit parameter.
@@ -542,31 +552,24 @@ public class RemoteIntrospector {
                                     timeoutUnitParam = i + 1;
                                     defaultTimeoutUnitParam = true;
                                 }
-                            } else if (ann instanceof TimeoutUnit) {
-                                if (timeoutUnitParam >= 0 && !defaultTimeoutUnitParam) {
-                                    throw new IllegalArgumentException
-                                        ("At most one timeout unit parameter allowed: " +
-                                         methodDesc(m));
-                                }
 
-                                if (paramType != TimeUnit.class) {
-                                    throw new IllegalArgumentException
-                                        ("Timeout unit parameter can only be TimeUnit, not " +
-                                         TypeDesc.forClass(paramType).getFullName() +
-                                         ": " + methodDesc(m));
-                                }
-
-                                timeoutUnitParam = i;
-                                defaultTimeoutUnitParam = false;
+                                continue;
                             }
+
+                            throw new IllegalArgumentException
+                                ("Timeout parameter can only apply to primitive " +
+                                 "numerical types or TimeUnit, not " +
+                                 TypeDesc.forClass(paramType).getFullName() +
+                                 ": " + methodDesc(m));
                         }
                     }
                 }
 
                 for (int i=0; i<paramsTypes.length; i++) {
                     Class paramType = paramsTypes[i];
-                    mParameterTypes.add(RParameter.make(paramType, mAsynchronous,
-                                                        timeoutParam == i, timeoutUnitParam == i));
+                    mParameterTypes.add(RParameter.make
+                                        (paramType, mAsynchronous,
+                                         timeoutValueParam == i, timeoutUnitParam == i));
                 }
             }
 
