@@ -24,6 +24,8 @@ import java.io.IOException;
 
 import java.rmi.Remote;
 
+import java.rmi.server.Unreferenced;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -433,6 +435,24 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnValue(TypeDesc.BOOLEAN);
         }
 
+        // Add the Unreferenced.unreferenced method.
+        {
+            mi = cf.addMethod(Modifiers.PUBLIC, "unreferenced", null, null);
+            b = new CodeBuilder(mi);
+            b.loadThis();
+            b.loadField(REMOTE_FIELD_NAME, remoteType);
+            TypeDesc unreferencedType = TypeDesc.forClass(Unreferenced.class);
+            b.instanceOf(unreferencedType);
+            Label notUnref = b.createLabel();
+            b.ifZeroComparisonBranch(notUnref, "==");
+            b.loadThis();
+            b.loadField(REMOTE_FIELD_NAME, remoteType);
+            b.checkCast(unreferencedType);
+            b.invokeInterface(unreferencedType, "unreferenced", null, null);
+            notUnref.setLocation();
+            b.returnVoid();
+        }
+                                 
         return ci.defineClass(cf);
     }
 
@@ -472,6 +492,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     throws IOException, NoSuchMethodException
                 {
                     throw new NoSuchMethodException(String.valueOf(methodID));
+                }
+
+                public void unreferenced() {
                 }
             };
         }

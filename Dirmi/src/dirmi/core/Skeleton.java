@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 
+import java.rmi.server.Unreferenced;
+
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client
  * requests, and invokes server-side methods. Any response is marshalled back
@@ -29,7 +31,7 @@ import java.rmi.Remote;
  * @author Brian S O'Neill
  * @see SkeletonFactory
  */
-public interface Skeleton {
+public interface Skeleton extends Unreferenced {
     /**
      * Invoke method in server-side instance. Any exception thrown from the
      * invoked method is written to the channel, unless method is

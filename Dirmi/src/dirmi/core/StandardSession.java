@@ -118,6 +118,7 @@ public class StandardSession implements Session {
 
     final ScheduledFuture<?> mBackgroundTask;
 
+    final Object mCloseLock;
     volatile boolean mClosing;
 
     /**
@@ -151,6 +152,8 @@ public class StandardSession implements Session {
         if (log == null) {
             log = LogFactory.getLog(Session.class);
         }
+
+        mCloseLock = new Object();
 
         mBroker = broker;
         mExecutor = executor;
@@ -329,20 +332,24 @@ public class StandardSession implements Session {
     private void close(boolean notify, boolean explicit, String message, Throwable exception)
         throws IOException
     {
-        if (mClosing) {
-            return;
-        }
-        mClosing = true;
-
-        try {
-            mBackgroundTask.cancel(false);
-        } catch (NullPointerException e) {
-            if (mBackgroundTask != null) {
-                throw e;
+        // Use lock as a barrier to prevent race condition with adding entries
+        // to mSkeletons.
+        synchronized (mCloseLock) {
+            if (mClosing) {
+                return;
             }
+            mClosing = true;
         }
 
         try {
+            try {
+                mBackgroundTask.cancel(false);
+            } catch (NullPointerException e) {
+                if (mBackgroundTask != null) {
+                    throw e;
+                }
+            }
+
             if (notify && mRemoteAdmin != null) {
                 if (explicit) {
                     mRemoteAdmin.closedExplicitly();
@@ -369,12 +376,26 @@ public class StandardSession implements Session {
         }
     }
 
-    void clearCollections() {
+    // Should only be called by close method.
+    private void clearCollections() {
         mSkeletonFactories.clear();
-        mSkeletons.clear();
         mStubFactoryRefs.clear();
         mStubRefs.clear();
         mDisposedObjects.clear();
+
+        for (Skeleton skeleton : mSkeletons.values()) {
+            unreferenced(skeleton);
+        }
+
+        mSkeletons.clear();
+    }
+
+    void unreferenced(Skeleton skeleton) {
+        try {
+            skeleton.unreferenced();
+        } catch (Throwable e) {
+            error("Remote object unreferenced notification failure", e);
+        }
     }
 
     public Object getRemoteServer() {
@@ -689,7 +710,11 @@ public class StandardSession implements Session {
             }
 
             mSkeletonFactories.remove(id);
-            mSkeletons.remove(id);
+
+            Skeleton skeleton = mSkeletons.remove(id);
+            if (skeleton != null) {
+                unreferenced(skeleton);
+            }
         }
 
         public void closedExplicitly() {
@@ -1044,8 +1069,23 @@ public class StandardSession implements Session {
                         }
                     }
 
-                    mSkeletons.putIfAbsent
-                        (objID, factory.createSkeleton(mSkeletonSupport, remote));
+                    Skeleton skeleton = factory.createSkeleton(mSkeletonSupport, remote);
+
+                    // Use lock as a barrier to prevent race condition with
+                    // close method. Skeletons should not be added to
+                    // mSkeletons if they are going to be immediately
+                    // unreferenced. Otherwise, there is a possibility that the
+                    // unreferenced method is not called.
+                    addSkeleton: {
+                        synchronized (mCloseLock) {
+                            if (!mClosing) {
+                                mSkeletons.putIfAbsent(objID, skeleton);
+                                break addSkeleton;
+                            }
+                        }
+                        unreferenced(skeleton);
+                        throw new RemoteException("Remote session is closing");
+                    }
                 }
 
                 obj = new MarshalledRemote(objID, typeID, info);
