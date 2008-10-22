@@ -20,17 +20,17 @@ import java.io.InputStream;
 import java.io.IOException;
 
 /**
- * Replacement for {@link java.io.BufferedInputStream} which does not have the
- * block forever on read bug. Marking is not supported. Any exception thrown by
- * the underlying stream causes it to be automatically closed. In addition,
- * this stream never returns the EOF marker. Instead, it throws an exception.
+ * Replacement for {@link java.io.BufferedInputStream}. Marking is not
+ * supported. Any exception thrown by the underlying stream causes it to be
+ * automatically closed. In addition, this stream never returns the EOF
+ * marker. Instead, it throws an exception.
  *
  * @author Brian S O'Neill
  */
 public class BufferedInputStream extends AbstractBufferedInputStream {
     private final InputStream mIn;
 
-    BufferedInputStream(InputStream in) {
+    public BufferedInputStream(InputStream in) {
         mIn = in;
     }
 

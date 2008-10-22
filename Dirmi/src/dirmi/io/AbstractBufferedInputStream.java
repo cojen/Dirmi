@@ -20,8 +20,8 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Abstract replacement for {@link java.io.BufferedInputStream} which does not
- * have the block forever on read bug. Marking is not supported.
+ * Abstract replacement for {@link java.io.BufferedInputStream}. Marking is
+ * not supported.
  *
  * @author Brian S O'Neill
  */

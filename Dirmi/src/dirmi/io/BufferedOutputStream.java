@@ -30,7 +30,7 @@ import java.io.OutputStream;
 public class BufferedOutputStream extends AbstractBufferedOutputStream {
     private final OutputStream mOut;
 
-    BufferedOutputStream(OutputStream out) {
+    public BufferedOutputStream(OutputStream out) {
         mOut = out;
     }
 
