@@ -21,9 +21,8 @@ import java.io.IOException;
 
 /**
  * Replacement for {@link java.io.BufferedInputStream}. Marking is not
- * supported. Any exception thrown by the underlying stream causes it to be
- * automatically closed. In addition, this stream never returns the EOF
- * marker. Instead, it throws an exception.
+ * supported and any exception thrown by the underlying stream causes it to be
+ * automatically closed. Reading EOF also closes the stream.
  *
  * @author Brian S O'Neill
  */
@@ -32,16 +31,6 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
 
     public BufferedInputStream(InputStream in) {
         mIn = in;
-    }
-
-    @Override
-    public synchronized int read() throws IOException {
-        int b = super.read();
-        if (b < 0) {
-            forceClose();
-            throw new IOException("Closed");
-        }
-        return b;
     }
 
     @Override
@@ -71,7 +60,8 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
         try {
             int amt = mIn.read(buffer, offset, length);
             if (amt <= 0) {
-                throw new IOException("Closed");
+                forceClose();
+                return -1;
             }
             return amt;
         } catch (IOException e) {
