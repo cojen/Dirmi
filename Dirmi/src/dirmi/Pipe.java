@@ -28,10 +28,11 @@ import java.io.OutputStream;
  * A pipe is a bidirectional stream which can be passed via an {@link
  * Asynchronous asynchronous} remote method. Client and server see the streams
  * swapped with respect to each other. Pipes can remain open as long as the
- * session is open.
+ * session is open, and all pipes are closed when the session is closed.
  *
- * <p>Pipes can also be used for transporting serializable objects or remote
- * objects.
+ * <p>Methods which use pipes may also utilize {@link Timeout timeouts}. It
+ * only applies to the sending of the request, however. All other operations on
+ * the pipe do not have a timeout applied.
  *
  * <pre>
  * &#64;Asynchronous
