@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import dirmi.Asynchronous;
+import dirmi.CallMode;
 
 import dirmi.core.Identifier;
 
@@ -64,6 +65,13 @@ public interface RemoteMethod extends Serializable {
      * @see Asynchronous
      */
     boolean isAsynchronous();
+
+    /**
+     * Returns the asynchronous call mode, or null if not asynchronous.
+     *
+     * @see Asynchronous
+     */
+    CallMode getAsynchronousCallMode();
 
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 

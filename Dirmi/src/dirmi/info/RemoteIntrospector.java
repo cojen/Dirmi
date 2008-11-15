@@ -44,6 +44,7 @@ import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
+import dirmi.CallMode;
 import dirmi.Pipe;
 import dirmi.RemoteFailure;
 import dirmi.Timeout;
@@ -452,7 +453,7 @@ public class RemoteIntrospector {
         private List<RParameter<Object>> mParameterTypes;
         private final Set<RemoteParameter<Throwable>> mExceptionTypes;
 
-        private final boolean mAsynchronous;
+        private final CallMode mCallMode;
 
         private RemoteParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
@@ -472,14 +473,14 @@ public class RemoteIntrospector {
             {
                 Asynchronous ann = m.getAnnotation(Asynchronous.class);
                 if (ann == null) {
-                    mAsynchronous = false;
+                    mCallMode = null;
                 } else {
-                    mAsynchronous = true;
+                    mCallMode = ann.value();
                 }
             }
 
             if (id == null) {
-                id = Identifier.identify(this, (byte) 0xfe, (byte) (mAsynchronous ? 1 : 0));
+                id = Identifier.identify(this, (byte) 0xfe, (byte) (mCallMode != null ? 1 : 0));
             }
 
             mID = id;
@@ -492,7 +493,7 @@ public class RemoteIntrospector {
             if (returnType == null) {
                 mReturnType = null;
             } else {
-                mReturnType = RParameter.make(returnType, mAsynchronous);
+                mReturnType = RParameter.make(returnType, mCallMode != null);
             }
 
             Class<?>[] paramsTypes = m.getParameterTypes();
@@ -568,7 +569,7 @@ public class RemoteIntrospector {
                 for (int i=0; i<paramsTypes.length; i++) {
                     Class paramType = paramsTypes[i];
                     mParameterTypes.add(RParameter.make
-                                        (paramType, mAsynchronous,
+                                        (paramType, mCallMode != null,
                                          timeoutValueParam == i, timeoutUnitParam == i));
                 }
             }
@@ -630,7 +631,7 @@ public class RemoteIntrospector {
             mParameterTypes = existing.mParameterTypes;
             mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
 
-            mAsynchronous = existing.mAsynchronous;
+            mCallMode = existing.mCallMode;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
@@ -672,7 +673,11 @@ public class RemoteIntrospector {
         }
 
         public boolean isAsynchronous() {
-            return mAsynchronous;
+            return mCallMode != null;
+        }
+
+        public CallMode getAsynchronousCallMode() {
+            return mCallMode;
         }
 
         public RemoteParameter<? extends Throwable> getRemoteFailureException() {
@@ -706,7 +711,7 @@ public class RemoteIntrospector {
                 return mName.equals(other.mName) && (mID == other.mID) &&
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
-                    (mAsynchronous == other.mAsynchronous) &&
+                    (mCallMode == other.mCallMode) &&
                     (mRemoteFailureException == other.getRemoteFailureException()) &&
                     (mRemoteFailureExceptionDeclared == other.isRemoteFailureExceptionDeclared());
             }
@@ -780,7 +785,7 @@ public class RemoteIntrospector {
                 throw new IllegalArgumentException("parameter types mismatch");
             }
 
-            if (mAsynchronous != other.mAsynchronous) {
+            if (mCallMode != other.mCallMode) {
                 // This is user error.
                 throw new IllegalArgumentException
                     ("Inherited methods conflict in use of @Asynchronous annotation: " +

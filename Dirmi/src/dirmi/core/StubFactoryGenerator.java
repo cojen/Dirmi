@@ -46,6 +46,7 @@ import org.cojen.util.SoftValuedHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import dirmi.CallMode;
 import dirmi.Pipe;
 import dirmi.UnimplementedMethodException;
 
@@ -309,10 +310,21 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            b.loadLocal(invOutVar);
-            b.invokeVirtual(invOutType, "flush", null, null);
+            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {
+                b.loadLocal(invOutVar);
+                b.invokeVirtual(invOutType, "flush", null, null);
+            }
 
             final Label invokeEnd;
+
+            if (method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED) {
+                // Read acknowledgement.
+                b.loadLocal(channelVar);
+                b.invokeInterface(invChannelType, "getInputStream", invInType, null);
+                b.invokeVirtual(invInType, "readThrowable", throwableType, null);
+                // Discard throwable since none is expected.
+                b.pop();
+            }
 
             if (method.isAsynchronous()) {
                 invokeEnd = b.createLabel().setLocation();

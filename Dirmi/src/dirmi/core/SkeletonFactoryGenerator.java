@@ -43,6 +43,7 @@ import org.cojen.classfile.TypeDesc;
 import org.cojen.util.ClassInjector;
 import org.cojen.util.SoftValuedHashMap;
 
+import dirmi.CallMode;
 import dirmi.Pipe;
 
 import dirmi.info.RemoteInfo;
@@ -285,6 +286,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
                 }
 
+                if (method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED) {
+                    // Acknowledge request by writing null.
+                    b.loadLocal(channelVar);
+                    b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
+                    b.dup();
+                    b.loadNull();
+                    b.invokeVirtual(invOutType, "writeThrowable", null,
+                                    new TypeDesc[] {throwableType});
+                    b.invokeVirtual(invOutType, "flush", null, null);
+                }
+
                 if (method.isAsynchronous() && reuseChannel) {
                     // Call finished method before invocation.
                     b.loadThis();
@@ -329,8 +341,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
 
                     b.loadLocal(channelVar);
-                    b.invokeInterface
-                        (invChannelType, "getOutputStream", invOutType, null);
+                    b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
                     LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
                     b.storeLocal(invOutVar);
 
