@@ -25,7 +25,7 @@ import java.io.InputStream;
  *
  * @author Brian S O'Neill
  */
-public abstract class AbstractBufferedInputStream extends InputStream {
+abstract class AbstractBufferedInputStream extends InputStream {
     private final byte[] mBuffer;
 
     private int mStart;
@@ -109,6 +109,12 @@ public abstract class AbstractBufferedInputStream extends InputStream {
 
     public synchronized int available() throws IOException {
         return mEnd - mStart;
+    }
+
+    @Override
+    public synchronized void close() throws IOException {
+        mStart = 0;
+        mEnd = 0;
     }
 
     protected abstract int doRead(byte[] buffer, int offset, int length) throws IOException;

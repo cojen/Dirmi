@@ -27,10 +27,21 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public class BufferedOutputStream extends AbstractBufferedOutputStream {
+class BufferedOutputStream extends AbstractBufferedOutputStream {
     private final OutputStream mOut;
 
     public BufferedOutputStream(OutputStream out) {
+        if (out == null) {
+            throw new IllegalArgumentException();
+        }
+        mOut = out;
+    }
+
+    public BufferedOutputStream(OutputStream out, int size) {
+        super(size);
+        if (out == null) {
+            throw new IllegalArgumentException();
+        }
         mOut = out;
     }
 

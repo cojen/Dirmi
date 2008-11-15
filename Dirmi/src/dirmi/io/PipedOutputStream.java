@@ -31,11 +31,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * state. Also, a thread reading from the stream can't get into a one-second
  * polling mode.
  *
- * <p>PipedOutputStream supports timeouts, and if an InterruptedIOException is
- * thrown, the stream is still valid. The amount of bytes transferred before
- * timing out is always zero. That is, a write operation which times out is
- * never partially successful.
- *
  * @author Brian S O'Neill
  * @see PipedInputStream
  */
@@ -123,6 +118,7 @@ public class PipedOutputStream extends OutputStream {
         try {
             while (mData != null) {
                 mWriteCondition.await();
+                checkConnected();
             }
         } catch (InterruptedException e) {
             mData = null;
@@ -240,6 +236,7 @@ public class PipedOutputStream extends OutputStream {
         try {
             while (mData == null) {
                 mReadCondition.await();
+                checkConnected();
             }
         } catch (InterruptedException e) {
             throw new InterruptedIOException("Thread interrupted");

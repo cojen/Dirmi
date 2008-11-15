@@ -26,7 +26,7 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public abstract class AbstractBufferedOutputStream extends OutputStream {
+abstract class AbstractBufferedOutputStream extends OutputStream {
     private final byte[] mBuffer;
 
     private int mPos;

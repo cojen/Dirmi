@@ -26,10 +26,21 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public class BufferedInputStream extends AbstractBufferedInputStream {
+class BufferedInputStream extends AbstractBufferedInputStream {
     private final InputStream mIn;
 
     public BufferedInputStream(InputStream in) {
+        if (in == null) {
+            throw new IllegalArgumentException();
+        }
+        mIn = in;
+    }
+
+    public BufferedInputStream(InputStream in, int size) {
+        super(size);
+        if (in == null) {
+            throw new IllegalArgumentException();
+        }
         mIn = in;
     }
 
@@ -52,6 +63,7 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
 
     @Override
     public synchronized void close() throws IOException {
+        super.close();
         mIn.close();
     }
 
@@ -86,7 +98,7 @@ public class BufferedInputStream extends AbstractBufferedInputStream {
 
     private void forceClose() {
         try {
-            mIn.close();
+            close();
         } catch (IOException e2) {
             // Ignore.
         }

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,38 +17,50 @@
 package dirmi.io;
 
 import java.io.InterruptedIOException;
+import java.io.IOException;
 
 import java.util.Random;
 
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import static org.junit.Assert.*;
+
+import dirmi.core.ThreadPool;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public class TestPipedStreams extends TestCase {
-    private static final int STREAM_TEST_COUNT = 100000;
+public class TestChannelStreams extends TestCase {
+    private static final int STREAM_TEST_COUNT = 10000;
 
     public static void main(String[] args) {
         junit.textui.TestRunner.run(suite());
     }
 
     public static TestSuite suite() {
-        return new TestSuite(TestPipedStreams.class);
+        return new TestSuite(TestChannelStreams.class);
     }
 
-    PipedInputStream mIn;
-    PipedOutputStream mOut;
+    ChannelInputStream mIn;
+    ChannelOutputStream mOut;
 
-    public TestPipedStreams(String name) {
+    public TestChannelStreams(String name) {
         super(name);
     }
 
     protected void setUp() throws Exception {
-        mIn = new PipedInputStream();
-        mOut = new PipedOutputStream(mIn);
+        PipedInputStream pin = new PipedInputStream();
+        PipedOutputStream pout = new PipedOutputStream(pin);
+        mIn = new ChannelInputStream(pin);
+        mOut = new ChannelOutputStream(pout);
     }
 
     protected void tearDown() throws Exception {
@@ -56,8 +68,9 @@ public class TestPipedStreams extends TestCase {
         mOut.close();
     }
 
-    public void testStream() throws Exception {
-        final long seed = 342487102938L;
+    public void testStreamNoReset() throws Exception {
+        final long seed = 341487102938L;
+        final long seed2 = 21851328712L;
 
         Thread reader = new Thread() {
             {
@@ -66,8 +79,8 @@ public class TestPipedStreams extends TestCase {
 
             public void run() {
                 Random rnd = new Random(seed);
-                Random rnd2 = new Random(21451328712L);
-                byte[] bytes = new byte[1000];
+                Random rnd2 = new Random(seed2);
+                byte[] bytes = new byte[10000];
 
                 try {
                     while (true) {
@@ -78,7 +91,7 @@ public class TestPipedStreams extends TestCase {
                             assertTrue(expected == c);
                         } else {
                             // Read and verify a chunk.
-                            int size = rnd2.nextInt(1000);
+                            int size = rnd2.nextInt(10000);
                             int offset, length;
                             if (size == 0) {
                                 offset = 0;
@@ -110,6 +123,11 @@ public class TestPipedStreams extends TestCase {
                 } catch (Exception e) {
                     e.printStackTrace();
                     fail();
+                } finally {
+                    try {
+                        mIn.close();
+                    } catch (Exception e) {
+                    }
                 }
             }
         };
@@ -119,17 +137,20 @@ public class TestPipedStreams extends TestCase {
         // Write random data, to be verified by reader.
 
         Random rnd = new Random(seed);
-        Random rnd2 = new Random(21451328712L);
-        byte[] sentBytes = new byte[1000];
+        Random rnd2 = new Random(seed);
+        byte[] sentBytes = new byte[10000];
 
         for (int q=0; q<STREAM_TEST_COUNT; q++) {
             if (rnd2.nextInt(100) < 1) {
                 // Write one byte.
                 int b = (byte) rnd.nextInt() & 0xff;
                 mOut.write(b);
+                if (rnd2.nextInt(10) < 1) {
+                    mOut.flush();
+                }
             } else {
                 // Write a chunk.
-                int size = rnd2.nextInt(1000);
+                int size = rnd2.nextInt(10000);
                 int offset, length;
                 if (size == 0) {
                     offset = 0;
@@ -143,10 +164,98 @@ public class TestPipedStreams extends TestCase {
                     sentBytes[offset + i] = (byte) rnd.nextInt();
                 }
                 mOut.write(sentBytes, offset, length);
+                if (rnd2.nextInt(10) < 9) {
+                    mOut.flush();
+                }
             }
         }
 
+        mOut.flush();
+
         reader.interrupt();
         reader.join();
+    }
+
+    public void testReset() throws Exception {
+        ExecutorService pool = new ThreadPool(10, true);
+
+        // Run several times to account for any odd race conditions.
+        for (int i=0; i<100; i++) {
+            Future<Object> a = pool.submit(new Callable<Object>() {
+                public Object call() throws Exception {
+                    mOut.write('A');
+                    mOut.flush();
+                    mOut.write('B');
+                    // Reset also discards 'B'.
+                    mOut.reset();
+                    mOut.write('C');
+                    mOut.flush();
+                    return null;
+                }
+            });
+
+            Future<int[]> b = pool.submit(new Callable<int[]>() {
+                public int[] call() throws Exception {
+                    int a = mIn.read();
+                    // Should see EOF because stream is in a reset state.
+                    int b = mIn.read();
+                    mIn.reset();
+                    int c = mIn.read();
+                    return new int[] {a, b, c};
+                }
+            });
+
+            a.get();
+            int[] results = b.get();
+            assertArrayEquals(new int[] {'A', -1, 'C'}, results);
+        }
+
+        pool.shutdown();
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+    }
+
+    public void testClose() throws Exception {
+        ExecutorService pool = new ThreadPool(10, true);
+
+        Future<int[]> r = pool.submit(new Callable<int[]>() {
+            public int[] call() throws Exception {
+                int a = mIn.read();
+                int b;
+                try {
+                    b = mIn.read();
+                } catch (IOException e) {
+                    // Expected.
+                    b = 1000;
+                }
+                int c;
+                try {
+                    mIn.reset();
+                    c = 0;
+                } catch (IOException e) {
+                    // Expected.
+                    c = 2000;
+                }
+                return new int[] {a, b, c};
+            }
+        });
+
+        mOut.write('Z');
+        mOut.close();
+        try {
+            mOut.write('?');
+            fail();
+        } catch (IOException e) {
+        }
+        try {
+            mOut.reset();
+            fail();
+        } catch (IOException e) {
+        }
+
+        int[] results = r.get();
+        assertArrayEquals(new int[] {'Z', 1000, 2000}, results);
+
+        pool.shutdown();
+        pool.awaitTermination(10, TimeUnit.SECONDS);
     }
 }
