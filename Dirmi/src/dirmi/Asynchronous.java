@@ -37,5 +37,10 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Asynchronous {
+    /**
+     * Control the calling mode of the asynchronous method. By default, the
+     * request is immediately sent to the remote endpoint, but it does not wait
+     * for acknowledgement.
+     */
     CallMode value() default CallMode.IMMEDIATE;
 }

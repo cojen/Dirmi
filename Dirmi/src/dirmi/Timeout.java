@@ -38,11 +38,12 @@ import java.util.concurrent.TimeUnit;
  * <p>When a {@link RemoteTimeoutException} is thrown, it does not indicate
  * whether the remote endpoint actually received the request or not. Care must
  * be taken when attempting to retry a failed remote invocation, especially if
- * it isn't idempotent. {@link Asynchronous} methods with callbacks can provide
- * more information regarding successful invocation, but timeouts on
- * asynchronous methods alone provide less information. This is because the
- * timeout on an asynchronous method only applies to the sending of the
- * request, not its acknowledgment.
+ * not idempotent. {@link Asynchronous} methods with callbacks can provide more
+ * information regarding successful invocation, but timeouts on asynchronous
+ * methods alone offer less utility. This is because the timeout on an
+ * asynchronous method only applies to the sending of the request. It does not
+ * wait for method completion. When using the {@link CallMode#ACKNOWLEDGED
+ * acknowledged} calling mode, timeouts do at least wait for acknowledgement.
  *
  * <p>Method parameters may use the {@link TimeoutParam} annotation to specify
  * timeout values and units. When applied to a primitive numeric type (which
@@ -63,6 +64,42 @@ import java.util.concurrent.TimeUnit;
  * the unit is milliseconds. In either case, the remote endpoint sees the
  * applied values instead of null. If the timeout value cannot be cast to the
  * parameter type without loss of magnitude, -1 (infinite) is passed instead.
+ *
+ * <pre>
+ * // 10 second timeout for all methods by default.
+ * <b>&#64;Timeout(10)</b>
+ * // If unit was not specified, milliseconds is assumed.
+ * <b>&#64;TimeoutUnit(TimeUnit.SECONDS)</b>
+ * public interface MyRemote extends Remote {
+ *     // Default 10 second timeout applies.
+ *     String getItemName(String id) throws RemoteException;
+ *
+ *     // Override with a 20 second timeout.
+ *     <b>&#64;Timeout(20)</b>
+ *     String getItemDescription(String id) throws RemoteException;
+ *
+ *     // Override with a 100 millisecond timeout.
+ *     <b>&#64;Timeout(100)</b>
+ *     <b>&#64;TimeoutUnit(TimeUnit.MILLISECONDS)</b>
+ *     String disableItem(String id) throws RemoteException;
+ *
+ *     // A parameter is passed to define the timeout, overriding the default.
+ *     // The timeout unit is seconds, as defined by the interface level annotation.
+ *     void runReport(String param, <b>&#64;TimeoutParam</b> int timeout) throws RemoteException;
+ *
+ *     // A parameter and unit is passed to define the timeout. If runtime unit is
+ *     // is null, it defaults to minutes.
+ *     <b>&#64;TimeoutUnit(TimeUnit.MINUTES)</b>
+ *     void runReport(String param, <b>&#64;TimeoutParam</b> int timeout, TimeUnit unit)
+ *         throws RemoteException;
+ *
+ *     // The timeout parameter is explicitly annotated, because of its non-standard
+ *     // argument position. If runtime unit is is null, it assumed to be seconds
+ *     // because of interface level annotation.
+ *     void runReport(String param, <b>&#64;TimeoutParam</b> TimeUnit unit, <b>&#64;TimeoutParam</b> int timeout)
+ *         throws RemoteException;
+ * }
+ * </pre>
  *
  * @author Brian S O'Neill
  * @see TimeoutUnit
