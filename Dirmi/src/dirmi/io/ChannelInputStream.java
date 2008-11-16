@@ -101,10 +101,10 @@ class ChannelInputStream extends BufferedInputStream {
 
     /**
      * Clears buffered data and allows stream to be reused for another
-     * command. Remote {@link ChannelOutputStream} must also be reset before
-     * this method returns.
+     * command. Recycle must also be called on remote {@link
+     * ChannelOutputStream} before this method returns.
      */
-    public synchronized void reset() throws IOException {
+    public synchronized void recycle() throws IOException {
         int resetCount = ++mResetCount;
         if (resetCount > 0) {
             int avail = mAvail;

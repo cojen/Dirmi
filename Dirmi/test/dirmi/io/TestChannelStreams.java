@@ -68,7 +68,7 @@ public class TestChannelStreams extends TestCase {
         mOut.close();
     }
 
-    public void testStreamNoReset() throws Exception {
+    public void testStreamNoRecycle() throws Exception {
         final long seed = 341487102938L;
         final long seed2 = 21851328712L;
 
@@ -176,7 +176,7 @@ public class TestChannelStreams extends TestCase {
         reader.join();
     }
 
-    public void testReset() throws Exception {
+    public void testRecycle() throws Exception {
         ExecutorService pool = new ThreadPool(10, true);
 
         // Run several times to account for any odd race conditions.
@@ -186,8 +186,8 @@ public class TestChannelStreams extends TestCase {
                     mOut.write('A');
                     mOut.flush();
                     mOut.write('B');
-                    // Reset also discards 'B'.
-                    mOut.reset();
+                    // Recycle also discards 'B'.
+                    mOut.recycle();
                     mOut.write('C');
                     mOut.flush();
                     return null;
@@ -197,9 +197,9 @@ public class TestChannelStreams extends TestCase {
             Future<int[]> b = pool.submit(new Callable<int[]>() {
                 public int[] call() throws Exception {
                     int a = mIn.read();
-                    // Should see EOF because stream is in a reset state.
+                    // Should see EOF because stream is in a recycle state.
                     int b = mIn.read();
-                    mIn.reset();
+                    mIn.recycle();
                     int c = mIn.read();
                     return new int[] {a, b, c};
                 }
@@ -229,7 +229,7 @@ public class TestChannelStreams extends TestCase {
                 }
                 int c;
                 try {
-                    mIn.reset();
+                    mIn.recycle();
                     c = 0;
                 } catch (IOException e) {
                     // Expected.
@@ -247,7 +247,7 @@ public class TestChannelStreams extends TestCase {
         } catch (IOException e) {
         }
         try {
-            mOut.reset();
+            mOut.recycle();
             fail();
         } catch (IOException e) {
         }

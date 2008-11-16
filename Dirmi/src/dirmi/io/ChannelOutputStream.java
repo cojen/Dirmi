@@ -111,11 +111,11 @@ class ChannelOutputStream extends OutputStream {
 
     /**
      * Clears buffered data and allows stream to be reused for another
-     * command. This stream must be flushed before reset command is actually
-     * delivered. Remote {@link ChannelInputStream} returns EOF until it too is
-     * explicitly reset.
+     * command. This stream must be flushed before recycle command is actually
+     * delivered. Remote {@link ChannelInputStream} returns EOF until recycle
+     * is explicitly called on it too.
      */
-    public synchronized void reset() throws IOException {
+    public synchronized void recycle() throws IOException {
         if (mState == STATE_CLOSED) {
             throw new IOException("Closed");
         }
