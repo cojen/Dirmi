@@ -27,7 +27,7 @@ import java.net.Socket;
  *
  * @author Brian S O'Neill
  */
-public class SocketChannel implements StreamChannel {
+class SocketChannel implements StreamChannel {
     private final Socket mSocket;
     private final InputStream mIn;
     private final OutputStream mOut;
