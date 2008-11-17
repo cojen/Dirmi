@@ -61,6 +61,20 @@ class SocketChannel implements StreamChannel {
     }
 
     public void close() throws IOException {
+        try {
+            mOut.close();
+            mIn.close();
+        } catch (IOException e) {
+            forceClose();
+            throw e;
+        }
         mSocket.close();
+    }
+
+    public void forceClose() {
+        try {
+            mSocket.close();
+        } catch (IOException e) {
+        }
     }
 }

@@ -640,5 +640,8 @@ public class StreamBrokerAcceptor implements Closeable {
 
         public void close() {
         }
+
+        public void forceClose() {
+        }
     }
 }

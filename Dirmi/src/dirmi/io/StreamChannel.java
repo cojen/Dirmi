@@ -40,4 +40,9 @@ public interface StreamChannel extends Closeable {
      * @return remote address or null if unknown
      */
     Object getRemoteAddress();
+
+    /**
+     * Forcibly close channel, discarding unflushed output and any exceptions.
+     */
+    void forceClose();
 }
