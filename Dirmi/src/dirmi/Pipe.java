@@ -44,11 +44,13 @@ import java.io.OutputStream;
 public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
     /**
      * Returns the Pipe's InputStream which also implements ObjectInput.
+     * Closing the stream is equivalent to closing the pipe.
      */
     InputStream getInputStream() throws IOException;
 
     /**
      * Returns the Pipe's OutputStream which also implements ObjectOutput.
+     * Closing the stream is equivalent to closing the pipe.
      */
     OutputStream getOutputStream() throws IOException;
 
