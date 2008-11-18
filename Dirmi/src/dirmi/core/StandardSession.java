@@ -734,7 +734,13 @@ public class StandardSession implements Session {
                     }
                     mChannelPool.remove();
                 }
-                pooledChannel.forceClose();
+                try {
+                    // Perform regular close to allow any lingering methods
+                    // using CallMode.EVENTUAL to get flushed.
+                    pooledChannel.close();
+                } catch (IOException e) {
+                    // Ignore.
+                }
             }
         }
     }
