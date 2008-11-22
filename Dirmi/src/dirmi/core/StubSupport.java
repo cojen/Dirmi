@@ -66,6 +66,20 @@ public interface StubSupport {
                                            double timeout, TimeUnit unit) throws T;
 
     /**
+     * Called after batched request is sent over channel and current thread
+     * should hold channel. This method should not throw any exception.
+     */
+    void batched(InvocationChannel channel);
+
+    /**
+     * Called after batched request is sent over channel and current thread
+     * should hold channel. This method should not throw any exception.
+     *
+     * @param closeTask optional close task for timed requests
+     */
+    void batched(InvocationChannel channel, Future<?> closeTask);
+
+    /**
      * Called after channel usage is finished and can be reused for sending
      * new requests. This method should not throw any exception.
      */

@@ -310,7 +310,9 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {
+            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL &&
+                method.getAsynchronousCallMode() != CallMode.BATCHED)
+            {
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(invOutType, "flush", null, null);
             }
@@ -335,7 +337,11 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 } else {
                     // Finished with channel.
-                    genFinished(b, channelVar, closeTaskVar);
+                    if (method.getAsynchronousCallMode() == CallMode.BATCHED) {
+                        genBatched(b, channelVar, closeTaskVar);
+                    } else {
+                        genFinished(b, channelVar, closeTaskVar);
+                    }
 
                     if (returnDesc == null) {
                         b.returnVoid();
@@ -677,6 +683,22 @@ public class StubFactoryGenerator<R extends Remote> {
         case TypeDesc.DOUBLE_CODE:
             b.loadConstant((double) timeout);
             return ((double) timeout) != timeout;
+        }
+    }
+
+    private void genBatched(CodeBuilder b, LocalVariable channelVar, LocalVariable closeTaskVar) {
+        final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
+
+        b.loadThis();
+        b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+        b.loadLocal(channelVar);
+        if (closeTaskVar == null) {
+            b.invokeInterface(stubSupportType, "batched", null,
+                              new TypeDesc[] {channelVar.getType()});
+        } else {
+            b.loadLocal(closeTaskVar);
+            b.invokeInterface(stubSupportType, "batched", null,
+                              new TypeDesc[] {channelVar.getType(), closeTaskVar.getType()});
         }
     }
 

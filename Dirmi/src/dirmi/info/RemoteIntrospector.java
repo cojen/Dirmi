@@ -210,6 +210,11 @@ public class RemoteIntrospector {
                                      "exactly one matching pipe input parameter: " +
                                      method.methodDesc());
                             }
+                            if (method.getAsynchronousCallMode() == CallMode.BATCHED) {
+                                throw new IllegalArgumentException
+                                    ("Asynchronous batched method can only return void: " +
+                                     method.methodDesc());
+                            }
                         } else {
                             throw new IllegalArgumentException
                                 ("Asynchronous method must return void or a pipe: " +

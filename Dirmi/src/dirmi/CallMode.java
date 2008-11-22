@@ -31,13 +31,24 @@ public enum CallMode {
     EVENTUAL,
 
     /**
+     * Send the request to the remote endpoint, but don't immediately flush the
+     * channel. The current thread holds the same channel for making additional
+     * requests until an immediate or synchronous request is sent. If the
+     * current thread exits before releasing the channel, the batched request
+     * is eventually sent.
+     *
+     * <p><i>Note: It is illegal for batched methods to return anything but void.</i>
+     */
+    BATCHED,
+
+    /**
      * Send the request to the remote endpoint and immediately flush the
-     * channel.
+     * channel. This is the default {@link Asynchronous} calling mode.
      */
     IMMEDIATE,
 
     /**
-     * Immediately send the request to the remote endpoint and wait for an
+     * Immediately send the request to the remote endpoint and wait for
      * acknowledgement that it was received.
      */
     ACKNOWLEDGED,

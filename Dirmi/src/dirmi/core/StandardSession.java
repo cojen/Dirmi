@@ -36,7 +36,11 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -116,6 +120,12 @@ public class StandardSession implements Session {
     // Pool of channels for client calls.
     final LinkedList<InvocationChan> mChannelPool;
 
+    // Thread local channel used with batch calls.
+    final ThreadLocal<InvocationChannel> mLocalChannel;
+
+    // Map of channels which are held by threads for batch calls.
+    final Map<InvocationChannel, Thread> mHeldChannelMap;
+
     final ScheduledFuture<?> mBackgroundTask;
 
     final Object mCloseLock;
@@ -168,6 +178,8 @@ public class StandardSession implements Session {
         mDisposedObjects = new ConcurrentLinkedQueue<VersionedIdentifier>();
 
         mChannelPool = new LinkedList<InvocationChan>();
+        mLocalChannel = new ThreadLocal<InvocationChannel>();
+        mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
         // Receives magic number and remote object.
         class Bootstrap implements StreamListener {
@@ -541,13 +553,32 @@ public class StandardSession implements Session {
     }
 
     InvocationChannel getChannel() throws IOException {
+        InvocationChannel channel = mLocalChannel.get();
+        if (channel != null) {
+            return channel;
+        }
+
         synchronized (mChannelPool) {
             if (mChannelPool.size() > 0) {
-                InvocationChannel channel = mChannelPool.removeLast();
+                channel = mChannelPool.removeLast();
                 return channel;
             }
         }
+
         return new NewInvocationChan(mBroker.connect());
+    }
+
+    void holdLocalChannel(InvocationChannel channel) {
+        mLocalChannel.set(channel);
+        mHeldChannelMap.put(channel, Thread.currentThread());
+    }
+
+    void releaseLocalChannel() {
+        InvocationChannel channel = mLocalChannel.get();
+        mLocalChannel.remove();
+        if (channel != null) {
+            mHeldChannelMap.remove(channel);
+        }
     }
 
     void warn(String message) {
@@ -717,6 +748,43 @@ public class StandardSession implements Session {
                 String message = "Unable to send disposed stubs: " + e;
                 if (!mClosing) {
                     mLog.error(message);
+                }
+            }
+
+            // Release channels held by threads that exited.
+            {
+                ArrayList<InvocationChannel> released = null;
+
+                synchronized (mHeldChannelMap) {
+                    Iterator<Map.Entry<InvocationChannel, Thread>> it =
+                        mHeldChannelMap.entrySet().iterator();
+
+                    while (it.hasNext()) {
+                        Map.Entry<InvocationChannel, Thread> entry = it.next();
+                        if (!entry.getValue().isAlive()) {
+                            InvocationChannel channel = entry.getKey();
+                            if (released == null) {
+                                released = new ArrayList<InvocationChannel>();
+                            }
+                            released.add(channel);
+                            it.remove();
+                        }
+                    }
+                }
+
+                // Recycle or close channels outside of synchronized block.
+                if (released != null) {
+                    for (InvocationChannel channel : released) {
+                        if (channel instanceof InvocationChan) {
+                            ((InvocationChan) channel).recycle();
+                        } else {
+                            try {
+                                channel.close();
+                            } catch (IOException e2) {
+                                // Ignore.
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1227,11 +1295,29 @@ public class StandardSession implements Session {
             return closeTask;
         }
 
+        public void batched(InvocationChannel channel) {
+            batched(channel, null);
+        }
+ 
+        public void batched(InvocationChannel channel, Future<?> closeTask) {
+            if (cancelCloseTask(channel, closeTask) && channel instanceof InvocationChan) {
+                holdLocalChannel(channel);
+            } else {
+                try {
+                    channel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+            }
+        }
+
         public void finished(InvocationChannel channel) {
             finished(channel, null);
         }
 
         public void finished(InvocationChannel channel, Future<?> closeTask) {
+            releaseLocalChannel();
+
             if (cancelCloseTask(channel, closeTask) && channel instanceof InvocationChan) {
                 ((InvocationChan) channel).recycle();
             } else {
@@ -1247,6 +1333,8 @@ public class StandardSession implements Session {
                                               InvocationChannel channel,
                                               Throwable cause)
         {
+            releaseLocalChannel();
+
             if (channel != null) {
                 channel.forceClose();
             }
