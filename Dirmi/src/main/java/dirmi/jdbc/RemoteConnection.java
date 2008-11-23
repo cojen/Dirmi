@@ -25,6 +25,8 @@ import java.sql.SQLWarning;
 
 import java.util.Properties;
 
+import dirmi.Asynchronous;
+import dirmi.CallMode;
 import dirmi.RemoteFailure;
 
 /**
@@ -79,6 +81,7 @@ public interface RemoteConnection extends Remote {
                                                 
     String nativeSQL(String sql) throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setAutoCommit(boolean autoCommit) throws SQLException;
 
     boolean getAutoCommit() throws SQLException;
@@ -93,26 +96,32 @@ public interface RemoteConnection extends Remote {
 
     RemoteDatabaseMetaData getMetaData() throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setReadOnly(boolean readOnly) throws SQLException;
 
     boolean isReadOnly() throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setCatalog(String catalog) throws SQLException;
 
     String getCatalog() throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setTransactionIsolation(int level) throws SQLException;
 
     int getTransactionIsolation() throws SQLException;
 
     SQLWarning getWarnings() throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void clearWarnings() throws SQLException;
 
     java.util.Map<String,Class<?>> getTypeMap() throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setTypeMap(java.util.Map<String,Class<?>> map) throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     void setHoldability(int holdability) throws SQLException;
 
     int getHoldability() throws SQLException;
@@ -135,9 +144,11 @@ public interface RemoteConnection extends Remote {
     
     boolean isValid(int timeout) throws SQLException;
 
+    @Asynchronous(CallMode.BATCHED)
     @RemoteFailure(exception=RemoteException.class)
     void setClientInfo(String name, String value) throws RemoteException, SQLClientInfoException;
         
+    @Asynchronous(CallMode.BATCHED)
     @RemoteFailure(exception=RemoteException.class)
     void setClientInfo(Properties properties)
         throws RemoteException, SQLClientInfoException;
