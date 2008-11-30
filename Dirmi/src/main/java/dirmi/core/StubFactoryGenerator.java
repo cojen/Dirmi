@@ -43,17 +43,17 @@ import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import dirmi.CallMode;
 import dirmi.Pipe;
-import dirmi.UnimplementedMethodException;
 
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteIntrospector;
 import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
+
+import static dirmi.core.CodeBuilderUtil.*;
 
 /**
  * Generates {@link StubFactory} instances for any given Remote type.
@@ -112,7 +112,7 @@ public class StubFactoryGenerator<R extends Remote> {
             try {
                 StubFactory<R> factory = new Factory<R>
                     (stubClass.getConstructor(StubSupport.class));
-                CodeBuilderUtil.invokeFactoryRefMethod(stubClass, factory);
+                invokeFactoryRefMethod(stubClass, factory);
                 return factory;
             } catch (IllegalAccessException e) {
                 throw new Error(e);
@@ -130,7 +130,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
     private Class<? extends R> generateStub() {
         ClassInjector ci = ClassInjector.create
-            (CodeBuilderUtil.cleanClassName(mRemoteInfo.getName()) + "$Stub",
+            (cleanClassName(mRemoteInfo.getName()) + "$Stub",
              mType.getClassLoader());
 
         ClassFile cf = new ClassFile(ci.getClassName());
@@ -139,28 +139,17 @@ public class StubFactoryGenerator<R extends Remote> {
         cf.markSynthetic();
         cf.setTarget("1.5");
 
-        final TypeDesc identifierType = TypeDesc.forClass(Identifier.class);
-        final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-        final TypeDesc invChannelType = TypeDesc.forClass(InvocationChannel.class);
-        final TypeDesc invInType = TypeDesc.forClass(InvocationInputStream.class);
-        final TypeDesc invOutType = TypeDesc.forClass(InvocationOutputStream.class);
-        final TypeDesc unimplementedExType = TypeDesc.forClass(UnimplementedMethodException.class);
-        final TypeDesc throwableType = TypeDesc.forClass(Throwable.class);
-        final TypeDesc classType = TypeDesc.forClass(Class.class);
-        final TypeDesc futureType = TypeDesc.forClass(Future.class);
-        final TypeDesc timeUnitType = TypeDesc.forClass(TimeUnit.class);
-
         // Add fields
         {
-            cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, stubSupportType);
+            cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         }
 
         // Add static method to assign identifiers.
-        CodeBuilderUtil.addInitMethodAndFields(cf, mRemoteInfo);
+        addInitMethodAndFields(cf, mRemoteInfo);
 
         // Add constructor
         {
-            MethodInfo mi = cf.addConstructor(Modifiers.PUBLIC, new TypeDesc[] {stubSupportType});
+            MethodInfo mi = cf.addConstructor(Modifiers.PUBLIC, new TypeDesc[]{STUB_SUPPORT_TYPE});
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
@@ -168,7 +157,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
             b.loadThis();
             b.loadLocal(b.getParameter(0));
-            b.storeField(STUB_SUPPORT_NAME, stubSupportType);
+            b.storeField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
 
             b.returnVoid();
         }
@@ -195,13 +184,13 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(method.getReturnType());
-            TypeDesc[] paramDescs = CodeBuilderUtil.getTypeDescs(method.getParameterTypes());
+            TypeDesc returnDesc = getTypeDesc(method.getReturnType());
+            TypeDesc[] paramDescs = getTypeDescs(method.getParameterTypes());
 
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
 
-            TypeDesc[] exceptionDescs = CodeBuilderUtil.getTypeDescs(method.getExceptionTypes());
+            TypeDesc[] exceptionDescs = getTypeDescs(method.getExceptionTypes());
             for (TypeDesc desc : exceptionDescs) {
                 mi.addException(desc);
             }
@@ -247,31 +236,31 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Create channel for invoking remote method.
             b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
             b.loadConstant(remoteFailureExType);
-            b.invokeInterface(stubSupportType, "prepare", invChannelType,
-                              new TypeDesc[] {classType});
-            LocalVariable channelVar = b.createLocalVariable(null, invChannelType);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "prepare", INV_CHANNEL_TYPE,
+                              new TypeDesc[] {CLASS_TYPE});
+            LocalVariable channelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
             b.storeLocal(channelVar);
 
             // Call invoke to write to channel.
             LocalVariable closeTaskVar;
             b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
             b.loadConstant(remoteFailureExType);
             b.loadLocal(channelVar);
             if (noTimeout) {
                 closeTaskVar = null;
-                b.invokeInterface(stubSupportType, "invoke", null,
-                                  new TypeDesc[] {classType, invChannelType});
+                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", null,
+                                  new TypeDesc[] {CLASS_TYPE, INV_CHANNEL_TYPE});
             } else {
                 timeoutVar = genLoadTimeoutVars
                     (b, true, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
 
-                closeTaskVar = b.createLocalVariable(null, futureType);
-                b.invokeInterface(stubSupportType, "invoke", futureType,
-                                  new TypeDesc[] {classType, invChannelType,
-                                                  timeoutType, timeUnitType});
+                closeTaskVar = b.createLocalVariable(null, FUTURE_TYPE);
+                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", FUTURE_TYPE,
+                                  new TypeDesc[] {CLASS_TYPE, INV_CHANNEL_TYPE,
+                                                  timeoutType, TIME_UNIT_TYPE});
                 b.storeLocal(closeTaskVar);
             }
 
@@ -279,19 +268,19 @@ public class StubFactoryGenerator<R extends Remote> {
 
             // Write method identifier to channel.
             b.loadLocal(channelVar);
-            b.invokeInterface(invChannelType, "getOutputStream", invOutType, null);
-            LocalVariable invOutVar = b.createLocalVariable(null, invOutType);
+            b.invokeInterface(INV_CHANNEL_TYPE, "getOutputStream", INV_OUT_TYPE, null);
+            LocalVariable invOutVar = b.createLocalVariable(null, INV_OUT_TYPE);
             b.storeLocal(invOutVar);
 
-            CodeBuilderUtil.loadMethodID(b, methodOrdinal);
+            loadMethodID(b, methodOrdinal);
             b.loadLocal(invOutVar);
-            b.invokeVirtual(identifierType, "write", null,
-                            new TypeDesc[] {TypeDesc.forClass(DataOutput.class)});
+            b.invokeVirtual(IDENTIFIER_TYPE, "write", null, new TypeDesc[] {DATA_OUTPUT_TYPE});
 
             if (paramDescs.length > 0) {
                 // Write parameters to channel.
 
-                boolean lookForPipe = method.isAsynchronous();
+                boolean lookForPipe = method.isAsynchronous() &&
+                    returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass());
 
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
@@ -304,7 +293,7 @@ public class StubFactoryGenerator<R extends Remote> {
                             // Use replacement.
                             param = timeoutVar;
                         }
-                        CodeBuilderUtil.writeParam(b, paramType, invOutVar, param);
+                        writeParam(b, paramType, invOutVar, param);
                     }
                     i++;
                 }
@@ -314,7 +303,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 method.getAsynchronousCallMode() != CallMode.BATCHED)
             {
                 b.loadLocal(invOutVar);
-                b.invokeVirtual(invOutType, "flush", null, null);
+                b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
 
             final Label invokeEnd;
@@ -322,8 +311,8 @@ public class StubFactoryGenerator<R extends Remote> {
             if (method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED) {
                 // Read acknowledgement.
                 b.loadLocal(channelVar);
-                b.invokeInterface(invChannelType, "getInputStream", invInType, null);
-                b.invokeVirtual(invInType, "readThrowable", throwableType, null);
+                b.invokeInterface(INV_CHANNEL_TYPE, "getInputStream", INV_IN_TYPE, null);
+                b.invokeVirtual(INV_IN_TYPE, "readThrowable", THROWABLE_TYPE, null);
                 // Discard throwable since none is expected.
                 b.pop();
             }
@@ -376,14 +365,14 @@ public class StubFactoryGenerator<R extends Remote> {
             } else {
                 // Read response.
                 b.loadLocal(channelVar);
-                b.invokeInterface(invChannelType, "getInputStream", invInType, null);
-                LocalVariable invInVar = b.createLocalVariable(null, invInType);
+                b.invokeInterface(INV_CHANNEL_TYPE, "getInputStream", INV_IN_TYPE, null);
+                LocalVariable invInVar = b.createLocalVariable(null, INV_IN_TYPE);
                 b.storeLocal(invInVar);
 
-                LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
+                LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
 
                 b.loadLocal(invInVar);
-                b.invokeVirtual(invInType, "readThrowable", throwableType, null);
+                b.invokeVirtual(INV_IN_TYPE, "readThrowable", THROWABLE_TYPE, null);
                 b.storeLocal(throwableVar);
 
                 b.loadLocal(throwableVar);
@@ -396,7 +385,7 @@ public class StubFactoryGenerator<R extends Remote> {
                     genFinished(b, channelVar, closeTaskVar);
                     b.returnVoid();
                 } else {
-                    CodeBuilderUtil.readParam(b, method.getReturnType(), invInVar);
+                    readParam(b, method.getReturnType(), invInVar);
                     invokeEnd = b.createLabel().setLocation();
                     // Finished with channel.
                     genFinished(b, channelVar, closeTaskVar);
@@ -413,24 +402,24 @@ public class StubFactoryGenerator<R extends Remote> {
             // If any invocation exception, indicate channel failed.
             {
                 b.exceptionHandler(invokeStart, invokeEnd, Throwable.class.getName());
-                LocalVariable throwableVar = b.createLocalVariable(null, throwableType);
+                LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
                 b.storeLocal(throwableVar);
 
                 b.loadThis();
-                b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+                b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
                 b.loadConstant(remoteFailureExType);
                 b.loadLocal(channelVar);
                 b.loadLocal(throwableVar);
                 if (noTimeout) {
-                    b.invokeInterface(stubSupportType, "failed", throwableType,
-                                      new TypeDesc[] {classType, invChannelType, throwableType});
+                    b.invokeInterface(STUB_SUPPORT_TYPE, "failed", THROWABLE_TYPE,
+                                      new TypeDesc[]{CLASS_TYPE, INV_CHANNEL_TYPE,THROWABLE_TYPE});
                 } else {
                     genLoadTimeoutVars(b, false, timeout, timeoutUnit, timeoutType,
                                        originalTimeoutVar, timeoutUnitVar);
                     b.loadLocal(closeTaskVar);
-                    b.invokeInterface(stubSupportType, "failed", throwableType,
-                                      new TypeDesc[] {classType, invChannelType, throwableType,
-                                                      timeoutType, timeUnitType, futureType});
+                    b.invokeInterface(STUB_SUPPORT_TYPE, "failed", THROWABLE_TYPE,
+                                      new TypeDesc[]{CLASS_TYPE, INV_CHANNEL_TYPE,THROWABLE_TYPE,
+                                                     timeoutType, TIME_UNIT_TYPE, FUTURE_TYPE});
                 }
                 b.throwObject();
             }
@@ -447,9 +436,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 RemoteMethod remoteMethod =
                     mRemoteInfo.getRemoteMethod(localMethod.getName(), paramTypes);
 
-                if (CodeBuilderUtil.equalTypes(remoteMethod.getReturnType(),
-                                               localMethod.getReturnType()))
-                {
+                if (equalTypes(remoteMethod.getReturnType(), localMethod.getReturnType())) {
                     // Method has been implemented.
                     continue;
                 }
@@ -460,14 +447,13 @@ public class StubFactoryGenerator<R extends Remote> {
                 // Server does not have this method.
             }
 
-            TypeDesc returnDesc = CodeBuilderUtil.getTypeDesc(localMethod.getReturnType());
-            TypeDesc[] paramDescs = CodeBuilderUtil.getTypeDescs(localMethod.getParameterTypes());
+            TypeDesc returnDesc = getTypeDesc(localMethod.getReturnType());
+            TypeDesc[] paramDescs = getTypeDescs(localMethod.getParameterTypes());
 
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, localMethod.getName(), returnDesc, paramDescs);
 
-            TypeDesc[] exceptionDescs = CodeBuilderUtil
-                .getTypeDescs(localMethod.getExceptionTypes());
+            TypeDesc[] exceptionDescs = getTypeDescs(localMethod.getExceptionTypes());
 
             for (TypeDesc desc : exceptionDescs) {
                 mi.addException(desc);
@@ -475,10 +461,10 @@ public class StubFactoryGenerator<R extends Remote> {
 
             CodeBuilder b = new CodeBuilder(mi);
 
-            b.newObject(unimplementedExType);
+            b.newObject(UNIMPLEMENTED_EX_TYPE);
             b.dup();
             b.loadConstant(mi.getMethodDescriptor().toMethodSignature(localMethod.getName()));
-            b.invokeConstructor(unimplementedExType, new TypeDesc[] {TypeDesc.STRING});
+            b.invokeConstructor(UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
             b.throwObject();
         }
 
@@ -488,8 +474,8 @@ public class StubFactoryGenerator<R extends Remote> {
             CodeBuilder b = new CodeBuilder(mi);
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "stubHashCode", TypeDesc.INT, null);
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "stubHashCode", TypeDesc.INT, null);
             b.returnValue(TypeDesc.INT);
         }
 
@@ -514,12 +500,12 @@ public class StubFactoryGenerator<R extends Remote> {
             b.ifZeroComparisonBranch(notInstance, "==");
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
             b.loadLocal(b.getParameter(0));
             b.checkCast(cf.getType());
-            b.loadField(cf.getType(), STUB_SUPPORT_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "stubEquals", TypeDesc.BOOLEAN,
-                              new TypeDesc[] {stubSupportType});
+            b.loadField(cf.getType(), STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "stubEquals", TypeDesc.BOOLEAN,
+                              new TypeDesc[] {STUB_SUPPORT_TYPE});
             b.returnValue(TypeDesc.BOOLEAN);
 
             notInstance.setLocation();
@@ -535,8 +521,8 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadConstant(mRemoteInfo.getName() + '@');
 
             b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, stubSupportType);
-            b.invokeInterface(stubSupportType, "stubToString", TypeDesc.STRING, null);
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "stubToString", TypeDesc.STRING, null);
 
             b.invokeVirtual(TypeDesc.STRING, "concat", TypeDesc.STRING,
                             new TypeDesc[] {TypeDesc.STRING});
@@ -547,7 +533,7 @@ public class StubFactoryGenerator<R extends Remote> {
         // Define remaining static exception converting methods.
         for (Map.Entry<Class, String> entry : exceptionConverters.entrySet()) {
             MethodInfo mi = cf.addMethod(Modifiers.PRIVATE.toStatic(true), entry.getValue(),
-                                         throwableType, new TypeDesc[] {throwableType});
+                                         THROWABLE_TYPE, new TypeDesc[] {THROWABLE_TYPE});
             CodeBuilder b = new CodeBuilder(mi);
 
             TypeDesc exType = TypeDesc.forClass(entry.getKey());
@@ -555,10 +541,9 @@ public class StubFactoryGenerator<R extends Remote> {
             b.newObject(exType);
             b.dup();
             b.loadLocal(b.getParameter(0));
-            b.invokeVirtual(TypeDesc.forClass(Throwable.class), "getMessage",
-                            TypeDesc.STRING, null);
+            b.invokeVirtual(THROWABLE_TYPE, "getMessage", TypeDesc.STRING, null);
             b.loadLocal(b.getParameter(0));
-            b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, throwableType});
+            b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, THROWABLE_TYPE});
             b.returnValue(exType);
         }
 
@@ -616,16 +601,14 @@ public class StubFactoryGenerator<R extends Remote> {
             }
         }
 
-        final TypeDesc timeUnitType = TypeDesc.forClass(TimeUnit.class);
-
         if (timeoutUnitVar == null) {
-            b.loadStaticField(timeUnitType, timeoutUnit.name(), timeUnitType);
+            b.loadStaticField(TIME_UNIT_TYPE, timeoutUnit.name(), TIME_UNIT_TYPE);
         } else {
             b.loadLocal(timeoutUnitVar);
             if (replaceNull) {
                 Label notNull = b.createLabel();
                 b.ifNullBranch(notNull, false);
-                b.loadStaticField(timeUnitType, timeoutUnit.name(), timeUnitType);
+                b.loadStaticField(TIME_UNIT_TYPE, timeoutUnit.name(), TIME_UNIT_TYPE);
                 b.storeLocal(timeoutUnitVar);
                 notNull.setLocation();
                 b.loadLocal(timeoutUnitVar);
@@ -687,33 +670,29 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private void genBatched(CodeBuilder b, LocalVariable channelVar, LocalVariable closeTaskVar) {
-        final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-
         b.loadThis();
-        b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+        b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         b.loadLocal(channelVar);
         if (closeTaskVar == null) {
-            b.invokeInterface(stubSupportType, "batched", null,
+            b.invokeInterface(STUB_SUPPORT_TYPE, "batched", null,
                               new TypeDesc[] {channelVar.getType()});
         } else {
             b.loadLocal(closeTaskVar);
-            b.invokeInterface(stubSupportType, "batched", null,
+            b.invokeInterface(STUB_SUPPORT_TYPE, "batched", null,
                               new TypeDesc[] {channelVar.getType(), closeTaskVar.getType()});
         }
     }
 
     private void genFinished(CodeBuilder b, LocalVariable channelVar, LocalVariable closeTaskVar) {
-        final TypeDesc stubSupportType = TypeDesc.forClass(StubSupport.class);
-
         b.loadThis();
-        b.loadField(STUB_SUPPORT_NAME, stubSupportType);
+        b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         b.loadLocal(channelVar);
         if (closeTaskVar == null) {
-            b.invokeInterface(stubSupportType, "finished", null,
+            b.invokeInterface(STUB_SUPPORT_TYPE, "finished", null,
                               new TypeDesc[] {channelVar.getType()});
         } else {
             b.loadLocal(closeTaskVar);
-            b.invokeInterface(stubSupportType, "finished", null,
+            b.invokeInterface(STUB_SUPPORT_TYPE, "finished", null,
                               new TypeDesc[] {channelVar.getType(), closeTaskVar.getType()});
         }
     }

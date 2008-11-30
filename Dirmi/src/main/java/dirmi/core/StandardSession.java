@@ -194,7 +194,7 @@ public class StandardSession implements Session {
                 InvocationChan chan;
                 doBoot: synchronized (this) {
                     try {
-                        chan = new NewInvocationChan(channel);
+                        chan = new InvocationChan(channel);
                         InvocationInputStream in = chan.getInputStream();
 
                         int magic = in.readInt();
@@ -275,7 +275,7 @@ public class StandardSession implements Session {
         {
             StreamChannel channel = broker.connect();
             try {
-                InvocationChan chan = new NewInvocationChan(channel);
+                InvocationChan chan = new InvocationChan(channel);
                 InvocationOutputStream out = chan.getOutputStream();
 
                 out.writeInt(MAGIC_NUMBER);
@@ -565,7 +565,7 @@ public class StandardSession implements Session {
             }
         }
 
-        return new NewInvocationChan(mBroker.connect());
+        return new InvocationChan(mBroker.connect());
     }
 
     void holdLocalChannel(InvocationChannel channel) {
@@ -816,7 +816,14 @@ public class StandardSession implements Session {
     private class Handler implements StreamListener {
         public void established(StreamChannel channel) {
             mBroker.accept(this);
-            handleRequest(new NewInvocationChan(channel));
+            InvocationChannel invChan;
+            try {
+                invChan = new InvocationChan(channel);
+            } catch (IOException e) {
+                failed(e);
+                return;
+            }
+            handleRequest(invChan);
         }
 
         public void failed(IOException e) {
@@ -831,19 +838,48 @@ public class StandardSession implements Session {
         }
     }
 
-    private abstract class InvocationChan extends AbstractInvocationChannel {
-        protected final StreamChannel mChannel;
+    private class InvocationChan extends AbstractInvocationChannel {
+        private final StreamChannel mChannel;
+        private final InvocationInputStream mInvIn;
+        private final InvocationOutputStream mInvOut;
 
         private volatile boolean mClosed;
+        private volatile long mTimestamp;
 
-        InvocationChan(StreamChannel channel) {
+        InvocationChan(StreamChannel channel) throws IOException {
             mChannel = channel;
+
+            mInvOut = new InvocationOutputStream
+                (new ReplacingObjectOutputStream(mChannel.getOutputStream()),
+                 channel.getLocalAddress(), channel.getRemoteAddress());
+
+            mInvIn = new InvocationInputStream
+                (new ResolvingObjectInputStream(mChannel.getInputStream()),
+                 channel.getLocalAddress(), channel.getRemoteAddress());
+        }
+
+        private InvocationChan(StreamChannel channel,
+                               InvocationInputStream in, InvocationOutputStream out)
+        {
+            mChannel = channel;
+
+            mInvIn = in;
+            mInvOut = out;
+            mTimestamp = System.currentTimeMillis();
+        }
+
+        public InvocationInputStream getInputStream() throws IOException {
+            return mInvIn;
+        }
+
+        public InvocationOutputStream getOutputStream() throws IOException {
+            return mInvOut;
         }
 
         public final void close() throws IOException {
             mClosed = true;
 
-            OutputStream out = getOutputNow();
+            OutputStream out = mInvOut;
             if (out != null) {
                 try {
                     out.close();
@@ -887,9 +923,9 @@ public class StandardSession implements Session {
         final void recycle() {
             try {
                 getOutputStream().reset();
-                InvocationChan recycled = doRecycle();
+                mTimestamp = System.currentTimeMillis();
                 synchronized (mChannelPool) {
-                    mChannelPool.add(recycled);
+                    mChannelPool.add(this);
                 }
             } catch (Exception e) {
                 forceClose();
@@ -897,109 +933,6 @@ public class StandardSession implements Session {
             }
         }
 
-        /**
-         * Implementation may return null if output not initialized yet.
-         */
-        abstract OutputStream getOutputNow();
-
-        abstract InvocationChan doRecycle() throws IOException;
-
-        abstract long getIdleTimestamp();
-    }
-
-    private class NewInvocationChan extends InvocationChan {
-        private InvocationInputStream mInvIn;
-        private volatile InvocationOutputStream mInvOut;
-
-        NewInvocationChan(StreamChannel channel) {
-            super(channel);
-        }
-
-        public synchronized InvocationInputStream getInputStream() throws IOException {
-            InvocationInputStream in = mInvIn;
-            if (in == null) {
-                connect();
-                in = mInvIn;
-            }
-            return in;
-        }
-
-        public synchronized InvocationOutputStream getOutputStream() throws IOException {
-            InvocationOutputStream out = mInvOut;
-            if (out == null) {
-                connect();
-                out = mInvOut;
-            }
-            return out;
-        }
-
-        private void connect() throws IOException {
-            mInvOut = new InvocationOutputStream
-                (new ReplacingObjectOutputStream(mChannel.getOutputStream()),
-                 getLocalAddress(), getRemoteAddress());
-
-            mInvIn = new InvocationInputStream
-                (new ResolvingObjectInputStream(mChannel.getInputStream()),
-                 getLocalAddress(), getRemoteAddress());
-        }
-
-        @Override
-        OutputStream getOutputNow() {
-            return mInvOut;
-        }
-
-        @Override
-        InvocationChan doRecycle() throws IOException {
-            InvocationInputStream in;
-            InvocationOutputStream out;
-            synchronized (this) {
-                in = getInputStream();
-                out = getOutputStream();
-            }
-            return new RecycledInvocationChan(mChannel, in, out);
-        }
-
-        @Override
-        long getIdleTimestamp() {
-            return 0;
-        }
-    }
-
-    private class RecycledInvocationChan extends InvocationChan {
-        private final InvocationInputStream mInvIn;
-        private final InvocationOutputStream mInvOut;
-
-        private volatile long mTimestamp;
-
-        RecycledInvocationChan(StreamChannel channel,
-                               InvocationInputStream in, InvocationOutputStream out)
-        {
-            super(channel);
-            mInvIn = in;
-            mInvOut = out;
-            mTimestamp = System.currentTimeMillis();
-        }
-
-        public InvocationInputStream getInputStream() throws IOException {
-            return mInvIn;
-        }
-
-        public InvocationOutputStream getOutputStream() throws IOException {
-            return mInvOut;
-        }
-
-        @Override
-        OutputStream getOutputNow() {
-            return mInvOut;
-        }
-
-        @Override
-        InvocationChan doRecycle() {
-            mTimestamp = System.currentTimeMillis();
-            return this;
-        }
-
-        @Override
         long getIdleTimestamp() {
             return mTimestamp;
         }

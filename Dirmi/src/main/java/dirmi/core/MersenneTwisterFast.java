@@ -141,6 +141,8 @@
 
 package dirmi.core;
 
+import java.security.SecureRandom;
+
 // Note: this class is hard-inlined in all of its methods.  This makes some of
 // the methods well-nigh unreadable in their complexity.  In fact, the Mersenne
 // Twister is fairly easy code to understand: if you're trying to get a handle
@@ -150,13 +152,42 @@ package dirmi.core;
 // Changes made:
 // - reformatted the code a bit
 // - removed functions not needed by Dirmi
-// - made synchronized
+// - added static utilities
 //
 // -- Brian S O'Neill
 
 class MersenneTwisterFast {
+    private static final SecureRandom cSecureRandom = new SecureRandom();
+
+    private static final ThreadLocal<MersenneTwisterFast> cLocalInstance =
+        new ThreadLocal<MersenneTwisterFast>() {
+            @Override
+            public MersenneTwisterFast initialValue() {
+                return newInstance();
+            }
+        };
+
+    /**
+     * Returns a new non-thread safe instance.
+     */
+    static MersenneTwisterFast newInstance() {
+        SecureRandom secure = cSecureRandom;
+        int[] seed = new int[N];
+        for (int i=0; i<seed.length; i++) {
+            seed[i] = secure.nextInt();
+        }
+        return new MersenneTwisterFast(seed);
+    }
+
+    /**
+     * Returns a non-sharable instance for this thread.
+     */
+    static MersenneTwisterFast localInstance() {
+        return cLocalInstance.get();
+    }
+
     // Period parameters
-    static final int N = 624;
+    private static final int N = 624;
     private static final int M = 397;
     private static final int MATRIX_A = 0x9908b0df;   // private static final * constant vector a
     private static final int UPPER_MASK = 0x80000000; // most significant w-r bits
@@ -200,7 +231,7 @@ class MersenneTwisterFast {
      * pass in a long that's bigger than an int (Mersenne Twister
      * only uses the first 32 bits for its seed).   
      */
-    public synchronized void setSeed(final long seed) {
+    public void setSeed(final long seed) {
         mt = new int[N];
         
         mag01 = new int[2];
@@ -226,7 +257,7 @@ class MersenneTwisterFast {
      * in the array are used; if the array is shorter than this then
      * integers are repeatedly used in a wrap-around fashion.
      */
-    public synchronized void setSeed(final int[] array) {
+    public void setSeed(final int[] array) {
         if (array.length == 0) {
             throw new IllegalArgumentException("Array length must be greater than zero");
         }
@@ -253,7 +284,7 @@ class MersenneTwisterFast {
         mt[0] = 0x80000000; /* MSB is 1; assuring non-zero initial array */ 
     }
 
-    public final synchronized long nextLong() {
+    public final long nextLong() {
         int y;
         int z;
 

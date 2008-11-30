@@ -21,8 +21,6 @@ import java.io.EOFException;
 import java.io.InputStream;
 import java.io.IOException;
 
-import java.security.SecureRandom;
-
 import java.util.Map;
 
 import org.cojen.util.WeakCanonicalSet;
@@ -35,21 +33,12 @@ import org.cojen.util.WeakValuedHashMap;
  * @author Brian S O'Neill
  */
 abstract class IdentifierStore<I extends AbstractIdentifier> {
-    private final MersenneTwisterFast mRandom;
     private final WeakCanonicalSet<I> mIdentifiers;
 
     private final Map<Object, I> mObjectsToIdentifiers;
     private final Map<I, Object> mIdentifiersToObjects;
 
     public IdentifierStore() {
-        SecureRandom rnd = new SecureRandom();
-        int[] seed = new int[MersenneTwisterFast.N];
-        for (int i=0; i<seed.length; i++) {
-            seed[i] = rnd.nextInt();
-        }
-
-        mRandom = new MersenneTwisterFast(seed);
-
         mIdentifiers = new WeakCanonicalSet<I>();
 
         mObjectsToIdentifiers = new WeakIdentityMap<Object, I>();
@@ -69,7 +58,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
         I id = mObjectsToIdentifiers.get(obj);
         if (id == null) {
             do {
-                id = newIdentifier(mRandom.nextLong());
+                id = newIdentifier(MersenneTwisterFast.localInstance().nextLong());
             } while (mIdentifiersToObjects.containsKey(id));
             id = mIdentifiers.put(id);
             mObjectsToIdentifiers.put(obj, id);
@@ -98,7 +87,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
             }
         } else {
             do {
-                long v = mRandom.nextLong();
+                long v = MersenneTwisterFast.localInstance().nextLong();
                 v &= (~0xff) | (andMask & 0xff);
                 v |= (orMask & 0xff);
                 id = newIdentifier(v);

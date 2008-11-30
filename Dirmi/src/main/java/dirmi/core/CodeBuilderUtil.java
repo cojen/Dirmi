@@ -18,9 +18,16 @@ package dirmi.core;
 
 import java.lang.reflect.InvocationTargetException;
 
+import java.io.DataOutput;
+
 import java.rmi.Remote;
 
+import java.rmi.server.Unreferenced;
+
 import java.util.Collection;
+
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
@@ -31,6 +38,9 @@ import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.ClassInjector;
+
+import dirmi.Pipe;
+import dirmi.UnimplementedMethodException;
 
 import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteMethod;
@@ -50,6 +60,42 @@ class CodeBuilderUtil {
 
     // Method name ends with '$' so as not to conflict with user method.
     static final String FACTORY_REF_METHOD_NAME = "factoryRef$";
+
+    static final TypeDesc IDENTIFIER_TYPE;
+    static final TypeDesc STUB_SUPPORT_TYPE;
+    static final TypeDesc SKEL_SUPPORT_TYPE;
+    static final TypeDesc INV_CHANNEL_TYPE;
+    static final TypeDesc INV_IN_TYPE;
+    static final TypeDesc INV_OUT_TYPE;
+    static final TypeDesc NO_SUCH_METHOD_EX_TYPE;
+    static final TypeDesc UNIMPLEMENTED_EX_TYPE;
+    static final TypeDesc ASYN_INV_EX_TYPE;
+    static final TypeDesc THROWABLE_TYPE;
+    static final TypeDesc CLASS_TYPE;
+    static final TypeDesc FUTURE_TYPE;
+    static final TypeDesc TIME_UNIT_TYPE;
+    static final TypeDesc PIPE_TYPE;
+    static final TypeDesc DATA_OUTPUT_TYPE;
+    static final TypeDesc UNREFERENCED_TYPE;
+
+    static {
+        IDENTIFIER_TYPE = TypeDesc.forClass(Identifier.class);
+        STUB_SUPPORT_TYPE = TypeDesc.forClass(StubSupport.class);
+        SKEL_SUPPORT_TYPE = TypeDesc.forClass(SkeletonSupport.class);
+        INV_CHANNEL_TYPE = TypeDesc.forClass(InvocationChannel.class);
+        INV_IN_TYPE = TypeDesc.forClass(InvocationInputStream.class);
+        INV_OUT_TYPE = TypeDesc.forClass(InvocationOutputStream.class);
+        NO_SUCH_METHOD_EX_TYPE = TypeDesc.forClass(NoSuchMethodException.class);
+        UNIMPLEMENTED_EX_TYPE = TypeDesc.forClass(UnimplementedMethodException.class);
+        ASYN_INV_EX_TYPE = TypeDesc.forClass(AsynchronousInvocationException.class);
+        THROWABLE_TYPE = TypeDesc.forClass(Throwable.class);
+        CLASS_TYPE = TypeDesc.forClass(Class.class);
+        FUTURE_TYPE = TypeDesc.forClass(Future.class);
+        TIME_UNIT_TYPE = TypeDesc.forClass(TimeUnit.class);
+        PIPE_TYPE = TypeDesc.forClass(Pipe.class);
+        DATA_OUTPUT_TYPE = TypeDesc.forClass(DataOutput.class);
+        UNREFERENCED_TYPE = TypeDesc.forClass(Unreferenced.class);
+    }
 
     static boolean equalTypes(RemoteParameter a, RemoteParameter b) {
         return a == null ? b == null : (a.equalTypes(b));
