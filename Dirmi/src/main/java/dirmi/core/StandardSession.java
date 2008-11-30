@@ -938,10 +938,6 @@ public class StandardSession implements Session {
                 (new ReplacingObjectOutputStream(mChannel.getOutputStream()),
                  getLocalAddress(), getRemoteAddress());
 
-            // Ensure ObjectOutputStream header is sent, to prevent peer from
-            // locking up when it constructs ObjectInputStream.
-            mInvOut.flush();
-
             mInvIn = new InvocationInputStream
                 (new ResolvingObjectInputStream(mChannel.getInputStream()),
                  getLocalAddress(), getRemoteAddress());
@@ -1016,6 +1012,11 @@ public class StandardSession implements Session {
         }
 
         @Override
+        protected void readStreamHeader() {
+            // Do nothing and prevent deadlock when connecting.
+        }
+
+        @Override
         protected Class<?> resolveClass(ObjectStreamClass desc)
             throws IOException, ClassNotFoundException
         {
@@ -1073,6 +1074,11 @@ public class StandardSession implements Session {
         ReplacingObjectOutputStream(OutputStream out) throws IOException {
             super(out);
             enableReplaceObject(true);
+        }
+
+        @Override
+        protected void writeStreamHeader() {
+            // Do nothing and prevent deadlock when connecting.
         }
 
         @Override
