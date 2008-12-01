@@ -56,7 +56,7 @@ class BufferedInputStream extends AbstractBufferedInputStream {
             }
             return available;
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
@@ -72,12 +72,12 @@ class BufferedInputStream extends AbstractBufferedInputStream {
         try {
             int amt = mIn.read(buffer, offset, length);
             if (amt <= 0) {
-                forceClose();
+                disconnect();
                 return -1;
             }
             return amt;
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
@@ -91,12 +91,12 @@ class BufferedInputStream extends AbstractBufferedInputStream {
             }
             return amt;
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
 
-    private void forceClose() {
+    private void disconnect() {
         try {
             close();
         } catch (IOException e2) {

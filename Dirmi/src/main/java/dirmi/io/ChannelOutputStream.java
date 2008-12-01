@@ -135,7 +135,7 @@ class ChannelOutputStream extends OutputStream {
             }
             mOut.flush();
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
@@ -151,7 +151,7 @@ class ChannelOutputStream extends OutputStream {
             try {
                 flush();
             } catch (IOException e) {
-                forceClose();
+                disconnect();
                 throw e;
             }
         }
@@ -163,7 +163,7 @@ class ChannelOutputStream extends OutputStream {
     }
 
     // Caller must be synchronized.
-    private void forceClose() {
+    private void disconnect() {
         try {
             close(false);
         } catch (IOException e) {
@@ -198,7 +198,7 @@ class ChannelOutputStream extends OutputStream {
             mPos = START_POS;
             mState = STATE_OPEN;
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }

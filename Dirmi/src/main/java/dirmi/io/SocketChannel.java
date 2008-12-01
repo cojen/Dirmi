@@ -65,13 +65,13 @@ class SocketChannel implements StreamChannel {
             mOut.close();
             mIn.close();
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
         mSocket.close();
     }
 
-    public void forceClose() {
+    public void disconnect() {
         try {
             mSocket.close();
         } catch (IOException e) {

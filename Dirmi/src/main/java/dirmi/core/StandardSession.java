@@ -230,7 +230,7 @@ public class StandardSession implements Session {
                     }
 
                     if (channel != null) {
-                        channel.forceClose();
+                        channel.disconnect();
                     }
 
                     return;
@@ -286,7 +286,7 @@ public class StandardSession implements Session {
 
                 chan.recycle();
             } catch (IOException e) {
-                channel.forceClose();
+                channel.disconnect();
                 throw e;
             }
         }
@@ -470,7 +470,7 @@ public class StandardSession implements Session {
                 objID.updateRemoteVersion(invChannel.readInt());
                 methodID = Identifier.read(din);
             } catch (IOException e) {
-                invChannel.forceClose();
+                invChannel.disconnect();
                 return;
             }
 
@@ -498,7 +498,7 @@ public class StandardSession implements Session {
 
                 // Connection must be closed in order to discard any unread
                 // input arguments and piled up asynchronous calls.
-                invChannel.forceClose();
+                invChannel.disconnect();
 
                 return;
             }
@@ -540,12 +540,12 @@ public class StandardSession implements Session {
 
                 // Connection must be closed in order to discard any unread
                 // input arguments and piled up asynchronous calls.
-                invChannel.forceClose();
+                invChannel.disconnect();
             } catch (IOException e) {
                 if (!mClosing) {
                     error("Failure processing request", e);
                 }
-                invChannel.forceClose();
+                invChannel.disconnect();
             }
 
             return;
@@ -884,7 +884,7 @@ public class StandardSession implements Session {
                 try {
                     out.close();
                 } catch (IOException e) {
-                    mChannel.forceClose();
+                    mChannel.disconnect();
                     throw e;
                 }
             }
@@ -892,9 +892,9 @@ public class StandardSession implements Session {
             mChannel.close();
         }
 
-        public final void forceClose() {
+        public final void disconnect() {
             mClosed = true;
-            mChannel.forceClose();
+            mChannel.disconnect();
         }
 
         public final Object getLocalAddress() {
@@ -928,7 +928,7 @@ public class StandardSession implements Session {
                     mChannelPool.add(this);
                 }
             } catch (Exception e) {
-                forceClose();
+                disconnect();
                 // Ignore.
             }
         }
@@ -1086,7 +1086,7 @@ public class StandardSession implements Session {
                     channel.getOutputStream().reset();
                     return true;
                 } catch (IOException e) {
-                    channel.forceClose();
+                    channel.disconnect();
                     error("Unable to flush response", e);
                     return false;
                 }
@@ -1275,7 +1275,7 @@ public class StandardSession implements Session {
             releaseLocalChannel();
 
             if (channel != null) {
-                channel.forceClose();
+                channel.disconnect();
             }
 
             RemoteException ex;
@@ -1393,7 +1393,7 @@ public class StandardSession implements Session {
         }
 
         public void run() {
-            mChannel.forceClose();
+            mChannel.disconnect();
         }
     }
 }

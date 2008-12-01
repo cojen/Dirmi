@@ -51,7 +51,7 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
             super.flush();
             mOut.flush();
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
@@ -67,12 +67,12 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
         try {
             mOut.write(buffer, offset, length);
         } catch (IOException e) {
-            forceClose();
+            disconnect();
             throw e;
         }
     }
 
-    private void forceClose() {
+    private void disconnect() {
         try {
             mOut.close();
         } catch (IOException e2) {

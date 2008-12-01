@@ -44,5 +44,5 @@ public interface StreamChannel extends Closeable {
     /**
      * Forcibly close channel, discarding unflushed output and any exceptions.
      */
-    void forceClose();
+    void disconnect();
 }
