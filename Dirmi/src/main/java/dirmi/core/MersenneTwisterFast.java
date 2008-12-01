@@ -284,6 +284,37 @@ class MersenneTwisterFast {
         mt[0] = 0x80000000; /* MSB is 1; assuring non-zero initial array */ 
     }
 
+    public final int nextInt() {
+        int y;
+        
+        if (mti >= N) {   // generate N words at one time
+            int kk;
+            final int[] mt = this.mt; // locals are slightly faster 
+            final int[] mag01 = this.mag01; // locals are slightly faster 
+            
+            for (kk = 0; kk < N - M; kk++) {
+                y = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
+                mt[kk] = mt[kk+M] ^ (y >>> 1) ^ mag01[y & 0x1];
+            }
+            for (; kk < N-1; kk++) {
+                y = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
+                mt[kk] = mt[kk+(M-N)] ^ (y >>> 1) ^ mag01[y & 0x1];
+            }
+            y = (mt[N-1] & UPPER_MASK) | (mt[0] & LOWER_MASK);
+            mt[N-1] = mt[M-1] ^ (y >>> 1) ^ mag01[y & 0x1];
+
+            mti = 0;
+        }
+  
+        y = mt[mti++];
+        y ^= y >>> 11;                          // TEMPERING_SHIFT_U(y)
+        y ^= (y << 7) & TEMPERING_MASK_B;       // TEMPERING_SHIFT_S(y)
+        y ^= (y << 15) & TEMPERING_MASK_C;      // TEMPERING_SHIFT_T(y)
+        y ^= (y >>> 18);                        // TEMPERING_SHIFT_L(y)
+
+        return y;
+    }
+
     public final long nextLong() {
         int y;
         int z;

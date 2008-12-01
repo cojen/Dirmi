@@ -58,6 +58,8 @@ public class StreamConnectorBroker implements StreamBroker {
 
     final ScheduledExecutorService mExecutor;
 
+    // FIXME: Use of weak references means that channels could leak, even if
+    // remote session is closed.
     final WeakIdentityMap<StreamChannel, Object> mChannels;
 
     final LinkedBlockingQueue<StreamListener> mListenerQueue;
@@ -135,7 +137,7 @@ public class StreamConnectorBroker implements StreamBroker {
                     try {
                         channel = mConnector.connect();
                         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-                        out.writeShort(4); // length of message minus one
+                        out.writeShort((1 + 4) - 1); // length of message
                         out.write(OP_CONNECTED);
                         out.writeInt(mId);
                         out.flush();
@@ -256,7 +258,7 @@ public class StreamConnectorBroker implements StreamBroker {
 
         StreamChannel channel = mConnector.connect();
         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-        out.writeShort(4); // length of message minus one
+        out.writeShort((1 + 4) - 1); // length of message
         out.write(OP_CONNECT);
         out.writeInt(mId);
         out.flush();

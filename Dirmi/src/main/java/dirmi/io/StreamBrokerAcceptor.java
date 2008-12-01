@@ -24,8 +24,6 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.util.Random;
-
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -39,6 +37,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.cojen.util.IntHashMap;
 import org.cojen.util.WeakIdentityMap;
 
+import dirmi.core.Random;
+
 /**
  * Paired with {@link StreamConnectorBroker} to adapt an acceptor into a broker
  * factory.
@@ -49,7 +49,6 @@ public class StreamBrokerAcceptor implements Closeable {
     static final int DEFAULT_PING_CHECK_MILLIS = 10000;
 
     final StreamAcceptor mAcceptor;
-    final Random mRnd;
     final IntHashMap<Broker> mBrokerMap;
     final LinkedBlockingQueue<StreamBrokerListener> mBrokerListenerQueue;
 
@@ -62,7 +61,6 @@ public class StreamBrokerAcceptor implements Closeable {
                                 final ScheduledExecutorService executor)
     {
         mAcceptor = acceptor;
-        mRnd = new Random();
         mBrokerMap = new IntHashMap<Broker>();
         mBrokerListenerQueue = new LinkedBlockingQueue<StreamBrokerListener>();
         mExecutor = executor;
@@ -86,7 +84,7 @@ public class StreamBrokerAcceptor implements Closeable {
                     if (op == StreamConnectorBroker.OP_OPEN) {
                         synchronized (mBrokerMap) {
                             do {
-                                id = mRnd.nextInt();
+                                id = Random.randomInt();
                             } while (mBrokerMap.containsKey(id));
                             // Store null to reserve the id and allow broker
                             // constructor to block.
@@ -285,6 +283,8 @@ public class StreamBrokerAcceptor implements Closeable {
 
         final ScheduledExecutorService mExecutor;
 
+        // FIXME: Use of weak references means that channels could leak, even
+        // if remote session is closed.
         final WeakIdentityMap<StreamChannel, Object> mChannels;
 
         final LinkedBlockingQueue<StreamChannel> mConnectQueue;
@@ -327,7 +327,7 @@ public class StreamBrokerAcceptor implements Closeable {
             }
 
             synchronized (out) {
-                out.writeShort(4); // length of message minus one
+                out.writeShort((1 + 4) - 1); // length of message
                 out.write(StreamConnectorBroker.OP_OPENED);
                 out.writeInt(id);
                 out.flush();
@@ -386,7 +386,7 @@ public class StreamBrokerAcceptor implements Closeable {
                     // Use a connection which was interrupted earlier.
                     mConnectionsInterrupted--;
                 } else {
-                    out.writeShort(4); // length of message minus one
+                    out.writeShort((1 + 4) - 1); // length of message
                     out.write(StreamConnectorBroker.OP_CONNECT);
                     out.writeInt(mId);
                     out.flush();
@@ -562,7 +562,7 @@ public class StreamBrokerAcceptor implements Closeable {
             try {
                 DataOutputStream out = mControlOut;
                 synchronized (out) {
-                    out.writeShort(0); // length of message minus one
+                    out.writeShort(1 - 1); // length of message
                     out.write(StreamConnectorBroker.OP_PING);
                     out.flush();
                 }
