@@ -803,11 +803,12 @@ public class StandardSession implements Session {
                     mChannelPool.remove();
                 }
                 try {
-                    // Perform regular close to allow any lingering methods
-                    // using CallMode.EVENTUAL to get flushed.
-                    pooledChannel.close();
+                    // Flush any lingering methods which used CallMode.EVENTUAL.
+                    pooledChannel.flush();
                 } catch (IOException e) {
                     // Ignore.
+                } finally {
+                    pooledChannel.disconnect();
                 }
             }
         }
