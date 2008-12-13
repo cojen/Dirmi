@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
  *
  * @author Brian S O'Neill
  */
-public interface MessageChannel extends Closeable {
+public interface MessageChannel extends AddressPair, Closeable {
     /**
      * Fully sends a fixed size message, blocking if send buffer is full.
      *
@@ -47,14 +47,4 @@ public interface MessageChannel extends Closeable {
      * Returns the constant maximum message size supported by the channel.
      */
     int getMaximumMessageSize();
-
-    /**
-     * @return local address or null if unknown
-     */
-    Object getLocalAddress();
-
-    /**
-     * @return remote address or null if unknown
-     */
-    Object getRemoteAddress();
 }

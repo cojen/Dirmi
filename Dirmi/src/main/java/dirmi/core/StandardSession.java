@@ -851,12 +851,10 @@ public class StandardSession implements Session {
             mChannel = channel;
 
             mInvOut = new InvocationOutputStream
-                (new ReplacingObjectOutputStream(mChannel.getOutputStream()),
-                 channel.getLocalAddress(), channel.getRemoteAddress());
+                (new ReplacingObjectOutputStream(mChannel.getOutputStream()), channel);
 
             mInvIn = new InvocationInputStream
-                (new ResolvingObjectInputStream(mChannel.getInputStream()),
-                 channel.getLocalAddress(), channel.getRemoteAddress());
+                (new ResolvingObjectInputStream(mChannel.getInputStream()), channel);
         }
 
         private InvocationChan(StreamChannel channel,

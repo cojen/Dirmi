@@ -26,6 +26,8 @@ import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.List;
 
+import dirmi.io.AddressPair;
+
 /**
  * 
  *
@@ -39,29 +41,23 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     static final byte NOT_NULL = 3;
 
     private final ObjectOutputStream mOut;
-    private final Object mLocalAddress;
-    private final Object mRemoteAddress;
+    private final AddressPair mPair;
 
     /**
      * @param out stream to wrap
      */
     public InvocationOutputStream(ObjectOutputStream out) {
         mOut = out;
-        mLocalAddress = null;
-        mRemoteAddress = null;
+        mPair = null;
     }
 
     /**
      * @param out stream to wrap
-     * @param localAddress optional local address to stitch into stack traces sent to client.
-     * @param remoteAddress optional remote address to stitch into stack traces sent to client.
+     * @param pair optional pair for extracing local and remote address
      */
-    public InvocationOutputStream(ObjectOutputStream out,
-                                  Object localAddress, Object remoteAddress)
-    {
+    public InvocationOutputStream(ObjectOutputStream out, AddressPair pair) {
         mOut = out;
-        mLocalAddress = localAddress;
-        mRemoteAddress = remoteAddress;
+        mPair = pair;
     }
 
     public void write(int b) throws IOException {
@@ -219,8 +215,8 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         collectChain(chain, t);
 
         ObjectOutput out = mOut;
-        out.writeObject(InvocationInputStream.toString(mLocalAddress));
-        out.writeObject(InvocationInputStream.toString(mRemoteAddress));
+        out.writeObject(InvocationInputStream.localAddress(mPair));
+        out.writeObject(InvocationInputStream.remoteAddress(mPair));
 
         writeVarUnsignedInt(chain.size());
 

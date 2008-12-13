@@ -16,23 +16,19 @@
 
 package dirmi.io;
 
-import java.io.Closeable;
-import java.io.InputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-
 /**
- * Basic interface for a blocking bidirectional I/O channel.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamChannel extends AddressPair, Closeable {
-    InputStream getInputStream() throws IOException;
-
-    OutputStream getOutputStream() throws IOException;
+public interface AddressPair {
+    /**
+     * @return local address or null if unknown
+     */
+    Object getLocalAddress();
 
     /**
-     * Forcibly close channel, discarding unflushed output and any exceptions.
+     * @return remote address or null if unknown
      */
-    void disconnect();
+    Object getRemoteAddress();
 }

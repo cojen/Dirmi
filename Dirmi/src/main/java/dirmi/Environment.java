@@ -154,6 +154,7 @@ public class Environment implements Closeable {
      *
      * @param port port for accepting socket connections
      * @param acceptor called as sessions are accepted
+     * @see SharedServer
      */
     public void acceptSessions(int port, SessionAcceptor acceptor) throws IOException {
         acceptSessions(new InetSocketAddress(port), acceptor);
@@ -164,6 +165,7 @@ public class Environment implements Closeable {
      *
      * @param bindpoint address for accepting socket connections
      * @param acceptor called as sessions are accepted
+     * @see SharedServer
      */
     public void acceptSessions(SocketAddress bindpoint, final SessionAcceptor acceptor)
         throws IOException

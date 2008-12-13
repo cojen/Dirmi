@@ -31,6 +31,8 @@ import java.util.List;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import dirmi.io.AddressPair;
+
 /**
  * 
  *
@@ -39,27 +41,23 @@ import java.rmi.RemoteException;
  */
 public class InvocationInputStream extends InputStream implements InvocationInput {
     private final ObjectInputStream mIn;
-    private final Object mLocalAddress;
-    private final Object mRemoteAddress;
+    private final AddressPair mPair;
 
     /**
      * @param in stream to wrap
      */
     public InvocationInputStream(ObjectInputStream in) {
         mIn = in;
-        mLocalAddress = null;
-        mRemoteAddress = null;
+        mPair = null;
     }
 
     /**
      * @param in stream to wrap
-     * @param localAddress optional local address to stitch into stack traces from server.
-     * @param remoteAddress optional remote address to stitch into stack traces from server.
+     * @param pair optional pair for extracing local and remote address
      */
-    public InvocationInputStream(ObjectInputStream in, Object localAddress, Object remoteAddress) {
+    public InvocationInputStream(ObjectInputStream in, AddressPair pair) {
         mIn = in;
-        mLocalAddress = localAddress;
-        mRemoteAddress = remoteAddress;
+        mPair = pair;
     }
 
     public void readFully(byte b[]) throws IOException {
@@ -316,9 +314,9 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             String pseudo = "Remote Method Invocation";
             mid = new StackTraceElement[] {
                 new StackTraceElement(pseudo, "address", serverLocalAddress, -1),
-                new StackTraceElement(pseudo, "address", toString(mRemoteAddress), -1),
+                new StackTraceElement(pseudo, "address", remoteAddress(mPair), -1),
                 new StackTraceElement(pseudo, "address", serverRemoteAddress, -1),
-                new StackTraceElement(pseudo, "address", toString(mLocalAddress), -1),
+                new StackTraceElement(pseudo, "address", localAddress(mPair), -1),
             };
         }
         
@@ -360,6 +358,14 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
 
     public void close() throws IOException {
         mIn.close();
+    }
+
+    static String localAddress(AddressPair pair) {
+        return pair == null ? null : toString(pair.getLocalAddress());
+    }
+
+    static String remoteAddress(AddressPair pair) {
+        return pair == null ? null : toString(pair.getRemoteAddress());
     }
 
     static String toString(Object obj) {
