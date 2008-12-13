@@ -135,9 +135,9 @@ public class Environment implements Closeable {
         try {
             SocketMessageProcessor processor = messageProcessor();
             MessageChannel channel = processor.newConnector(endpoint, bindpoint).connect();
-            StreamConnector connector = new SocketStreamConnector(endpoint, bindpoint);
-            StreamBroker broker = new StreamConnectorBroker(channel, connector, mExecutor);
-            Session session = new StandardSession(broker, server, mExecutor);
+            StreamConnector connector = new SocketStreamConnector(mExecutor, endpoint, bindpoint);
+            StreamBroker broker = new StreamConnectorBroker(mExecutor, channel, connector);
+            Session session = new StandardSession(mExecutor, broker, server);
 
             synchronized (mSessions) {
                 mSessions.put(session, "");
@@ -177,10 +177,10 @@ public class Environment implements Closeable {
 
         Lock lock = closeLock();
         try {
-            StreamAcceptor streamAcceptor = new SocketStreamAcceptor(bindpoint, mExecutor);
+            StreamAcceptor streamAcceptor = new SocketStreamAcceptor(mExecutor, bindpoint);
             StreamBrokerAcceptor brokerAcceptor =
-                new StreamBrokerAcceptor(streamAcceptor, mExecutor);
-            StandardSessionServer server = new StandardSessionServer(brokerAcceptor, mExecutor);
+                new StreamBrokerAcceptor(mExecutor, streamAcceptor);
+            StandardSessionServer server = new StandardSessionServer(mExecutor, brokerAcceptor);
 
             synchronized (mSessionServers) {
                 mSessionServers.put(server, "");

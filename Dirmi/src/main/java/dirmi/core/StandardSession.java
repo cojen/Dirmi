@@ -132,25 +132,26 @@ public class StandardSession implements Session {
     volatile boolean mClosing;
 
     /**
+     * @param executor shared executor for remote methods
      * @param broker channel broker must always connect to same remote server
      * @param server optional server object to export
-     * @param executor shared executor for remote methods
      */
-    public StandardSession(StreamBroker broker, Object server,
-                           ScheduledExecutorService executor)
+    public StandardSession(ScheduledExecutorService executor,
+                           StreamBroker broker, Object server)
         throws IOException
     {
-        this(broker, server, executor, null);
+        this(executor, broker, server, null);
     }
 
     /**
+     * @param executor shared executor for remote methods
      * @param broker channel broker must always connect to same remote server
      * @param server optional server object to export
-     * @param executor shared executor for remote methods
      * @param log message log; pass null for default
      */
-    public StandardSession(StreamBroker broker, final Object server,
-                           ScheduledExecutorService executor, Log log)
+    public StandardSession(ScheduledExecutorService executor,
+                           StreamBroker broker, final Object server,
+                           Log log)
         throws IOException
     {
         if (broker == null) {
@@ -560,8 +561,7 @@ public class StandardSession implements Session {
 
         synchronized (mChannelPool) {
             if (mChannelPool.size() > 0) {
-                channel = mChannelPool.removeLast();
-                return channel;
+                return mChannelPool.removeLast();
             }
         }
 

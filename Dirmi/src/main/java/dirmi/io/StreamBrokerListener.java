@@ -32,7 +32,9 @@ public interface StreamBrokerListener {
 
     /**
      * Called when broker cannot be established. This method may safely
-     * block.
+     * block. Invocation of this method does not imply that new brokers cannot
+     * be established. If established method re-adds this listener, then the
+     * failed method must do so as well.
      */
     void failed(IOException e);
 }

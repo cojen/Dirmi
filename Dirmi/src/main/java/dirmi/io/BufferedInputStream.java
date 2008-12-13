@@ -30,10 +30,7 @@ class BufferedInputStream extends AbstractBufferedInputStream {
     private final InputStream mIn;
 
     public BufferedInputStream(InputStream in) {
-        if (in == null) {
-            throw new IllegalArgumentException();
-        }
-        mIn = in;
+        this(in, DEFAULT_SIZE);
     }
 
     public BufferedInputStream(InputStream in, int size) {
@@ -44,17 +41,25 @@ class BufferedInputStream extends AbstractBufferedInputStream {
         mIn = in;
     }
 
+    // Copy constructor.
+    BufferedInputStream(BufferedInputStream in) {
+        super(in);
+        mIn = in.mIn;
+    }
+
     @Override
-    public synchronized int available() throws IOException {
+    public int available() throws IOException {
         try {
-            int available = super.available();
-            if (available <= 0) {
-                available = mIn.available();
-                if (available < 0) {
-                    throw new IOException("Closed");
+            synchronized (this) {
+                int available = super.available();
+                if (available <= 0) {
+                    available = mIn.available();
+                    if (available < 0) {
+                        throw new IOException("Closed");
+                    }
                 }
+                return available;
             }
-            return available;
         } catch (IOException e) {
             disconnect();
             throw e;
@@ -96,7 +101,10 @@ class BufferedInputStream extends AbstractBufferedInputStream {
         }
     }
 
-    private void disconnect() {
+    /**
+     * Is called without lock held.
+     */
+    protected void disconnect() {
         try {
             close();
         } catch (IOException e2) {

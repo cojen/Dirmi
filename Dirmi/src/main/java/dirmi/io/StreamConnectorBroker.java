@@ -72,8 +72,8 @@ public class StreamConnectorBroker implements StreamBroker {
     private boolean mClosed;
     private volatile String mClosedReason;
 
-    public StreamConnectorBroker(final MessageChannel controlChannel, StreamConnector connector,
-                                 ScheduledExecutorService executor)
+    public StreamConnectorBroker(ScheduledExecutorService executor,
+                                 final MessageChannel controlChannel, StreamConnector connector)
         throws IOException
     {
         mControlChannel = controlChannel;
@@ -137,7 +137,6 @@ public class StreamConnectorBroker implements StreamBroker {
                     try {
                         channel = mConnector.connect();
                         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-                        out.writeShort((1 + 4) - 1); // length of message
                         out.write(OP_CONNECTED);
                         out.writeInt(mId);
                         out.flush();
@@ -258,7 +257,6 @@ public class StreamConnectorBroker implements StreamBroker {
 
         StreamChannel channel = mConnector.connect();
         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-        out.writeShort((1 + 4) - 1); // length of message
         out.write(OP_CONNECT);
         out.writeInt(mId);
         out.flush();
@@ -343,7 +341,7 @@ public class StreamConnectorBroker implements StreamBroker {
 
     @Override
     public String toString() {
-        return "StreamConnectorBroker{channel=" + mControlChannel + '}';
+        return "StreamConnectorBroker {channel=" + mControlChannel + '}';
     }
 
     Lock closeLock() throws IOException {

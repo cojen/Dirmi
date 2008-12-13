@@ -29,21 +29,17 @@ import java.net.Socket;
  */
 class SocketChannel implements StreamChannel {
     private final Socket mSocket;
-    private final InputStream mIn;
-    private final OutputStream mOut;
 
     SocketChannel(Socket socket) throws IOException {
         mSocket = socket;
-        mIn = new BufferedInputStream(socket.getInputStream());
-        mOut = new BufferedOutputStream(socket.getOutputStream());
     }
 
     public InputStream getInputStream() throws IOException {
-        return mIn;
+        return mSocket.getInputStream();
     }
 
     public OutputStream getOutputStream() throws IOException {
-        return mOut;
+        return mSocket.getOutputStream();
     }
 
     public Object getLocalAddress() {
@@ -56,18 +52,11 @@ class SocketChannel implements StreamChannel {
 
     @Override
     public String toString() {
-        return "StreamChannel{localAddress=" + getLocalAddress() +
+        return "SocketChannel {localAddress=" + getLocalAddress() +
             ", remoteAddress=" + getRemoteAddress() + '}';
     }
 
     public void close() throws IOException {
-        try {
-            mOut.close();
-            mIn.close();
-        } catch (IOException e) {
-            disconnect();
-            throw e;
-        }
         mSocket.close();
     }
 

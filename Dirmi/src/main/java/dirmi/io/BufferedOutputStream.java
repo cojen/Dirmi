@@ -31,25 +31,33 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
     private final OutputStream mOut;
 
     public BufferedOutputStream(OutputStream out) {
+        this(out, 0, DEFAULT_SIZE, 0);
+    }
+
+    public BufferedOutputStream(OutputStream out, int prefix, int size, int suffix) {
+        super(prefix, size, suffix);
         if (out == null) {
             throw new IllegalArgumentException();
         }
         mOut = out;
     }
 
-    public BufferedOutputStream(OutputStream out, int size) {
-        super(size);
-        if (out == null) {
-            throw new IllegalArgumentException();
-        }
-        mOut = out;
+    // Copy constructor.
+    BufferedOutputStream(BufferedOutputStream out) {
+        super(out);
+        mOut = out.mOut;
     }
 
     @Override
-    public synchronized void flush() throws IOException {
+    public boolean flush(boolean force) throws IOException {
         try {
-            super.flush();
-            mOut.flush();
+            synchronized (this) {
+                if (super.flush(force)) {
+                    mOut.flush();
+                    return true;
+                }
+            }
+            return false;
         } catch (IOException e) {
             disconnect();
             throw e;
@@ -58,12 +66,12 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
 
     @Override
     public synchronized void close() throws IOException {
-        super.flush();
+        flush();
         mOut.close();
     }
 
     @Override
-    protected void doWrite(byte[] buffer, int offset, int length) throws IOException {
+    protected void doFlush(byte[] buffer, int offset, int length) throws IOException {
         try {
             mOut.write(buffer, offset, length);
         } catch (IOException e) {
@@ -72,7 +80,10 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
         }
     }
 
-    private void disconnect() {
+    /**
+     * Is called without lock held.
+     */
+    protected void disconnect() {
         try {
             mOut.close();
         } catch (IOException e2) {

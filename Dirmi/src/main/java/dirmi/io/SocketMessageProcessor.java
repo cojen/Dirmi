@@ -109,7 +109,7 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageConnector{endpoint=" + endpoint + ", bindpoint=" + bindpoint + '}';
+                return "MessageConnector {endpoint=" + endpoint + ", bindpoint=" + bindpoint + '}';
             }
         };
     }
@@ -172,7 +172,7 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageAcceptor{bindpoint=" + bindpoint + '}';
+                return "MessageAcceptor {bindpoint=" + bindpoint + '}';
             }
         };
     }
@@ -351,7 +351,7 @@ public class SocketMessageProcessor implements Closeable {
     }
 
     private class Chan implements MessageChannel {
-        private static final int MAX_MESSAGE_SIZE = 65536;
+        private static final int MAX_MESSAGE_SIZE = 32768 + 127;
 
         private final SocketChannel mChannel;
 
@@ -389,15 +389,19 @@ public class SocketMessageProcessor implements Closeable {
             lock.lock();
             try {
                 prefix.clear();
-                prefix.put((byte) ((size - 1) >> 8));
-                prefix.put((byte) (size - 1));
+                if (size < 128) {
+                    prefix.put((byte) size);
+                    size++;
+                } else {
+                    prefix.put((byte) (0x80 | ((size - 128) >> 8)));
+                    prefix.put((byte) (size - 128));
+                    size += 2;
+                }
                 prefix.flip();
 
                 buffers[1] = buffer;
 
                 try {
-                    // Account for prefix.
-                    size += 2;
                     do {
                         selector.select();
                         Iterator<SelectionKey> it = selector.selectedKeys().iterator();
@@ -437,7 +441,7 @@ public class SocketMessageProcessor implements Closeable {
 
         @Override
         public String toString() {
-            return "MessageChannel{localAddress=" + getLocalAddress() +
+            return "MessageChannel {localAddress=" + getLocalAddress() +
                 ", remoteAddress=" + getRemoteAddress() + '}';
         }
 
@@ -571,20 +575,22 @@ public class SocketMessageProcessor implements Closeable {
 
             while (true) {
                 if (size <= 0) {
-                    if (size == 0) {
-                        // Nothing is known about message yet.
-                        if (buffer.remaining() == 1) {
-                            // Only first byte of size known so far.
-                            mSize = ~(buffer.get() & 0xff);
-                            buffer.position(0).limit(0);
-                            return null;
-                        } 
-                        // Size is fully known.
-                        mSize = size = (((buffer.get() & 0xff) << 8) | (buffer.get() & 0xff)) + 1;
-                    } else {
-                        // Size is partially known, but now is fully known.
-                        mSize = size = (((~size) << 8) | (buffer.get() & 0xff)) + 1;
+                    readSize: {
+                        if (size == 0) {
+                            // Nothing is known about message yet.
+                            size = buffer.get();
+                            if (size >= 0) {
+                                break readSize;
+                            }
+                            if (!buffer.hasRemaining()) {
+                                // Only first byte of size known so far.
+                                buffer.position(0).limit(0);
+                                return null;
+                            }
+                        }
+                        mSize = size = ((size & 0x7f) << 8) + (buffer.get() & 0xff) + 128;
                     }
+
                     if (!buffer.hasRemaining()) {
                         // Buffer fully drained, but no message received yet.
                         buffer.position(0).limit(0);

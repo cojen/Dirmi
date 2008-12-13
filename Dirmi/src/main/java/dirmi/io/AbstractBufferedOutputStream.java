@@ -27,28 +27,55 @@ import java.io.OutputStream;
  * @author Brian S O'Neill
  */
 abstract class AbstractBufferedOutputStream extends OutputStream {
+    static final int DEFAULT_SIZE = 8192;
+
     private final byte[] mBuffer;
+    private final int mStart;
+    private final int mEnd;
 
     private int mPos;
     
     public AbstractBufferedOutputStream() {
-        this(8192);
+        this(0, DEFAULT_SIZE, 0);
     }
 
-    public AbstractBufferedOutputStream(int size) {
+    public AbstractBufferedOutputStream(int prefix, int size, int suffix) {
         if (size <= 0) {
             throw new IllegalArgumentException("Buffer size <= 0");
         }
-        mBuffer = new byte[size];
+        if (prefix < 0) {
+            prefix = 0;
+        }
+        if (suffix < 0) {
+            suffix = 0;
+        }
+        mBuffer = new byte[prefix + size + suffix];
+        mStart = prefix;
+        mEnd = prefix + size;
+        synchronized (this) {
+            mPos = prefix;
+        }
+    }
+
+    // Copy constructor.
+    AbstractBufferedOutputStream(AbstractBufferedOutputStream out) {
+        synchronized (out) {
+            mBuffer = out.mBuffer;
+            mStart = out.mStart;
+            mEnd = out.mEnd;
+            synchronized (this) {
+                mPos = out.mPos;
+            }
+        }
     }
 
     public synchronized void write(int b) throws IOException {
         byte[] buffer = mBuffer;
         int pos = mPos;
         buffer[pos++] = (byte) b;
-        if (pos >= buffer.length) {
-            doWrite(buffer, 0, buffer.length);
-            mPos = 0;
+        if (pos >= mEnd) {
+            doFlush(buffer, mStart, mEnd - mStart);
+            mPos = mStart;
         } else {
             mPos = pos;
         }
@@ -57,41 +84,48 @@ abstract class AbstractBufferedOutputStream extends OutputStream {
     public synchronized void write(byte[] b, int off, int len) throws IOException {
         byte[] buffer = mBuffer;
         int pos = mPos;
-        int avail = buffer.length - pos;
+        int avail = mEnd - pos;
         if (avail >= len) {
             System.arraycopy(b, off, buffer, pos, len);
             if (avail == len) {
-                doWrite(buffer, 0, buffer.length);
-                mPos = 0;
+                doFlush(buffer, mStart, mEnd - mStart);
+                mPos = mStart;
             } else {
                 mPos = pos + len;
             }
         } else {
             // Fill remainder of buffer and flush it.
             System.arraycopy(b, off, buffer, pos, avail);
-            doWrite(buffer, 0, buffer.length);
             off += avail;
             len -= avail;
-            if (len < buffer.length) {
-                System.arraycopy(b, off, buffer, 0, len);
-                mPos = len;
-            } else {
-                mPos = 0;
-                doWrite(b, off, len);
+            doFlush(buffer, mStart, avail = mEnd - mStart);
+            while (len >= avail) {
+                System.arraycopy(b, off, buffer, mStart, avail);
+                off += avail;
+                len -= avail;
+                doFlush(buffer, mStart, avail);
             }
+            System.arraycopy(b, off, buffer, mStart, len);
+            mPos = mStart + len;
         }
+    }
+
+    public final void flush() throws IOException {
+        flush(false);
     }
 
     /**
      * Subclass should override this implementation, which just drains the
      * buffer.
      */
-    public synchronized void flush() throws IOException {
+    protected synchronized boolean flush(boolean force) throws IOException {
         int pos = mPos;
-        if (pos != 0) {
-            doWrite(mBuffer, 0, pos);
-            mPos = 0;
+        if (force || pos > mStart) {
+            doFlush(mBuffer, mStart, pos - mStart);
+            mPos = mStart;
+            return true;
         }
+        return false;
     }
 
     /**
@@ -101,6 +135,12 @@ abstract class AbstractBufferedOutputStream extends OutputStream {
         flush();
     }
 
-    protected abstract void doWrite(byte[] buffer, int offset, int length)
-        throws IOException;
+    /**
+     * Called to actually write the contents of the buffer.
+     *
+     * @param buffer mutable buffer, guaranteed to have room for prefix and suffix
+     * @param offset offset into buffer
+     * @param length always more than zero if called from public flush method
+     */
+    protected abstract void doFlush(byte[] buffer, int offset, int length) throws IOException;
 }

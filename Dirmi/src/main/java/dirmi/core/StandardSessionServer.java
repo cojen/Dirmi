@@ -41,18 +41,19 @@ public class StandardSessionServer implements Closeable {
     private final ScheduledExecutorService mExecutor;
     private final Log mLog;
 
-    public StandardSessionServer(StreamBrokerAcceptor acceptor,
-                                 ScheduledExecutorService executor)
+    public StandardSessionServer(ScheduledExecutorService executor,
+                                 StreamBrokerAcceptor acceptor)
     {
-        this(acceptor, executor, null);
+        this(executor, acceptor, null);
     }
 
     /**
      * @param executor shared executor for remote methods
      * @param log message log; pass null for default
      */
-    public StandardSessionServer(StreamBrokerAcceptor acceptor,
-                                 ScheduledExecutorService executor, Log log)
+    public StandardSessionServer(ScheduledExecutorService executor,
+                                 StreamBrokerAcceptor acceptor,
+                                 Log log)
     {
         if (acceptor == null) {
             throw new IllegalArgumentException("Broker acceptor is null");
@@ -78,7 +79,7 @@ public class StandardSessionServer implements Closeable {
 
                 Session session;
                 try {
-                    session = new StandardSession(broker, server, mExecutor, mLog);
+                    session = new StandardSession(mExecutor, broker, server, mLog);
                 } catch (IOException e) {
                     try {
                         broker.close();
@@ -93,6 +94,7 @@ public class StandardSessionServer implements Closeable {
             }
 
             public void failed(IOException e) {
+                mAcceptor.accept(this);
                 acceptor.failed(e);
             }
         });

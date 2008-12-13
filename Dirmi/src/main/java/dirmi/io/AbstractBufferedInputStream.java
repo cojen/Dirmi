@@ -26,13 +26,15 @@ import java.io.InputStream;
  * @author Brian S O'Neill
  */
 abstract class AbstractBufferedInputStream extends InputStream {
+    static final int DEFAULT_SIZE = 8192;
+
     private final byte[] mBuffer;
 
     private int mStart;
     private int mEnd;
 
     public AbstractBufferedInputStream() {
-        this(8192);
+        this(DEFAULT_SIZE);
     }
 
     public AbstractBufferedInputStream(int size) {
@@ -40,6 +42,15 @@ abstract class AbstractBufferedInputStream extends InputStream {
             throw new IllegalArgumentException("Buffer size <= 0");
         }
         mBuffer = new byte[size];
+    }
+
+    // Copy constructor.
+    public AbstractBufferedInputStream(AbstractBufferedInputStream in) {
+        synchronized (in) {
+            mBuffer = in.mBuffer;
+            mStart = in.mStart;
+            mEnd = in.mEnd;
+        }
     }
 
     public synchronized int read() throws IOException {

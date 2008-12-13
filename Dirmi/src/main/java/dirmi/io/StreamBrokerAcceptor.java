@@ -57,8 +57,8 @@ public class StreamBrokerAcceptor implements Closeable {
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
 
-    public StreamBrokerAcceptor(final StreamAcceptor acceptor,
-                                final ScheduledExecutorService executor)
+    public StreamBrokerAcceptor(final ScheduledExecutorService executor,
+                                final StreamAcceptor acceptor)
     {
         mAcceptor = acceptor;
         mBrokerMap = new IntHashMap<Broker>();
@@ -75,11 +75,8 @@ public class StreamBrokerAcceptor implements Closeable {
                 Broker broker;
 
                 try {
-
                     DataInputStream in = new DataInputStream(channel.getInputStream());
-                    int length = in.readUnsignedShort() + 1;
-
-                    op = in.read();
+                    op = in.readByte();
 
                     if (op == StreamConnectorBroker.OP_OPEN) {
                         synchronized (mBrokerMap) {
@@ -122,15 +119,21 @@ public class StreamBrokerAcceptor implements Closeable {
 
                     id = in.readInt();
                 } catch (IOException e) {
-                    try {
-                        channel.close();
-                    } catch (IOException e2) {
-                        // Ignore.
+                    // Most likely caused by remote endpoint closing during
+                    // connection establishment or against a pooled
+                    // channel. Don't bother passing exception to listener
+                    // since this is not important.
+
+                    channel.disconnect();
+
+                    if (e.getCause() instanceof RejectedExecutionException) {
+                        // Okay, this is important. It was thrown by Broker constructor.
+                        StreamBrokerListener listener = pollListener();
+                        if (listener != null) {
+                            listener.failed(e);
+                        }
                     }
-                    StreamBrokerListener listener = pollListener();
-                    if (listener != null) {
-                        listener.failed(e);
-                    }
+
                     return;
                 }
 
@@ -140,11 +143,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
                 if (broker == null) {
                     // Connection is bogus.
-                    try {
-                        channel.close();
-                    } catch (IOException e) {
-                        // Ignore.
-                    }
+                    channel.disconnect();
                     return;
                 }
 
@@ -159,11 +158,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
                 default:
                     // Unknown operation.
-                    try {
-                        channel.close();
-                    } catch (IOException e) {
-                        // Ignore.
-                    }
+                    channel.disconnect();
                     break;
                 }
             }
@@ -327,7 +322,6 @@ public class StreamBrokerAcceptor implements Closeable {
             }
 
             synchronized (out) {
-                out.writeShort((1 + 4) - 1); // length of message
                 out.write(StreamConnectorBroker.OP_OPENED);
                 out.writeInt(id);
                 out.flush();
@@ -386,7 +380,6 @@ public class StreamBrokerAcceptor implements Closeable {
                     // Use a connection which was interrupted earlier.
                     mConnectionsInterrupted--;
                 } else {
-                    out.writeShort((1 + 4) - 1); // length of message
                     out.write(StreamConnectorBroker.OP_CONNECT);
                     out.writeInt(mId);
                     out.flush();
@@ -482,7 +475,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
         @Override
         public String toString() {
-            return "StreamBrokerAcceptor.Broker{channel=" + mControlChannel + '}';
+            return "StreamBrokerAcceptor.Broker {channel=" + mControlChannel + '}';
         }
 
         Lock closeLock() throws IOException {
@@ -505,11 +498,7 @@ public class StreamBrokerAcceptor implements Closeable {
                     lock.unlock();
                 }
             } catch (IOException e) {
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                channel.disconnect();
             }
         }
 
@@ -525,7 +514,7 @@ public class StreamBrokerAcceptor implements Closeable {
             } catch (InterruptedException e) {
             }
 
-            unregisterAndClose(channel);
+            unregisterAndDisconnect(channel);
         }
 
         private void register(StreamChannel channel) {
@@ -534,16 +523,11 @@ public class StreamBrokerAcceptor implements Closeable {
             }
         }
 
-        private void unregisterAndClose(StreamChannel channel) {
+        private void unregisterAndDisconnect(StreamChannel channel) {
             synchronized (mChannels) {
                 mChannels.remove(channel);
             }
-
-            try {
-                channel.close();
-            } catch (IOException e) {
-                // Ignore.
-            }
+            channel.disconnect();
         }
 
         void doPingCheck() {
@@ -562,7 +546,6 @@ public class StreamBrokerAcceptor implements Closeable {
             try {
                 DataOutputStream out = mControlOut;
                 synchronized (out) {
-                    out.writeShort(1 - 1); // length of message
                     out.write(StreamConnectorBroker.OP_PING);
                     out.flush();
                 }
@@ -570,14 +553,7 @@ public class StreamBrokerAcceptor implements Closeable {
                 DataInputStream in = mControlIn;
                 synchronized (in) {
                     // Read pong response.
-                    int length = in.readUnsignedShort() + 1;
-                    while (length > 0) {
-                        int amt = (int) in.skip(length);
-                        if (amt <= 0) {
-                            break;
-                        }
-                        length -= amt;
-                    }
+                    in.readByte();
                 }
 
                 mPinged = true;
