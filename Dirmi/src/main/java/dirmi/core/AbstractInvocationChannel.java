@@ -17,13 +17,23 @@
 package dirmi.core;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public abstract class AbstractInvocationChannel implements InvocationChannel {
+abstract class AbstractInvocationChannel implements InvocationChannel {
+    final InvocationInputStream mInvIn;
+    final InvocationOutputStream mInvOut;
+
+    AbstractInvocationChannel(ObjectInputStream in, ObjectOutputStream out) {
+        mInvIn = new InvocationInputStream(this, in);
+        mInvOut = new InvocationOutputStream(this, out);
+    }
+
     public void reset() throws IOException {
         getOutputStream().reset();
     }

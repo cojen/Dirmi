@@ -841,30 +841,14 @@ public class StandardSession implements Session {
 
     private class InvocationChan extends AbstractInvocationChannel {
         private final StreamChannel mChannel;
-        private final InvocationInputStream mInvIn;
-        private final InvocationOutputStream mInvOut;
 
         private volatile boolean mClosed;
         private volatile long mTimestamp;
 
         InvocationChan(StreamChannel channel) throws IOException {
+            super(new ResolvingObjectInputStream(channel.getInputStream()),
+                  new ReplacingObjectOutputStream(channel.getOutputStream()));
             mChannel = channel;
-
-            mInvOut = new InvocationOutputStream
-                (new ReplacingObjectOutputStream(mChannel.getOutputStream()), channel);
-
-            mInvIn = new InvocationInputStream
-                (new ResolvingObjectInputStream(mChannel.getInputStream()), channel);
-        }
-
-        private InvocationChan(StreamChannel channel,
-                               InvocationInputStream in, InvocationOutputStream out)
-        {
-            mChannel = channel;
-
-            mInvIn = in;
-            mInvOut = out;
-            mTimestamp = System.currentTimeMillis();
         }
 
         public InvocationInputStream getInputStream() throws IOException {
@@ -878,14 +862,12 @@ public class StandardSession implements Session {
         public final void close() throws IOException {
             mClosed = true;
 
-            OutputStream out = mInvOut;
-            if (out != null) {
-                try {
-                    out.close();
-                } catch (IOException e) {
-                    mChannel.disconnect();
-                    throw e;
-                }
+            try {
+                mInvOut.doClose();
+                mInvIn.doClose();
+            } catch (IOException e) {
+                mChannel.disconnect();
+                throw e;
             }
 
             mChannel.close();
@@ -910,6 +892,13 @@ public class StandardSession implements Session {
 
         public final void writeThrowable(Throwable t) throws IOException {
             getOutputStream().writeThrowable(t);
+        }
+
+        @Override
+        public String toString() {
+            String hashCode = Integer.toHexString(hashCode());
+            return "Pipe@" + hashCode + " {localAddress=" + mChannel.getLocalAddress() +
+                ", remoteAddress=" + mChannel.getRemoteAddress() + '}';
         }
 
         final boolean isClosed() {

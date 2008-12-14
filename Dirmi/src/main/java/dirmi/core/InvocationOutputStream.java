@@ -26,8 +26,6 @@ import java.io.UTFDataFormatException;
 import java.util.ArrayList;
 import java.util.List;
 
-import dirmi.io.AddressPair;
-
 /**
  * 
  *
@@ -40,24 +38,15 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     static final byte NULL = 2;
     static final byte NOT_NULL = 3;
 
+    private final InvocationChannel mChannel;
     private final ObjectOutputStream mOut;
-    private final AddressPair mPair;
 
     /**
      * @param out stream to wrap
      */
-    public InvocationOutputStream(ObjectOutputStream out) {
+    public InvocationOutputStream(InvocationChannel channel, ObjectOutputStream out) {
+        mChannel = channel;
         mOut = out;
-        mPair = null;
-    }
-
-    /**
-     * @param out stream to wrap
-     * @param pair optional pair for extracing local and remote address
-     */
-    public InvocationOutputStream(ObjectOutputStream out, AddressPair pair) {
-        mOut = out;
-        mPair = pair;
     }
 
     public void write(int b) throws IOException {
@@ -215,8 +204,8 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         collectChain(chain, t);
 
         ObjectOutput out = mOut;
-        out.writeObject(InvocationInputStream.localAddress(mPair));
-        out.writeObject(InvocationInputStream.remoteAddress(mPair));
+        out.writeObject(InvocationInputStream.localAddress(mChannel));
+        out.writeObject(InvocationInputStream.remoteAddress(mChannel));
 
         writeVarUnsignedInt(chain.size());
 
@@ -250,7 +239,23 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         mOut.flush();
     }
 
+    @Override
+    public String toString() {
+        if (mChannel == null) {
+            return super.toString();
+        }
+        return "OutputStream for ".concat(mChannel.toString());
+    }
+
     public void close() throws IOException {
+        if (mChannel == null) {
+            mOut.close();
+        } else {
+            mChannel.close();
+        }
+    }
+
+    void doClose() throws IOException {
         mOut.close();
     }
 }

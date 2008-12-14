@@ -31,8 +31,6 @@ import java.util.List;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import dirmi.io.AddressPair;
-
 /**
  * 
  *
@@ -40,24 +38,15 @@ import dirmi.io.AddressPair;
  * @see InvocationOutputStream
  */
 public class InvocationInputStream extends InputStream implements InvocationInput {
+    private final InvocationChannel mChannel;
     private final ObjectInputStream mIn;
-    private final AddressPair mPair;
 
     /**
      * @param in stream to wrap
      */
-    public InvocationInputStream(ObjectInputStream in) {
+    public InvocationInputStream(InvocationChannel channel, ObjectInputStream in) {
+        mChannel = channel;
         mIn = in;
-        mPair = null;
-    }
-
-    /**
-     * @param in stream to wrap
-     * @param pair optional pair for extracing local and remote address
-     */
-    public InvocationInputStream(ObjectInputStream in, AddressPair pair) {
-        mIn = in;
-        mPair = pair;
     }
 
     public void readFully(byte b[]) throws IOException {
@@ -314,9 +303,9 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             String pseudo = "Remote Method Invocation";
             mid = new StackTraceElement[] {
                 new StackTraceElement(pseudo, "address", serverLocalAddress, -1),
-                new StackTraceElement(pseudo, "address", remoteAddress(mPair), -1),
+                new StackTraceElement(pseudo, "address", remoteAddress(mChannel), -1),
                 new StackTraceElement(pseudo, "address", serverRemoteAddress, -1),
-                new StackTraceElement(pseudo, "address", localAddress(mPair), -1),
+                new StackTraceElement(pseudo, "address", localAddress(mChannel), -1),
             };
         }
         
@@ -356,16 +345,32 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return cause;
     }
 
+    @Override
+    public String toString() {
+        if (mChannel == null) {
+            return super.toString();
+        }
+        return "InputStream for ".concat(mChannel.toString());
+    }
+
     public void close() throws IOException {
+        if (mChannel == null) {
+            mIn.close();
+        } else {
+            mChannel.close();
+        }
+    }
+
+    void doClose() throws IOException {
         mIn.close();
     }
 
-    static String localAddress(AddressPair pair) {
-        return pair == null ? null : toString(pair.getLocalAddress());
+    static String localAddress(InvocationChannel channel) {
+        return channel == null ? null : toString(channel.getLocalAddress());
     }
 
-    static String remoteAddress(AddressPair pair) {
-        return pair == null ? null : toString(pair.getRemoteAddress());
+    static String remoteAddress(InvocationChannel channel) {
+        return channel == null ? null : toString(channel.getRemoteAddress());
     }
 
     static String toString(Object obj) {
