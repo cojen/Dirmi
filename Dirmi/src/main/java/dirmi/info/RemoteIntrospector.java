@@ -44,6 +44,7 @@ import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 
 import dirmi.Asynchronous;
+import dirmi.Batched;
 import dirmi.CallMode;
 import dirmi.Pipe;
 import dirmi.RemoteFailure;
@@ -210,7 +211,7 @@ public class RemoteIntrospector {
                                      "exactly one matching pipe input parameter: " +
                                      method.methodDesc());
                             }
-                            if (method.getAsynchronousCallMode() == CallMode.BATCHED) {
+                            if (method.isBatched()) {
                                 throw new IllegalArgumentException
                                     ("Asynchronous batched method can only return void: " +
                                      method.methodDesc());
@@ -459,6 +460,7 @@ public class RemoteIntrospector {
         private final Set<RemoteParameter<Throwable>> mExceptionTypes;
 
         private final CallMode mCallMode;
+        private final boolean mBatched;
 
         private RemoteParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
@@ -475,7 +477,16 @@ public class RemoteIntrospector {
         RMethod(Identifier id, Method m) {
             mName = m.getName();
 
-            {
+            if (m.isAnnotationPresent(Batched.class)) {
+                mBatched = true;
+                mCallMode = CallMode.EVENTUAL;
+                if (m.isAnnotationPresent(Asynchronous.class)) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated as both @Batched and @Asynchronous: " +
+                         methodDesc(m));
+                }
+            } else {
+                mBatched = false;
                 Asynchronous ann = m.getAnnotation(Asynchronous.class);
                 if (ann == null) {
                     mCallMode = null;
@@ -637,6 +648,7 @@ public class RemoteIntrospector {
             mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
 
             mCallMode = existing.mCallMode;
+            mBatched = existing.mBatched;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
@@ -685,6 +697,10 @@ public class RemoteIntrospector {
             return mCallMode;
         }
 
+        public boolean isBatched() {
+            return mBatched;
+        }
+
         public RemoteParameter<? extends Throwable> getRemoteFailureException() {
             return mRemoteFailureException;
         }
@@ -717,6 +733,7 @@ public class RemoteIntrospector {
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
                     (mCallMode == other.mCallMode) &&
+                    (mBatched == other.mBatched) &&
                     (mRemoteFailureException == other.getRemoteFailureException()) &&
                     (mRemoteFailureExceptionDeclared == other.isRemoteFailureExceptionDeclared());
             }
@@ -794,6 +811,13 @@ public class RemoteIntrospector {
                 // This is user error.
                 throw new IllegalArgumentException
                     ("Inherited methods conflict in use of @Asynchronous annotation: " +
+                     methodDesc() + " and " + other.methodDesc());
+            }
+
+            if (mBatched != other.mBatched) {
+                // This is user error.
+                throw new IllegalArgumentException
+                    ("Inherited methods conflict in use of @Batched annotation: " +
                      methodDesc() + " and " + other.methodDesc());
             }
 

@@ -31,8 +31,7 @@ import java.sql.SQLXML;
 
 import java.util.Calendar;
 
-import dirmi.Asynchronous;
-import dirmi.CallMode;
+import dirmi.Batched;
 import dirmi.RemoteFailure;
 
 /**
@@ -46,81 +45,81 @@ public interface RemotePreparedStatement extends RemoteStatement {
 
     int executeUpdate() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void clearParameters() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setNull(int parameterIndex, int sqlType) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setBoolean(int parameterIndex, boolean x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setByte(int parameterIndex, byte x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setShort(int parameterIndex, short x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setInt(int parameterIndex, int x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setLong(int parameterIndex, long x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setFloat(int parameterIndex, float x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setDouble(int parameterIndex, double x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setString(int parameterIndex, String x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setBytes(int parameterIndex, byte[] x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setDate(int parameterIndex, java.sql.Date x)
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setTime(int parameterIndex, java.sql.Time x) 
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setTimestamp(int parameterIndex, java.sql.Timestamp x)
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setObject(int parameterIndex, Object x, int targetSqlType) 
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setObject(int parameterIndex, Object x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setDate(int parameterIndex, java.sql.Date x, Calendar cal)
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setTime(int parameterIndex, java.sql.Time x, Calendar cal) 
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setTimestamp(int parameterIndex, java.sql.Timestamp x, Calendar cal)
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setNull(int parameterIndex, int sqlType, String typeName) 
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setURL(int parameterIndex, java.net.URL x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setNString(int parameterIndex, String value) throws SQLException;
 
     /* FIXME
@@ -139,27 +138,27 @@ public interface RemotePreparedStatement extends RemoteStatement {
     */
 
     /* FIXME
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setRef (int parameterIndex, Ref x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setBlob (int parameterIndex, Blob x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setClob (int parameterIndex, Clob x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setArray (int parameterIndex, Array x) throws SQLException;
     */
 
     /* FIXME
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setRowId(int parameterIndex, RowId x) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setNCharacterStream(int parameterIndex, Reader value, long length) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setNClob(int parameterIndex, NClob value) throws SQLException;
 
     void setClob(int parameterIndex, Reader reader, long length)
@@ -171,13 +170,13 @@ public interface RemotePreparedStatement extends RemoteStatement {
     void setNClob(int parameterIndex, Reader reader, long length)
         throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException;
     */
 
     boolean execute() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void addBatch() throws SQLException;
 
     ResultSetMetaDataCopy getMetaData() throws SQLException;
@@ -186,12 +185,12 @@ public interface RemotePreparedStatement extends RemoteStatement {
     ParameterMetaData getParameterMetaData() throws SQLException;
     */
  
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setPoolable(boolean poolable) throws SQLException;
         
     boolean isPoolable() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setObject(int parameterIndex, Object x, int targetSqlType, int scaleOrLength)
         throws SQLException;
 }

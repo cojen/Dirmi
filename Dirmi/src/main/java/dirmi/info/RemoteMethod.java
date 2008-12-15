@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import dirmi.Asynchronous;
+import dirmi.Batched;
 import dirmi.CallMode;
 
 import dirmi.core.Identifier;
@@ -72,6 +73,14 @@ public interface RemoteMethod extends Serializable {
      * @see Asynchronous
      */
     CallMode getAsynchronousCallMode();
+
+    /**
+     * Returns true if this method is batched, which implies that it is
+     * asynchronous with the eventual call mode.
+     *
+     * @see Batched
+     */
+    boolean isBatched();
 
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 

@@ -299,9 +299,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL &&
-                method.getAsynchronousCallMode() != CallMode.BATCHED)
-            {
+            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
@@ -326,7 +324,7 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.returnValue(returnDesc);
                 } else {
                     // Finished with channel.
-                    if (method.getAsynchronousCallMode() == CallMode.BATCHED) {
+                    if (method.isBatched()) {
                         genBatched(b, channelVar, closeTaskVar);
                     } else {
                         genFinished(b, channelVar, closeTaskVar);

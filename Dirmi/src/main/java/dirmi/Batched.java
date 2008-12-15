@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2008 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,29 +19,25 @@ package dirmi;
 import java.lang.annotation.*;
 
 /**
- * Identify a method as being asynchronous, which does not imply
- * non-blocking. It merely means that the caller does not wait for the remote
- * method to finish. An asynchronous method will likely block if the network
- * layer is backed up.
+ * Identify a method as being batched and asynchronous, which does not imply
+ * non-blocking. Requests are sent to the remote endpoint, but the channel
+ * is not immediately flushed. The current thread holds the same channel for
+ * making additional requests until an immediate or synchronous request is
+ * sent. If the current thread exits before releasing the channel, the batched
+ * request is eventually sent.
  *
- * <p>An asynchronous method must return void or a {@link Pipe}.
+ * <p>A batched method must return void.
  *
  * <pre>
- * &#64;Asynchronous
- * void sendMessage(String data) throws RemoteException;
+ * &#64;Batched
+ * void setOption(int option) throws RemoteException;
  * </pre>
  *
  * @author Brian S O'Neill
- * @see Batched
+ * @see Asynchronous
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
-public @interface Asynchronous {
-    /**
-     * Control the calling mode of the asynchronous method. By default, the
-     * request is immediately sent to the remote endpoint, but it does not wait
-     * for acknowledgement.
-     */
-    CallMode value() default CallMode.IMMEDIATE;
+public @interface Batched {
 }

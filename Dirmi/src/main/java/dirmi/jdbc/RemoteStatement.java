@@ -21,8 +21,7 @@ import java.rmi.Remote;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 
-import dirmi.Asynchronous;
-import dirmi.CallMode;
+import dirmi.Batched;
 import dirmi.RemoteFailure;
 
 /**
@@ -40,30 +39,30 @@ public interface RemoteStatement extends Remote {
 
     int getMaxFieldSize() throws SQLException;
     
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setMaxFieldSize(int max) throws SQLException;
 
     int getMaxRows() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setMaxRows(int max) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setEscapeProcessing(boolean enable) throws SQLException;
 
     int getQueryTimeout() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setQueryTimeout(int seconds) throws SQLException;
 
     void cancel() throws SQLException;
 
     SQLWarning getWarnings() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void clearWarnings() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setCursorName(String name) throws SQLException;
         
     boolean execute(String sql) throws SQLException;
@@ -74,12 +73,12 @@ public interface RemoteStatement extends Remote {
 
     boolean getMoreResults() throws SQLException; 
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setFetchDirection(int direction) throws SQLException;
 
     int getFetchDirection() throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void setFetchSize(int rows) throws SQLException;
   
     int getFetchSize() throws SQLException;
@@ -88,9 +87,10 @@ public interface RemoteStatement extends Remote {
 
     int getResultSetType()  throws SQLException;
 
+    @Batched
     void addBatch(String sql) throws SQLException;
 
-    @Asynchronous(CallMode.BATCHED)
+    @Batched
     void clearBatch() throws SQLException;
 
     int[] executeBatch() throws SQLException;
