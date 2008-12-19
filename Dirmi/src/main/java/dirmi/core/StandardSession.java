@@ -29,6 +29,10 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.io.WriteAbortedException;
 
+import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+
 import java.lang.reflect.Constructor;
 
 import java.rmi.NoSuchObjectException;
@@ -82,6 +86,9 @@ public class StandardSession implements Session {
     final StreamBroker mBroker;
     final ScheduledExecutorService mExecutor;
     final Log mLog;
+
+    // Queue for reclaimed phantom references.
+    final ReferenceQueue<Object> mReferenceQueue;
 
     // Strong references to SkeletonFactories. SkeletonFactories are created as
     // needed and can be recreated as well. This map just provides quick
@@ -169,6 +176,7 @@ public class StandardSession implements Session {
         mBroker = broker;
         mExecutor = executor;
         mLog = log;
+        mReferenceQueue = new ReferenceQueue<Object>();
         mLocalServer = server;
 
         mSkeletonFactories = new ConcurrentHashMap<VersionedIdentifier, SkeletonFactory>();
@@ -416,6 +424,13 @@ public class StandardSession implements Session {
         return "Session{broker=" + mBroker + '}';
     }
 
+    void drainReferenceQueue() {
+        Reference<?> ref;
+        while ((ref = mReferenceQueue.poll()) != null) {
+            ((UnreachableReference) ref).unreachable();
+        }
+    }
+
     void sendDisposedStubs() throws IOException {
         if (mRemoteAdmin == null) {
             return;
@@ -597,11 +612,19 @@ public class StandardSession implements Session {
         mLog.error(message, e);
     }
 
+    private static abstract class UnreachableReference<T> extends PhantomReference<T> {
+        public UnreachableReference(T referent, ReferenceQueue queue) {
+            super(referent, queue);
+        }
+
+        protected abstract void unreachable();
+    }
+
     private class StubFactoryRef extends UnreachableReference<StubFactory> {
         private final VersionedIdentifier mTypeID;
 
-        StubFactoryRef(StubFactory factory, VersionedIdentifier typeID) {
-            super(factory);
+        StubFactoryRef(StubFactory factory, ReferenceQueue queue, VersionedIdentifier typeID) {
+            super(factory, queue);
             mTypeID = typeID;
         }
 
@@ -613,8 +636,8 @@ public class StandardSession implements Session {
     private static class StubRef extends UnreachableReference<Remote> {
         private final StubSupportImpl mStubSupport;
 
-        StubRef(Remote stub, StubSupportImpl support) {
-            super(stub);
+        StubRef(Remote stub, ReferenceQueue queue, StubSupportImpl support) {
+            super(stub, queue);
             mStubSupport = support;
         }
 
@@ -741,6 +764,9 @@ public class StandardSession implements Session {
         }
 
         public void run() {
+            // Gather stubs to be disposed.
+            drainReferenceQueue();
+
             // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
@@ -975,13 +1001,14 @@ public class StandardSession implements Session {
 
                         factory = typeID.register(StubFactoryGenerator.getStubFactory(type, info));
 
-                        mStubFactoryRefs.put(typeID, new StubFactoryRef(factory, typeID));
+                        mStubFactoryRefs.put
+                            (typeID, new StubFactoryRef(factory, mReferenceQueue, typeID));
                     }
 
                     StubSupportImpl support = new StubSupportImpl(objID);
                     remote = objID.register(factory.createStub(support));
 
-                    mStubRefs.put(objID, new StubRef(remote, support));
+                    mStubRefs.put(objID, new StubRef(remote, mReferenceQueue, support));
                 }
 
                 obj = remote;
