@@ -48,7 +48,6 @@ import java.util.Map;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -114,9 +113,6 @@ public class StandardSession implements Session {
     // referent becomes unreachable. When the referent Stub becomes
     // unreachable, its entry in this map must be removed to reclaim memory.
     final ConcurrentMap<VersionedIdentifier, StubRef> mStubRefs;
-
-    // Automatically disposed objects, pending transmission to server.
-    final ConcurrentLinkedQueue<VersionedIdentifier> mDisposedObjects;
 
     final Object mLocalServer;
     final Object mRemoteServer;
@@ -184,7 +180,6 @@ public class StandardSession implements Session {
         mSkeletonSupport = new SkeletonSupportImpl();
         mStubFactoryRefs = new ConcurrentHashMap<VersionedIdentifier, StubFactoryRef>();
         mStubRefs = new ConcurrentHashMap<VersionedIdentifier, StubRef>();
-        mDisposedObjects = new ConcurrentLinkedQueue<VersionedIdentifier>();
 
         mChannelPool = new LinkedList<InvocationChan>();
         mLocalChannel = new ThreadLocal<InvocationChannel>();
@@ -394,7 +389,6 @@ public class StandardSession implements Session {
         mSkeletonFactories.clear();
         mStubFactoryRefs.clear();
         mStubRefs.clear();
-        mDisposedObjects.clear();
 
         for (Skeleton skeleton : mSkeletons.values()) {
             unreferenced(skeleton);
@@ -424,47 +418,41 @@ public class StandardSession implements Session {
         return "Session{broker=" + mBroker + '}';
     }
 
-    void drainReferenceQueue() {
-        Reference<?> ref;
-        while ((ref = mReferenceQueue.poll()) != null) {
-            ((UnreachableReference) ref).unreachable();
-        }
-    }
-
     void sendDisposedStubs() throws IOException {
         if (mRemoteAdmin == null) {
             return;
         }
 
         while (true) {
-            ArrayList<VersionedIdentifier> disposedStubsList =
-                new ArrayList<VersionedIdentifier>();
-            for (int i = 0; i < DISPOSE_BATCH; i++) {
-                VersionedIdentifier id = mDisposedObjects.poll();
-                if (id == null) {
-                    break;
+            // Gather batch of stubs to be disposed.
+            ArrayList<VersionedIdentifier> disposedList = new ArrayList<VersionedIdentifier>();
+
+            Reference<?> ref;
+            while (disposedList.size() < DISPOSE_BATCH && (ref = mReferenceQueue.poll()) != null) {
+                VersionedIdentifier id = ((Ref) ref).unreachable();
+                if (id != null) {
+                    disposedList.add(id);
                 }
-                disposedStubsList.add(id);
             }
 
-            int size = disposedStubsList.size();
+            int size = disposedList.size();
             if (size == 0) {
                 return;
             }
 
-            VersionedIdentifier[] disposedStubs = new VersionedIdentifier[size];
+            VersionedIdentifier[] disposed = new VersionedIdentifier[size];
             int[] localVersions = new int[size];
             int[] remoteVersions = new int[size];
 
             for (int i=0; i<size; i++) {
-                VersionedIdentifier id = disposedStubsList.get(i);
-                disposedStubs[i] = id;
+                VersionedIdentifier id = disposedList.get(i);
+                disposed[i] = id;
                 localVersions[i] = id.localVersion();
                 remoteVersions[i] = id.remoteVersion();
             }
 
             try {
-                mRemoteAdmin.disposed(disposedStubs, localVersions, remoteVersions);
+                mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
             } catch (RemoteException e) {
                 if (e.getCause() instanceof IOException) {
                     throw (IOException) e.getCause();
@@ -612,15 +600,18 @@ public class StandardSession implements Session {
         mLog.error(message, e);
     }
 
-    private static abstract class UnreachableReference<T> extends PhantomReference<T> {
-        public UnreachableReference(T referent, ReferenceQueue queue) {
+    private static abstract class Ref<T> extends PhantomReference<T> {
+        public Ref(T referent, ReferenceQueue queue) {
             super(referent, queue);
         }
 
-        protected abstract void unreachable();
+        /**
+         * @return null if already disposed of
+         */
+        protected abstract VersionedIdentifier unreachable();
     }
 
-    private class StubFactoryRef extends UnreachableReference<StubFactory> {
+    private class StubFactoryRef extends Ref<StubFactory> {
         private final VersionedIdentifier mTypeID;
 
         StubFactoryRef(StubFactory factory, ReferenceQueue queue, VersionedIdentifier typeID) {
@@ -628,12 +619,12 @@ public class StandardSession implements Session {
             mTypeID = typeID;
         }
 
-        protected void unreachable() {
-            mDisposedObjects.add(mTypeID);
+        protected VersionedIdentifier unreachable() {
+            return mTypeID;
         }
     }
 
-    private static class StubRef extends UnreachableReference<Remote> {
+    private static class StubRef extends Ref<Remote> {
         private final StubSupportImpl mStubSupport;
 
         StubRef(Remote stub, ReferenceQueue queue, StubSupportImpl support) {
@@ -641,8 +632,8 @@ public class StandardSession implements Session {
             mStubSupport = support;
         }
 
-        protected void unreachable() {
-            mStubSupport.unreachable();
+        protected VersionedIdentifier unreachable() {
+            return mStubSupport.unreachable();
         }
     }
 
@@ -764,9 +755,6 @@ public class StandardSession implements Session {
         }
 
         public void run() {
-            // Gather stubs to be disposed.
-            drainReferenceQueue();
-
             // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
@@ -1373,10 +1361,8 @@ public class StandardSession implements Session {
             return mObjID.toString();
         }
 
-        void unreachable() {
-            if (mStubRefs.remove(mObjID) != null) {
-                mDisposedObjects.add(mObjID);
-            }
+        VersionedIdentifier unreachable() {
+            return mStubRefs.remove(mObjID) == null ? null : mObjID;
         }
 
         /**
