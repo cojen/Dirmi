@@ -17,6 +17,7 @@
 package dirmi.core;
 
 import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.ObjectStreamException;
@@ -72,11 +73,29 @@ public class VersionedIdentifier extends AbstractIdentifier {
         return cStore.read(in);
     }
 
+    /**
+     * Returns a deserialized identifier, which may or may not have an object
+     * registered with it. Also reads version number and updates it.
+     */
+    public static VersionedIdentifier readAndUpdateRemoteVersion(DataInput in) throws IOException {
+        VersionedIdentifier id = cStore.read(in);
+        id.updateRemoteVersion(in.readInt());
+        return id;
+    }
+
     private volatile transient int mLocalVersion;
     private volatile transient int mRemoteVersion;
 
     VersionedIdentifier(long bits) {
         super(bits);
+    }
+
+    /**
+     * Writes the identifier and also writes the next local version number.
+     */
+    public void writeWithNextVersion(DataOutput out) throws IOException {
+        super.write(out);
+        out.writeInt(nextLocalVersion());
     }
 
     /**

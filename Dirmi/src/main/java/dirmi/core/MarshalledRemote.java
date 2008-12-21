@@ -23,14 +23,12 @@ import java.io.ObjectOutput;
 
 import dirmi.info.RemoteInfo;
 
-import dirmi.core.Identifier;
-
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-class MarshalledRemote implements Externalizable {
+class MarshalledRemote implements Marshalled, Externalizable {
     private static final long serialVersionUID = 1;
 
     VersionedIdentifier mObjID;
@@ -48,18 +46,14 @@ class MarshalledRemote implements Externalizable {
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
-        mObjID.write(out);
-        out.writeInt(mObjID.nextLocalVersion());
-        mTypeID.write(out);
-        out.writeInt(mTypeID.nextLocalVersion());
+        mObjID.writeWithNextVersion(out);
+        mTypeID.writeWithNextVersion(out);
         out.writeObject(mInfo);
     }
 
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        mObjID = VersionedIdentifier.read(in);
-        mObjID.updateRemoteVersion(in.readInt());
-        mTypeID = VersionedIdentifier.read(in);
-        mTypeID.updateRemoteVersion(in.readInt());
+        mObjID = VersionedIdentifier.readAndUpdateRemoteVersion(in);
+        mTypeID = VersionedIdentifier.readAndUpdateRemoteVersion(in);
         mInfo = (RemoteInfo) in.readObject();
     }
 }

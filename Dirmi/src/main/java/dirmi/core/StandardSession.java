@@ -59,6 +59,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import dirmi.Asynchronous;
+import dirmi.MalformedRemoteObjectException;
 import dirmi.NoSuchClassException;
 import dirmi.RemoteTimeoutException;
 import dirmi.Session;
@@ -405,6 +406,21 @@ public class StandardSession implements Session {
         }
     }
 
+    boolean addSkeleton(VersionedIdentifier objID, Skeleton skeleton) {
+        // Use lock as a barrier to prevent race condition with close
+        // method. Skeletons should not be added to mSkeletons if they are
+        // going to be immediately unreferenced. Otherwise, there is a
+        // possibility that the unreferenced method is not called.
+        synchronized (mCloseLock) {
+            if (!mClosing) {
+                mSkeletons.putIfAbsent(objID, skeleton);
+                return true;
+            }
+        }
+        unreferenced(skeleton);
+        return false;
+    }
+
     public Object getRemoteServer() {
         return mRemoteServer;
     }
@@ -470,8 +486,7 @@ public class StandardSession implements Session {
             final Identifier methodID;
             try {
                 DataInput din = (DataInput) invChannel.getInputStream();
-                objID = VersionedIdentifier.read(din);
-                objID.updateRemoteVersion(invChannel.readInt());
+                objID = VersionedIdentifier.readAndUpdateRemoteVersion(din);
                 methodID = Identifier.read(din);
             } catch (IOException e) {
                 invChannel.disconnect();
@@ -962,7 +977,11 @@ public class StandardSession implements Session {
 
         @Override
         protected Object resolveObject(Object obj) throws IOException {
-            if (obj instanceof MarshalledRemote) {
+            if (obj instanceof Marshalled) {
+                if (obj instanceof MarshalledIntrospectionFailure) {
+                    throw ((MarshalledIntrospectionFailure) obj).toException();
+                }
+
                 MarshalledRemote mr = (MarshalledRemote) obj;
 
                 VersionedIdentifier objID = mr.mObjID;
@@ -1027,7 +1046,8 @@ public class StandardSession implements Session {
                 try {
                     remoteType = RemoteIntrospector.getRemoteType(remote);
                 } catch (IllegalArgumentException e) {
-                    throw new WriteAbortedException("Malformed Remote object", e);
+                    return new MarshalledIntrospectionFailure
+                        (e.getMessage(), obj.getClass().getName());
                 }
 
                 VersionedIdentifier typeID = VersionedIdentifier.identify(remoteType);
@@ -1042,7 +1062,7 @@ public class StandardSession implements Session {
                         try {
                             factory = SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
                         } catch (IllegalArgumentException e) {
-                            throw new WriteAbortedException("Malformed Remote object", e);
+                            return new MarshalledIntrospectionFailure(e.getMessage(), remoteType);
                         }
                         SkeletonFactory existing = mSkeletonFactories.putIfAbsent(typeID, factory);
                         if (existing != null && existing != factory) {
@@ -1057,19 +1077,7 @@ public class StandardSession implements Session {
 
                     Skeleton skeleton = factory.createSkeleton(mSkeletonSupport, remote);
 
-                    // Use lock as a barrier to prevent race condition with
-                    // close method. Skeletons should not be added to
-                    // mSkeletons if they are going to be immediately
-                    // unreferenced. Otherwise, there is a possibility that the
-                    // unreferenced method is not called.
-                    addSkeleton: {
-                        synchronized (mCloseLock) {
-                            if (!mClosing) {
-                                mSkeletons.putIfAbsent(objID, skeleton);
-                                break addSkeleton;
-                            }
-                        }
-                        unreferenced(skeleton);
+                    if (!addSkeleton(objID, skeleton)) {
                         throw new RemoteException("Remote session is closing");
                     }
                 }
@@ -1132,8 +1140,7 @@ public class StandardSession implements Session {
             throws T
         {
             try {
-                mObjID.write((DataOutput) channel.getOutputStream());
-                channel.writeInt(mObjID.nextLocalVersion());
+                mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
@@ -1163,8 +1170,7 @@ public class StandardSession implements Session {
             }
 
             try {
-                mObjID.write((DataOutput) channel.getOutputStream());
-                channel.writeInt(mObjID.nextLocalVersion());
+                mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
             }
@@ -1228,8 +1234,7 @@ public class StandardSession implements Session {
             }
 
             try {
-                mObjID.write((DataOutput) channel.getOutputStream());
-                channel.writeInt(mObjID.nextLocalVersion());
+                mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
             }
