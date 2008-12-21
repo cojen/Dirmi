@@ -62,6 +62,7 @@ class CodeBuilderUtil {
     static final String FACTORY_REF_METHOD_NAME = "factoryRef$";
 
     static final TypeDesc IDENTIFIER_TYPE;
+    static final TypeDesc VERSIONED_IDENTIFIER_TYPE;
     static final TypeDesc STUB_SUPPORT_TYPE;
     static final TypeDesc SKEL_SUPPORT_TYPE;
     static final TypeDesc INV_CHANNEL_TYPE;
@@ -80,6 +81,7 @@ class CodeBuilderUtil {
 
     static {
         IDENTIFIER_TYPE = TypeDesc.forClass(Identifier.class);
+        VERSIONED_IDENTIFIER_TYPE = TypeDesc.forClass(VersionedIdentifier.class);
         STUB_SUPPORT_TYPE = TypeDesc.forClass(StubSupport.class);
         SKEL_SUPPORT_TYPE = TypeDesc.forClass(SkeletonSupport.class);
         INV_CHANNEL_TYPE = TypeDesc.forClass(InvocationChannel.class);

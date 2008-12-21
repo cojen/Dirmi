@@ -16,6 +16,7 @@
 
 package dirmi.core;
 
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import java.util.concurrent.Future;
@@ -35,8 +36,8 @@ public interface StubSupport {
     <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureException) throws T;
 
     /**
-     * Writes request header to prepared channel. Caller flushes output after
-     * arguments are written, and then channel is read from.
+     * Writes request header to prepared channel. Caller chooses to flush
+     * output after arguments are written and then reads channel.
      *
      * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
@@ -44,8 +45,8 @@ public interface StubSupport {
                                       InvocationChannel channel) throws T;
 
     /**
-     * Writes request header to prepared channel. Caller flushes output after
-     * arguments are written, and then channel is read from.
+     * Writes request header to prepared channel. Caller chooses to flush
+     * output after arguments are written and then reads channel.
      *
      * @throws java.rmi.NoSuchObjectException if support has been disposed
      * @return task to close channel after provided timeout has elapsed
@@ -55,8 +56,8 @@ public interface StubSupport {
                                            long timeout, TimeUnit unit) throws T;
 
     /**
-     * Writes request header to prepared channel. Caller flushes output after
-     * arguments are written, and then channel is read from.
+     * Writes request header to prepared channel. Caller chooses to flush
+     * output after arguments are written and then reads channel.
      *
      * @throws java.rmi.NoSuchObjectException if support has been disposed
      * @return task to close channel after provided timeout has elapsed
@@ -64,6 +65,17 @@ public interface StubSupport {
     <T extends Throwable> Future<?> invoke(Class<T> remoteFailureException,
                                            InvocationChannel channel,
                                            double timeout, TimeUnit unit) throws T;
+    /**
+     * Used by batched methods which return a Remote object. This method writes
+     * an identifier to the channel, and returns a remote object of the
+     * requested type.
+     *
+     * @param type type of remote object returned by batched method
+     * @return stub for remote object
+     */
+    <T extends Throwable, R extends Remote> R createBatchedRemote(Class<T> remoteFailureException,
+                                                                  InvocationChannel channel,
+                                                                  Class<R> type) throws T;
 
     /**
      * Called after batched request is sent over channel and current thread

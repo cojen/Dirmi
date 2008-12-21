@@ -407,6 +407,9 @@ public class StandardSession implements Session {
     }
 
     boolean addSkeleton(VersionedIdentifier objID, Skeleton skeleton) {
+        // FIXME: Handle rare objID collision. If collision, replace with
+        // Skeleton instance that can select by object id.
+
         // Use lock as a barrier to prevent race condition with close
         // method. Skeletons should not be added to mSkeletons if they are
         // going to be immediately unreferenced. Otherwise, there is a
@@ -417,6 +420,7 @@ public class StandardSession implements Session {
                 return true;
             }
         }
+
         unreferenced(skeleton);
         return false;
     }
@@ -527,7 +531,7 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(methodID, invChannel)) {
+                        if (skeleton.invoke(objID, methodID, invChannel)) {
                             // Handle another request.
                             continue;
                         }
@@ -658,7 +662,12 @@ public class StandardSession implements Session {
             /**
              * Returns RemoteInfo object from server.
              */
-            RemoteInfo getRemoteInfo(VersionedIdentifier id) throws RemoteException;
+            RemoteInfo getRemoteInfo(VersionedIdentifier typeID) throws RemoteException;
+
+            /**
+             * Returns RemoteInfo object from server.
+             */
+            RemoteInfo getRemoteInfo(Identifier typeID) throws RemoteException;
 
             /**
              * Notification from client when it has disposed of identified objects.
@@ -682,10 +691,18 @@ public class StandardSession implements Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public RemoteInfo getRemoteInfo(VersionedIdentifier id) throws NoSuchClassException {
-            Class remoteType = (Class) id.tryRetrieve();
+        public RemoteInfo getRemoteInfo(VersionedIdentifier typeID) throws NoSuchClassException {
+            Class remoteType = (Class) typeID.tryRetrieve();
             if (remoteType == null) {
-                throw new NoSuchClassException("No Class found for id: " + id);
+                throw new NoSuchClassException("No Class found for id: " + typeID);
+            }
+            return RemoteIntrospector.examine(remoteType);
+        }
+
+        public RemoteInfo getRemoteInfo(Identifier typeID) throws NoSuchClassException {
+            Class remoteType = (Class) typeID.tryRetrieve();
+            if (remoteType == null) {
+                throw new NoSuchClassException("No Class found for id: " + typeID);
             }
             return RemoteIntrospector.examine(remoteType);
         }
@@ -1090,6 +1107,30 @@ public class StandardSession implements Session {
     }
 
     private class SkeletonSupportImpl implements SkeletonSupport {
+        public <R extends Remote> void linkBatchedRemote(Class<R> type, R remote,
+                                                         Identifier typeID,
+                                                         VersionedIdentifier remoteID)
+            throws RemoteException
+        {
+            // Design note: Using a regular Identifier for the type to factory
+            // mapping avoids collisions with stub factories which might be
+            // registered against the same id. Stub factories are registered
+            // with VersionedIdentifier, which uses a separate the cache. Also,
+            // the distributed garbage collector is not involved with
+            // reclaiming skeleton factories for batch methods, and so the use
+            // of VersionedIdentifier adds no value.
+
+            SkeletonFactory factory = (SkeletonFactory) typeID.tryRetrieve();
+            if (factory == null) {
+                RemoteInfo remoteInfo = mRemoteAdmin.getRemoteInfo(typeID);
+                // FIXME: SkeletonFactoryGenerator needs to handle info differences
+                factory = SkeletonFactoryGenerator.getSkeletonFactory(type, remoteInfo);
+                factory = typeID.register(factory);
+            }
+
+            addSkeleton(remoteID, factory.createSkeleton(mSkeletonSupport, remote));
+        }
+
         public boolean finished(final InvocationChannel channel, boolean synchronous) {
             if (synchronous) {
                 try {
@@ -1123,6 +1164,11 @@ public class StandardSession implements Session {
 
         StubSupportImpl(VersionedIdentifier id) {
             mObjID = id;
+        }
+
+        // Used by batched methods that return a remote object.
+        private StubSupportImpl() {
+            mObjID = VersionedIdentifier.identify(this);
         }
 
         public <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureEx)
@@ -1240,6 +1286,38 @@ public class StandardSession implements Session {
             }
 
             return closeTask;
+        }
+
+        public <T extends Throwable, R extends Remote> R
+            createBatchedRemote(Class<T> remoteFailureEx,
+                                InvocationChannel channel, Class<R> type) throws T
+        {
+            RemoteInfo info;
+            try {
+                info = RemoteIntrospector.examine(type);
+            } catch (IllegalArgumentException e) {
+                Throwable cause = new MalformedRemoteObjectException(e.getMessage(), type);
+                throw failed(remoteFailureEx, channel, cause);
+            }
+            
+            StubFactory<R> factory = StubFactoryGenerator.getStubFactory(type, info);
+
+            StubSupportImpl support = new StubSupportImpl();
+            Identifier typeId = Identifier.identify(type);
+
+            // Write the type id and versioned object identifier.
+            try {
+                typeId.write(channel);
+                support.mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, channel, e);
+            }
+
+            R remote = factory.createStub(support);
+
+            mStubRefs.put(support.mObjID, new StubRef(remote, mReferenceQueue, support));
+
+            return remote;
         }
 
         public void batched(InvocationChannel channel) {

@@ -322,6 +322,24 @@ public class StubFactoryGenerator<R extends Remote> {
                     // Return channel; as a Pipe.
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
+                } else if (method.isBatched() && returnDesc != null &&
+                           Remote.class.isAssignableFrom(returnDesc.toClass()))
+                {
+                    // Return a remote object from a batched method.
+                    b.loadThis();
+                    b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+                    b.loadConstant(remoteFailureExType);
+                    b.loadLocal(channelVar);
+                    b.loadConstant(returnDesc);
+                    b.invokeInterface(STUB_SUPPORT_TYPE, "createBatchedRemote",
+                                      TypeDesc.forClass(Remote.class),
+                                      new TypeDesc[] {CLASS_TYPE, INV_CHANNEL_TYPE, CLASS_TYPE});
+                    b.checkCast(returnDesc);
+
+                    // Finished with channel.
+                    genBatched(b, channelVar, closeTaskVar);
+
+                    b.returnValue(returnDesc);
                 } else {
                     // Finished with channel.
                     if (method.isBatched()) {

@@ -16,6 +16,9 @@
 
 package dirmi.core;
 
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
 /**
  * Object passed to a Skeleton instance in order for it to decide when channels
  * can be reused.
@@ -23,6 +26,19 @@ package dirmi.core;
  * @author Brian S O'Neill
  */
 public interface SkeletonSupport {
+    /**
+     * Used by batched methods which return a Remote object. This method
+     * creates a skeleton for the given remote object and registers it.
+     *
+     * @param type type of remote object
+     * @param remote remote object returned by server method
+     * @param typeID type ID assigned by client
+     * @param remoteID object ID assigned by client
+     */
+    <R extends Remote> void linkBatchedRemote(Class<R> type, R remote,
+                                              Identifier typeID, VersionedIdentifier remoteID)
+        throws RemoteException;
+
     /**
      * Called after channel usage is finished and can be reused for receiving
      * new requests. This method should not throw any exception.

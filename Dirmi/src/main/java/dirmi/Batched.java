@@ -26,7 +26,8 @@ import java.lang.annotation.*;
  * sent. If the current thread exits before releasing the channel, the batched
  * request is eventually sent.
  *
- * <p>A batched method must return void.
+ * <p>A batched method must return void or a Remote object. Returning a Remote
+ * object allows batched calls to be chained together.
  *
  * <pre>
  * &#64;Batched

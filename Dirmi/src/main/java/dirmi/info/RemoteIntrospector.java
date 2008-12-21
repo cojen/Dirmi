@@ -213,8 +213,14 @@ public class RemoteIntrospector {
                             }
                             if (method.isBatched()) {
                                 throw new IllegalArgumentException
-                                    ("Asynchronous batched method can only return void: " +
+                                    ("Asynchronous batched method cannot return a pipe: " +
                                      method.methodDesc());
+                            }
+                        } else if (method.isBatched()) {
+                            if (!Remote.class.isAssignableFrom(returnType)) {
+                                throw new IllegalArgumentException
+                                    ("Asynchronous batched method must return void " +
+                                     "or a Remote object: " + method.methodDesc());
                             }
                         } else {
                             throw new IllegalArgumentException
@@ -1060,6 +1066,10 @@ public class RemoteIntrospector {
                 return this;
             }
             return intern(new RParameter(mType, flags));
+        }
+
+        private Object readResolve() {
+            return intern(this);
         }
     }
 }

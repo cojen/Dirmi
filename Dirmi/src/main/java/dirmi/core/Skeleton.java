@@ -38,6 +38,8 @@ public interface Skeleton extends Unreferenced {
      * asynchronous. Any other exception thrown from this method indicates a
      * communication failure, and so the channel should be closed.
      *
+     * @param objectID object id to invoke; ignored by implementations that support one object
+     * @param methodID method to invoke
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
      * @return true if caller should read another request from channel
@@ -49,7 +51,7 @@ public interface Skeleton extends Unreferenced {
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
      */
-    boolean invoke(Identifier methodID, InvocationChannel channel)
+    boolean invoke(VersionedIdentifier objectID, Identifier methodID, InvocationChannel channel)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,
