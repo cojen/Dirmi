@@ -21,11 +21,14 @@ import java.rmi.RemoteException;
 
 import java.sql.SQLException;
 
+import dirmi.Batched;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
 public interface RemoteConnector extends Remote {
+    @Batched
     RemoteConnection getConnection(String db) throws RemoteException, SQLException;
 }
