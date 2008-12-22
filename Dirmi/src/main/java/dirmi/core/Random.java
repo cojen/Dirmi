@@ -17,7 +17,7 @@
 package dirmi.core;
 
 /**
- * Collection of thread-safe methods for generating secure random numbers.
+ * Collection of thread-safe methods for generating random numbers.
  *
  * @author Brian S O'Neill
  */
