@@ -43,6 +43,7 @@ import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
 import dirmi.CallMode;
+import dirmi.MalformedRemoteObjectException;
 import dirmi.Pipe;
 
 import dirmi.info.RemoteInfo;
@@ -79,8 +80,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         synchronized (cCache) {
             SkeletonFactory<R> factory = (SkeletonFactory<R>) cCache.get(type);
             if (factory == null) {
-                RemoteInfo info = RemoteIntrospector.examine(type);
-                factory = new SkeletonFactoryGenerator<R>(type, info).generateFactory();
+                factory = new SkeletonFactoryGenerator<R>(type).generateFactory();
                 cCache.put(type, factory);
             }
             return factory;
@@ -97,7 +97,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
      */
     public static <R extends Remote> SkeletonFactory<R> getSkeletonFactory(Class<R> type,
                                                                            RemoteInfo remoteInfo)
-        throws IllegalArgumentException
     {
         synchronized (cCache) {
             Object key = KeyFactory.createKey(new Object[] {type, remoteInfo});
@@ -113,9 +112,33 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     private final Class<R> mType;
     private final RemoteInfo mInfo;
 
-    private SkeletonFactoryGenerator(Class<R> type, RemoteInfo info) {
+    private final RemoteInfo mLocalInfo;
+    // Is set only if mLocalInfo is null.
+    private final String mMalformedInfoMessage;
+
+    private SkeletonFactoryGenerator(Class<R> type) throws IllegalArgumentException {
         mType = type;
-        mInfo = info;
+        mInfo = mLocalInfo = RemoteIntrospector.examine(type);
+        mMalformedInfoMessage = null;
+    }
+
+    private SkeletonFactoryGenerator(Class<R> type, RemoteInfo remoteInfo) {
+        mType = type;
+        mInfo = remoteInfo;
+
+        RemoteInfo localInfo;
+        String malformed;
+
+        try {
+            localInfo = RemoteIntrospector.examine(type);
+            malformed = null;
+        } catch (IllegalArgumentException e) {
+            localInfo = null;
+            malformed = e.getMessage();
+        }
+
+        mLocalInfo = localInfo;
+        mMalformedInfoMessage = malformed;
     }
 
     private SkeletonFactory<R> generateFactory() {
@@ -343,16 +366,36 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 if (method.isAsynchronous() && reuseChannel && remoteIdVar == null) {
                     // Call finished method before invocation.
-                    genFinished(b, channelVar, false, pendingRequestVar);
+                    genFinished(b, channelVar, false);
+                    b.storeLocal(pendingRequestVar);
                 }
 
                 {
                     // Try handler right before server side method invocation.
                     tryStarts[ordinal] = b.createLabel().setLocation();
 
-                    // Invoke the server side method.
-                    TypeDesc[] params = getTypeDescs(paramTypes);
-                    b.invokeInterface(remoteType, method.getName(), returnDesc, params);
+                    if (methodExists(method)) {
+                        // Invoke the server side method.
+                        TypeDesc[] params = getTypeDescs(paramTypes);
+                        b.invokeInterface(remoteType, method.getName(), returnDesc, params);
+                    } else if (mLocalInfo == null) {
+                        // Cannot invoke method because interface is malformed.
+                        TypeDesc exType = TypeDesc.forClass(MalformedRemoteObjectException.class);
+                        b.newObject(exType);
+                        b.dup();
+                        b.loadConstant(mMalformedInfoMessage);
+                        b.loadConstant(remoteType);
+                        b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, CLASS_TYPE});
+                        b.throwObject();
+                    } else {
+                        // Cannot invoke method because it is unimplemented.
+                        b.newObject(UNIMPLEMENTED_EX_TYPE);
+                        b.dup();
+                        b.loadConstant(method.getSignature());
+                        b.invokeConstructor
+                            (UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
+                        b.throwObject();
+                    }
 
                     // Exception handler covers server method invocation only.
                     tryEnds[ordinal] = b.createLabel().setLocation();
@@ -375,11 +418,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                                       remoteTypeIdVar.getType(),
                                                       remoteIdVar.getType()});
 
-                    // Finished with channel after linked.
                     if (reuseChannel) {
-                        // Call finished method before invocation.
-                        genFinished(b, channelVar, false, pendingRequestVar);
+                        // Finished with channel after linked.
+                        genFinished(b, channelVar, false);
+                    } else {
+                        b.loadLocal(pendingRequestVar);
                     }
+
+                    b.returnValue(TypeDesc.BOOLEAN);
                 } else if (method.isAsynchronous()) {
                     // Discard return value from asynchronous methods.
                     if (returnDesc != null) {
@@ -389,6 +435,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                             b.pop();
                         }
                     }
+
+                    b.loadLocal(pendingRequestVar);
+                    b.returnValue(TypeDesc.BOOLEAN);
                 } else {
                     // For synchronous method, write response and flush stream.
 
@@ -412,11 +461,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     }
 
                     // Call finished method.
-                    genFinished(b, channelVar, true, pendingRequestVar);
+                    genFinished(b, channelVar, true);
+                    b.returnValue(TypeDesc.BOOLEAN);
                 }
-
-                b.loadLocal(pendingRequestVar);
-                b.returnValue(TypeDesc.BOOLEAN);
 
                 ordinal++;
 
@@ -488,7 +535,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null, new TypeDesc[] {THROWABLE_TYPE});
 
             // Call finished method.
-            genFinished(b, channelVar, true, null);
+            genFinished(b, channelVar, true);
             b.returnValue(TypeDesc.BOOLEAN);
         }
 
@@ -512,18 +559,38 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         return ci.defineClass(cf);
     }
 
-    private void genFinished(CodeBuilder b, LocalVariable channelVar, boolean synchronous,
-                             LocalVariable pendingRequestVar)
-    {
+    private boolean methodExists(RemoteMethod method) {
+        if (mLocalInfo == mInfo) {
+            // Since method came from same info, of course it exists.
+            return true;
+        }
+
+        if (mLocalInfo == null) {
+            // Local interface is malformed and so no skeleton methods can be
+            // implemented.
+            return false;
+        }
+
+        List<? extends RemoteParameter> paramList = method.getParameterTypes();
+        RemoteParameter[] paramTypes = new RemoteParameter[paramList.size()];
+        paramList.toArray(paramTypes);
+
+        try {
+            RemoteMethod localMethod = mLocalInfo.getRemoteMethod(method.getName(), paramTypes);
+            return equalTypes(localMethod.getReturnType(), method.getReturnType());
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    // Implementation leaves a boolean on the stack.
+    private void genFinished(CodeBuilder b, LocalVariable channelVar, boolean synchronous) {
         b.loadThis();
         b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
         b.loadLocal(channelVar);
         b.loadConstant(synchronous);
         b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.BOOLEAN,
                           new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN});
-        if (pendingRequestVar != null) {
-            b.storeLocal(pendingRequestVar);
-        }
     }
 
     private static class Factory<R extends Remote> implements SkeletonFactory<R> {

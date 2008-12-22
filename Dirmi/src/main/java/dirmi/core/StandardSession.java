@@ -1123,7 +1123,6 @@ public class StandardSession implements Session {
             SkeletonFactory factory = (SkeletonFactory) typeID.tryRetrieve();
             if (factory == null) {
                 RemoteInfo remoteInfo = mRemoteAdmin.getRemoteInfo(typeID);
-                // FIXME: SkeletonFactoryGenerator needs to handle info differences
                 factory = SkeletonFactoryGenerator.getSkeletonFactory(type, remoteInfo);
                 factory = typeID.register(factory);
             }

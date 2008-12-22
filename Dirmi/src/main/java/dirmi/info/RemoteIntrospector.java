@@ -81,7 +81,7 @@ public class RemoteIntrospector {
      * Returns the Remote interface implemented by the given Remote object.
      *
      * @param remoteObj remote object to examine
-     * @throws IllegalArgumentException if remote is null
+     * @throws IllegalArgumentException if remote is null or malformed
      */
     public static <R extends Remote> Class<? extends Remote> getRemoteType(R remoteObj)
         throws IllegalArgumentException
@@ -693,6 +693,10 @@ public class RemoteIntrospector {
                 return Collections.emptySet();
             }
             return mExceptionTypes;
+        }
+
+        public String getSignature() {
+            return getSignature(null);
         }
 
         public boolean isAsynchronous() {

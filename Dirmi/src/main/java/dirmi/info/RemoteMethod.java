@@ -61,6 +61,11 @@ public interface RemoteMethod extends Serializable {
     Set<? extends RemoteParameter<? extends Throwable>> getExceptionTypes();
 
     /**
+     * Returns a Java-syntax signature for method.
+     */
+    String getSignature();
+
+    /**
      * Returns true if this method is asynchronous.
      *
      * @see Asynchronous
