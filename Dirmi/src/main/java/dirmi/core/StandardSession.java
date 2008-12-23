@@ -279,12 +279,12 @@ public class StandardSession implements Session {
                 }
 
                 if (mIOException != null) {
-                    mIOException.fillInStackTrace();
+                    ExceptionUtils.addLocalTrace(mIOException);
                     throw mIOException;
                 }
 
                 if (mRuntimeException != null) {
-                    mRuntimeException.fillInStackTrace();
+                    ExceptionUtils.addLocalTrace(mRuntimeException);
                     throw mRuntimeException;
                 }
 

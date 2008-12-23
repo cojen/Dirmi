@@ -26,6 +26,8 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import java.util.concurrent.locks.Lock;
 
+import dirmi.core.ExceptionUtils;
+
 /**
  * Paired with {@link StreamBrokerAcceptor} to adapt a connector into a full
  * broker.
@@ -35,7 +37,10 @@ import java.util.concurrent.locks.Lock;
 public class StreamConnectorBroker extends AbstractStreamBroker implements StreamBroker {
     final StreamConnector mConnector;
     final MessageChannel mControlChannel;
-    volatile int mBrokerId;
+
+    private boolean mOpened;
+    private int mBrokerId;
+    private IOException mOpenException;
 
     public StreamConnectorBroker(ScheduledExecutorService executor,
                                  final MessageChannel controlChannel, StreamConnector connector)
@@ -50,8 +55,6 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
 
         class ControlReceiver implements MessageReceiver {
             private byte[] mMessage;
-            private boolean mReceivedId;
-            private IOException mException;
 
             public MessageReceiver receive(int totalSize, int offset, ByteBuffer buffer) {
                 if (offset == 0) {
@@ -65,16 +68,14 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                 int command = mMessage[0];
 
                 switch (command) {
-                case OP_OPENED:
-                    synchronized (this) {
-                        mBrokerId = (mMessage[1] << 24) | ((mMessage[2] & 0xff) << 16)
-                            | ((mMessage[3] & 0xff) << 8) | (mMessage[4] & 0xff);
-                        mReceivedId = true;
-                        notifyAll();
-                    }
+                case OP_OPENED: {
+                    int brokerId = (mMessage[1] << 24) | ((mMessage[2] & 0xff) << 16)
+                        | ((mMessage[3] & 0xff) << 8) | (mMessage[4] & 0xff);
+                    setBrokerId(brokerId);
                     break;
+                }
 
-                case OP_CHANNEL_CONNECT:
+                case OP_CHANNEL_CONNECT: {
                     int channelId = reserveChannelId();
                     StreamChannel channel = null;
 
@@ -82,7 +83,7 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                         channel = mConnector.connect();
                         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
                         out.write(OP_CHANNEL_CONNECTED);
-                        out.writeInt(mBrokerId);
+                        out.writeInt(brokerId());
                         out.writeInt(channelId);
                         out.flush();
 
@@ -95,8 +96,9 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                         }
                     }
                     break;
+                }
 
-                case OP_PING:
+                case OP_PING: {
                     mPinged = true;
                     try {
                         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_PONG}));
@@ -113,6 +115,7 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                     }
                     break;
                 }
+                }
             }
 
             public void closed() {
@@ -120,36 +123,18 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
             }
 
             public void closed(IOException e) {
-                synchronized (this) {
-                    if (e == null) {
-                        e = new IOException("Closed");
-                    }
-                    mReceivedId = true;
-                    mException = e;
-                    notifyAll();
-                    String message = "Broker is closed";
-                    if (e.getMessage() != null) {
-                        message = message + ": " + e.getMessage();
-                    }
-                    try {
-                        close(message);
-                    } catch (IOException e2) {
-                        // Ignore.
-                    }
+                if (e == null) {
+                    e = new IOException("Closed");
                 }
-            }
-
-            synchronized void waitForId() throws IOException {
+                openFailed(e);
+                String message = "Broker is closed";
+                if (e.getMessage() != null) {
+                    message = message + ": " + e.getMessage();
+                }
                 try {
-                    while (!mReceivedId) {
-                        wait();
-                    }
-                    if (mException != null) {
-                        mException.fillInStackTrace();
-                        throw mException;
-                    }
-                } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
+                    close(message);
+                } catch (IOException e2) {
+                    // Ignore.
                 }
             }
         };
@@ -158,7 +143,13 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
 
         controlChannel.receive(first);
 
-        first.waitForId();
+        // Block until broker id has been received.
+        try {
+            brokerId();
+        } catch (IOException e) {
+            ExceptionUtils.addLocalTrace(e);
+            throw e;
+        }
     }
 
     public StreamChannel connect() throws IOException {
@@ -172,7 +163,7 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
             channel = mConnector.connect();
             DataOutputStream out = new DataOutputStream(channel.getOutputStream());
             out.write(OP_CHANNEL_CONNECTED_DIRECT);
-            out.writeInt(mBrokerId);
+            out.writeInt(brokerId());
             out.writeInt(channelId);
             out.flush();
 
@@ -201,5 +192,35 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
     @Override
     public String toString() {
         return "StreamConnectorBroker {channel=" + mControlChannel + '}';
+    }
+
+    synchronized void setBrokerId(int id) {
+        if (!mOpened) {
+            mBrokerId = id;
+            mOpened = true;
+            notifyAll();
+        }
+    }
+
+    synchronized void openFailed(IOException e) {
+        if (!mOpened) {
+            mOpenException = e;
+            mOpened = true;
+            notifyAll();
+        }
+    }
+
+    synchronized int brokerId() throws IOException {
+        try {
+            while (!mOpened) {
+                wait();
+            }
+            if (mOpenException != null) {
+                throw mOpenException;
+            }
+            return mBrokerId;
+        } catch (InterruptedException e) {
+            throw new InterruptedIOException();
+        }
     }
 }

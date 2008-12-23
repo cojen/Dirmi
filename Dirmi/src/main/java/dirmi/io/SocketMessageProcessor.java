@@ -43,6 +43,8 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
+import dirmi.core.ExceptionUtils;
+
 /**
  * 
  *
@@ -478,7 +480,7 @@ public class SocketMessageProcessor implements Closeable {
                 }
                 IOException cause = mCause;
                 if (cause != null) {
-                    cause.fillInStackTrace();
+                    ExceptionUtils.addLocalTrace(cause);
                     throw cause;
                 }
             }

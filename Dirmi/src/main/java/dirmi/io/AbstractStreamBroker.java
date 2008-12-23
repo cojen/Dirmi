@@ -154,7 +154,9 @@ abstract class AbstractStreamBroker implements StreamBroker {
                 mChannelMap.remove(channelId);
             }
         }
-        channel.disconnect();
+        if (channel != null) {
+            channel.disconnect();
+        }
     }
 
     void doPingCheck() {
