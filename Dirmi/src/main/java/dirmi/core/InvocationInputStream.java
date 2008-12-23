@@ -300,13 +300,15 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         // method was invoked remotely. Also include any addresses.
         StackTraceElement[] mid;
         {
-            String pseudo = "Remote Method Invocation";
-            mid = new StackTraceElement[] {
-                new StackTraceElement(pseudo, "address", serverLocalAddress, -1),
-                new StackTraceElement(pseudo, "address", remoteAddress(mChannel), -1),
-                new StackTraceElement(pseudo, "address", serverRemoteAddress, -1),
-                new StackTraceElement(pseudo, "address", localAddress(mChannel), -1),
-            };
+            List<StackTraceElement> elements = new ArrayList<StackTraceElement>(4);
+
+            String message = "Remote Method Invocation";
+            addAddress(elements, message, "address",
+                       serverLocalAddress, remoteAddress(mChannel));
+            addAddress(elements, message, "address",
+                       serverRemoteAddress, localAddress(mChannel));
+
+            mid = elements.toArray(new StackTraceElement[elements.size()]);
         }
         
         if (localTraceLength >= 1) {
@@ -320,6 +322,19 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         }
 
         return t;
+    }
+
+    private static void addAddress(List<StackTraceElement> list, String message, String addrType,
+                                   String addr1, String addr2)
+    {
+        if (addr1 == null || (addr2 != null && addr2.contains(addr1))) {
+            list.add(new StackTraceElement(message, addrType, addr2, -1));
+        } else if (addr2 == null || (addr1 != null && addr1.contains(addr2))) {
+            list.add(new StackTraceElement(message, addrType, addr1, -1));
+        } else {
+            list.add(new StackTraceElement(message, addrType, addr1, -1));
+            list.add(new StackTraceElement(message, addrType, addr2, -1));
+        }
     }
 
     private RemoteException tryReconstruct(List<ThrowableInfo> chain) {
