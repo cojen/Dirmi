@@ -143,8 +143,8 @@ public class VersionedIdentifier extends AbstractIdentifier {
     }
 
     @Override
-    public <T> T register(T obj) throws IllegalArgumentException {
-        return cStore.register(this, obj);
+    public <T> void register(T obj) throws IllegalArgumentException {
+        cStore.register(this, obj);
     }
 
     @Override

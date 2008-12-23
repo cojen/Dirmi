@@ -134,17 +134,11 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
         return canonicalIdentifier(newIdentifier(bits));
     }
 
-    synchronized <T> T register(I id, T obj) {
+    synchronized <T> void register(I id, T obj) {
         if (obj == null) {
             throw new IllegalArgumentException("Registered object cannot be null");
         }
-        Object existing = mIdentifiersToObjects.get(id);
-        if (existing != null) {
-            return (T) existing;
-        }
         mObjectsToIdentifiers.put(obj, id);
-        mIdentifiersToObjects.put(id, obj);
-        return obj;
     }
 
     synchronized Object tryRetrieve(I id) {

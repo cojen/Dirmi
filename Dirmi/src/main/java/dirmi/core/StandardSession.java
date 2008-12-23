@@ -71,6 +71,9 @@ import dirmi.io.StreamBroker;
 import dirmi.io.StreamChannel;
 import dirmi.io.StreamListener;
 
+import org.cojen.util.WeakValuedHashMap;
+import org.cojen.util.SoftValuedHashMap;
+
 /**
  * 
  *
@@ -78,7 +81,7 @@ import dirmi.io.StreamListener;
  */
 public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
-    static final int PROTOCOL_VERSION = 1;
+    static final int PROTOCOL_VERSION = 20081220;
 
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
@@ -95,6 +98,10 @@ public class StandardSession implements Session {
     // concurrent access to sharable SkeletonFactory instances.
     final ConcurrentMap<VersionedIdentifier, SkeletonFactory> mSkeletonFactories;
 
+    // Cache of skeleton factories created for use by batched methods which
+    //return a remote object.
+    final Map<Identifier, SkeletonFactory> mRemoteSkeletonFactories;
+
     // Strong references to Skeletons. Skeletons are created as needed and can
     // be recreated as well. This map just provides quick concurrent access to
     // sharable Skeleton instances.
@@ -102,12 +109,18 @@ public class StandardSession implements Session {
 
     final SkeletonSupport mSkeletonSupport;
 
+    // Cache of stub factories.
+    final Map<VersionedIdentifier, StubFactory> mStubFactories;
+
     // Strong references to PhantomReferences to StubFactories.
     // PhantomReferences need to be strongly reachable or else they will be
     // reclaimed sooner than the referent becomes unreachable. When the
     // referent StubFactory becomes unreachable, its entry in this map must be
     // removed to reclaim memory.
     final ConcurrentMap<VersionedIdentifier, StubFactoryRef> mStubFactoryRefs;
+
+    // Cache of stubs.
+    final Map<VersionedIdentifier, Remote> mStubs;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
     // to be strongly reachable or else they will be reclaimed sooner than the
@@ -177,9 +190,13 @@ public class StandardSession implements Session {
         mLocalServer = server;
 
         mSkeletonFactories = new ConcurrentHashMap<VersionedIdentifier, SkeletonFactory>();
+        mRemoteSkeletonFactories = new SoftValuedHashMap<Identifier, SkeletonFactory>();
         mSkeletons = new ConcurrentHashMap<VersionedIdentifier, Skeleton>();
         mSkeletonSupport = new SkeletonSupportImpl();
+
+        mStubFactories = new SoftValuedHashMap<VersionedIdentifier, StubFactory>();
         mStubFactoryRefs = new ConcurrentHashMap<VersionedIdentifier, StubFactoryRef>();
+        mStubs = new WeakValuedHashMap<VersionedIdentifier, Remote>();
         mStubRefs = new ConcurrentHashMap<VersionedIdentifier, StubRef>();
 
         mChannelPool = new LinkedList<InvocationChan>();
@@ -619,6 +636,32 @@ public class StandardSession implements Session {
         mLog.error(message, e);
     }
 
+    /**
+     * Used in conjunction with register.
+     */
+    static <K extends AbstractIdentifier, V> V lookup(Map<K, V> map, K key) {
+        synchronized (map) {
+            return map.get(key);
+        }
+    }
+
+    /**
+     * Used in conjunction with lookup.
+     *
+     * @return same value instance if registered; existing instance otherwise
+     */
+    static <K extends AbstractIdentifier, V> V register(Map<K, V> map, K key, V value) {
+        synchronized (map) {
+            V existing = map.get(key);
+            if (existing != null) {
+                return existing;
+            }
+            map.put(key, value);
+        }
+        key.register(value);
+        return value;
+    }
+
     private static abstract class Ref<T> extends PhantomReference<T> {
         public Ref(T referent, ReferenceQueue queue) {
             super(referent, queue);
@@ -1002,11 +1045,11 @@ public class StandardSession implements Session {
                 MarshalledRemote mr = (MarshalledRemote) obj;
 
                 VersionedIdentifier objID = mr.mObjID;
-                Remote remote = (Remote) objID.tryRetrieve();
+                Remote remote = lookup(mStubs, objID);
 
                 if (remote == null) {
                     VersionedIdentifier typeID = mr.mTypeID;
-                    StubFactory factory = (StubFactory) typeID.tryRetrieve();
+                    StubFactory factory = lookup(mStubFactories, typeID);
 
                     if (factory == null) {
                         RemoteInfo info = mr.mInfo;
@@ -1023,16 +1066,28 @@ public class StandardSession implements Session {
                             type = Remote.class;
                         }
 
-                        factory = typeID.register(StubFactoryGenerator.getStubFactory(type, info));
+                        factory = StubFactoryGenerator.getStubFactory(type, info);
 
-                        mStubFactoryRefs.put
-                            (typeID, new StubFactoryRef(factory, mReferenceQueue, typeID));
+                        StubFactory existing = register(mStubFactories, typeID, factory);
+                        if (existing == factory) {
+                            mStubFactoryRefs.put
+                                (typeID, new StubFactoryRef(factory, mReferenceQueue, typeID));
+                        } else {
+                            // Use existing instance instead.
+                            factory = existing;
+                        }
                     }
 
                     StubSupportImpl support = new StubSupportImpl(objID);
-                    remote = objID.register(factory.createStub(support));
+                    remote = factory.createStub(support);
 
-                    mStubRefs.put(objID, new StubRef(remote, mReferenceQueue, support));
+                    Remote existing = register(mStubs, objID, remote);
+                    if (existing == remote) {
+                        mStubRefs.put(objID, new StubRef(remote, mReferenceQueue, support));
+                    } else {
+                        // Use existing instance instead.
+                        remote = existing;
+                    }
                 }
 
                 obj = remote;
@@ -1120,11 +1175,16 @@ public class StandardSession implements Session {
             // reclaiming skeleton factories for batch methods, and so the use
             // of VersionedIdentifier adds no value.
 
-            SkeletonFactory factory = (SkeletonFactory) typeID.tryRetrieve();
+            SkeletonFactory factory = lookup(mRemoteSkeletonFactories, typeID);
             if (factory == null) {
                 RemoteInfo remoteInfo = mRemoteAdmin.getRemoteInfo(typeID);
                 factory = SkeletonFactoryGenerator.getSkeletonFactory(type, remoteInfo);
-                factory = typeID.register(factory);
+
+                SkeletonFactory existing = register(mRemoteSkeletonFactories, typeID, factory);
+                if (existing != factory) {
+                    // Use existing instance instead.
+                    factory = existing;
+                }
             }
 
             addSkeleton(remoteID, factory.createSkeleton(mSkeletonSupport, remote));

@@ -78,13 +78,14 @@ public abstract class AbstractIdentifier implements Comparable<AbstractIdentifie
     /**
      * Register the given object with this identifier. Registered objects are
      * not strongly referenced, and so they may be garbage collected unless
-     * referenced elsewhere. Only one object may be registered with the
-     * identifier, and attempting to register another object has no effect.
+     * referenced elsewhere. Many objects can be registered with an identifier.
      *
-     * @return registered object, never null
+     * <p>A registered object cannot be retrieved, but calling identify against
+     * a registered object returns the original identifier object.
+     *
      * @throws IllegalArgumentException if given object is null
      */
-    public abstract <T> T register(T obj) throws IllegalArgumentException;
+    public abstract <T> void register(T obj) throws IllegalArgumentException;
 
     public byte getData() {
         return (byte) mBits;
