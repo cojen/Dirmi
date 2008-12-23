@@ -206,60 +206,54 @@ public class StandardSession implements Session {
         // Receives magic number and remote object.
         class Bootstrap implements StreamListener {
             private boolean mDone;
+            private InvocationChan mChannelToRecycle;
             private IOException mIOException;
             private RuntimeException mRuntimeException;
             private Error mError;
             Object mRemoteServer;
             Hidden.Admin mRemoteAdmin;
 
-            public void established(StreamChannel channel) {
-                InvocationChan chan;
-                doBoot: synchronized (this) {
+            public synchronized void established(StreamChannel channel) {
+                try {
+                    InvocationChan chan = new InvocationChan(channel);
+                    InvocationInputStream in = chan.getInputStream();
+
+                    int magic = in.readInt();
+                    if (magic != MAGIC_NUMBER) {
+                        throw new IOException("Incorrect magic number: " + magic);
+                    }
+
+                    int version = in.readInt();
+                    if (version != PROTOCOL_VERSION) {
+                        throw new IOException("Unsupported protocol version: " + version);
+                    }
+
                     try {
-                        chan = new InvocationChan(channel);
-                        InvocationInputStream in = chan.getInputStream();
-
-                        int magic = in.readInt();
-                        if (magic != MAGIC_NUMBER) {
-                            throw new IOException("Incorrect magic number: " + magic);
-                        }
-
-                        int version = in.readInt();
-                        if (version != PROTOCOL_VERSION) {
-                            throw new IOException("Unsupported protocol version: " + version);
-                        }
-
-                        try {
-                            mRemoteServer = in.readObject();
-                            mRemoteAdmin = (Hidden.Admin) in.readObject();
-                        } catch (ClassNotFoundException e) {
-                            IOException io = new IOException();
-                            io.initCause(e);
-                            throw io;
-                        }
-
-                        // Reached only upon successful bootstrap.
-                        break doBoot;
-                    } catch (IOException e) {
-                        mIOException = e;
-                    } catch (RuntimeException e) {
-                        mRuntimeException = e;
-                    } catch (Error e) {
-                        mError = e;
-                    } finally {
-                        mDone = true;
-                        notifyAll();
+                        mRemoteServer = in.readObject();
+                        mRemoteAdmin = (Hidden.Admin) in.readObject();
+                    } catch (ClassNotFoundException e) {
+                        IOException io = new IOException();
+                        io.initCause(e);
+                        throw io;
                     }
 
-                    if (channel != null) {
-                        channel.disconnect();
-                    }
-
+                    // Reached only upon successful bootstrap.
+                    mChannelToRecycle = chan;
                     return;
+                } catch (IOException e) {
+                    mIOException = e;
+                } catch (RuntimeException e) {
+                    mRuntimeException = e;
+                } catch (Error e) {
+                    mError = e;
+                } finally {
+                    mDone = true;
+                    notifyAll();
                 }
 
-                // Reuse initial connection for handling incoming requests.
-                handleRequest(chan);
+                if (channel != null) {
+                    channel.disconnect();
+                }
             }
 
             public synchronized void failed(IOException e) {
@@ -268,7 +262,10 @@ public class StandardSession implements Session {
                 notifyAll();
             }
 
-            public synchronized void complete() throws IOException {
+            /**
+             * @return channel to recycle
+             */
+            public synchronized InvocationChan complete() throws IOException {
                 while (!mDone) {
                     try {
                         wait();
@@ -276,17 +273,22 @@ public class StandardSession implements Session {
                         throw new InterruptedIOException();
                     }
                 }
+
                 if (mError != null) {
                     throw mError;
                 }
+
                 if (mIOException != null) {
                     mIOException.fillInStackTrace();
                     throw mIOException;
                 }
+
                 if (mRuntimeException != null) {
                     mRuntimeException.fillInStackTrace();
                     throw mRuntimeException;
                 }
+
+                return mChannelToRecycle;
             }
         };
 
@@ -313,7 +315,7 @@ public class StandardSession implements Session {
             }
         }
 
-        bootstrap.complete();
+        final InvocationChan bootstrapChannel = bootstrap.complete();
 
         mRemoteServer = bootstrap.mRemoteServer;
         mRemoteAdmin = bootstrap.mRemoteAdmin;
@@ -324,6 +326,10 @@ public class StandardSession implements Session {
             mBackgroundTask = executor.scheduleWithFixedDelay
                 (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
+            if (bootstrapChannel != null) {
+                bootstrapChannel.disconnect();
+            }
+
             String message = "Unable to start background task";
             try {
                 closeOnFailure(message, e);
@@ -335,7 +341,25 @@ public class StandardSession implements Session {
             throw io;
         }
 
-        // Begin accepting requests.
+        if (bootstrapChannel != null) {
+            // Minimum required set up is complete, and so bootstrap channel
+            // can be recycled for new incoming requests.
+            try {
+                handleRequestAsync(bootstrapChannel);
+            } catch (RejectedExecutionException e) {
+                String message = "Unable to accept initial requests";
+                try {
+                    closeOnFailure(message, e);
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                IOException io = new IOException(message);
+                io.initCause(e);
+                throw io;
+            }
+        }
+
+        // Begin accepting new requests.
         mBroker.accept(new Handler());
     }
 
@@ -499,6 +523,14 @@ public class StandardSession implements Session {
                 }
             }
         }
+    }
+
+    void handleRequestAsync(final InvocationChannel invChannel) {
+        mExecutor.execute(new Runnable() {
+            public void run() {
+                handleRequest(invChannel);
+            }
+        });
     }
 
     void handleRequest(InvocationChannel invChannel) {
@@ -1205,11 +1237,7 @@ public class StandardSession implements Session {
                 try {
                     // Let another thread process next request while this
                     // thread continues to process active request.
-                    mExecutor.execute(new Runnable() {
-                        public void run() {
-                            handleRequest(channel);
-                        }
-                    });
+                    handleRequestAsync(channel);
                     return false;
                 } catch (RejectedExecutionException e) {
                     return true;

@@ -224,9 +224,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
                     try {
                         channel.getOutputStream().flush();
                     } catch (IOException e) {
-                        if (exception == null) {
-                            exception = e;
-                        }
+                        // Ignore.
                     } finally {
                         channel.disconnect();
                     }
