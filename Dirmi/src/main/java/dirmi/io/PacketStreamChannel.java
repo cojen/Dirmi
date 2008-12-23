@@ -36,7 +36,7 @@ class PacketStreamChannel implements StreamChannel {
         AtomicIntegerFieldUpdater.newUpdater(PacketStreamChannel.class, "mClosed");
 
     final Executor mExecutor;
-    private final StreamListener mRecycler;
+    private final StreamRecycler mRecycler;
 
     private final StreamChannel mChannel;
     private final In mIn;
@@ -44,7 +44,7 @@ class PacketStreamChannel implements StreamChannel {
 
     private volatile int mClosed;
 
-    PacketStreamChannel(Executor executor, StreamListener recycler, StreamChannel channel)
+    PacketStreamChannel(Executor executor, StreamRecycler recycler, StreamChannel channel)
         throws IOException
     {
         mExecutor = executor;
@@ -112,7 +112,7 @@ class PacketStreamChannel implements StreamChannel {
                 mOut.doClose();
             }
             if (mRecycler != null) {
-                mRecycler.established(new PacketStreamChannel(this));
+                mRecycler.recycled(new PacketStreamChannel(this));
             } else {
                 mChannel.disconnect();
             }
@@ -366,7 +366,7 @@ class PacketStreamChannel implements StreamChannel {
         @Override
         public synchronized void write(byte[] b, int off, int len) throws IOException {
             if (mState != 0) {
-                throw new IOException("Closed");
+                throw new IOException("Closed: " + this);
             }
             super.write(b, off, len);
         }

@@ -16,17 +16,15 @@
 
 package dirmi.io;
 
-import java.io.Closeable;
-import java.io.IOException;
-
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamBroker extends StreamAcceptor, StreamConnector, Closeable {
+interface StreamRecycler {
     /**
-     * Prevents new channels from being created and disconnects all existing channels.
+     * Called at most once as soon as channel can be reused. This method may
+     * safely block, and it can interact with the channel too.
      */
-    void close() throws IOException;
+    void recycled(StreamChannel channel);
 }

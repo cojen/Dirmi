@@ -48,13 +48,9 @@ public class SocketStreamAcceptor implements StreamAcceptor {
         mServerSocket.bind(bindpoint);
         mListenerQueue = new LinkedBlockingQueue<StreamListener>();
 
-        final StreamListener recycler = new StreamListener() {
-            public void established(StreamChannel channel) {
+        final StreamRecycler recycler = new StreamRecycler() {
+            public void recycled(StreamChannel channel) {
                 accepted(channel);
-            }
-
-            public void failed(IOException e) {
-                // Ignore.
             }
         };
 

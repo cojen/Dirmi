@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-class StreamChannelPool implements StreamListener {
+class StreamChannelPool implements StreamRecycler {
     private static final int POLL_RATE_MILLIS = 5000;
     private static final int MAX_IDLE_MILLIS = 60 * 1000;
 
@@ -44,7 +44,7 @@ class StreamChannelPool implements StreamListener {
         mPool = new LinkedList<Entry>();
     }
 
-    public synchronized void established(StreamChannel channel) {
+    public synchronized void recycled(StreamChannel channel) {
         mPool.add(new Entry(channel));
 
         if (mCloseTask == null) {
@@ -60,10 +60,6 @@ class StreamChannelPool implements StreamListener {
                 channel.disconnect();
             }
         }
-    }
-
-    public void failed(IOException e) {
-	// Ignore.
     }
 
     StreamChannel dequeue() {

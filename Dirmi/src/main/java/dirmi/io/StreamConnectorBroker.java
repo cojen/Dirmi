@@ -16,25 +16,15 @@
 
 package dirmi.io;
 
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
-import java.io.OutputStream;
 
 import java.nio.ByteBuffer;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import org.cojen.util.WeakIdentityMap;
 
 /**
  * Paired with {@link StreamBrokerAcceptor} to adapt a connector into a full
@@ -42,69 +32,21 @@ import org.cojen.util.WeakIdentityMap;
  *
  * @author Brian S O'Neill
  */
-public class StreamConnectorBroker implements StreamBroker {
-    static final int DEFAULT_PING_CHECK_MILLIS = 10000;
-
-    static final byte OP_OPEN = 1;
-    static final byte OP_OPENED = 2;
-    static final byte OP_CONNECT = 3;
-    static final byte OP_CONNECTED = 4;
-    static final byte OP_PING = 5;
-    static final byte OP_PONG = 6;
-
+public class StreamConnectorBroker extends AbstractStreamBroker implements StreamBroker {
     final StreamConnector mConnector;
     final MessageChannel mControlChannel;
-    volatile int mId;
-
-    final ScheduledExecutorService mExecutor;
-
-    // FIXME: Use of weak references means that channels could leak, even if
-    // remote session is closed.
-    final WeakIdentityMap<StreamChannel, Object> mChannels;
-
-    final LinkedBlockingQueue<StreamListener> mListenerQueue;
-
-    final ScheduledFuture<?> mPingCheckTask;
-
-    volatile boolean mPinged;
-
-    private final ReadWriteLock mCloseLock;
-    private boolean mClosed;
-    private volatile String mClosedReason;
+    volatile int mBrokerId;
 
     public StreamConnectorBroker(ScheduledExecutorService executor,
                                  final MessageChannel controlChannel, StreamConnector connector)
         throws IOException
     {
+        super(executor);
+
         mControlChannel = controlChannel;
         mConnector = connector;
-        mCloseLock = new ReentrantReadWriteLock(true);
-
-        mExecutor = executor;
-
-        mChannels = new WeakIdentityMap<StreamChannel, Object>();
 
         controlChannel.send(ByteBuffer.wrap(new byte[] {OP_OPEN}));
-
-        mListenerQueue = new LinkedBlockingQueue<StreamListener>();
-
-        try {
-            // Start ping check task.
-            long checkRate = DEFAULT_PING_CHECK_MILLIS;
-            PingCheckTask checkTask = new PingCheckTask(this);
-            mPingCheckTask = executor.scheduleAtFixedRate
-                (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
-            checkTask.setFuture(mPingCheckTask);
-        } catch (RejectedExecutionException e) {
-            try {
-                close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
-            IOException io = new IOException("Unable to start ping task");
-            io.initCause(e);
-            throw io;
-        }
 
         class ControlReceiver implements MessageReceiver {
             private byte[] mMessage;
@@ -125,39 +67,28 @@ public class StreamConnectorBroker implements StreamBroker {
                 switch (command) {
                 case OP_OPENED:
                     synchronized (this) {
-                        mId = (mMessage[1] << 24) | ((mMessage[2] & 0xff) << 16)
+                        mBrokerId = (mMessage[1] << 24) | ((mMessage[2] & 0xff) << 16)
                             | ((mMessage[3] & 0xff) << 8) | (mMessage[4] & 0xff);
                         mReceivedId = true;
                         notifyAll();
                     }
                     break;
 
-                case OP_CONNECT:
+                case OP_CHANNEL_CONNECT:
+                    int channelId = reserveChannelId();
                     StreamChannel channel = null;
+
                     try {
                         channel = mConnector.connect();
                         DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-                        out.write(OP_CONNECTED);
-                        out.writeInt(mId);
+                        out.write(OP_CHANNEL_CONNECTED);
+                        out.writeInt(mBrokerId);
+                        out.writeInt(channelId);
                         out.flush();
 
-                        register(channel);
-
-                        StreamListener listener = pollListener();
-                        if (listener != null) {
-                            listener.established(channel);
-                        } else {
-                            // Not accepted in time, so close it.
-                            try {
-                                channel.close();
-                            } catch (IOException e) {
-                                // Ignore.
-                            }
-                        }
+                        accepted(channelId, channel);
                     } catch (IOException e) {
-                        if (channel != null) {
-                            unregisterAndClose(channel);
-                        }
+                        unregisterAndDisconnect(channelId, channel);
                         StreamListener listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
@@ -230,178 +161,45 @@ public class StreamConnectorBroker implements StreamBroker {
         first.waitForId();
     }
 
-    public void accept(final StreamListener listener) {
-        try {
-            Lock lock = closeLock();
-            try {
-                mListenerQueue.add(listener);
-            } finally {
-                lock.unlock();
-            }
-        } catch (final IOException e) {
-            try {
-                mExecutor.execute(new Runnable() {
-                    public void run() {
-                        listener.failed(e);
-                    }
-                });
-            } catch (RejectedExecutionException e2) {
-                listener.failed(e);
-            }
-        }
-    }
-
     public StreamChannel connect() throws IOException {
         // Quick check to see if closed.
         closeLock().unlock();
 
-        StreamChannel channel = mConnector.connect();
-        DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-        out.write(OP_CONNECT);
-        out.writeInt(mId);
-        out.flush();
+        int channelId = reserveChannelId();
+        StreamChannel channel = null;
 
         try {
+            channel = mConnector.connect();
+            DataOutputStream out = new DataOutputStream(channel.getOutputStream());
+            out.write(OP_CHANNEL_CONNECTED_DIRECT);
+            out.writeInt(mBrokerId);
+            out.writeInt(channelId);
+            out.flush();
+
             Lock lock = closeLock();
             try {
-                register(channel);
+                register(channelId, channel);
                 return channel;
             } finally {
                 lock.unlock();
             }
         } catch (IOException e) {
-            try {
-                channel.close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            unregisterAndDisconnect(channelId, channel);
             throw e;
         }
     }
 
-    public void close() throws IOException {
-        close(null);
+    @Override
+    protected void preClose() {
     }
 
-    void close(String reason) throws IOException {
-        Lock lock = mCloseLock.writeLock();
-        lock.lock();
-        try {
-            if (mClosed) {
-                return;
-            }
-
-            mClosed = true;
-
-            if (reason == null) {
-                reason = "Broker is closed";
-            }
-            mClosedReason = reason;
-
-            try {
-                mPingCheckTask.cancel(true);
-            } catch (NullPointerException e) {
-                // mPingCheckTask might not have been assigned.
-            }
-
-            StreamListener listener;
-            while ((listener = mListenerQueue.poll()) != null) {
-                listener.failed(new IOException(reason));
-            }
-
-            IOException exception = null;
-
-            try {
-                mControlChannel.close();
-            } catch (IOException e) {
-                exception = e;
-            }
-
-            synchronized (mChannels) {
-                for (StreamChannel channel : mChannels.keySet()) {
-                    try {
-                        channel.close();
-                    } catch (IOException e) {
-                        if (exception == null) {
-                            exception = e;
-                        }
-                    }
-                }
-
-                mChannels.clear();
-            }
-
-            if (exception != null) {
-                throw exception;
-            }
-        } finally {
-            lock.unlock();
-        }
+    @Override
+    protected void closeControlChannel() throws IOException {
+        mControlChannel.close();
     }
 
     @Override
     public String toString() {
         return "StreamConnectorBroker {channel=" + mControlChannel + '}';
-    }
-
-    Lock closeLock() throws IOException {
-        Lock lock = mCloseLock.readLock();
-        lock.lock();
-        if (mClosed) {
-            lock.unlock();
-            throw new IOException(mClosedReason);
-        }
-        return lock;
-    }
-
-    StreamListener pollListener() {
-        try {
-            return mListenerQueue.poll(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            return null;
-        }
-    }
-
-    private void register(StreamChannel channel) {
-        synchronized (mChannels) {
-            mChannels.put(channel, "");
-        }
-    }
-
-    private void unregisterAndClose(StreamChannel channel) {
-        synchronized (mChannels) {
-            mChannels.remove(channel);
-        }
-
-        try {
-            channel.close();
-        } catch (IOException e) {
-            // Ignore.
-        }
-    }
-
-    void doPingCheck() {
-        if (!mPinged) {
-            try {
-                close("Broker is closed: Ping failure");
-            } catch (IOException e) {
-                // Ignore.
-            }
-        } else {
-            mPinged = false;
-        }
-    }
-
-    private static class PingCheckTask extends AbstractPingTask<StreamConnectorBroker> {
-        PingCheckTask(StreamConnectorBroker broker) {
-            super(broker);
-        }
-
-        public void run() {
-            StreamConnectorBroker broker = broker();
-            if (broker != null) {
-                broker.doPingCheck();
-            }
-        }
     }
 }

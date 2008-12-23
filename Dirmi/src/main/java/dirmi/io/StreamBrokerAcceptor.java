@@ -35,7 +35,6 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.cojen.util.IntHashMap;
-import org.cojen.util.WeakIdentityMap;
 
 import dirmi.core.Random;
 
@@ -46,8 +45,6 @@ import dirmi.core.Random;
  * @author Brian S O'Neill
  */
 public class StreamBrokerAcceptor implements Closeable {
-    static final int DEFAULT_PING_CHECK_MILLIS = 10000;
-
     final StreamAcceptor mAcceptor;
     final IntHashMap<Broker> mBrokerMap;
     final LinkedBlockingQueue<StreamBrokerListener> mBrokerListenerQueue;
@@ -71,28 +68,28 @@ public class StreamBrokerAcceptor implements Closeable {
                 acceptor.accept(this);
 
                 int op;
-                int id;
+                int brokerId;
                 Broker broker;
 
                 try {
                     DataInputStream in = new DataInputStream(channel.getInputStream());
                     op = in.readByte();
 
-                    if (op == StreamConnectorBroker.OP_OPEN) {
+                    if (op == AbstractStreamBroker.OP_OPEN) {
                         synchronized (mBrokerMap) {
                             do {
-                                id = Random.randomInt();
-                            } while (mBrokerMap.containsKey(id));
+                                brokerId = Random.randomInt();
+                            } while (mBrokerMap.containsKey(brokerId));
                             // Store null to reserve the id and allow broker
                             // constructor to block.
-                            mBrokerMap.put(id, null);
+                            mBrokerMap.put(brokerId, null);
                         }
 
                         try {
-                            broker = new Broker(channel, id, executor);
+                            broker = new Broker(executor, channel, brokerId);
                         } catch (IOException e) {
                             synchronized (mBrokerMap) {
-                                mBrokerMap.remove(id);
+                                mBrokerMap.remove(brokerId);
                             }
                             throw e;
                         }
@@ -117,7 +114,36 @@ public class StreamBrokerAcceptor implements Closeable {
                         }
                     }
 
-                    id = in.readInt();
+                    brokerId = in.readInt();
+
+                    synchronized (mBrokerMap) {
+                        broker = mBrokerMap.get(brokerId);
+                    }
+
+                    if (broker == null) {
+                        // Connection is bogus.
+                        channel.disconnect();
+                        return;
+                    }
+
+                    switch (op) {
+                    case AbstractStreamBroker.OP_CHANNEL_CONNECTED: {
+                        int channelId = in.readInt();
+                        broker.connected(channelId, channel);
+                        break;
+                    }
+
+                    case AbstractStreamBroker.OP_CHANNEL_CONNECTED_DIRECT: {
+                        int channelId = in.readInt();
+                        broker.accepted(channelId, channel);
+                        break;
+                    }
+
+                    default:
+                        // Unknown operation.
+                        channel.disconnect();
+                        break;
+                    }
                 } catch (IOException e) {
                     // Most likely caused by remote endpoint closing during
                     // connection establishment or against a pooled
@@ -133,33 +159,6 @@ public class StreamBrokerAcceptor implements Closeable {
                             listener.failed(e);
                         }
                     }
-
-                    return;
-                }
-
-                synchronized (mBrokerMap) {
-                    broker = mBrokerMap.get(id);
-                }
-
-                if (broker == null) {
-                    // Connection is bogus.
-                    channel.disconnect();
-                    return;
-                }
-
-                switch (op) {
-                case StreamConnectorBroker.OP_CONNECTED:
-                    broker.connected(channel);
-                    break;
-
-                case StreamConnectorBroker.OP_CONNECT:
-                    broker.accepted(channel);
-                    break;
-
-                default:
-                    // Unknown operation.
-                    channel.disconnect();
-                    break;
                 }
             }
 
@@ -266,77 +265,52 @@ public class StreamBrokerAcceptor implements Closeable {
 
     void closed(Broker broker) {
         synchronized (mBrokerMap) {
-            mBrokerMap.remove(broker.mId);
+            mBrokerMap.remove(broker.mBrokerId);
         }
     }
 
-    private class Broker implements StreamBroker {
+    private class Broker extends AbstractStreamBroker implements StreamBroker {
         final StreamChannel mControlChannel;
         final DataOutputStream mControlOut;
         final DataInputStream mControlIn;
-        final int mId;
-
-        final ScheduledExecutorService mExecutor;
-
-        // FIXME: Use of weak references means that channels could leak, even
-        // if remote session is closed.
-        final WeakIdentityMap<StreamChannel, Object> mChannels;
+        final int mBrokerId;
 
         final LinkedBlockingQueue<StreamChannel> mConnectQueue;
-        final LinkedBlockingQueue<StreamListener> mListenerQueue;
 
-        final ScheduledFuture<?> mPingCheckTask;
         final ScheduledFuture<?> mPingTask;
 
         // Synchronize on mControlOut to access.
         int mConnectionsInterrupted;
 
-        volatile boolean mPinged;
-
-        private final ReadWriteLock mCloseLock;
-        private boolean mClosed;
-        private volatile String mClosedReason;
-
         /**
          * @param controlChannel accepted channel
          */
-        Broker(StreamChannel controlChannel, int id, ScheduledExecutorService executor)
+        Broker(ScheduledExecutorService executor, StreamChannel controlChannel, int id)
             throws IOException
         {
+            super(executor);
+
             mControlChannel = controlChannel;
             DataOutputStream out = new DataOutputStream(controlChannel.getOutputStream());
             mControlOut = out;
             mControlIn = new DataInputStream(controlChannel.getInputStream());
-            mId = id;
-            mCloseLock = new ReentrantReadWriteLock(true);
-
-            mExecutor = executor;
-
-            mChannels = new WeakIdentityMap<StreamChannel, Object>();
+            mBrokerId = id;
 
             mConnectQueue = new LinkedBlockingQueue<StreamChannel>();
-            mListenerQueue = new LinkedBlockingQueue<StreamListener>();
 
             synchronized (mBrokerMap) {
                 mBrokerMap.put(id, this);
             }
 
             synchronized (out) {
-                out.write(StreamConnectorBroker.OP_OPENED);
+                out.write(OP_OPENED);
                 out.writeInt(id);
                 out.flush();
             }
 
             try {
-                // Start ping check task.
-                long checkRate = DEFAULT_PING_CHECK_MILLIS;
-                PingCheckTask checkTask = new PingCheckTask(this);
-                mPingCheckTask = executor.scheduleAtFixedRate
-                    (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
-                checkTask.setFuture(mPingCheckTask);
-
                 // Start ping task.
-                long delay = checkRate >> 1;
+                long delay = DEFAULT_PING_CHECK_MILLIS >> 1;
                 PingTask task = new PingTask(this);
                 mPingTask = executor.scheduleWithFixedDelay
                     (task, delay, delay, TimeUnit.MILLISECONDS);
@@ -353,23 +327,6 @@ public class StreamBrokerAcceptor implements Closeable {
             }
         }
 
-        public void accept(final StreamListener listener) {
-            try {
-                Lock lock = closeLock();
-                try {
-                    mListenerQueue.add(listener);
-                } finally {
-                    lock.unlock();
-                }
-            } catch (final IOException e) {
-                mExecutor.execute(new Runnable() {
-                    public void run() {
-                        listener.failed(e);
-                    }
-                });
-            }
-        }
-
         public StreamChannel connect() throws IOException {
             // Quick check to see if closed.
             closeLock().unlock();
@@ -380,8 +337,8 @@ public class StreamBrokerAcceptor implements Closeable {
                     // Use a connection which was interrupted earlier.
                     mConnectionsInterrupted--;
                 } else {
-                    out.write(StreamConnectorBroker.OP_CONNECT);
-                    out.writeInt(mId);
+                    out.write(OP_CHANNEL_CONNECT);
+                    out.writeInt(mBrokerId);
                     out.flush();
                 }
             }
@@ -404,73 +361,22 @@ public class StreamBrokerAcceptor implements Closeable {
             return channel;
         }
 
-        public void close() throws IOException {
-            close(null);
+        @Override
+        protected void preClose() {
+            closed(this);
+
+            mConnectQueue.add(new ClosedStream());
+
+            try {
+                mPingTask.cancel(true);
+            } catch (NullPointerException e) {
+                // mPingTask might not have been assigned.
+            }
         }
 
-        void close(String reason) throws IOException {
-            Lock lock = mCloseLock.writeLock();
-            lock.lock();
-            try {
-                if (mClosed) {
-                    return;
-                }
-
-                mClosed = true;
-
-                if (reason == null) {
-                    reason = "Broker is closed";
-                }
-                mClosedReason = reason;
-
-                closed(this);
-
-                mConnectQueue.add(new ClosedStream());
-
-                try {
-                    mPingCheckTask.cancel(true);
-                } catch (NullPointerException e) {
-                    // mPingCheckTask might not have been assigned.
-                }
-                try {
-                    mPingTask.cancel(true);
-                } catch (NullPointerException e) {
-                    // mPingTask might not have been assigned.
-                }
-
-                StreamListener listener;
-                while ((listener = mListenerQueue.poll()) != null) {
-                    listener.failed(new IOException(reason));
-                }
-
-                IOException exception = null;
-
-                try {
-                    mControlChannel.close();
-                } catch (IOException e) {
-                    exception = e;
-                }
-
-                synchronized (mChannels) {
-                    for (StreamChannel channel : mChannels.keySet()) {
-                        try {
-                            channel.close();
-                        } catch (IOException e) {
-                            if (exception == null) {
-                                exception = e;
-                            }
-                        }
-                    }
-
-                    mChannels.clear();
-                }
-
-                if (exception != null) {
-                    throw exception;
-                }
-            } finally {
-                lock.unlock();
-            }
+        @Override
+        protected void closeControlChannel() throws IOException {
+            mControlChannel.disconnect();
         }
 
         @Override
@@ -478,21 +384,11 @@ public class StreamBrokerAcceptor implements Closeable {
             return "StreamBrokerAcceptor.Broker {channel=" + mControlChannel + '}';
         }
 
-        Lock closeLock() throws IOException {
-            Lock lock = mCloseLock.readLock();
-            lock.lock();
-            if (mClosed) {
-                lock.unlock();
-                throw new IOException(mClosedReason);
-            }
-            return lock;
-        }
-
-        void connected(StreamChannel channel) {
+        void connected(int channelId, StreamChannel channel) {
             try {
                 Lock lock = closeLock();
                 try {
-                    register(channel);
+                    register(channelId, channel);
                     mConnectQueue.add(channel);
                 } finally {
                     lock.unlock();
@@ -502,51 +398,11 @@ public class StreamBrokerAcceptor implements Closeable {
             }
         }
 
-        void accepted(StreamChannel channel) {
-            register(channel);
-
-            try {
-                StreamListener listener = mListenerQueue.poll(10, TimeUnit.SECONDS);
-                if (listener != null) {
-                    listener.established(channel);
-                    return;
-                }
-            } catch (InterruptedException e) {
-            }
-
-            unregisterAndDisconnect(channel);
-        }
-
-        private void register(StreamChannel channel) {
-            synchronized (mChannels) {
-                mChannels.put(channel, "");
-            }
-        }
-
-        private void unregisterAndDisconnect(StreamChannel channel) {
-            synchronized (mChannels) {
-                mChannels.remove(channel);
-            }
-            channel.disconnect();
-        }
-
-        void doPingCheck() {
-            if (!mPinged) {
-                try {
-                    close("Broker is closed: Ping failure");
-                } catch (IOException e) {
-                    // Ignore.
-                }
-            } else {
-                mPinged = false;
-            }
-        }
-
         void doPing() {
             try {
                 DataOutputStream out = mControlOut;
                 synchronized (out) {
-                    out.write(StreamConnectorBroker.OP_PING);
+                    out.write(OP_PING);
                     out.flush();
                 }
 
@@ -567,19 +423,6 @@ public class StreamBrokerAcceptor implements Closeable {
                 } catch (IOException e2) {
                     // Ignore.
                 }
-            }
-        }
-    }
-
-    private static class PingCheckTask extends AbstractPingTask<Broker> {
-        PingCheckTask(Broker broker) {
-            super(broker);
-        }
-
-        public void run() {
-            Broker broker = broker();
-            if (broker != null) {
-                broker.doPingCheck();
             }
         }
     }
