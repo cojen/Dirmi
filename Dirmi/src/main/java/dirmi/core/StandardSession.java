@@ -34,6 +34,9 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
@@ -1194,9 +1197,9 @@ public class StandardSession implements Session {
     }
 
     private class SkeletonSupportImpl implements SkeletonSupport {
-        public <R extends Remote> void linkBatchedRemote(Class<R> type, R remote,
-                                                         Identifier typeID,
-                                                         VersionedIdentifier remoteID)
+        public <R extends Remote> void linkBatchedRemote(Identifier typeID,
+                                                         VersionedIdentifier remoteID,
+                                                         Class<R> type, R remote)
             throws RemoteException
         {
             // Design note: Using a regular Identifier for the type to factory
@@ -1220,6 +1223,17 @@ public class StandardSession implements Session {
             }
 
             addSkeleton(remoteID, factory.createSkeleton(mSkeletonSupport, remote));
+        }
+
+        public <R extends Remote> R failedBatchedRemote(Class<R> type, final Throwable cause) {
+            InvocationHandler handler = new InvocationHandler() {
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    throw cause;
+                }
+            };
+
+            return (R) Proxy.newProxyInstance
+                (getClass().getClassLoader(), new Class[] {type}, handler);
         }
 
         public boolean finished(final InvocationChannel channel, boolean synchronous) {

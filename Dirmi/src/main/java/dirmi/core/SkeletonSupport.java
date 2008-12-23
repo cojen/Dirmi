@@ -30,14 +30,24 @@ public interface SkeletonSupport {
      * Used by batched methods which return a Remote object. This method
      * creates a skeleton for the given remote object and registers it.
      *
-     * @param type type of remote object
-     * @param remote remote object returned by server method
      * @param typeID type ID assigned by client
      * @param remoteID object ID assigned by client
+     * @param type type of remote object
+     * @param remote remote object returned by server method
      */
-    <R extends Remote> void linkBatchedRemote(Class<R> type, R remote,
-                                              Identifier typeID, VersionedIdentifier remoteID)
+    <R extends Remote> void linkBatchedRemote(Identifier typeID, VersionedIdentifier remoteID,
+                                              Class<R> type, R remote)
         throws RemoteException;
+
+    /**
+     * Used by batched methods which return a Remote object. This method is
+     * called if server method throws an exception.
+     *
+     * @param type type of remote object
+     * @param cause thrown by server method
+     * @return instance of remote object which throws the cause from every method
+     */
+    <R extends Remote> R failedBatchedRemote(Class<R> type, Throwable cause);
 
     /**
      * Called after channel usage is finished and can be reused for receiving

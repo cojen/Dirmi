@@ -70,7 +70,7 @@ class CodeBuilderUtil {
     static final TypeDesc INV_OUT_TYPE;
     static final TypeDesc NO_SUCH_METHOD_EX_TYPE;
     static final TypeDesc UNIMPLEMENTED_EX_TYPE;
-    static final TypeDesc ASYN_INV_EX_TYPE;
+    static final TypeDesc ASYNC_INV_EX_TYPE;
     static final TypeDesc THROWABLE_TYPE;
     static final TypeDesc CLASS_TYPE;
     static final TypeDesc FUTURE_TYPE;
@@ -89,7 +89,7 @@ class CodeBuilderUtil {
         INV_OUT_TYPE = TypeDesc.forClass(InvocationOutputStream.class);
         NO_SUCH_METHOD_EX_TYPE = TypeDesc.forClass(NoSuchMethodException.class);
         UNIMPLEMENTED_EX_TYPE = TypeDesc.forClass(UnimplementedMethodException.class);
-        ASYN_INV_EX_TYPE = TypeDesc.forClass(AsynchronousInvocationException.class);
+        ASYNC_INV_EX_TYPE = TypeDesc.forClass(AsynchronousInvocationException.class);
         THROWABLE_TYPE = TypeDesc.forClass(Throwable.class);
         CLASS_TYPE = TypeDesc.forClass(Class.class);
         FUTURE_TYPE = TypeDesc.forClass(Future.class);
