@@ -920,40 +920,56 @@ public class RemoteIntrospector {
                 mTimeoutUnit = info.getTimeoutUnit();
             }
 
-            Class<? extends Throwable> exClass = mRemoteFailureException.getType();
+            Class<? extends Throwable> failExClass = mRemoteFailureException.getType();
 
-            if (!exClass.isAssignableFrom(RemoteException.class)) {
+            if (!failExClass.isAssignableFrom(RemoteException.class)) {
                 // Check for valid constructor.
                 validCheck: {
-                    if (validExceptions.contains(exClass)) {
+                    if (validExceptions.contains(failExClass)) {
                         break validCheck;
                     }
-                    for (Constructor ctor : exClass.getConstructors()) {
+                    for (Constructor ctor : failExClass.getConstructors()) {
                         Class[] paramTypes = ctor.getParameterTypes();
                         if (paramTypes.length != 1) {
                             continue;
                         }
                         if (paramTypes[0].isAssignableFrom(RemoteException.class)) {
-                            validExceptions.add(exClass);
+                            validExceptions.add(failExClass);
                             break validCheck;
                         }
                     }
                     throw new IllegalArgumentException
                         ("Remote failure exception does not have a public single-argument " +
-                         "constructor which accepts a RemoteException: " + exClass.getName());
+                         "constructor which accepts a RemoteException: " + failExClass.getName());
                 }
             }
 
-            boolean uncheckedException =
-                RuntimeException.class.isAssignableFrom(exClass) ||
-                Error.class.isAssignableFrom(exClass);
-
-            if (!uncheckedException && isRemoteFailureExceptionDeclared()) {
-                if (!declaresException(exClass)) {
+            if (isChecked(failExClass) && isRemoteFailureExceptionDeclared()) {
+                if (!declaresException(failExClass)) {
+                    String message = "Method must declare throwing " + failExClass.getName();
+                    if (isBatched() || !isAsynchronous()) {
+                        message += " (or a superclass)";
+                    }
                     throw new IllegalArgumentException
-                        ("Method must declare throwing " + exClass.getName() +
-                         " (or a superclass): " + methodDesc() + "; use @RemoteFailure to " +
-                         "override behavior");
+                        (message + ": " + methodDesc() +
+                         "; use @RemoteFailure to override behavior");
+                }
+            }
+
+            if (isAsynchronous() && !isBatched()) {
+                // Asynchronous non-batched methods can only declare throwing
+                // the remote failure exception.
+                Class<?>[] exceptionTypes = mMethod.getExceptionTypes();
+                if (exceptionTypes != null) {
+                    for (Class exceptionType : exceptionTypes) {
+                        if (isChecked(exceptionType) && exceptionType != failExClass) {
+                            throw new IllegalArgumentException
+                                ("Asynchronous method can only declare throwing " +
+                                 failExClass.getName() + ": " +
+                                 methodDesc(mMethod, exceptionType) +
+                                 "; use @RemoteFailure override behavior");
+                        }
+                    }
                 }
             }
 
@@ -961,9 +977,26 @@ public class RemoteIntrospector {
             mMethod = null;
         }
 
+        private static boolean isChecked(Class<? extends Throwable> exClass) {
+            return !(RuntimeException.class.isAssignableFrom(exClass) ||
+                     Error.class.isAssignableFrom(exClass));
+        }
+
         static String methodDesc(Method m) {
+            return methodDesc(m, null);
+        }
+
+        static String methodDesc(Method m, Class exceptionType) {
             String name = m.getDeclaringClass().getName() + '.' + m.getName();
-            return '"' + MethodDesc.forMethod(m).toMethodSignature(name) + '"';
+            StringBuilder b = new StringBuilder();
+            b.append('"');
+            b.append(MethodDesc.forMethod(m).toMethodSignature(name));
+            if (exceptionType != null) {
+                b.append(" throws ");
+                b.append(exceptionType.getName());
+            }
+            b.append('"');
+            return b.toString();
         }
 
         String methodDesc() {
