@@ -18,6 +18,8 @@ package dirmi;
 
 import java.lang.annotation.*;
 
+import java.lang.reflect.UndeclaredThrowableException;
+
 /**
  * Identify a method as being batched and asynchronous, which does not imply
  * non-blocking. Requests are sent to the remote endpoint, but the channel
@@ -33,6 +35,15 @@ import java.lang.annotation.*;
  * &#64;Batched
  * void setOption(int option) throws RemoteException;
  * </pre>
+ *
+ * Batched methods can declare throwing any exception, and any exception thrown
+ * by the server aborts the batch operation. This exception is passed to the
+ * caller of the immediate or synchronous method that terminated the batch. If
+ * the terminating method does not declare throwing the exception type, it is
+ * wrapped by {@link UndeclaredThrowableException}. Any Remote objects returned
+ * from batched methods at or after the exception being thrown will be
+ * bogus. Attempts to invoke methods on these objects will also throw the
+ * original exception, possibly wrapped.
  *
  * @author Brian S O'Neill
  * @see Asynchronous

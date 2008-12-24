@@ -58,9 +58,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import dirmi.Asynchronous;
 import dirmi.MalformedRemoteObjectException;
 import dirmi.NoSuchClassException;
@@ -91,7 +88,6 @@ public class StandardSession implements Session {
 
     final StreamBroker mBroker;
     final ScheduledExecutorService mExecutor;
-    final Log mLog;
 
     // Queue for reclaimed phantom references.
     final ReferenceQueue<Object> mReferenceQueue;
@@ -150,6 +146,7 @@ public class StandardSession implements Session {
 
     final Object mCloseLock;
     volatile boolean mClosing;
+    String mCloseMessage;
 
     /**
      * @param executor shared executor for remote methods
@@ -157,21 +154,7 @@ public class StandardSession implements Session {
      * @param server optional server object to export
      */
     public StandardSession(ScheduledExecutorService executor,
-                           StreamBroker broker, Object server)
-        throws IOException
-    {
-        this(executor, broker, server, null);
-    }
-
-    /**
-     * @param executor shared executor for remote methods
-     * @param broker channel broker must always connect to same remote server
-     * @param server optional server object to export
-     * @param log message log; pass null for default
-     */
-    public StandardSession(ScheduledExecutorService executor,
-                           StreamBroker broker, final Object server,
-                           Log log)
+                           StreamBroker broker, final Object server)
         throws IOException
     {
         if (broker == null) {
@@ -180,15 +163,11 @@ public class StandardSession implements Session {
         if (executor == null) {
             throw new IllegalArgumentException("Executor is null");
         }
-        if (log == null) {
-            log = LogFactory.getLog(Session.class);
-        }
 
         mCloseLock = new Object();
 
         mBroker = broker;
         mExecutor = executor;
-        mLog = log;
         mReferenceQueue = new ReferenceQueue<Object>();
         mLocalServer = server;
 
@@ -374,9 +353,9 @@ public class StandardSession implements Session {
         close(false, false, message, exception);
     }
 
-    void peerClosed() {
+    void peerClosed(String message) {
         try {
-            close(false, true, null, null);
+            close(false, true, message, null);
         } catch (IOException e) {
             // Ignore.
         }
@@ -385,12 +364,18 @@ public class StandardSession implements Session {
     private void close(boolean notify, boolean explicit, String message, Throwable exception)
         throws IOException
     {
+        if (message == null) {
+            message = "Session closed";
+        }
+
         // Use lock as a barrier to prevent race condition with adding entries
         // to mSkeletons.
         synchronized (mCloseLock) {
             if (mClosing) {
                 return;
             }
+            // Null during close.
+            mCloseMessage = null;
             mClosing = true;
         }
 
@@ -426,6 +411,9 @@ public class StandardSession implements Session {
             mBroker.close();
         } finally {
             clearCollections();
+            mCloseMessage = message;
+            // Volatile barrier.
+            mClosing = true;
         }
     }
 
@@ -446,7 +434,7 @@ public class StandardSession implements Session {
         try {
             skeleton.unreferenced();
         } catch (Throwable e) {
-            error("Remote object unreferenced notification failure", e);
+            uncaughtException(e);
         }
     }
 
@@ -482,7 +470,7 @@ public class StandardSession implements Session {
         return "Session{broker=" + mBroker + '}';
     }
 
-    void sendDisposedStubs() throws IOException {
+    void sendDisposedStubs() {
         if (mRemoteAdmin == null) {
             return;
         }
@@ -518,11 +506,8 @@ public class StandardSession implements Session {
             try {
                 mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
             } catch (RemoteException e) {
-                if (e.getCause() instanceof IOException) {
-                    throw (IOException) e.getCause();
-                }
                 if (!mClosing) {
-                    error("Unable to dispose remote stubs", e);
+                    uncaughtException(e);
                 }
             }
         }
@@ -556,8 +541,6 @@ public class StandardSession implements Session {
 
             if (skeleton == null) {
                 String message = "Cannot find remote object: " + objID;
-
-                error(message);
 
                 boolean synchronous = (methodID.getData() & 0x01) == 0;
                 if (synchronous) {
@@ -599,7 +582,7 @@ public class StandardSession implements Session {
                         if (cause == null) {
                             cause = e;
                         }
-                        warn("Unhandled exception in asynchronous method", cause);
+                        uncaughtException(cause);
                         if (e.isRequestPending()) {
                             continue;
                         }
@@ -624,7 +607,7 @@ public class StandardSession implements Session {
                 invChannel.disconnect();
             } catch (IOException e) {
                 if (!mClosing) {
-                    error("Failure processing request", e);
+                    uncaughtException(e);
                 }
                 invChannel.disconnect();
             }
@@ -634,6 +617,13 @@ public class StandardSession implements Session {
     }
 
     InvocationChannel getChannel() throws IOException {
+        if (mClosing) {
+            String message = mCloseMessage;
+            if (message != null) {
+                throw new IOException(message);
+            }
+        }
+
         InvocationChannel channel = mLocalChannel.get();
         if (channel != null) {
             return channel;
@@ -661,20 +651,13 @@ public class StandardSession implements Session {
         }
     }
 
-    void warn(String message) {
-        mLog.warn(message);
-    }
-
-    void warn(String message, Throwable e) {
-        mLog.warn(message, e);
-    }
-
-    void error(String message) {
-        mLog.error(message);
-    }
-
-    void error(String message, Throwable e) {
-        mLog.error(message, e);
+    void uncaughtException(Throwable e) {
+        try {
+            Thread t = Thread.currentThread();
+            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+        } catch (Throwable e2) {
+            // I give up.
+        }
     }
 
     /**
@@ -855,14 +838,13 @@ public class StandardSession implements Session {
         }
 
         public void closedExplicitly() {
-            peerClosed();
+            peerClosed(null);
         }
 
         public void closedOnFailure(String message, Throwable exception) {
-            String prefix = "Channel closed by peer due to unexpected failure";
+            String prefix = "Session closed by peer due to unexpected failure";
             message = message == null ? prefix : (prefix + ": " + message);
-            mLog.error(message, exception);
-            peerClosed();
+            peerClosed(message);
         }
     }
 
@@ -872,14 +854,7 @@ public class StandardSession implements Session {
 
         public void run() {
             // Send batch of disposed ids to peer.
-            try {
-                sendDisposedStubs();
-            } catch (IOException e) {
-                String message = "Unable to send disposed stubs: " + e;
-                if (!mClosing) {
-                    mLog.error(message);
-                }
-            }
+            sendDisposedStubs();
 
             // Release channels held by threads that exited.
             {
@@ -959,7 +934,8 @@ public class StandardSession implements Session {
 
         public void failed(IOException e) {
             if (!mClosing) {
-                warn("Failure accepting request", e);
+                // This is just noise.
+                //uncaughtException(new IOException("Failure accepting request", e));
                 try {
                     closeOnFailure(e.getMessage(), e);
                 } catch (IOException e2) {
@@ -1100,10 +1076,10 @@ public class StandardSession implements Session {
 
                         Class type;
                         try {
-                            // FIXME: Use resolveClass.
+                            // FIXME: Call configurable ClassLoader.
                             type = Class.forName(info.getName());
                         } catch (ClassNotFoundException e) {
-                            warn("Remote interface not found: " + info.getName(), e);
+                            // Class not found, but client can access methods via reflection.
                             type = Remote.class;
                         }
 
@@ -1250,7 +1226,6 @@ public class StandardSession implements Session {
                     return true;
                 } catch (IOException e) {
                     channel.disconnect();
-                    error("Unable to flush response", e);
                     return false;
                 }
             } else {

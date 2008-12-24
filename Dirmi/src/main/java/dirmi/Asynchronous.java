@@ -31,6 +31,13 @@ import java.lang.annotation.*;
  * void sendMessage(String data) throws RemoteException;
  * </pre>
  *
+ * Asynchronous methods can only declare throwing RemoteException or the
+ * exception indicated by {@link RemoteFailure}. A client can expect a
+ * RemoteException to be thrown by an asynchronous method only if there is a
+ * communication failure. Any exception thrown by the server implementation is
+ * not passed to the client, but it is instead passed to the thread's uncaught
+ * exception handler.
+ *
  * @author Brian S O'Neill
  * @see Batched
  */

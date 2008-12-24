@@ -41,7 +41,11 @@ public class SharedServer implements SessionAcceptor {
 
     public void failed(IOException e) {
         Thread t = Thread.currentThread();
-        t.getUncaughtExceptionHandler().uncaughtException(t, e);
+        try {
+            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+        } catch (Throwable e2) {
+            // I give up.
+        }
         // Yield just in case exceptions are out of control.
         t.yield();
     }

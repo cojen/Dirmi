@@ -21,9 +21,6 @@ import java.io.IOException;
 
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import dirmi.Session;
 import dirmi.SessionAcceptor;
 
@@ -39,21 +36,12 @@ import dirmi.io.StreamBrokerListener;
 public class StandardSessionServer implements Closeable {
     private final StreamBrokerAcceptor mAcceptor;
     private final ScheduledExecutorService mExecutor;
-    private final Log mLog;
-
-    public StandardSessionServer(ScheduledExecutorService executor,
-                                 StreamBrokerAcceptor acceptor)
-    {
-        this(executor, acceptor, null);
-    }
 
     /**
      * @param executor shared executor for remote methods
-     * @param log message log; pass null for default
      */
     public StandardSessionServer(ScheduledExecutorService executor,
-                                 StreamBrokerAcceptor acceptor,
-                                 Log log)
+                                 StreamBrokerAcceptor acceptor)
     {
         if (acceptor == null) {
             throw new IllegalArgumentException("Broker acceptor is null");
@@ -61,13 +49,8 @@ public class StandardSessionServer implements Closeable {
         if (executor == null) {
             throw new IllegalArgumentException("Executor is null");
         }
-        if (log == null) {
-            log = LogFactory.getLog(SessionAcceptor.class);
-        }
-
         mAcceptor = acceptor;
         mExecutor = executor;
-        mLog = log;
     }
 
     public void accept(final SessionAcceptor acceptor) {
@@ -79,7 +62,7 @@ public class StandardSessionServer implements Closeable {
 
                 Session session;
                 try {
-                    session = new StandardSession(mExecutor, broker, server, mLog);
+                    session = new StandardSession(mExecutor, broker, server);
                 } catch (IOException e) {
                     try {
                         broker.close();
