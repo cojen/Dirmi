@@ -24,15 +24,28 @@ package dirmi.core;
  *
  * @author Brian S O'Neill
  */
-public class AsynchronousInvocationException extends Exception {
+public final class AsynchronousInvocationException extends Exception {
     private static final long serialVersionUID = 1;
-
-    private final boolean mRequestPending;
 
     /**
      * @param requestPending true if caller should read another request from channel
      */
-    public AsynchronousInvocationException(Throwable cause, boolean requestPending) {
+    public static final AsynchronousInvocationException make(Throwable cause,
+                                                             boolean requestPending)
+    {
+        if (cause instanceof AsynchronousInvocationException) {
+            AsynchronousInvocationException ex = (AsynchronousInvocationException) cause;
+            if (requestPending == ex.isRequestPending()) {
+                return ex;
+            }
+            cause = ex.getCause();
+        }
+        return new AsynchronousInvocationException(cause, requestPending);
+    }
+
+    private final boolean mRequestPending;
+
+    private AsynchronousInvocationException(Throwable cause, boolean requestPending) {
         super(cause);
         mRequestPending = requestPending;
     }

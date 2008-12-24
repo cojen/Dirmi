@@ -18,6 +18,7 @@ package dirmi.core;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.UndeclaredThrowableException;
 
 import java.io.DataInput;
 import java.io.IOException;
@@ -373,6 +374,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 Label tryStart, tryEnd;
                 {
+                    tryStart = b.createLabel().setLocation();
+
                     // If a batched exception is pending, throw it now instead
                     // of invoking method.
                     b.loadLocal(batchedExceptionVar);
@@ -382,25 +385,23 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadLocal(batchedExceptionVar);
                     if (method.isBatched()) {
                         b.throwObject();
-
-                        // Exception handler is after re-throw to prevent double wrapping.
-                        tryStart = b.createLabel().setLocation();
                     } else {
-                        tryStart = b.createLabel().setLocation();
+                        // Throw cause as declared type or wrapped in
+                        // UndeclaredThrowableException.
 
                         Class[] declaredExceptions = declaredExceptionTypes(method);
                         if (declaredExceptions == null || declaredExceptions.length == 0) {
                             b.loadNull();
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
                                             new TypeDesc[] {CLASS_TYPE.toArrayType()});
                         } else if (declaredExceptions.length == 1) {
                             b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
                                             new TypeDesc[] {CLASS_TYPE});
                         } else if (declaredExceptions.length == 2) {
                             b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
                             b.loadConstant(TypeDesc.forClass(declaredExceptions[1]));
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
                                             new TypeDesc[] {CLASS_TYPE, CLASS_TYPE});
                         } else {
                             b.loadConstant(declaredExceptions.length);
@@ -413,9 +414,28 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                 b.storeToArray(CLASS_TYPE);
                             }
                      
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
                                             new TypeDesc[] {CLASS_TYPE.toArrayType()});
                         }
+
+                        Label isDeclared = b.createLabel();
+                        b.ifZeroComparisonBranch(isDeclared, "!=");
+                        TypeDesc undecExType =
+                            TypeDesc.forClass(UndeclaredThrowableException.class);
+                        b.newObject(undecExType);
+                        b.dup();
+                        b.loadLocal(batchedExceptionVar);
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
+                        b.dup();
+                        b.invokeVirtual(THROWABLE_TYPE, "toString", TypeDesc.STRING, null);
+                        b.invokeConstructor(undecExType,
+                                            new TypeDesc[] {THROWABLE_TYPE, TypeDesc.STRING});
+                        b.throwObject();
+
+                        isDeclared.setLocation();
+                        b.loadLocal(batchedExceptionVar);
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
+                        b.throwObject();
                     }
 
                     noPendingException.setLocation();
@@ -464,8 +484,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadLocal(exVar);
                     b.invokeInterface(SKEL_SUPPORT_TYPE, "failedBatchedRemote", rootRemoteType,
                                       new TypeDesc[] {CLASS_TYPE, THROWABLE_TYPE});
+                    Label linkRemote = b.createLabel();
+                    b.branch(linkRemote);
 
                     haveRemote.setLocation();
+                    b.loadNull();
+                    b.storeLocal(exVar);
+
+                    linkRemote.setLocation();
 
                     // Link remote object to id for batched method.
                     LocalVariable remoteVar = b.createLocalVariable(null, returnDesc);
@@ -482,9 +508,20 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                                       remoteIdVar.getType(),
                                                       CLASS_TYPE, rootRemoteType});
 
+                    b.loadLocal(exVar);
+                    Label hasException = b.createLabel();
+                    b.ifNullBranch(hasException, false);
+
                     // Return true so that next batch request is handled in same thread.
                     b.loadConstant(true);
                     b.returnValue(TypeDesc.BOOLEAN);
+
+                    // Throw exception, to stop all remaining batch requests.
+                    hasException.setLocation();
+                    b.loadLocal(exVar);
+                    b.invokeStatic(BATCH_INV_EX_TYPE, "make", BATCH_INV_EX_TYPE,
+                                   new TypeDesc[] {THROWABLE_TYPE});
+                    b.throwObject();
                 } else if (method.isBatched()) {
                     batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
 
@@ -563,13 +600,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             for (Label[] pair : batchExceptionBounds) {
                 b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
             }
-
-            b.storeLocal(throwableVar);
-
-            b.newObject(BATCH_INV_EX_TYPE);
-            b.dup();
-            b.loadLocal(throwableVar);
-            b.invokeConstructor(BATCH_INV_EX_TYPE, new TypeDesc[] {THROWABLE_TYPE});
+            b.invokeStatic(BATCH_INV_EX_TYPE, "make", BATCH_INV_EX_TYPE,
+                           new TypeDesc[] {THROWABLE_TYPE});
             b.throwObject();
         }
 
@@ -579,15 +611,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             for (Label[] pair : asyncExceptionBounds) {
                 b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
             }
-
-            b.storeLocal(throwableVar);
-
-            b.newObject(ASYNC_INV_EX_TYPE);
-            b.dup();
-            b.loadLocal(throwableVar);
             b.loadLocal(pendingRequestVar);
-            b.invokeConstructor(ASYNC_INV_EX_TYPE,
-                                new TypeDesc[] {THROWABLE_TYPE, TypeDesc.BOOLEAN});
+            b.invokeStatic(ASYNC_INV_EX_TYPE, "make", ASYNC_INV_EX_TYPE,
+                           new TypeDesc[] {THROWABLE_TYPE, TypeDesc.BOOLEAN});
             b.throwObject();
         }
 
@@ -596,7 +622,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             for (Label[] pair : syncExceptionBounds) {
                 b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
             }
-
             b.storeLocal(throwableVar);
 
             b.loadLocal(channelVar);

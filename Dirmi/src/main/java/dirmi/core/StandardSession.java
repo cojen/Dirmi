@@ -587,6 +587,7 @@ public class StandardSession implements Session {
                     try {
                         if (skeleton.invoke(objID, methodID, invChannel, batchedException)) {
                             // Handle another request.
+                            batchedException = null;
                             continue;
                         }
                     } catch (BatchedInvocationException e) {

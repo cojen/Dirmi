@@ -16,8 +16,6 @@
 
 package dirmi.core;
 
-import org.cojen.util.ThrowUnchecked;
-
 /**
  * If an exception is thrown from a skeleton-invoked method which is batched,
  * it must be thrown from the first non-batched method encountered in the
@@ -25,40 +23,54 @@ import org.cojen.util.ThrowUnchecked;
  *
  * @author Brian S O'Neill
  */
-public class BatchedInvocationException extends Exception {
+public final class BatchedInvocationException extends Exception {
     private static final long serialVersionUID = 1;
 
-    public BatchedInvocationException(Throwable cause) {
+    public static BatchedInvocationException make(Throwable cause) {
+        if (cause instanceof BatchedInvocationException) {
+            return (BatchedInvocationException) cause;
+        }
+        return new BatchedInvocationException(cause);
+    }
+
+    private BatchedInvocationException(Throwable cause) {
         super(cause);
     }
 
     /**
-     * Throws the cause of this exception if it is unchecked or an instance of
-     * any of the given declared type. Otherwise, it is thrown as an
-     * UndeclaredThrowableException. This method only returns normally if the
-     * cause is null.
+     * Returns true if cause of this exception matches the declared type or is
+     * unchecked.
      */
-    public void throwAsDeclaredCause(Class declaredType) {
-        ThrowUnchecked.fireDeclared(getCause(), declaredType);
+    public boolean isCauseDeclared(Class declaredType) {
+        Throwable cause = getCause();
+        return (cause instanceof RuntimeException) || (cause instanceof Error) ||
+            (declaredType != null && declaredType.isInstance(cause));
     }
 
     /**
-     * Throws the cause of this exception if it is unchecked or an instance of
-     * any of the given declared types. Otherwise, it is thrown as an
-     * UndeclaredThrowableException. This method only returns normally if the
-     * cause is null.
+     * Returns true if cause of this exception matches one of the declared
+     * types or is unchecked.
      */
-    public void throwAsDeclaredCause(Class declaredType1, Class declaredType2) {
-        ThrowUnchecked.fireDeclared(getCause(), declaredType1, declaredType2);
+    public boolean isCauseDeclared(Class declaredType, Class declaredType2) {
+        return isCauseDeclared(new Class[] {declaredType, declaredType2});
     }
 
     /**
-     * Throws the cause of this exception if it is unchecked or an instance of
-     * any of the given declared types. Otherwise, it is thrown as an
-     * UndeclaredThrowableException. This method only returns normally if the
-     * cause is null.
+     * Returns true if cause of this exception matches one of the declared
+     * types or is unchecked.
      */
-    public void throwAsDeclaredCause(Class... declaredTypes) {
-        ThrowUnchecked.fireDeclared(getCause(), declaredTypes);
+    public boolean isCauseDeclared(Class... declaredTypes) {
+        Throwable cause = getCause();
+        if ((cause instanceof RuntimeException) || (cause instanceof Error)) {
+            return true;
+        }
+        if (declaredTypes != null) {
+            for (Class declaredType : declaredTypes) {
+                if (declaredType != null && declaredType.isInstance(cause)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
