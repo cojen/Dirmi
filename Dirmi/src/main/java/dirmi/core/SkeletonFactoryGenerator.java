@@ -373,8 +373,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 Label tryStart, tryEnd;
                 {
-                    tryStart = b.createLabel().setLocation();
-
                     // If a batched exception is pending, throw it now instead
                     // of invoking method.
                     b.loadLocal(batchedExceptionVar);
@@ -384,7 +382,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadLocal(batchedExceptionVar);
                     if (method.isBatched()) {
                         b.throwObject();
+
+                        // Exception handler is after re-throw to prevent double wrapping.
+                        tryStart = b.createLabel().setLocation();
                     } else {
+                        tryStart = b.createLabel().setLocation();
+
                         Class[] declaredExceptions = declaredExceptionTypes(method);
                         if (declaredExceptions == null || declaredExceptions.length == 0) {
                             b.loadNull();
