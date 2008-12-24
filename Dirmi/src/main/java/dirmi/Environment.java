@@ -32,7 +32,6 @@ import org.cojen.util.WeakIdentityMap;
 
 import dirmi.core.StandardSession;
 import dirmi.core.StandardSessionServer;
-import dirmi.core.ThreadPool;
 
 import dirmi.io.MessageChannel;
 import dirmi.io.SocketMessageProcessor;
@@ -43,6 +42,8 @@ import dirmi.io.StreamBroker;
 import dirmi.io.StreamBrokerAcceptor;
 import dirmi.io.StreamConnector;
 import dirmi.io.StreamConnectorBroker;
+
+import dirmi.util.ThreadPool;
 
 /**
  * Sharable environment for creating and accepting remote sessions. All

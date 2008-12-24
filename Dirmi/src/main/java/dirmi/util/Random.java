@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.core;
+package dirmi.util;
 
 /**
  * Collection of thread-safe methods for generating random numbers.

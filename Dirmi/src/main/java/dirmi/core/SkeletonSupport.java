@@ -19,6 +19,9 @@ package dirmi.core;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import dirmi.util.Identifier;
+import dirmi.util.VersionedIdentifier;
+
 /**
  * Object passed to a Skeleton instance in order for it to decide when channels
  * can be reused.

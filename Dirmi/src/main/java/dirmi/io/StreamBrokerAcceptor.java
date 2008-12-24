@@ -36,7 +36,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.cojen.util.IntHashMap;
 
-import dirmi.core.Random;
+import dirmi.util.Random;
 
 /**
  * Paired with {@link StreamConnectorBroker} to adapt an acceptor into a broker

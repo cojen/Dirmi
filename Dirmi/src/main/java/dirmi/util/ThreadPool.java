@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dirmi.core;
+package dirmi.util;
 
 import java.util.Collections;
 import java.util.List;

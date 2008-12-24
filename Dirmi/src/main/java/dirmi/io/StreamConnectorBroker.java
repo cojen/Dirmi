@@ -26,7 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import java.util.concurrent.locks.Lock;
 
-import dirmi.core.ExceptionUtils;
+import dirmi.util.ExceptionUtils;
 
 /**
  * Paired with {@link StreamBrokerAcceptor} to adapt a connector into a full

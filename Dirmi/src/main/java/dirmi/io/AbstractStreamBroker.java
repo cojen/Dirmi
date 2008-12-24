@@ -30,7 +30,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.cojen.util.IntHashMap;
 
-import dirmi.core.Random;
+import dirmi.util.Random;
 
 /**
  * Implementation shared by {@link StreamConnectorBroker} and {@link StreamBrokerAcceptor}.

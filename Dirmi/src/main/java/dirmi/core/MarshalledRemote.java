@@ -23,6 +23,8 @@ import java.io.ObjectOutput;
 
 import dirmi.info.RemoteInfo;
 
+import dirmi.util.VersionedIdentifier;
+
 /**
  * 
  *

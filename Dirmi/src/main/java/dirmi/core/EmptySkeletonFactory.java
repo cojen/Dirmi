@@ -18,6 +18,9 @@ package dirmi.core;
 
 import java.rmi.Remote;
 
+import dirmi.util.Identifier;
+import dirmi.util.VersionedIdentifier;
+
 /**
  * Factory which creates skeletons that support no methods.
  *

@@ -52,7 +52,7 @@ import dirmi.Timeout;
 import dirmi.TimeoutParam;
 import dirmi.TimeoutUnit;
 
-import dirmi.core.Identifier;
+import dirmi.util.Identifier;
 
 /**
  * Supports examination of Remote types, returning all metadata associated

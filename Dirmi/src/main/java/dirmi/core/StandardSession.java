@@ -58,6 +58,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.cojen.util.WeakValuedHashMap;
+import org.cojen.util.SoftValuedHashMap;
+
 import dirmi.Asynchronous;
 import dirmi.MalformedRemoteObjectException;
 import dirmi.NoSuchClassException;
@@ -71,8 +74,10 @@ import dirmi.io.StreamBroker;
 import dirmi.io.StreamChannel;
 import dirmi.io.StreamListener;
 
-import org.cojen.util.WeakValuedHashMap;
-import org.cojen.util.SoftValuedHashMap;
+import dirmi.util.AbstractIdentifier;
+import dirmi.util.ExceptionUtils;
+import dirmi.util.Identifier;
+import dirmi.util.VersionedIdentifier;
 
 /**
  * 

@@ -139,7 +139,7 @@
  @version 13
 */
 
-package dirmi.core;
+package dirmi.util;
 
 import java.security.SecureRandom;
 

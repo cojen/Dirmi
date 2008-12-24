@@ -26,7 +26,7 @@ import dirmi.Asynchronous;
 import dirmi.Batched;
 import dirmi.CallMode;
 
-import dirmi.core.Identifier;
+import dirmi.util.Identifier;
 
 /**
  * 

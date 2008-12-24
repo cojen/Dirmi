@@ -19,7 +19,7 @@ package dirmi.info;
 import java.io.Serializable;
 import java.util.Set;
 
-import dirmi.core.Identifier;
+import dirmi.util.Identifier;
 
 /**
  * 

@@ -46,7 +46,8 @@ import dirmi.info.RemoteInfo;
 import dirmi.info.RemoteMethod;
 import dirmi.info.RemoteParameter;
 
-import dirmi.core.Identifier;
+import dirmi.util.Identifier;
+import dirmi.util.VersionedIdentifier;
 
 /**
  * 

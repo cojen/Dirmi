@@ -23,6 +23,9 @@ import java.rmi.Remote;
 
 import java.rmi.server.Unreferenced;
 
+import dirmi.util.Identifier;
+import dirmi.util.VersionedIdentifier;
+
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client
  * requests, and invokes server-side methods. Any response is marshalled back

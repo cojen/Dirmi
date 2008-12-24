@@ -43,7 +43,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
-import dirmi.core.ExceptionUtils;
+import dirmi.util.ExceptionUtils;
 
 /**
  * 
