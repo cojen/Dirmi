@@ -212,7 +212,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod
             (Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
-             new TypeDesc[] {VERSIONED_IDENTIFIER_TYPE, IDENTIFIER_TYPE, INV_CHANNEL_TYPE});
+             new TypeDesc[] {
+                 VERSIONED_IDENTIFIER_TYPE, IDENTIFIER_TYPE, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE
+             });
         CodeBuilder b = new CodeBuilder(mi);
 
         // Note: This implementation ignores the object id parameter. Instances
@@ -220,6 +222,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         LocalVariable methodIDVar = b.getParameter(1);
         LocalVariable channelVar = b.getParameter(2);
+        LocalVariable batchedExceptionVar = b.getParameter(3);
 
         // Have a reference to the InputStream for reading parameters.
         b.loadLocal(channelVar);
@@ -275,6 +278,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Labels which mark exception boundaries for different method types.
         List<Label[]> syncExceptionBounds = new ArrayList<Label[]>(methods.size());
         List<Label[]> asyncExceptionBounds = new ArrayList<Label[]>(methods.size());
+        List<Label[]> batchExceptionBounds = new ArrayList<Label[]>(methods.size());
 
         int ordinal = 0;
         int entryIndex = 0;
@@ -305,6 +309,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 TypeDesc returnDesc = getTypeDesc(method.getReturnType());
                 List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
 
+                // Channel is always reused except if returning a Pipe.
                 boolean reuseChannel = true;
 
                 if (paramTypes.size() != 0) {
@@ -358,18 +363,59 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
                 }
 
-                if (method.isAsynchronous() && reuseChannel && !batchedRemote) {
+                if (method.isAsynchronous() && reuseChannel && !method.isBatched()) {
                     // Call finished method before invocation.
                     genFinished(b, channelVar, false);
                     b.storeLocal(pendingRequestVar);
                 }
 
-                // Generate code which invokes server side method. Exception
-                // handler covers just this invocation.
+                // Generate code which invokes server side method.
 
                 Label tryStart, tryEnd;
                 {
                     tryStart = b.createLabel().setLocation();
+
+                    // If a batched exception is pending, throw it now instead
+                    // of invoking method.
+                    b.loadLocal(batchedExceptionVar);
+                    Label noPendingException = b.createLabel();
+                    b.ifNullBranch(noPendingException, true);
+
+                    b.loadLocal(batchedExceptionVar);
+                    if (method.isBatched()) {
+                        b.throwObject();
+                    } else {
+                        Class[] declaredExceptions = declaredExceptionTypes(method);
+                        if (declaredExceptions == null || declaredExceptions.length == 0) {
+                            b.loadNull();
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                                            new TypeDesc[] {CLASS_TYPE.toArrayType()});
+                        } else if (declaredExceptions.length == 1) {
+                            b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                                            new TypeDesc[] {CLASS_TYPE});
+                        } else if (declaredExceptions.length == 2) {
+                            b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
+                            b.loadConstant(TypeDesc.forClass(declaredExceptions[1]));
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                                            new TypeDesc[] {CLASS_TYPE, CLASS_TYPE});
+                        } else {
+                            b.loadConstant(declaredExceptions.length);
+                            b.newObject(CLASS_TYPE.toArrayType());
+                            for (int i=0; i<declaredExceptions.length; i++) {
+                                Class exception = declaredExceptions[i];
+                                b.dup();
+                                b.loadConstant(i);
+                                b.loadConstant(TypeDesc.forClass(exception));
+                                b.storeToArray(CLASS_TYPE);
+                            }
+                     
+                            b.invokeVirtual(BATCH_INV_EX_TYPE, "throwAsDeclaredCause", null,
+                                            new TypeDesc[] {CLASS_TYPE.toArrayType()});
+                        }
+                    }
+
+                    noPendingException.setLocation();
 
                     if (methodExists(method)) {
                         // Invoke the server side method.
@@ -433,25 +479,23 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                                       remoteIdVar.getType(),
                                                       CLASS_TYPE, rootRemoteType});
 
-                    if (reuseChannel) {
-                        // Finished with channel after linked.
-                        genFinished(b, channelVar, false);
-                    } else {
-                        b.loadLocal(pendingRequestVar);
-                    }
+                    // Return true so that next batch request is handled in same thread.
+                    b.loadConstant(true);
+                    b.returnValue(TypeDesc.BOOLEAN);
+                } else if (method.isBatched()) {
+                    batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
 
+                    // Discard return value from batched methods.
+                    popStackArg(b, returnDesc);
+
+                    // Return true so that next batch request is handled in same thread.
+                    b.loadConstant(true);
                     b.returnValue(TypeDesc.BOOLEAN);
                 } else if (method.isAsynchronous()) {
                     asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
 
                     // Discard return value from asynchronous methods.
-                    if (returnDesc != null) {
-                        if (returnDesc.isDoubleWord()) {
-                            b.pop2();
-                        } else {
-                            b.pop();
-                        }
-                    }
+                    popStackArg(b, returnDesc);
 
                     b.loadLocal(pendingRequestVar);
                     b.returnValue(TypeDesc.BOOLEAN);
@@ -509,6 +553,22 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // for asynchronous methods.
 
         LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
+
+        // Handler for batched methods (if any). Re-throw exception wrapped in
+        // BatchedInvocationException.
+        if (batchExceptionBounds.size() > 0) {
+            for (Label[] pair : batchExceptionBounds) {
+                b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
+            }
+
+            b.storeLocal(throwableVar);
+
+            b.newObject(BATCH_INV_EX_TYPE);
+            b.dup();
+            b.loadLocal(throwableVar);
+            b.invokeConstructor(BATCH_INV_EX_TYPE, new TypeDesc[] {THROWABLE_TYPE});
+            b.throwObject();
+        }
 
         // Handler for asynchronous methods (if any). Re-throw exception
         // wrapped in AsynchronousInvocationException.
@@ -602,6 +662,32 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.loadConstant(synchronous);
         b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.BOOLEAN,
                           new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN});
+    }
+
+    private void popStackArg(CodeBuilder b, TypeDesc type) {
+        if (type != null) {
+            if (type.isDoubleWord()) {
+                b.pop2();
+            } else {
+                b.pop();
+            }
+        }
+    }
+
+    private Class[] declaredExceptionTypes(RemoteMethod method) {
+        Set<? extends RemoteParameter> all = method.getExceptionTypes();
+        List<Class> declared = new ArrayList<Class>(all.size());
+
+        for (RemoteParameter p : all) {
+            Class type = p.getType();
+            if (!RuntimeException.class.isAssignableFrom(type) &&
+                !Error.class.isAssignableFrom(type))
+            {
+                declared.add(type);
+            }
+        }
+
+        return declared.toArray(new Class[declared.size()]);
     }
 
     private static class Factory<R extends Remote> implements SkeletonFactory<R> {

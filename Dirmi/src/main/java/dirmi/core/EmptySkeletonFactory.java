@@ -32,7 +32,7 @@ class EmptySkeletonFactory implements SkeletonFactory {
     public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
         return new Skeleton() {
             public boolean invoke(VersionedIdentifier objectID, Identifier methodID,
-                                  InvocationChannel channel)
+                                  InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
             {
                 throw new NoSuchMethodException

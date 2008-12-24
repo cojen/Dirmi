@@ -34,14 +34,23 @@ import java.rmi.server.Unreferenced;
 public interface Skeleton extends Unreferenced {
     /**
      * Invoke method in server-side instance. Any exception thrown from the
-     * invoked method is written to the channel, unless method is
-     * asynchronous. Any other exception thrown from this method indicates a
+     * invoked method is written to the channel, unless method is asynchronous
+     * or batched. Any other exception thrown from this method indicates a
      * communication failure, and so the channel should be closed.
+     *
+     * <p>If this invocation is after a batched call which threw an exception,
+     * the batchedException parameter wraps it. If non-null, the input
+     * arguments must be discarded and the method not actually invoked. Next,
+     * if method is batched, the same exception is re-thrown. Otherwise, the
+     * exception is converted to a type compatible with the method's throwable
+     * exception types and handled like any other thrown exception. For
+     * synchronous methods, this means the exception is written to the channel.
      *
      * @param objectID object id to invoke; ignored by implementations that support one object
      * @param methodID method to invoke
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
+     * @param batchedException optional exception which was thrown earlier in a batch request
      * @return true if caller should read another request from channel
      * @throws IOException if thrown from channel
      * @throws NoSuchMethodException if method is unknown
@@ -50,11 +59,15 @@ public interface Skeleton extends Unreferenced {
      * refers to an unknown class
      * @throws AsynchronousInvocationException if method is asynchronous and
      * throws an exception
+     * @throws BatchedInvocationException if method is batched and
+     * throws an exception
      */
-    boolean invoke(VersionedIdentifier objectID, Identifier methodID, InvocationChannel channel)
+    boolean invoke(VersionedIdentifier objectID, Identifier methodID, InvocationChannel channel,
+                   BatchedInvocationException batchedException)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,
                ClassNotFoundException,
-               AsynchronousInvocationException;
+               AsynchronousInvocationException,
+               BatchedInvocationException;
 }

@@ -537,6 +537,8 @@ public class StandardSession implements Session {
     }
 
     void handleRequest(InvocationChannel invChannel) {
+        BatchedInvocationException batchedException = null;
+
         while (true) {
             final VersionedIdentifier objID;
             final Identifier methodID;
@@ -583,10 +585,13 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(objID, methodID, invChannel)) {
+                        if (skeleton.invoke(objID, methodID, invChannel, batchedException)) {
                             // Handle another request.
                             continue;
                         }
+                    } catch (BatchedInvocationException e) {
+                        batchedException = e;
+                        continue;
                     } catch (AsynchronousInvocationException e) {
                         throwable = null;
                         Throwable cause = e.getCause();
