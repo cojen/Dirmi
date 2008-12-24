@@ -25,8 +25,6 @@ public class ExceptionUtils {
     /**
      * Augments the stack trace of the given exception with the local stack
      * trace. Useful for rethrowing exceptions from asynchronous callbacks.
-     *
-     * @param message separator message in trace
      */
     public static void addLocalTrace(Throwable e) {
         String message = "--- thread transfer ---";
