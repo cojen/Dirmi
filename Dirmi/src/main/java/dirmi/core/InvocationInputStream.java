@@ -302,7 +302,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         {
             List<StackTraceElement> elements = new ArrayList<StackTraceElement>(4);
 
-            String message = "Remote Method Invocation";
+            String message = "--- remote method invocation ---";
             addAddress(elements, message, "address",
                        serverLocalAddress, remoteAddress(mChannel));
             addAddress(elements, message, "address",
