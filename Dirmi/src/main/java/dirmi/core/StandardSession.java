@@ -193,7 +193,6 @@ public class StandardSession implements Session {
         // Receives magic number and remote object.
         class Bootstrap implements StreamListener {
             private boolean mDone;
-            private InvocationChan mChannelToRecycle;
             private IOException mIOException;
             private RuntimeException mRuntimeException;
             private Error mError;
@@ -225,7 +224,7 @@ public class StandardSession implements Session {
                     }
 
                     // Reached only upon successful bootstrap.
-                    mChannelToRecycle = chan;
+                    chan.close();
                     return;
                 } catch (IOException e) {
                     mIOException = e;
@@ -249,10 +248,7 @@ public class StandardSession implements Session {
                 notifyAll();
             }
 
-            /**
-             * @return channel to recycle
-             */
-            public synchronized InvocationChan complete() throws IOException {
+            public synchronized void complete() throws IOException {
                 while (!mDone) {
                     try {
                         wait();
@@ -274,8 +270,6 @@ public class StandardSession implements Session {
                     ExceptionUtils.addLocalTrace(mRuntimeException);
                     throw mRuntimeException;
                 }
-
-                return mChannelToRecycle;
             }
         };
 
@@ -295,14 +289,14 @@ public class StandardSession implements Session {
                 out.writeObject(new AdminImpl());
                 out.flush();
 
-                chan.recycle();
+                chan.close();
             } catch (IOException e) {
                 channel.disconnect();
                 throw e;
             }
         }
 
-        final InvocationChan bootstrapChannel = bootstrap.complete();
+        bootstrap.complete();
 
         mRemoteServer = bootstrap.mRemoteServer;
         mRemoteAdmin = bootstrap.mRemoteAdmin;
@@ -313,10 +307,6 @@ public class StandardSession implements Session {
             mBackgroundTask = executor.scheduleWithFixedDelay
                 (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
-            if (bootstrapChannel != null) {
-                bootstrapChannel.disconnect();
-            }
-
             String message = "Unable to start background task";
             try {
                 closeOnFailure(message, e);
@@ -326,24 +316,6 @@ public class StandardSession implements Session {
             IOException io = new IOException(message);
             io.initCause(e);
             throw io;
-        }
-
-        if (bootstrapChannel != null) {
-            // Minimum required set up is complete, and so bootstrap channel
-            // can be recycled for new incoming requests.
-            try {
-                handleRequestAsync(bootstrapChannel);
-            } catch (RejectedExecutionException e) {
-                String message = "Unable to accept initial requests";
-                try {
-                    closeOnFailure(message, e);
-                } catch (IOException e2) {
-                    // Ignore.
-                }
-                IOException io = new IOException(message);
-                io.initCause(e);
-                throw io;
-            }
         }
 
         // Begin accepting new requests.
