@@ -59,7 +59,7 @@
             <link>http://java.sun.com/javase/6/docs/api</link>
           </links>
           <sourcepath>${basedir}/src/main/java</sourcepath>
-          <subpackages>dirmi</subpackages>
+          <subpackages>org.cojen.dirmi</subpackages>
         </configuration>
       </plugin>
 
