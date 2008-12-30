@@ -31,9 +31,8 @@ import java.rmi.RemoteException;
  *
  * <p>An asynchronous method must declare returning void, a {@link Pipe}, or a
  * {@link Future}. An asynchronous task represented a {@code Future} cannot be
- * cancelled unless using an {@link CallMode#ACKNOWLEDGED acknowledged} call
- * mode. Implementations of asynchronous future methods should return a factory
- * generated {@link Response response}.
+ * cancelled. Implementations of asynchronous future methods should return a
+ * factory generated {@link Response response}.
  *
  * <pre>
  * <b>&#64;Asynchronous</b>
