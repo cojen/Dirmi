@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -1156,6 +1157,22 @@ public class StandardSession implements Session {
     }
 
     private class SkeletonSupportImpl implements SkeletonSupport {
+        public <V> void completion(Future<V> response, RemoteCompletion<V> completion)
+            throws RemoteException
+        {
+            try {
+                completion.complete(response.get());
+            } catch (InterruptedException e) {
+                completion.exception(e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause == null) {
+                    cause = e;
+                }
+                completion.exception(cause);
+            }
+        }
+
         public <R extends Remote> void linkBatchedRemote(Identifier typeID,
                                                          VersionedIdentifier remoteID,
                                                          Class<R> type, R remote)
@@ -1345,6 +1362,10 @@ public class StandardSession implements Session {
             }
 
             return closeTask;
+        }
+
+        public <V> Future<V> createFuture() {
+            return new RemoteCompletionServer<V>();
         }
 
         public <T extends Throwable, R extends Remote> R

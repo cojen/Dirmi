@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import java.lang.annotation.Annotation;
@@ -197,7 +198,12 @@ public class RemoteIntrospector {
                 if (method.isAsynchronous()) {
                     if (method.getReturnType() != null) {
                         Class returnType = method.getReturnType().getType();
-                        if (Pipe.class.isAssignableFrom(returnType)) {
+                        if (Pipe.class == returnType) {
+                            if (method.isBatched()) {
+                                throw new IllegalArgumentException
+                                    ("Asynchronous batched method cannot return Pipe: " +
+                                     method.methodDesc());
+                            }
                             // Verify one parameter is a pipe.
                             int count = 0;
                             for (RemoteParameter param : method.getParameterTypes()) {
@@ -207,24 +213,21 @@ public class RemoteIntrospector {
                             }
                             if (count != 1) {
                                 throw new IllegalArgumentException
-                                    ("Asynchronous method which returns a pipe must have " +
-                                     "exactly one matching pipe input parameter: " +
+                                    ("Asynchronous method which returns Pipe must have " +
+                                     "exactly one matching Pipe input parameter: " +
                                      method.methodDesc());
                             }
-                            if (method.isBatched()) {
-                                throw new IllegalArgumentException
-                                    ("Asynchronous batched method cannot return a pipe: " +
-                                     method.methodDesc());
-                            }
+                        } else if (Future.class == returnType) {
+                            // Okay.
                         } else if (method.isBatched()) {
                             if (!Remote.class.isAssignableFrom(returnType)) {
                                 throw new IllegalArgumentException
-                                    ("Asynchronous batched method must return void " +
-                                     "or a Remote object: " + method.methodDesc());
+                                    ("Asynchronous batched method must return void, " +
+                                     "a Remote object, or Future: " + method.methodDesc());
                             }
                         } else {
                             throw new IllegalArgumentException
-                                ("Asynchronous method must return void or a pipe: " +
+                                ("Asynchronous method must return void, Pipe, or Future: " +
                                  method.methodDesc());
                         }
                     }

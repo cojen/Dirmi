@@ -19,6 +19,8 @@ package org.cojen.dirmi.core;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import java.util.concurrent.Future;
+
 import org.cojen.dirmi.util.Identifier;
 import org.cojen.dirmi.util.VersionedIdentifier;
 
@@ -29,6 +31,12 @@ import org.cojen.dirmi.util.VersionedIdentifier;
  * @author Brian S O'Neill
  */
 public interface SkeletonSupport {
+    /**
+     * Used by asynchronous methods which return a Future to write completion
+     * response.
+     */
+    <V> void completion(Future<V> response, RemoteCompletion<V> completion) throws RemoteException;
+
     /**
      * Used by batched methods which return a Remote object. This method
      * creates a skeleton for the given remote object and registers it.

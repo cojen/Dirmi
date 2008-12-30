@@ -65,6 +65,14 @@ public interface StubSupport {
     <T extends Throwable> Future<?> invoke(Class<T> remoteFailureException,
                                            InvocationChannel channel,
                                            double timeout, TimeUnit unit) throws T;
+
+    /**
+     * Used by asynchronous methods which return a Future.
+     *
+     * @return future which also implements RemoteCompletion
+     */
+    <V> Future<V> createFuture();
+
     /**
      * Used by batched methods which return a Remote object. This method writes
      * an identifier to the channel, and returns a remote object of the

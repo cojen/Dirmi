@@ -20,6 +20,8 @@ import java.lang.annotation.*;
 
 import java.lang.reflect.UndeclaredThrowableException;
 
+import java.util.concurrent.Future;
+
 import java.rmi.Remote;
 
 /**
@@ -30,9 +32,10 @@ import java.rmi.Remote;
  * sent. If the current thread exits before releasing the channel, the batched
  * request is eventually sent.
  *
- * <p>A batched method must declare returning void or a {@link Remote}
- * object. Returning a {@code Remote} object allows batched calls to be chained
- * together.
+ * <p>A batched method must declare returning void, a {@link Remote} object, or
+ * {@link Future}. Returning a {@code Remote} object allows batched calls to be
+ * chained together. See {@link Asynchronous} for information regarding the use
+ * of {@code Future}.
  *
  * <pre>
  * <b>&#64;Batched</b>

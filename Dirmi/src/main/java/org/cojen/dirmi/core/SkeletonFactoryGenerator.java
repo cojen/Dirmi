@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.concurrent.Future;
+
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
@@ -313,14 +315,30 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 // Channel is always reused except if returning a Pipe.
                 boolean reuseChannel = true;
 
+                LocalVariable completionVar = null;
+                if (method.isAsynchronous() &&
+                    returnDesc != null && Future.class == returnDesc.toClass())
+                {
+                    // Read the Future completion object early.
+                    completionVar = b.createLocalVariable
+                        (null, TypeDesc.forClass(RemoteCompletion.class));
+                    b.loadLocal(invInVar);
+                    b.invokeVirtual(invInVar.getType(), "readUnshared", TypeDesc.OBJECT, null);
+                    b.checkCast(completionVar.getType());
+                    b.storeLocal(completionVar);
+                }
+
+                // FIXME: If has completionVar, catch exception from reading
+                // parameters and report to client.
+
                 if (paramTypes.size() != 0) {
                     // Read parameters onto stack.
 
                     boolean lookForPipe = method.isAsynchronous() &&
-                        returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass());
+                        returnDesc != null && Pipe.class == returnDesc.toClass();
 
                     for (RemoteParameter paramType : paramTypes) {
-                        if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
+                        if (lookForPipe && Pipe.class == paramType.getType()) {
                             lookForPipe = false;
                             // Use channel as Pipe.
                             b.loadLocal(channelVar);
@@ -525,8 +543,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 } else if (method.isBatched()) {
                     batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
 
-                    // Discard return value from batched methods.
-                    popStackArg(b, returnDesc);
+                    genAsyncResponse(b, returnDesc, completionVar);
 
                     // Return true so that next batch request is handled in same thread.
                     b.loadConstant(true);
@@ -534,8 +551,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 } else if (method.isAsynchronous()) {
                     asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
 
-                    // Discard return value from asynchronous methods.
-                    popStackArg(b, returnDesc);
+                    genAsyncResponse(b, returnDesc, completionVar);
 
                     b.loadLocal(pendingRequestVar);
                     b.returnValue(TypeDesc.BOOLEAN);
@@ -692,13 +708,26 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                           new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN});
     }
 
-    private void popStackArg(CodeBuilder b, TypeDesc type) {
-        if (type != null) {
-            if (type.isDoubleWord()) {
-                b.pop2();
-            } else {
-                b.pop();
+    private void genAsyncResponse(CodeBuilder b, TypeDesc type, LocalVariable completionVar) {
+        if (completionVar == null) {
+            // Cannot write response so chuck it.
+            if (type != null) {
+                if (type.isDoubleWord()) {
+                    b.pop2();
+                } else {
+                    b.pop();
+                }
             }
+        } else {
+            LocalVariable valueVar = b.createLocalVariable(null, type);
+            b.storeLocal(valueVar);
+            b.loadThis();
+            b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
+            b.loadLocal(valueVar);
+            b.loadLocal(completionVar);
+            b.invokeInterface(SKEL_SUPPORT_TYPE, "completion",
+                              null, new TypeDesc[] {TypeDesc.forClass(Future.class),
+                                                    TypeDesc.forClass(RemoteCompletion.class)});
         }
     }
 

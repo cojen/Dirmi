@@ -31,6 +31,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.concurrent.Future;
+
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
@@ -264,6 +266,17 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeLocal(closeTaskVar);
             }
 
+            LocalVariable futureVar = null;
+            if (method.isAsynchronous() &&
+                returnDesc != null && Future.class == returnDesc.toClass())
+            {
+                futureVar = b.createLocalVariable(null, TypeDesc.forClass(Future.class));
+                b.loadThis();
+                b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+                b.invokeInterface(STUB_SUPPORT_TYPE, "createFuture", futureVar.getType(), null);
+                b.storeLocal(futureVar);
+            }
+
             final Label invokeStart = b.createLabel().setLocation();
 
             // Write method identifier to channel.
@@ -276,15 +289,24 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.invokeVirtual(IDENTIFIER_TYPE, "write", null, new TypeDesc[] {DATA_OUTPUT_TYPE});
 
+            if (futureVar != null) {
+                // Write the Future first to allow any parameter reading
+                // problems to be reported as an exception.
+                b.loadLocal(invOutVar);
+                b.loadLocal(futureVar);
+                b.invokeVirtual(invOutVar.getType(), "writeUnshared", null,
+                                new TypeDesc[] {TypeDesc.OBJECT});
+            }
+
             if (paramDescs.length > 0) {
                 // Write parameters to channel.
 
                 boolean lookForPipe = method.isAsynchronous() &&
-                    returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass());
+                    returnDesc != null && Pipe.class == returnDesc.toClass();
 
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
-                    if (lookForPipe && Pipe.class.isAssignableFrom(paramType.getType())) {
+                    if (lookForPipe && Pipe.class == paramType.getType()) {
                         lookForPipe = false;
                         // Don't pass the Pipe to server.
                     } else {
@@ -318,9 +340,12 @@ public class StubFactoryGenerator<R extends Remote> {
             if (method.isAsynchronous()) {
                 invokeEnd = b.createLabel().setLocation();
 
-                if (returnDesc != null && Pipe.class.isAssignableFrom(returnDesc.toClass())) {
+                if (returnDesc != null && Pipe.class == returnDesc.toClass()) {
                     // Return channel; as a Pipe.
                     b.loadLocal(channelVar);
+                    b.returnValue(returnDesc);
+                } else if (futureVar != null) {
+                    b.loadLocal(futureVar);
                     b.returnValue(returnDesc);
                 } else if (method.isBatched() && returnDesc != null &&
                            Remote.class.isAssignableFrom(returnDesc.toClass()))
