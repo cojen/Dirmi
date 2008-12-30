@@ -17,6 +17,9 @@
 package org.cojen.dirmi;
 
 import java.io.IOException;
+import java.io.Serializable;
+
+import java.rmi.Remote;
 
 /**
  * Callback invoked by {@link Environment} as sessions are accepted.
@@ -26,9 +29,9 @@ import java.io.IOException;
 public interface SessionAcceptor {
     /**
      * Called by multiple threads as a session is being
-     * established. Implementation should return a Remote or Serializable
-     * object which is exported to remote endpoint. The object returned by this
-     * method is available as the session's local server.
+     * established. Implementation should return a {@link Remote} or {@link
+     * Serializable} object which is exported to remote endpoint. The object
+     * returned by this method is available as the session's local server.
      *
      * @return primary local server object
      */

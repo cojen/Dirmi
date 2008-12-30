@@ -16,12 +16,13 @@
 
 package org.cojen.dirmi;
 
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 /**
  * Thrown when a remote method has not been implemented by the remote
  * server. This can happen when the client and server have different versions
- * of the interface that extends Remote.
+ * of the interface that extends {@link Remote}.
  *
  * @author Brian S O'Neill
  */

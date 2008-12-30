@@ -17,6 +17,9 @@
 package org.cojen.dirmi;
 
 import java.io.Closeable;
+import java.io.Serializable;
+
+import java.rmi.Remote;
 
 /**
  * Remote method invocation session.
@@ -25,16 +28,16 @@ import java.io.Closeable;
  */
 public interface Session extends Closeable {
     /**
-     * Returns the primary Remote or Serializable object exported by remote
-     * endpoint.
+     * Returns the primary {@link Remote} or {@link Serializable} object
+     * exported by remote endpoint.
      *
      * @return primary remote server object, which can be null
      */
     Object getRemoteServer();
 
     /**
-     * Returns the primary Remote or Serializable object exported by local
-     * endpoint.
+     * Returns the primary {@link Remote} or {@link Serializable} object
+     * exported by local endpoint.
      *
      * @return primary local server object, which can be null
      */

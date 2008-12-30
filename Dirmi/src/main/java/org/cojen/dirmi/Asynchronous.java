@@ -18,25 +18,55 @@ package org.cojen.dirmi;
 
 import java.lang.annotation.*;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import java.rmi.RemoteException;
+
 /**
  * Identify a method as being asynchronous, which does not imply
  * non-blocking. It merely means that the caller does not wait for the remote
  * method to finish. An asynchronous method will likely block if the network
  * layer is backed up.
  *
- * <p>An asynchronous method must return void or a {@link Pipe}.
+ * <p>An asynchronous method must declare returning void, a {@link Pipe}, or a
+ * {@link Future}. An asynchronous task represented a {@code Future} cannot be
+ * cancelled. Implementations of asynchronous future methods should return a
+ * factory generated {@link Response response}.
  *
  * <pre>
- * &#64;Asynchronous
+ * <b>&#64;Asynchronous</b>
  * void sendMessage(String data) throws RemoteException;
  * </pre>
  *
- * Asynchronous methods can only declare throwing RemoteException or the
- * exception indicated by {@link RemoteFailure}. A client can expect a
- * RemoteException to be thrown by an asynchronous method only if there is a
- * communication failure. Any exception thrown by the server implementation is
- * not passed to the client, but it is instead passed to the thread's uncaught
- * exception handler.
+ * <pre>
+ * <b>&#64;Asynchronous</b>
+ * &#64;RemoteFailure(exception=FileNotFoundException.class)
+ * Pipe readFile(String name, Pipe pipe) throws FileNotFoundException;
+ * </pre>
+ *
+ * <pre>
+ * <b>&#64;Asynchronous</b>
+ * Future&lt;Image&gt; generateImage(int width, int height, Object data) throws RemoteException;
+ * </pre>
+ *
+ * <pre>
+ * <b>&#64;Asynchronous(CallMode.ACKNOWLEDGED)</b>
+ * void launchBuild(Object params, ProgressCallback callback) throws RemoteException;
+ * </pre>
+ *
+ * Asynchronous methods which return void or a {@link Pipe} can only declare
+ * throwing {@link RemoteException} or the exception indicated by {@link
+ * RemoteFailure}. A client can expect an exception to be thrown by an
+ * asynchronous method only if there is a communication failure. Any exception
+ * thrown by the server implementation is not passed to the client, but it is
+ * instead passed to the thread's uncaught exception handler.
+ *
+ * <p>Any exception thrown by an asynchronous method which returns a {@link
+ * Future} is passed to the caller via the {@code Future}. Upon calling {@link
+ * Future#get get}, an {@link ExecutionException} is thrown. A communication
+ * failure while sending the request is thrown directly to the caller and not
+ * through the {@code Future}.
  *
  * @author Brian S O'Neill
  * @see Batched

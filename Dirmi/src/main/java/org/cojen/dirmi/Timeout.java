@@ -18,6 +18,7 @@ package org.cojen.dirmi;
 
 import java.lang.annotation.*;
 
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,6 +45,8 @@ import java.util.concurrent.TimeUnit;
  * asynchronous method only applies to the sending of the request. It does not
  * wait for method completion. When using the {@link CallMode#ACKNOWLEDGED
  * acknowledged} calling mode, timeouts do at least wait for acknowledgement.
+ * Consider returning a {@link Future} and call the {@code get} method which
+ * accepts a timeout.
  *
  * <p>Method parameters may use the {@link TimeoutParam} annotation to specify
  * timeout values and units. When applied to a primitive numeric type (which

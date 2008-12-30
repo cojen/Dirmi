@@ -36,7 +36,7 @@ import java.io.OutputStream;
  *
  * <pre>
  * &#64;Asynchronous
- * Pipe readFile(String name, Pipe pipe) throws RemoteException, IOException;
+ * <b>Pipe</b> uploadFile(String name, <b>Pipe</b> pipe) throws RemoteException, IOException;
  * </pre>
  *
  * @author Brian S O'Neill

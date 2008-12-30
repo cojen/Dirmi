@@ -17,6 +17,9 @@
 package org.cojen.dirmi;
 
 import java.io.IOException;
+import java.io.Serializable;
+
+import java.rmi.Remote;
 
 /**
  * Simple implementation of {@link SessionAcceptor} which always exports the
@@ -28,6 +31,9 @@ import java.io.IOException;
 public class SharedServer implements SessionAcceptor {
     private final Object mServer;
 
+    /**
+     * @param server {@link Remote} or {@link Serializable} object to share
+     */
     public SharedServer(Object server) {
         mServer = server;
     }

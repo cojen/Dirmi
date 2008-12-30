@@ -25,7 +25,7 @@ import java.rmi.RemoteException;
  * RemoteException}, and it must be declared to be thrown.
  *
  * <pre>
- * &#64;RemoteFailure(exception=SQLException.class)
+ * <b>&#64;RemoteFailure(exception=SQLException.class)</b>
  * int executeUpdate(String sql) throws SQLException;
  * </pre>
  *
@@ -36,10 +36,10 @@ import java.rmi.RemoteException;
 @Target({ElementType.METHOD, ElementType.TYPE})
 public @interface RemoteFailure {
     /**
-     * Specify the exception to throw when the remote call fails. If not
-     * RemoteException (or a superclass), then it must support exception
+     * Specify the exception to throw when the remote call fails. If not {@link
+     * RemoteException} (or a superclass), then it must support exception
      * chaining. A public constructor must exist which accepts a single
-     * argument of RemoteException or a superclass.
+     * argument of {@code RemoteException} or a superclass.
      */
     Class<? extends Throwable> exception() default RemoteException.class;
 
