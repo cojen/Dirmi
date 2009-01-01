@@ -169,23 +169,27 @@ class CodeBuilderUtil {
      * @param param type of parameter to write
      * @param invOutVar variable which references a InvocationOutput instance
      * @param paramVar variable which references parameter value
+     * @return true if param was written as shared
      */
-    static void writeParam(CodeBuilder b,
-                           RemoteParameter param,
-                           LocalVariable invOutVar,
-                           LocalVariable paramVar)
+    static boolean writeParam(CodeBuilder b,
+                              RemoteParameter param,
+                              LocalVariable invOutVar,
+                              LocalVariable paramVar)
     {
         TypeDesc type = getTypeDesc(param);
 
+        boolean shared;
         String methodName;
         TypeDesc methodType;
 
         if (type.isPrimitive()) {
+            shared = false;
             methodName = type.getRootName();
             methodName = "write" +
                 Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
             methodType = type;
         } else if (param.isUnshared()) {
+            shared = false;
             if (TypeDesc.STRING == type) {
                 methodName = "writeUnsharedString";
                 methodType = type;
@@ -194,6 +198,7 @@ class CodeBuilderUtil {
                 methodType = TypeDesc.OBJECT;
             }
         } else {
+            shared = true;
             methodName = "writeObject";
             methodType = TypeDesc.OBJECT;
         }
@@ -201,6 +206,8 @@ class CodeBuilderUtil {
         b.loadLocal(invOutVar);
         b.loadLocal(paramVar);
         b.invokeVirtual(invOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
+
+        return shared;
     }
 
     static TypeDesc getTypeDesc(RemoteParameter param) {

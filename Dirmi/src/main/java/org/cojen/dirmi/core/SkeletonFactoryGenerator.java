@@ -586,7 +586,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
                                     new TypeDesc[] {THROWABLE_TYPE});
                     if (retVar != null) {
-                        writeParam(b, method.getReturnType(), invOutVar, retVar);
+                        boolean shared = writeParam(b, method.getReturnType(), invOutVar, retVar);
+                        if (shared) {
+                            // Reset the stream to allow response to be freed.
+                            b.loadLocal(invOutVar);
+                            b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
+                        }
                     }
 
                     // Call finished method.

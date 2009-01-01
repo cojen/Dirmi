@@ -104,7 +104,7 @@ public class StandardSession implements Session {
     final ConcurrentMap<VersionedIdentifier, SkeletonFactory> mSkeletonFactories;
 
     // Cache of skeleton factories created for use by batched methods which
-    //return a remote object.
+    // return a remote object. Must explicitly synchronize access.
     final Map<Identifier, SkeletonFactory> mRemoteSkeletonFactories;
 
     // Strong references to Skeletons. Skeletons are created as needed and can
@@ -114,7 +114,7 @@ public class StandardSession implements Session {
 
     final SkeletonSupport mSkeletonSupport;
 
-    // Cache of stub factories.
+    // Cache of stub factories. Must explicitly synchronize access.
     final Map<VersionedIdentifier, StubFactory> mStubFactories;
 
     // Strong references to PhantomReferences to StubFactories.
@@ -124,7 +124,7 @@ public class StandardSession implements Session {
     // removed to reclaim memory.
     final ConcurrentMap<VersionedIdentifier, StubFactoryRef> mStubFactoryRefs;
 
-    // Cache of stubs.
+    // Cache of stubs. Must explicitly synchronize access.
     final Map<VersionedIdentifier, Remote> mStubs;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
@@ -406,6 +406,16 @@ public class StandardSession implements Session {
         }
 
         mSkeletons.clear();
+
+        synchronized (mRemoteSkeletonFactories) {
+            mRemoteSkeletonFactories.clear();
+        }
+        synchronized (mStubFactories) {
+            mStubFactories.clear();
+        }
+        synchronized (mStubs) {
+            mStubs.clear();
+        }
     }
 
     void unreferenced(Skeleton skeleton) {
@@ -418,7 +428,9 @@ public class StandardSession implements Session {
 
     boolean addSkeleton(VersionedIdentifier objID, Skeleton skeleton) {
         // FIXME: Handle rare objID collision. If collision, replace with
-        // Skeleton instance that can select by object id.
+        // Skeleton instance that can select by object id. Perhaps just make
+        // VersionedIdentifier be 128 bit instead of 64. If so, remove objectID
+        // parameter from Skeleton interface.
 
         // Use lock as a barrier to prevent race condition with close
         // method. Skeletons should not be added to mSkeletons if they are
@@ -639,7 +651,7 @@ public class StandardSession implements Session {
     }
 
     /**
-     * Used in conjunction with register.
+     * Used in conjunction with register. Synchronizes access to map.
      */
     static <K extends AbstractIdentifier, V> V lookup(Map<K, V> map, K key) {
         synchronized (map) {
@@ -648,7 +660,7 @@ public class StandardSession implements Session {
     }
 
     /**
-     * Used in conjunction with lookup.
+     * Used in conjunction with lookup. Synchronizes access to map.
      *
      * @return same value instance if registered; existing instance otherwise
      */
@@ -662,6 +674,21 @@ public class StandardSession implements Session {
         }
         key.register(value);
         return value;
+    }
+
+    <R extends Remote> R createAndRegisterStub(VersionedIdentifier objID,
+                                               StubFactory<R> factory,
+                                               StubSupportImpl support)
+    {
+        R remote = factory.createStub(support);
+        R existing = (R) register(mStubs, objID, remote);
+        if (existing == remote) {
+            mStubRefs.put(objID, new StubRef(remote, mReferenceQueue, support));
+        } else {
+            // Use existing instance instead.
+            remote = existing;
+        }
+        return remote;
     }
 
     private static abstract class Ref<T> extends PhantomReference<T> {
@@ -1083,16 +1110,7 @@ public class StandardSession implements Session {
                         }
                     }
 
-                    StubSupportImpl support = new StubSupportImpl(objID);
-                    remote = factory.createStub(support);
-
-                    Remote existing = register(mStubs, objID, remote);
-                    if (existing == remote) {
-                        mStubRefs.put(objID, new StubRef(remote, mReferenceQueue, support));
-                    } else {
-                        // Use existing instance instead.
-                        remote = existing;
-                    }
+                    remote = createAndRegisterStub(objID, factory, new StubSupportImpl(objID));
                 }
 
                 obj = remote;
@@ -1226,7 +1244,6 @@ public class StandardSession implements Session {
             if (synchronous) {
                 try {
                     channel.getOutputStream().flush();
-                    channel.getOutputStream().reset();
                     return true;
                 } catch (IOException e) {
                     channel.disconnect();
@@ -1403,11 +1420,7 @@ public class StandardSession implements Session {
                 throw failed(remoteFailureEx, channel, e);
             }
 
-            R remote = factory.createStub(support);
-
-            mStubRefs.put(support.mObjID, new StubRef(remote, mReferenceQueue, support));
-
-            return remote;
+            return createAndRegisterStub(support.mObjID, factory, support);
         }
 
         public void batched(InvocationChannel channel) {

@@ -32,8 +32,12 @@ class EmptySkeletonFactory implements SkeletonFactory {
     private EmptySkeletonFactory() {
     }
 
-    public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
+    public Skeleton createSkeleton(SkeletonSupport support, final Remote remoteServer) {
         return new Skeleton() {
+            public Remote getRemoteServer() {
+                return remoteServer;
+            }
+
             public boolean invoke(VersionedIdentifier objectID, Identifier methodID,
                                   InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
