@@ -36,6 +36,11 @@ import org.cojen.dirmi.util.VersionedIdentifier;
  */
 public interface Skeleton extends Unreferenced {
     /**
+     * Returns the Remote object managed by this Skeleton.
+     */
+    Remote getRemoteServer();
+
+    /**
      * Invoke method in server-side instance. Any exception thrown from the
      * invoked method is written to the channel, unless method is asynchronous
      * or batched. Any other exception thrown from this method indicates a

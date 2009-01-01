@@ -1038,11 +1038,21 @@ public class StandardSession implements Session {
                 }
 
                 MarshalledRemote mr = (MarshalledRemote) obj;
-
                 VersionedIdentifier objID = mr.mObjID;
-                Remote remote = lookup(mStubs, objID);
 
-                if (remote == null) {
+                Remote remote;
+                findRemote: {
+                    remote = lookup(mStubs, objID);
+                    if (remote != null) {
+                        break findRemote;
+                    }
+
+                    Skeleton skeleton = lookup(mSkeletons, objID);
+                    if (skeleton != null) {
+                        remote = skeleton.getRemoteServer();
+                        break findRemote;
+                    }
+
                     VersionedIdentifier typeID = mr.mTypeID;
                     StubFactory factory = lookup(mStubFactories, typeID);
 
