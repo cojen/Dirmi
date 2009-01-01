@@ -46,7 +46,7 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                                  final MessageChannel controlChannel, StreamConnector connector)
         throws IOException
     {
-        super(executor);
+        super(executor, true);
 
         mControlChannel = controlChannel;
         mConnector = connector;

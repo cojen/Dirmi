@@ -18,6 +18,7 @@ package org.cojen.dirmi.io;
 
 import java.io.IOException;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,7 +50,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
     static final byte OP_CHANNEL_CONNECTED_DIRECT = 7;
     static final byte OP_CHANNEL_CLOSE = 8;
 
-    final ScheduledExecutorService mExecutor;
+    final Executor mExecutor;
 
     // FIXME: StreamChannel close/disconnect needs to unregister from map
     private final IntHashMap<StreamChannel> mChannelMap;
@@ -64,28 +65,48 @@ abstract class AbstractStreamBroker implements StreamBroker {
 
     volatile boolean mPinged;
 
-    AbstractStreamBroker(ScheduledExecutorService executor) throws IOException {
-        mExecutor = executor;
+    {
         mChannelMap = new IntHashMap<StreamChannel>();
         mListenerQueue = new LinkedBlockingQueue<StreamListener>();
         mCloseLock = new ReentrantReadWriteLock(true);
+    }
 
-        try {
-            // Start ping check task.
-            long checkRate = DEFAULT_PING_CHECK_MILLIS;
-            PingCheckTask checkTask = new PingCheckTask(this);
-            mPingCheckTask = executor.scheduleAtFixedRate
-                (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
-            checkTask.setFuture(mPingCheckTask);
-        } catch (RejectedExecutionException e) {
+    AbstractStreamBroker(Executor executor) {
+        if (executor == null) {
+            throw new IllegalArgumentException("Executor is null");
+        }
+        mExecutor = executor;
+        mPingCheckTask = null;
+    }
+
+    AbstractStreamBroker(ScheduledExecutorService executor, boolean doPingChecks)
+        throws IOException
+    {
+        if (executor == null) {
+            throw new IllegalArgumentException("Executor is null");
+        }
+        mExecutor = executor;
+
+        if (!doPingChecks) {
+            mPingCheckTask = null;
+        } else {
             try {
-                close();
-            } catch (IOException e2) {
-                // Ignore.
+                // Start ping check task.
+                long checkRate = DEFAULT_PING_CHECK_MILLIS;
+                PingCheckTask checkTask = new PingCheckTask(this);
+                mPingCheckTask = ((ScheduledExecutorService) executor).scheduleAtFixedRate
+                    (checkTask, checkRate, checkRate, TimeUnit.MILLISECONDS);
+                checkTask.setFuture(mPingCheckTask);
+            } catch (RejectedExecutionException e) {
+                try {
+                    close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                IOException io = new IOException("Unable to start ping task");
+                io.initCause(e);
+                throw io;
             }
-            IOException io = new IOException("Unable to start ping task");
-            io.initCause(e);
-            throw io;
         }
     }
 
@@ -202,10 +223,9 @@ abstract class AbstractStreamBroker implements StreamBroker {
 
             preClose();
 
-            try {
-                mPingCheckTask.cancel(true);
-            } catch (NullPointerException e) {
-                // mPingCheckTask might not have been assigned.
+            ScheduledFuture<?> pingCheckTask = mPingCheckTask;
+            if (pingCheckTask != null) {
+                pingCheckTask.cancel(true);
             }
 
             StreamListener listener;

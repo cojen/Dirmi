@@ -288,7 +288,7 @@ public class StreamBrokerAcceptor implements Closeable {
         Broker(ScheduledExecutorService executor, StreamChannel controlChannel, int id)
             throws IOException
         {
-            super(executor);
+            super(executor, true);
 
             mControlChannel = controlChannel;
             DataOutputStream out = new DataOutputStream(controlChannel.getOutputStream());
