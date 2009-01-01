@@ -197,32 +197,25 @@ public class StandardSession implements Session {
             private IOException mIOException;
             private RuntimeException mRuntimeException;
             private Error mError;
-            Object mRemoteServer;
-            Hidden.Admin mRemoteAdmin;
 
             public synchronized void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
                     InvocationInputStream in = chan.getInputStream();
+                    InvocationOutputStream out = chan.getOutputStream();
 
                     int magic = in.readInt();
                     if (magic != MAGIC_NUMBER) {
                         throw new IOException("Incorrect magic number: " + magic);
                     }
-
                     int version = in.readInt();
                     if (version != PROTOCOL_VERSION) {
                         throw new IOException("Unsupported protocol version: " + version);
                     }
 
-                    try {
-                        mRemoteServer = in.readObject();
-                        mRemoteAdmin = (Hidden.Admin) in.readObject();
-                    } catch (ClassNotFoundException e) {
-                        IOException io = new IOException();
-                        io.initCause(e);
-                        throw io;
-                    }
+                    out.writeObject(server);
+                    out.writeObject(new AdminImpl());
+                    out.flush();
 
                     // Reached only upon successful bootstrap.
                     chan.close();
@@ -283,12 +276,20 @@ public class StandardSession implements Session {
             try {
                 InvocationChan chan = new InvocationChan(channel);
                 InvocationOutputStream out = chan.getOutputStream();
+                InvocationInputStream in = chan.getInputStream();
 
                 out.writeInt(MAGIC_NUMBER);
                 out.writeInt(PROTOCOL_VERSION);
-                out.writeObject(server);
-                out.writeObject(new AdminImpl());
                 out.flush();
+
+                try {
+                    mRemoteServer = in.readObject();
+                    mRemoteAdmin = (Hidden.Admin) in.readObject();
+                } catch (ClassNotFoundException e) {
+                    IOException io = new IOException();
+                    io.initCause(e);
+                    throw io;
+                }
 
                 chan.close();
             } catch (IOException e) {
@@ -298,9 +299,6 @@ public class StandardSession implements Session {
         }
 
         bootstrap.complete();
-
-        mRemoteServer = bootstrap.mRemoteServer;
-        mRemoteAdmin = bootstrap.mRemoteAdmin;
 
         try {
             // Start background task.
