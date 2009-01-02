@@ -191,114 +191,73 @@ public class StandardSession implements Session {
         mLocalChannel = new ThreadLocal<InvocationChannel>();
         mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
-        // Receives magic number and remote object.
-        class Bootstrap implements StreamListener {
-            private boolean mDone;
-            private IOException mIOException;
-            private RuntimeException mRuntimeException;
-            private Error mError;
-
-            public synchronized void established(StreamChannel channel) {
+        // Accept bootstrap request which replies with server and admin objects.
+        mBroker.accept(new StreamListener() {
+            public void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
                     InvocationInputStream in = chan.getInputStream();
                     InvocationOutputStream out = chan.getOutputStream();
 
-                    int magic = in.readInt();
-                    if (magic != MAGIC_NUMBER) {
-                        throw new IOException("Incorrect magic number: " + magic);
+                    try {
+                        int magic = in.readInt();
+                        out.writeInt(MAGIC_NUMBER);
+                        if (magic != MAGIC_NUMBER) {
+                            return;
+                        }
+                        int version = in.readInt();
+                        out.writeInt(PROTOCOL_VERSION);
+                        if (version != PROTOCOL_VERSION) {
+                            return;
+                        }
+                        out.writeUnshared(server);
+                        out.writeUnshared(new AdminImpl());
+                    } finally {
+                        out.flush();
                     }
-                    int version = in.readInt();
-                    if (version != PROTOCOL_VERSION) {
-                        throw new IOException("Unsupported protocol version: " + version);
-                    }
-
-                    out.writeObject(server);
-                    out.writeObject(new AdminImpl());
-                    out.flush();
-
-                    // Reached only upon successful bootstrap.
-                    chan.close();
-                    return;
-                } catch (IOException e) {
-                    mIOException = e;
-                } catch (RuntimeException e) {
-                    mRuntimeException = e;
-                } catch (Error e) {
-                    mError = e;
+                } catch (Exception e) {
+                    // Ignore. Let receive code detect communication error.
                 } finally {
-                    mDone = true;
-                    notifyAll();
-                }
-
-                if (channel != null) {
                     channel.disconnect();
                 }
             }
 
-            public synchronized void failed(IOException e) {
-                mDone = true;
-                mIOException = e;
-                notifyAll();
+            public void failed(IOException e) {
+                // Ignore.
+            }
+        });
+
+        // Send bootstrap request which receives server and admin objects.
+        StreamChannel channel = broker.connect();
+        try {
+            InvocationChan chan = new InvocationChan(channel);
+            InvocationOutputStream out = chan.getOutputStream();
+            InvocationInputStream in = chan.getInputStream();
+
+            out.writeInt(MAGIC_NUMBER);
+            out.writeInt(PROTOCOL_VERSION);
+            out.flush();
+
+            int magic = in.readInt();
+            if (magic != MAGIC_NUMBER) {
+                throw new IOException("Incorrect magic number: " + magic);
+            }
+            int version = in.readInt();
+            if (version != PROTOCOL_VERSION) {
+                throw new IOException("Unsupported protocol version: " + version);
             }
 
-            public synchronized void complete() throws IOException {
-                while (!mDone) {
-                    try {
-                        wait();
-                    } catch (InterruptedException e) {
-                        throw new InterruptedIOException();
-                    }
-                }
-
-                if (mError != null) {
-                    throw mError;
-                }
-
-                if (mIOException != null) {
-                    ExceptionUtils.addLocalTrace(mIOException);
-                    throw mIOException;
-                }
-
-                if (mRuntimeException != null) {
-                    ExceptionUtils.addLocalTrace(mRuntimeException);
-                    throw mRuntimeException;
-                }
-            }
-        };
-
-        Bootstrap bootstrap = new Bootstrap();
-        mBroker.accept(bootstrap);
-
-        // Transmit bootstrap information.
-        {
-            StreamChannel channel = broker.connect();
             try {
-                InvocationChan chan = new InvocationChan(channel);
-                InvocationOutputStream out = chan.getOutputStream();
-                InvocationInputStream in = chan.getInputStream();
-
-                out.writeInt(MAGIC_NUMBER);
-                out.writeInt(PROTOCOL_VERSION);
-                out.flush();
-
-                try {
-                    mRemoteServer = in.readObject();
-                    mRemoteAdmin = (Hidden.Admin) in.readObject();
-                } catch (ClassNotFoundException e) {
-                    IOException io = new IOException();
-                    io.initCause(e);
-                    throw io;
-                }
-
-                chan.close();
-            } catch (IOException e) {
-                channel.disconnect();
-                throw e;
+                mRemoteServer = in.readUnshared();
+                mRemoteAdmin = (Hidden.Admin) in.readUnshared();
+            } catch (ClassNotFoundException e) {
+                IOException io = new IOException();
+                io.initCause(e);
+                throw io;
             }
+        } finally {
+            channel.disconnect();
         }
-
-        bootstrap.complete();
 
         try {
             // Start background task.
@@ -356,17 +315,18 @@ public class StandardSession implements Session {
         }
 
         try {
-            try {
-                mBackgroundTask.cancel(false);
-            } catch (NullPointerException e) {
-                if (mBackgroundTask != null) {
-                    throw e;
-                }
+            ScheduledFuture<?> task = mBackgroundTask;
+            if (task != null) {
+                task.cancel(false);
             }
 
             if (notify && mRemoteAdmin != null) {
                 if (explicit) {
-                    mRemoteAdmin.closedExplicitly();
+                    try {
+                        mRemoteAdmin.closedExplicitly();
+                    } catch (RemoteException e) {
+                        // Ignore.
+                    }
                 } else {
                     try {
                         mRemoteAdmin.closedOnFailure(message, exception);
