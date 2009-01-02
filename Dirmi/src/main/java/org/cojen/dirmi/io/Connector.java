@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -23,7 +24,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface Connector<C> {
+public interface Connector<C extends Closeable> {
     /**
      * Returns a new channel, possibly blocking until it has been established.
      */

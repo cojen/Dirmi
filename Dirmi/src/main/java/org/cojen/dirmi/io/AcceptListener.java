@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -23,7 +24,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface AcceptListener<C> {
+public interface AcceptListener<C extends Closeable> {
     /**
      * Called at most once as soon as channel has been established. This
      * method may safely block, and it can interact with the channel too.

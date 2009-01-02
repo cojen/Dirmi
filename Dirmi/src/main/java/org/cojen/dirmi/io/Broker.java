@@ -24,7 +24,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface Broker<C> extends Acceptor<C>, Connector<C>, Closeable {
+public interface Broker<C extends Closeable> extends Acceptor<C>, Connector<C>, Closeable {
     /**
      * Prevents new channels from being created and disconnects all existing channels.
      */
