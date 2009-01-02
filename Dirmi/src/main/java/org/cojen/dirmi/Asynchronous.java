@@ -30,9 +30,10 @@ import java.rmi.RemoteException;
  * layer is backed up.
  *
  * <p>An asynchronous method must declare returning void, {@link Pipe}, or
- * {@link Future}. An asynchronous task represented a {@code Future} cannot be
- * cancelled. Implementations of asynchronous future methods should return a
- * factory generated {@link Response response}.
+ * {@link Future}. An asynchronous task represented by a {@code Future} cannot
+ * be cancelled, at least not via the {@code Future} object. Implementations of
+ * asynchronous future methods should return a factory generated {@link
+ * Response response}.
  *
  * <pre>
  * <b>&#64;Asynchronous</b>
