@@ -39,37 +39,37 @@ import org.cojen.util.IntHashMap;
 import org.cojen.dirmi.util.Random;
 
 /**
- * Paired with {@link StreamConnectorBroker} to adapt an acceptor into a broker
- * factory.
+ * Paired with {@link StreamChannelConnectorBroker} to adapt an acceptor into a
+ * broker factory.
  *
  * @author Brian S O'Neill
  */
-public class StreamBrokerAcceptor implements Closeable {
-    final StreamAcceptor mAcceptor;
-    final IntHashMap<Broker> mBrokerMap;
-    final LinkedBlockingQueue<StreamBrokerListener> mBrokerListenerQueue;
+public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChannel>> {
+    final Acceptor<StreamChannel> mAcceptor;
+    final IntHashMap<TheBroker> mBrokerMap;
+    final LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>> mBrokerListenerQueue;
 
     final ScheduledExecutorService mExecutor;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
 
-    public StreamBrokerAcceptor(final ScheduledExecutorService executor,
-                                final StreamAcceptor acceptor)
+    public StreamChannelBrokerAcceptor(final ScheduledExecutorService executor,
+                                       final Acceptor<StreamChannel> acceptor)
     {
         mAcceptor = acceptor;
-        mBrokerMap = new IntHashMap<Broker>();
-        mBrokerListenerQueue = new LinkedBlockingQueue<StreamBrokerListener>();
+        mBrokerMap = new IntHashMap<TheBroker>();
+        mBrokerListenerQueue = new LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>>();
         mExecutor = executor;
         mCloseLock = new ReentrantReadWriteLock(true);
 
-        acceptor.accept(new StreamListener() {
+        acceptor.accept(new AcceptListener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 acceptor.accept(this);
 
                 int op;
                 int brokerId;
-                Broker broker;
+                TheBroker broker;
 
                 try {
                     DataInputStream in = new DataInputStream(channel.getInputStream());
@@ -86,7 +86,7 @@ public class StreamBrokerAcceptor implements Closeable {
                         }
 
                         try {
-                            broker = new Broker(executor, channel, brokerId);
+                            broker = new TheBroker(executor, channel, brokerId);
                         } catch (IOException e) {
                             synchronized (mBrokerMap) {
                                 mBrokerMap.remove(brokerId);
@@ -96,7 +96,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
                         Lock lock = closeLock();
                         try {
-                            StreamBrokerListener listener = pollListener();
+                            AcceptListener<Broker<StreamChannel>> listener = pollListener();
                             if (listener != null) {
                                 listener.established(broker);
                             } else {
@@ -154,7 +154,7 @@ public class StreamBrokerAcceptor implements Closeable {
 
                     if (e.getCause() instanceof RejectedExecutionException) {
                         // Okay, this is important. It was thrown by Broker constructor.
-                        StreamBrokerListener listener = pollListener();
+                        AcceptListener<Broker<StreamChannel>> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -163,7 +163,7 @@ public class StreamBrokerAcceptor implements Closeable {
             }
 
             public void failed(IOException e) {
-                StreamBrokerListener listener;
+                AcceptListener<Broker<StreamChannel>> listener;
                 if ((listener = pollListener()) != null) {
                     listener.failed(e);
                 }
@@ -179,7 +179,7 @@ public class StreamBrokerAcceptor implements Closeable {
      * asynchronously. Only one broker is accepted per invocation of this
      * method.
      */
-    public void accept(final StreamBrokerListener listener) {
+    public void accept(final AcceptListener<Broker<StreamChannel>> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -255,7 +255,7 @@ public class StreamBrokerAcceptor implements Closeable {
         return lock;
     }
 
-    StreamBrokerListener pollListener() {
+    AcceptListener<Broker<StreamChannel>> pollListener() {
         try {
             return mBrokerListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -263,13 +263,13 @@ public class StreamBrokerAcceptor implements Closeable {
         }
     }
 
-    void closed(Broker broker) {
+    void closed(TheBroker broker) {
         synchronized (mBrokerMap) {
             mBrokerMap.remove(broker.mBrokerId);
         }
     }
 
-    private class Broker extends AbstractStreamBroker implements StreamBroker {
+    private class TheBroker extends AbstractStreamBroker {
         final StreamChannel mControlChannel;
         final DataOutputStream mControlOut;
         final DataInputStream mControlIn;
@@ -285,7 +285,7 @@ public class StreamBrokerAcceptor implements Closeable {
         /**
          * @param controlChannel accepted channel
          */
-        Broker(ScheduledExecutorService executor, StreamChannel controlChannel, int id)
+        TheBroker(ScheduledExecutorService executor, StreamChannel controlChannel, int id)
             throws IOException
         {
             super(executor, true);
@@ -362,7 +362,7 @@ public class StreamBrokerAcceptor implements Closeable {
         }
 
         @Override
-        protected void preClose() {
+        void preClose() {
             closed(this);
 
             mConnectQueue.add(new ClosedStream());
@@ -375,7 +375,7 @@ public class StreamBrokerAcceptor implements Closeable {
         }
 
         @Override
-        protected void closeControlChannel() throws IOException {
+        void closeControlChannel() throws IOException {
             mControlChannel.disconnect();
         }
 
@@ -427,13 +427,13 @@ public class StreamBrokerAcceptor implements Closeable {
         }
     }
 
-    private static class PingTask extends AbstractPingTask<Broker> {
-        PingTask(Broker broker) {
+    private static class PingTask extends AbstractPingTask<TheBroker> {
+        PingTask(TheBroker broker) {
             super(broker);
         }
 
         public void run() {
-            Broker broker = broker();
+            TheBroker broker = broker();
             if (broker != null) {
                 broker.doPing();
             }

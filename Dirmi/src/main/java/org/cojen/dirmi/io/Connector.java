@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -24,16 +23,9 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface MessageAcceptor extends Closeable {
+public interface Connector<C> {
     /**
-     * Returns immediately and calls established method on listener
-     * asynchronously. Only one channel is accepted per invocation of this
-     * method.
+     * Returns a new channel, possibly blocking until it has been established.
      */
-    void accept(MessageListener listener);
-
-    /**
-     * Prevents new channels from being accepted.
-     */
-    void close() throws IOException;
+    C connect() throws IOException;
 }

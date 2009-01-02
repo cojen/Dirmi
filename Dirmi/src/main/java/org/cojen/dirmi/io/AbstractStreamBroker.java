@@ -38,7 +38,7 @@ import org.cojen.dirmi.util.Random;
  *
  * @author Brian S O'Neill
  */
-abstract class AbstractStreamBroker implements StreamBroker {
+abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     static final int DEFAULT_PING_CHECK_MILLIS = 10000;
 
     static final byte OP_OPEN = 1;
@@ -55,7 +55,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
     // FIXME: StreamChannel close/disconnect needs to unregister from map
     private final IntHashMap<StreamChannel> mChannelMap;
 
-    private final LinkedBlockingQueue<StreamListener> mListenerQueue;
+    private final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
@@ -67,7 +67,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
 
     {
         mChannelMap = new IntHashMap<StreamChannel>();
-        mListenerQueue = new LinkedBlockingQueue<StreamListener>();
+        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
         mCloseLock = new ReentrantReadWriteLock(true);
     }
 
@@ -110,7 +110,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
         }
     }
 
-    public void accept(final StreamListener listener) {
+    public void accept(final AcceptListener<StreamChannel> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -134,7 +134,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
     void accepted(int channelId, StreamChannel channel) {
         register(channelId, channel);
 
-        StreamListener listener = pollListener();
+        AcceptListener<StreamChannel> listener = pollListener();
         if (listener != null) {
             listener.established(channel);
         } else {
@@ -143,7 +143,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
         }
     }
 
-    StreamListener pollListener() {
+    AcceptListener<StreamChannel> pollListener() {
         try {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -228,7 +228,7 @@ abstract class AbstractStreamBroker implements StreamBroker {
                 pingCheckTask.cancel(true);
             }
 
-            StreamListener listener;
+            AcceptListener<StreamChannel> listener;
             while ((listener = mListenerQueue.poll()) != null) {
                 listener.failed(new IOException(reason));
             }
@@ -263,9 +263,9 @@ abstract class AbstractStreamBroker implements StreamBroker {
         }
     }
 
-    protected abstract void preClose() throws IOException;
+    abstract void preClose() throws IOException;
 
-    protected abstract void closeControlChannel() throws IOException;
+    abstract void closeControlChannel() throws IOException;
 
     private static class PingCheckTask extends AbstractPingTask<AbstractStreamBroker> {
         PingCheckTask(AbstractStreamBroker broker) {

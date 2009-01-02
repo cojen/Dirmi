@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 import java.nio.ByteBuffer;
@@ -26,7 +25,7 @@ import java.nio.ByteBuffer;
  *
  * @author Brian S O'Neill
  */
-public interface MessageChannel extends AddressPair, Closeable {
+public interface MessageChannel extends Channel {
     /**
      * Fully sends a fixed size message, blocking if send buffer is full.
      *

@@ -31,7 +31,7 @@ import java.util.concurrent.locks.Lock;
  *
  * @author Brian S O'Neill
  */
-public class PipedBroker extends AbstractStreamBroker implements StreamBroker {
+public class PipedBroker extends AbstractStreamBroker implements Broker<StreamChannel> {
     private PipedBroker mEndpoint;
 
     /**
@@ -122,11 +122,11 @@ public class PipedBroker extends AbstractStreamBroker implements StreamBroker {
     }
 
     @Override
-    protected void preClose() {
+    void preClose() {
     }
 
     @Override
-    protected void closeControlChannel() {
+    void closeControlChannel() {
     }
 
     private class Channel implements StreamChannel {

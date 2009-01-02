@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,25 +16,16 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.IOException;
+import java.io.Closeable;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface StreamBrokerListener {
+public interface Channel extends AddressPair, Closeable {
     /**
-     * Called at most once as soon as broker has been established. This
-     * method may safely block, and it can interact with the broker too.
+     * Forcibly close channel, discarding unflushed output and any exceptions.
      */
-    void established(StreamBroker broker);
-
-    /**
-     * Called when broker cannot be established. This method may safely
-     * block. Invocation of this method does not imply that new brokers cannot
-     * be established. If established method re-adds this listener, then the
-     * failed method must do so as well.
-     */
-    void failed(IOException e);
+    void disconnect();
 }

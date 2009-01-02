@@ -33,15 +33,16 @@ import org.cojen.util.WeakIdentityMap;
 import org.cojen.dirmi.core.StandardSession;
 import org.cojen.dirmi.core.StandardSessionServer;
 
+import org.cojen.dirmi.io.Acceptor;
+import org.cojen.dirmi.io.Broker;
+import org.cojen.dirmi.io.Connector;
 import org.cojen.dirmi.io.MessageChannel;
 import org.cojen.dirmi.io.SocketMessageProcessor;
-import org.cojen.dirmi.io.SocketStreamAcceptor;
-import org.cojen.dirmi.io.SocketStreamConnector;
-import org.cojen.dirmi.io.StreamAcceptor;
-import org.cojen.dirmi.io.StreamBroker;
-import org.cojen.dirmi.io.StreamBrokerAcceptor;
-import org.cojen.dirmi.io.StreamConnector;
-import org.cojen.dirmi.io.StreamConnectorBroker;
+import org.cojen.dirmi.io.SocketStreamChannelAcceptor;
+import org.cojen.dirmi.io.SocketStreamChannelConnector;
+import org.cojen.dirmi.io.StreamChannel;
+import org.cojen.dirmi.io.StreamChannelBrokerAcceptor;
+import org.cojen.dirmi.io.StreamChannelConnectorBroker;
 
 import org.cojen.dirmi.util.ThreadPool;
 
@@ -136,8 +137,10 @@ public class Environment implements Closeable {
         try {
             SocketMessageProcessor processor = messageProcessor();
             MessageChannel channel = processor.newConnector(endpoint, bindpoint).connect();
-            StreamConnector connector = new SocketStreamConnector(mExecutor, endpoint, bindpoint);
-            StreamBroker broker = new StreamConnectorBroker(mExecutor, channel, connector);
+            Connector<StreamChannel> connector =
+                new SocketStreamChannelConnector(mExecutor, endpoint, bindpoint);
+            Broker<StreamChannel> broker =
+                new StreamChannelConnectorBroker(mExecutor, channel, connector);
             Session session = new StandardSession(mExecutor, broker, server);
 
             synchronized (mSessions) {
@@ -180,9 +183,10 @@ public class Environment implements Closeable {
 
         Lock lock = closeLock();
         try {
-            StreamAcceptor streamAcceptor = new SocketStreamAcceptor(mExecutor, bindpoint);
-            StreamBrokerAcceptor brokerAcceptor =
-                new StreamBrokerAcceptor(mExecutor, streamAcceptor);
+            Acceptor<StreamChannel> streamAcceptor =
+                new SocketStreamChannelAcceptor(mExecutor, bindpoint);
+            Acceptor<Broker<StreamChannel>> brokerAcceptor =
+                new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
             StandardSessionServer server = new StandardSessionServer(mExecutor, brokerAcceptor);
 
             synchronized (mSessionServers) {

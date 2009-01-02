@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface MessageListener {
+public interface AcceptListener<C> {
     /**
      * Called at most once as soon as channel has been established. This
      * method may safely block, and it can interact with the channel too.
      */
-    void established(MessageChannel channel);
+    void established(C channel);
 
     /**
      * Called when channel cannot be established. This method may safely

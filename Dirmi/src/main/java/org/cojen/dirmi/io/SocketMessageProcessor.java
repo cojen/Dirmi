@@ -82,18 +82,18 @@ public class SocketMessageProcessor implements Closeable {
         executor.execute(new ReadTask());
     }
 
-    public MessageConnector newConnector(SocketAddress endpoint) {
+    public Connector<MessageChannel> newConnector(SocketAddress endpoint) {
         return newConnector(endpoint, null);
     }
 
-    public MessageConnector newConnector(final SocketAddress endpoint,
-                                         final SocketAddress bindpoint)
+    public Connector<MessageChannel> newConnector(final SocketAddress endpoint,
+                                                  final SocketAddress bindpoint)
     {
         if (endpoint == null) {
             throw new IllegalArgumentException();
         }
 
-        return new MessageConnector() {
+        return new Connector<MessageChannel>() {
             public MessageChannel connect() throws IOException {
                 final SocketChannel channel = SocketChannel.open();
                 channel.socket().setTcpNoDelay(true);
@@ -116,7 +116,7 @@ public class SocketMessageProcessor implements Closeable {
         };
     }
 
-    public MessageAcceptor newAcceptor(final SocketAddress bindpoint) throws IOException {
+    public Acceptor<MessageChannel> newAcceptor(final SocketAddress bindpoint) throws IOException {
         if (bindpoint == null) {
             throw new IllegalArgumentException();
         }
@@ -126,9 +126,9 @@ public class SocketMessageProcessor implements Closeable {
         serverChannel.configureBlocking(false);
 
         class Accept implements Registerable, Selectable<SocketChannel> {
-            private final MessageListener mListener;
+            private final AcceptListener<MessageChannel> mListener;
 
-            Accept(MessageListener listener) {
+            Accept(AcceptListener<MessageChannel> listener) {
                 mListener = listener;
             }
 
@@ -163,8 +163,8 @@ public class SocketMessageProcessor implements Closeable {
             }
         };
 
-        return new MessageAcceptor() {
-            public void accept(MessageListener listener) {
+        return new Acceptor<MessageChannel>() {
+            public void accept(AcceptListener<MessageChannel> listener) {
                 enqueueRegister(new Accept(listener));
             }
 
@@ -449,6 +449,14 @@ public class SocketMessageProcessor implements Closeable {
 
         public void close() throws IOException {
             close(null);
+        }
+
+        public void disconnect() {
+            try {
+                close(null);
+            } catch (IOException e) {
+                // Ignore.
+            }
         }
 
         // Called directly by Reader.

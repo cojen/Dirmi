@@ -28,18 +28,20 @@ import java.util.concurrent.ScheduledExecutorService;
  *
  * @author Brian S O'Neill
  */
-public class SocketStreamConnector implements StreamConnector {
+public class SocketStreamChannelConnector implements Connector<StreamChannel> {
     private final ScheduledExecutorService mExecutor;
     private final StreamChannelPool mPool;
     private final SocketAddress mEndpoint;
     private final SocketAddress mBindpoint;
 
-    public SocketStreamConnector(ScheduledExecutorService executor, SocketAddress endpoint) {
+    public SocketStreamChannelConnector(ScheduledExecutorService executor,
+                                        SocketAddress endpoint)
+    {
         this(executor, endpoint, null);
     }
 
-    public SocketStreamConnector(ScheduledExecutorService executor,
-                                 SocketAddress endpoint, SocketAddress bindpoint)
+    public SocketStreamChannelConnector(ScheduledExecutorService executor,
+                                        SocketAddress endpoint, SocketAddress bindpoint)
     {
         if (executor == null || endpoint == null) {
             throw new IllegalArgumentException();

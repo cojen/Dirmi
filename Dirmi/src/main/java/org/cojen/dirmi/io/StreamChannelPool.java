@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-class StreamChannelPool implements StreamRecycler {
+class StreamChannelPool implements Recycler<StreamChannel> {
     private static final int POLL_RATE_MILLIS = 5000;
     private static final int MAX_IDLE_MILLIS = 60 * 1000;
 

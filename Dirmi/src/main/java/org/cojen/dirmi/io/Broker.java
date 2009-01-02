@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface StreamBroker extends StreamAcceptor, StreamConnector, Closeable {
+public interface Broker<C> extends Acceptor<C>, Connector<C>, Closeable {
     /**
      * Prevents new channels from being created and disconnects all existing channels.
      */

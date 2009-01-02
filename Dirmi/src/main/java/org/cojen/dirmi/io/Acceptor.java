@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -23,16 +24,16 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface StreamListener {
+public interface Acceptor<C> extends Closeable {
     /**
-     * Called at most once as soon as channel has been established. This
-     * method may safely block, and it can interact with the channel too.
+     * Returns immediately and calls established method on listener
+     * asynchronously. Only one channel is accepted per invocation of this
+     * method.
      */
-    void established(StreamChannel channel);
+    void accept(AcceptListener<C> listener);
 
     /**
-     * Called when channel cannot be established. This method may safely
-     * block.
+     * Prevents new channels from being accepted.
      */
-    void failed(IOException e);
+    void close() throws IOException;
 }

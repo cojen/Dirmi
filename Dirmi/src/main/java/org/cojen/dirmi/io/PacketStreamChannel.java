@@ -36,7 +36,7 @@ class PacketStreamChannel implements StreamChannel {
         AtomicIntegerFieldUpdater.newUpdater(PacketStreamChannel.class, "mClosed");
 
     final Executor mExecutor;
-    private final StreamRecycler mRecycler;
+    private final Recycler<StreamChannel> mRecycler;
 
     private final StreamChannel mChannel;
     private final In mIn;
@@ -44,7 +44,7 @@ class PacketStreamChannel implements StreamChannel {
 
     private volatile int mClosed;
 
-    PacketStreamChannel(Executor executor, StreamRecycler recycler, StreamChannel channel)
+    PacketStreamChannel(Executor executor, Recycler<StreamChannel> recycler, StreamChannel channel)
         throws IOException
     {
         mExecutor = executor;

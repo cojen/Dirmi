@@ -24,9 +24,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAcceptor;
 
-import org.cojen.dirmi.io.StreamBroker;
-import org.cojen.dirmi.io.StreamBrokerAcceptor;
-import org.cojen.dirmi.io.StreamBrokerListener;
+import org.cojen.dirmi.io.Acceptor;
+import org.cojen.dirmi.io.AcceptListener;
+import org.cojen.dirmi.io.Broker;
+import org.cojen.dirmi.io.StreamChannel;
 
 /**
  * 
@@ -34,14 +35,14 @@ import org.cojen.dirmi.io.StreamBrokerListener;
  * @author Brian S O'Neill
  */
 public class StandardSessionServer implements Closeable {
-    private final StreamBrokerAcceptor mAcceptor;
+    private final Acceptor<Broker<StreamChannel>> mAcceptor;
     private final ScheduledExecutorService mExecutor;
 
     /**
      * @param executor shared executor for remote methods
      */
     public StandardSessionServer(ScheduledExecutorService executor,
-                                 StreamBrokerAcceptor acceptor)
+                                 Acceptor<Broker<StreamChannel>> acceptor)
     {
         if (acceptor == null) {
             throw new IllegalArgumentException("Broker acceptor is null");
@@ -54,8 +55,8 @@ public class StandardSessionServer implements Closeable {
     }
 
     public void accept(final SessionAcceptor acceptor) {
-        mAcceptor.accept(new StreamBrokerListener() {
-            public void established(StreamBroker broker) {
+        mAcceptor.accept(new AcceptListener<Broker<StreamChannel>>() {
+            public void established(Broker<StreamChannel> broker) {
                 mAcceptor.accept(this);
 
                 Object server = acceptor.createServer();

@@ -29,21 +29,24 @@ import java.util.concurrent.locks.Lock;
 import org.cojen.dirmi.util.ExceptionUtils;
 
 /**
- * Paired with {@link StreamBrokerAcceptor} to adapt a connector into a full
- * broker.
+ * Paired with {@link StreamChannelBrokerAcceptor} to adapt a connector into a
+ * full broker.
  *
  * @author Brian S O'Neill
  */
-public class StreamConnectorBroker extends AbstractStreamBroker implements StreamBroker {
-    final StreamConnector mConnector;
+public class StreamChannelConnectorBroker extends AbstractStreamBroker
+    implements Broker<StreamChannel>
+{
+    final Connector<StreamChannel> mConnector;
     final MessageChannel mControlChannel;
 
     private boolean mOpened;
     private int mBrokerId;
     private IOException mOpenException;
 
-    public StreamConnectorBroker(ScheduledExecutorService executor,
-                                 final MessageChannel controlChannel, StreamConnector connector)
+    public StreamChannelConnectorBroker(ScheduledExecutorService executor,
+                                        final MessageChannel controlChannel,
+                                        Connector<StreamChannel> connector)
         throws IOException
     {
         super(executor, true);
@@ -90,7 +93,7 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
                         accepted(channelId, channel);
                     } catch (IOException e) {
                         unregisterAndDisconnect(channelId, channel);
-                        StreamListener listener = pollListener();
+                        AcceptListener<StreamChannel> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -181,11 +184,11 @@ public class StreamConnectorBroker extends AbstractStreamBroker implements Strea
     }
 
     @Override
-    protected void preClose() {
+    void preClose() {
     }
 
     @Override
-    protected void closeControlChannel() throws IOException {
+    void closeControlChannel() throws IOException {
         mControlChannel.close();
     }
 

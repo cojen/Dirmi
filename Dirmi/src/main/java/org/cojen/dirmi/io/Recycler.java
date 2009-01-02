@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,16 +16,15 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.IOException;
-
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public interface MessageConnector {
+interface Recycler<C> {
     /**
-     * Returns a new channel, possibly blocking until it has been established.
+     * Called at most once as soon as channel can be reused. This method may
+     * safely block, and it can interact with the channel too.
      */
-    MessageChannel connect() throws IOException;
+    void recycled(C channel);
 }

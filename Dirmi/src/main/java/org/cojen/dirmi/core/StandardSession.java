@@ -71,9 +71,9 @@ import org.cojen.dirmi.Session;
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
 
-import org.cojen.dirmi.io.StreamBroker;
+import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.StreamChannel;
-import org.cojen.dirmi.io.StreamListener;
+import org.cojen.dirmi.io.AcceptListener;
 
 import org.cojen.dirmi.util.AbstractIdentifier;
 import org.cojen.dirmi.util.ExceptionUtils;
@@ -92,7 +92,7 @@ public class StandardSession implements Session {
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
 
-    final StreamBroker mBroker;
+    final Broker<StreamChannel> mBroker;
     final ScheduledExecutorService mExecutor;
 
     // Queue for reclaimed phantom references.
@@ -160,7 +160,7 @@ public class StandardSession implements Session {
      * @param server optional server object to export
      */
     public StandardSession(ScheduledExecutorService executor,
-                           StreamBroker broker, final Object server)
+                           Broker<StreamChannel> broker, final Object server)
         throws IOException
     {
         if (broker == null) {
@@ -192,7 +192,7 @@ public class StandardSession implements Session {
         mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
         // Accept bootstrap request which replies with server and admin objects.
-        mBroker.accept(new StreamListener() {
+        mBroker.accept(new AcceptListener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
@@ -882,7 +882,7 @@ public class StandardSession implements Session {
         }
     }
 
-    private class Handler implements StreamListener {
+    private class Handler implements AcceptListener<StreamChannel> {
         public void established(StreamChannel channel) {
             mBroker.accept(this);
             InvocationChannel invChan;

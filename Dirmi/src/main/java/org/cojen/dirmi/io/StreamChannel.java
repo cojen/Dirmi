@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -26,13 +25,8 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public interface StreamChannel extends AddressPair, Closeable {
+public interface StreamChannel extends Channel {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;
-
-    /**
-     * Forcibly close channel, discarding unflushed output and any exceptions.
-     */
-    void disconnect();
 }

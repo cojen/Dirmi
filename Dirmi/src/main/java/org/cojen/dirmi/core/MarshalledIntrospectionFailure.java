@@ -28,7 +28,7 @@ import org.cojen.dirmi.MalformedRemoteObjectException;
  *
  * @author Brian S O'Neill
  */
-public class MarshalledIntrospectionFailure implements Marshalled, Externalizable {
+class MarshalledIntrospectionFailure implements Marshalled, Externalizable {
     private static final long serialVersionUID = 1;
 
     private String mMessage;
