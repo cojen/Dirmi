@@ -386,10 +386,8 @@ public class StandardSession implements Session {
     }
 
     boolean addSkeleton(VersionedIdentifier objID, Skeleton skeleton) {
-        // FIXME: Handle rare objID collision. If collision, replace with
-        // Skeleton instance that can select by object id. Perhaps just make
-        // VersionedIdentifier be 128 bit instead of 64. If so, remove objectID
-        // parameter from Skeleton interface.
+        // FIXME: Handle rare objID collision. Perhaps just make
+        // VersionedIdentifier be 128 bit instead of 64.
 
         // Use lock as a barrier to prevent race condition with close
         // method. Skeletons should not be added to mSkeletons if they are
@@ -517,7 +515,7 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(objID, methodID, invChannel, batchedException)) {
+                        if (skeleton.invoke(methodID, invChannel, batchedException)) {
                             // Handle another request.
                             batchedException = null;
                             continue;

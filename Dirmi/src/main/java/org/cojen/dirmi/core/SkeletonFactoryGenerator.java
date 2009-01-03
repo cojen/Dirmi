@@ -225,17 +225,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod
             (Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
-             new TypeDesc[] {
-                 VERSIONED_IDENTIFIER_TYPE, IDENTIFIER_TYPE, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE
-             });
+             new TypeDesc[] {IDENTIFIER_TYPE, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
         CodeBuilder b = new CodeBuilder(mi);
 
-        // Note: This implementation ignores the object id parameter. Instances
-        // can only serve a single object.
-
-        LocalVariable methodIDVar = b.getParameter(1);
-        LocalVariable channelVar = b.getParameter(2);
-        LocalVariable batchedExceptionVar = b.getParameter(3);
+        LocalVariable methodIDVar = b.getParameter(0);
+        LocalVariable channelVar = b.getParameter(1);
+        LocalVariable batchedExceptionVar = b.getParameter(2);
 
         // Have a reference to the InputStream for reading parameters.
         b.loadLocal(channelVar);

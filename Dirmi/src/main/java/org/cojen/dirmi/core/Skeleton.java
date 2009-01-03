@@ -54,7 +54,6 @@ public interface Skeleton extends Unreferenced {
      * exception types and handled like any other thrown exception. For
      * synchronous methods, this means the exception is written to the channel.
      *
-     * @param objectID object id to invoke; ignored by implementations that support one object
      * @param methodID method to invoke
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
@@ -70,7 +69,7 @@ public interface Skeleton extends Unreferenced {
      * @throws BatchedInvocationException if method is batched and
      * throws an exception
      */
-    boolean invoke(VersionedIdentifier objectID, Identifier methodID, InvocationChannel channel,
+    boolean invoke(Identifier methodID, InvocationChannel channel,
                    BatchedInvocationException batchedException)
         throws IOException,
                NoSuchMethodException,
