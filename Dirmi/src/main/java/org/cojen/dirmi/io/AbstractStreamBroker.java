@@ -48,6 +48,7 @@ import org.cojen.dirmi.util.Random;
  */
 abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     static final int DEFAULT_PING_CHECK_MILLIS = 10000;
+    static final int DEFAULT_CHANNEL_CLEANUP_DELAY_SECONDS = 100;
 
     static final byte OP_OPEN = 1;
     static final byte OP_OPENED = 2;
@@ -69,36 +70,32 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     private boolean mClosed;
     volatile String mClosedReason;
 
-    private final ScheduledFuture<?> mPingCheckTask;
+    private volatile ScheduledFuture<?> mPingCheckTask;
 
     volatile boolean mPinged;
-
-    {
-        mChannelMap = new IntHashMap<ChannelReference>();
-        mChannelQueue = new ReferenceQueue<StreamChannel>();
-        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
-        mCloseLock = new ReentrantReadWriteLock(true);
-    }
 
     AbstractStreamBroker(Executor executor) {
         if (executor == null) {
             throw new IllegalArgumentException("Executor is null");
         }
         mExecutor = executor;
-        mPingCheckTask = null;
+
+        mChannelMap = new IntHashMap<ChannelReference>();
+        mChannelQueue = new ReferenceQueue<StreamChannel>();
+        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
+        mCloseLock = new ReentrantReadWriteLock(true);
+
+        if (executor instanceof ScheduledExecutorService) {
+            new CleanupTask((ScheduledExecutorService) executor, this).schedule();
+        }
     }
 
     AbstractStreamBroker(ScheduledExecutorService executor, boolean doPingChecks)
         throws IOException
     {
-        if (executor == null) {
-            throw new IllegalArgumentException("Executor is null");
-        }
-        mExecutor = executor;
+        this(executor);
 
-        if (!doPingChecks) {
-            mPingCheckTask = null;
-        } else {
+        if (doPingChecks) {
             try {
                 // Start ping check task.
                 long checkRate = DEFAULT_PING_CHECK_MILLIS;
@@ -181,32 +178,11 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
         // Clean up unreferenced channels. Do so in separate thread to allow
         // register method to return right away.
-        final Reference<? extends StreamChannel> firstRef = queue.poll();
-        if (firstRef != null) {
+        final Reference<? extends StreamChannel> ref = queue.poll();
+        if (ref != null) {
             Runnable task = new Runnable() {
                 public void run() {
-                    Reference<? extends StreamChannel> ref = firstRef;
-
-                    List<Closeable> toClose = new ArrayList<Closeable>();
-                    synchronized (map) {
-                        do {
-                            ChannelReference channelRef = (ChannelReference) ref;
-                            map.remove(channelRef.mChannelId);
-                            Closeable closable = channelRef.mClosable;
-                            if (closable != null) {
-                                toClose.add(closable);
-                            }
-                        } while ((ref = queue.poll()) != null);
-                    }
-
-                    // Disconnect channels outside of synchronized block.
-                    for (Closeable closable : toClose) {
-                        try {
-                            closable.close();
-                        } catch (IOException e) {
-                            // Ignore.
-                        }
-                    }
+                    cleanupUnreferencedChannels(ref);
                 }
             };
 
@@ -215,6 +191,36 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             } catch (RejectedExecutionException e) {
                 // Run it in this thread instead.
                 task.run();
+            }
+        }
+    }
+
+    void cleanupUnreferencedChannels(Reference<? extends StreamChannel> ref) {
+        ReferenceQueue<StreamChannel> queue = mChannelQueue;
+        if (ref == null && (ref = queue.poll()) == null) {
+            return;
+        }
+
+        IntHashMap<ChannelReference> map = mChannelMap;
+
+        List<Closeable> toClose = new ArrayList<Closeable>();
+        synchronized (map) {
+            do {
+                ChannelReference channelRef = (ChannelReference) ref;
+                map.remove(channelRef.mChannelId);
+                Closeable closable = channelRef.mClosable;
+                if (closable != null) {
+                    toClose.add(closable);
+                }
+            } while ((ref = queue.poll()) != null);
+        }
+
+        // Disconnect channels outside of synchronized block.
+        for (Closeable closable : toClose) {
+            try {
+                closable.close();
+            } catch (IOException e) {
+                // Ignore.
             }
         }
     }
@@ -252,6 +258,16 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             throw new IOException(mClosedReason);
         }
         return lock;
+    }
+
+    boolean isClosed() {
+        Lock lock = mCloseLock.readLock();
+        lock.lock();
+        try {
+            return mClosed;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void close() throws IOException {
@@ -332,6 +348,33 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             super(channel, queue);
             mChannelId = channelId;
             mClosable = channel.getCloseable();
+        }
+    }
+
+    private static class CleanupTask implements Runnable {
+        private final ScheduledExecutorService mExecutor;
+        private final WeakReference<AbstractStreamBroker> mBrokerRef;
+
+        CleanupTask(ScheduledExecutorService executor, AbstractStreamBroker broker) {
+            mExecutor = executor;
+            mBrokerRef = new WeakReference<AbstractStreamBroker>(broker);
+        }
+
+        public void run() {
+            AbstractStreamBroker broker = mBrokerRef.get();
+            if (broker != null && !broker.isClosed()) {
+                broker.cleanupUnreferencedChannels(null);
+                schedule();
+            }
+        }
+
+        void schedule() {
+            try {
+                mExecutor.schedule(this, DEFAULT_CHANNEL_CLEANUP_DELAY_SECONDS, TimeUnit.SECONDS);
+            } catch (RejectedExecutionException e) {
+                // Cleanup task is not critical. Cleanup still happens during
+                // registration of new channels.
+            }
         }
     }
 
