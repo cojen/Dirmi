@@ -126,9 +126,9 @@ public class SocketMessageProcessor implements Closeable {
         serverChannel.configureBlocking(false);
 
         class Accept implements Registerable, Selectable<SocketChannel> {
-            private final AcceptListener<MessageChannel> mListener;
+            private final Acceptor.Listener<MessageChannel> mListener;
 
-            Accept(AcceptListener<MessageChannel> listener) {
+            Accept(Acceptor.Listener<MessageChannel> listener) {
                 mListener = listener;
             }
 
@@ -164,7 +164,7 @@ public class SocketMessageProcessor implements Closeable {
         };
 
         return new Acceptor<MessageChannel>() {
-            public void accept(AcceptListener<MessageChannel> listener) {
+            public void accept(Acceptor.Listener<MessageChannel> listener) {
                 enqueueRegister(new Accept(listener));
             }
 

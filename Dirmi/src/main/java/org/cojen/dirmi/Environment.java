@@ -31,7 +31,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.cojen.util.WeakIdentityMap;
 
 import org.cojen.dirmi.core.StandardSession;
-import org.cojen.dirmi.core.StandardSessionServer;
 
 import org.cojen.dirmi.io.Acceptor;
 import org.cojen.dirmi.io.Broker;
@@ -57,8 +56,7 @@ public class Environment implements Closeable {
 
     private SocketMessageProcessor mMessageProcessor;
 
-    final WeakIdentityMap<Session, Object> mSessions;
-    final WeakIdentityMap<StandardSessionServer, Object> mSessionServers;
+    final WeakIdentityMap<Closeable, Object> mCloseableSet;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
@@ -82,8 +80,7 @@ public class Environment implements Closeable {
      */
     public Environment(ScheduledExecutorService executor) {
         mExecutor = executor;
-        mSessions = new WeakIdentityMap<Session, Object>();
-        mSessionServers = new WeakIdentityMap<StandardSessionServer, Object>();
+        mCloseableSet = new WeakIdentityMap<Closeable, Object>();
         mCloseLock = new ReentrantReadWriteLock(true);
     }
 
@@ -141,12 +138,26 @@ public class Environment implements Closeable {
                 new SocketStreamChannelConnector(mExecutor, endpoint, bindpoint);
             Broker<StreamChannel> broker =
                 new StreamChannelConnectorBroker(mExecutor, channel, connector);
+
+            return createSession(broker, server);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Attempts to connect to remote host, blocking until session is
+     * established. Only one session can be created per broker instance.
+     *
+     * @param broker broker for establishing connections; must always connect to same remote host
+     * @param server optional primary server object to export; must be Remote
+     * or Serializable
+     */
+    public Session createSession(Broker<StreamChannel> broker, Object server) throws IOException {
+        Lock lock = closeLock();
+        try {
             Session session = new StandardSession(mExecutor, broker, server);
-
-            synchronized (mSessions) {
-                mSessions.put(session, "");
-            }
-
+            addToClosableSet(session);
             return session;
         } finally {
             lock.unlock();
@@ -154,76 +165,90 @@ public class Environment implements Closeable {
     }
 
     /**
-     * Returns immediately and asynchronously accepts sessions.
+     * Returns immediately and asynchronously accepts sessions. Any exceptions
+     * during session establishment are passed to the thread's uncaught
+     * exception handler.
      *
      * @param port port for accepting socket connections
-     * @param acceptor called as sessions are accepted
-     * @see SharedServer
+     * @param server primary server object to export; must be Remote or
+     * Serializable
+     * @return object which can be closed to stop accepting sessions
      */
-    public void acceptSessions(int port, SessionAcceptor acceptor) throws IOException {
-        acceptSessions(new InetSocketAddress(port), acceptor);
+    public Closeable acceptSessions(int port, Object server) throws IOException {
+        return acceptSessions(new InetSocketAddress(port), server);
     }
 
     /**
-     * Returns immediately and asynchronously accepts sessions.
+     * Returns immediately and asynchronously accepts sessions. Any exceptions
+     * during session establishment are passed to the thread's uncaught
+     * exception handler.
      *
      * @param bindpoint address for accepting socket connections
-     * @param acceptor called as sessions are accepted
-     * @see SharedServer
+     * @param server shared server object to export; must be Remote or
+     * Serializable
+     * @return object which can be closed to stop accepting sessions
      */
-    public void acceptSessions(SocketAddress bindpoint, final SessionAcceptor acceptor)
+    public Closeable acceptSessions(SocketAddress bindpoint, final Object server)
+        throws IOException
+    {
+        Lock lock = closeLock();
+        try {
+            Acceptor<Broker<StreamChannel>> brokerAcceptor = createBrokerAcceptor(bindpoint);
+
+            brokerAcceptor.accept(new Acceptor.Listener<Broker<StreamChannel>>() {
+                public void established(Broker<StreamChannel> broker) {
+                    try {
+                        createSession(broker, server);
+                    } catch (IOException e) {
+                        try {
+                            broker.close();
+                        } catch (IOException e2) {
+                            // Ignore.
+                        }
+                    }
+                }
+
+                public void failed(IOException e) {
+                    Thread t = Thread.currentThread();
+                    try {
+                        t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                    } catch (Throwable e2) {
+                        // I give up.
+                    }
+                    // Yield just in case exceptions are out of control.
+                    t.yield();
+                }
+            });
+
+            return brokerAcceptor;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns immediately and asynchronously accepts brokers. Sessions can be
+     * created from brokers by calling the {@link #createSession(Broker,
+     * Object)} method. Compared to the {@link #acceptSessions}, this method
+     * provides more control over how sessions are accepted.
+     *
+     * @param bindpoint address for accepting socket connections
+     * @return an acceptor of brokers
+     */
+    public Acceptor<Broker<StreamChannel>> createBrokerAcceptor(SocketAddress bindpoint)
         throws IOException
     {
         if (bindpoint == null) {
             throw new IllegalArgumentException("Must provide a bindpoint");
         }
-        if (acceptor == null) {
-            throw new IllegalArgumentException("Must provide an acceptor");
-        }
-
         Lock lock = closeLock();
         try {
             Acceptor<StreamChannel> streamAcceptor =
                 new SocketStreamChannelAcceptor(mExecutor, bindpoint);
             Acceptor<Broker<StreamChannel>> brokerAcceptor =
                 new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
-            StandardSessionServer server = new StandardSessionServer(mExecutor, brokerAcceptor);
-
-            synchronized (mSessionServers) {
-                mSessionServers.put(server, "");
-            }
-
-            SessionAcceptor copyAcceptor = new SessionAcceptor() {
-                public Object createServer() {
-                    return acceptor.createServer();
-                }
-
-                public void established(Session session) {
-                    Lock lock;
-                    try {
-                        lock = closeLock();
-                    } catch (IOException e) {
-                        failed(e);
-                        return;
-                    }
-                    try {
-                        synchronized (mSessions) {
-                            mSessions.put(session, "");
-                        }
-                    } finally {
-                        lock.unlock();
-                    }
-                    acceptor.established(session);
-                }
-
-                public void failed(IOException e) {
-                    if (!isClosed()) {
-                        acceptor.failed(e);
-                    }
-                }
-            };
-
-            server.accept(copyAcceptor);
+            addToClosableSet(brokerAcceptor);
+            return brokerAcceptor;
         } finally {
             lock.unlock();
         }
@@ -243,10 +268,10 @@ public class Environment implements Closeable {
 
             IOException exception = null;
 
-            synchronized (mSessionServers) {
-                for (StandardSessionServer server : mSessionServers.keySet()) {
+            synchronized (mCloseableSet) {
+                for (Closeable c : mCloseableSet.keySet()) {
                     try {
-                        server.close();
+                        c.close();
                     } catch (IOException e) {
                         if (exception == null) {
                             exception = e;
@@ -254,21 +279,7 @@ public class Environment implements Closeable {
                     }
                 }
 
-                mSessionServers.clear();
-            }
-
-            synchronized (mSessions) {
-                for (Session session : mSessions.keySet()) {
-                    try {
-                        session.close();
-                    } catch (IOException e) {
-                        if (exception == null) {
-                            exception = e;
-                        }
-                    }
-                }
-
-                mSessions.clear();
+                mCloseableSet.clear();
             }
 
             mExecutor.shutdownNow();
@@ -303,10 +314,22 @@ public class Environment implements Closeable {
         return lock;
     }
 
+    void addToClosableSet(Closeable c) throws IOException {
+        Lock lock = closeLock();
+        try {
+            synchronized (mCloseableSet) {
+                mCloseableSet.put(c, "");
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private synchronized SocketMessageProcessor messageProcessor() throws IOException {
         SocketMessageProcessor processor = mMessageProcessor;
         if (processor == null) {
             mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
+            addToClosableSet(processor);
         }
         return processor;
     }

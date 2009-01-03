@@ -93,7 +93,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
                         accepted(channelId, channel);
                     } catch (IOException e) {
                         unregisterAndDisconnect(channelId, channel);
-                        AcceptListener<StreamChannel> listener = pollListener();
+                        Acceptor.Listener<StreamChannel> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -194,7 +194,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
 
     @Override
     public String toString() {
-        return "StreamConnectorBroker {channel=" + mControlChannel + '}';
+        return "StreamChannelConnectorBroker {channel=" + mControlChannel + '}';
     }
 
     synchronized void setBrokerId(int id) {

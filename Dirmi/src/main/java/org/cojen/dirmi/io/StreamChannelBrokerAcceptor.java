@@ -47,7 +47,7 @@ import org.cojen.dirmi.util.Random;
 public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChannel>> {
     final Acceptor<StreamChannel> mAcceptor;
     final IntHashMap<TheBroker> mBrokerMap;
-    final LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>> mBrokerListenerQueue;
+    final LinkedBlockingQueue<Acceptor.Listener<Broker<StreamChannel>>> mBrokerListenerQueue;
 
     final ScheduledExecutorService mExecutor;
 
@@ -59,11 +59,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
     {
         mAcceptor = acceptor;
         mBrokerMap = new IntHashMap<TheBroker>();
-        mBrokerListenerQueue = new LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>>();
+        mBrokerListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<Broker<StreamChannel>>>();
         mExecutor = executor;
         mCloseLock = new ReentrantReadWriteLock(true);
 
-        acceptor.accept(new AcceptListener<StreamChannel>() {
+        acceptor.accept(new Acceptor.Listener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 acceptor.accept(this);
 
@@ -96,7 +96,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
                         Lock lock = closeLock();
                         try {
-                            AcceptListener<Broker<StreamChannel>> listener = pollListener();
+                            Acceptor.Listener<Broker<StreamChannel>> listener = pollListener();
                             if (listener != null) {
                                 listener.established(broker);
                             } else {
@@ -154,7 +154,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
                     if (e.getCause() instanceof RejectedExecutionException) {
                         // Okay, this is important. It was thrown by Broker constructor.
-                        AcceptListener<Broker<StreamChannel>> listener = pollListener();
+                        Acceptor.Listener<Broker<StreamChannel>> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -163,7 +163,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
             }
 
             public void failed(IOException e) {
-                AcceptListener<Broker<StreamChannel>> listener;
+                Acceptor.Listener<Broker<StreamChannel>> listener;
                 if ((listener = pollListener()) != null) {
                     listener.failed(e);
                 }
@@ -179,7 +179,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
      * asynchronously. Only one broker is accepted per invocation of this
      * method.
      */
-    public void accept(final AcceptListener<Broker<StreamChannel>> listener) {
+    public void accept(final Acceptor.Listener<Broker<StreamChannel>> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -255,7 +255,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         return lock;
     }
 
-    AcceptListener<Broker<StreamChannel>> pollListener() {
+    Acceptor.Listener<Broker<StreamChannel>> pollListener() {
         try {
             return mBrokerListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -381,7 +381,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
         @Override
         public String toString() {
-            return "StreamBrokerAcceptor.Broker {channel=" + mControlChannel + '}';
+            return "StreamChannelBrokerAcceptor.Broker {channel=" + mControlChannel + '}';
         }
 
         void connected(int channelId, StreamChannel channel) {

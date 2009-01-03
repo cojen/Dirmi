@@ -69,6 +69,7 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
 
     @Override
     public String toString() {
-        return "StreamConnector {endpoint=" + mEndpoint + ", bindpoint=" + mBindpoint + '}';
+        return "SocketStreamChannelConnector {endpoint=" + mEndpoint +
+            ", bindpoint=" + mBindpoint + '}';
     }
 }

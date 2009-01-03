@@ -64,7 +64,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     private final IntHashMap<ChannelReference> mChannelMap;
     private final ReferenceQueue<StreamChannel> mChannelQueue;
 
-    private final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
+    private final LinkedBlockingQueue<Acceptor.Listener<StreamChannel>> mListenerQueue;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
@@ -82,7 +82,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
         mChannelMap = new IntHashMap<ChannelReference>();
         mChannelQueue = new ReferenceQueue<StreamChannel>();
-        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
+        mListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<StreamChannel>>();
         mCloseLock = new ReentrantReadWriteLock(true);
 
         if (executor instanceof ScheduledExecutorService) {
@@ -116,7 +116,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         }
     }
 
-    public void accept(final AcceptListener<StreamChannel> listener) {
+    public void accept(final Acceptor.Listener<StreamChannel> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -140,7 +140,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     void accepted(int channelId, StreamChannel channel) {
         register(channelId, channel);
 
-        AcceptListener<StreamChannel> listener = pollListener();
+        Acceptor.Listener<StreamChannel> listener = pollListener();
         if (listener != null) {
             listener.established(channel);
         } else {
@@ -149,7 +149,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         }
     }
 
-    AcceptListener<StreamChannel> pollListener() {
+    Acceptor.Listener<StreamChannel> pollListener() {
         try {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -296,7 +296,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                 pingCheckTask.cancel(true);
             }
 
-            AcceptListener<StreamChannel> listener;
+            Acceptor.Listener<StreamChannel> listener;
             while ((listener = mListenerQueue.poll()) != null) {
                 listener.failed(new IOException(reason));
             }

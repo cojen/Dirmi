@@ -72,9 +72,9 @@ import org.cojen.dirmi.Session;
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
 
+import org.cojen.dirmi.io.Acceptor;
 import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.StreamChannel;
-import org.cojen.dirmi.io.AcceptListener;
 
 import org.cojen.dirmi.util.AbstractIdentifier;
 import org.cojen.dirmi.util.ExceptionUtils;
@@ -193,7 +193,7 @@ public class StandardSession implements Session {
         mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
         // Accept bootstrap request which replies with server and admin objects.
-        mBroker.accept(new AcceptListener<StreamChannel>() {
+        mBroker.accept(new Acceptor.Listener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
@@ -881,7 +881,7 @@ public class StandardSession implements Session {
         }
     }
 
-    private class Handler implements AcceptListener<StreamChannel> {
+    private class Handler implements Acceptor.Listener<StreamChannel> {
         public void established(StreamChannel channel) {
             mBroker.accept(this);
             InvocationChannel invChan;

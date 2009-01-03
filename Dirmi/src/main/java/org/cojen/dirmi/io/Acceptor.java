@@ -30,10 +30,24 @@ public interface Acceptor<C extends Closeable> extends Closeable {
      * asynchronously. Only one channel is accepted per invocation of this
      * method.
      */
-    void accept(AcceptListener<C> listener);
+    void accept(Listener<C> listener);
 
     /**
      * Prevents new channels from being accepted.
      */
     void close() throws IOException;
+
+    public static interface Listener<C extends Closeable> {
+        /**
+         * Called at most once as soon as channel has been established. This
+         * method may safely block, and it can interact with the channel too.
+         */
+        void established(C channel);
+
+        /**
+         * Called when channel cannot be established. This method may safely
+         * block.
+         */
+        void failed(IOException e);
+    }
 }
