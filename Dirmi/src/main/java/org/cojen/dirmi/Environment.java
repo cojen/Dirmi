@@ -102,20 +102,7 @@ public class Environment implements Closeable {
      * @param endpoint address of remote host
      */
     public Session createSession(SocketAddress endpoint) throws IOException {
-        return createSession(endpoint, null);
-    }
-
-    /**
-     * Attempts to connect to remote host, blocking until session is
-     * established.
-     *
-     * @param endpoint address of remote host
-     * @param bindpoint address of local host; pass null for default
-     */
-    public Session createSession(SocketAddress endpoint, SocketAddress bindpoint)
-        throws IOException
-    {
-        return createSession(endpoint, bindpoint, null);
+        return createSession(endpoint, null, null);
     }
 
     /**
