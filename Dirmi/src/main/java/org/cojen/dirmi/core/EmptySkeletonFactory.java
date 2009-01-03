@@ -38,12 +38,11 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 return remoteServer;
             }
 
-            public boolean invoke(VersionedIdentifier objectID, Identifier methodID,
+            public boolean invoke(Identifier methodID,
                                   InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
             {
-                throw new NoSuchMethodException
-                    ("Object id: " + objectID + ", method id: " + methodID);
+                throw new NoSuchMethodException("method id: " + methodID);
             }
 
             public void unreferenced() {
