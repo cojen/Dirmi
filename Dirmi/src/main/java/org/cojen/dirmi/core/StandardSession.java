@@ -1037,7 +1037,7 @@ public class StandardSession implements Session {
                         break findRemote;
                     }
 
-                    Skeleton skeleton = lookup(mSkeletons, objID);
+                    Skeleton skeleton = mSkeletons.get(objID);
                     if (skeleton != null) {
                         remote = skeleton.getRemoteServer();
                         break findRemote;
