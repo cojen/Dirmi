@@ -82,7 +82,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
 
                     try {
                         socket.setTcpNoDelay(true);
-                        StreamChannel channel = new SocketChannel(socket);
+                        StreamChannel channel = new SocketStreamChannel(socket);
                         accepted(new PacketStreamChannel(executor, recycler, channel));
                     } catch (IOException e) {
                         try {

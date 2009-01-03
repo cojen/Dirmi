@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -102,6 +103,10 @@ class PacketStreamChannel implements StreamChannel {
             mChannel.disconnect();
             mIn.doClose(false);
         }
+    }
+
+    public Closeable getCloseable() {
+        return mChannel;
     }
 
     // Should only be called by executed task, allowing recycler operation to

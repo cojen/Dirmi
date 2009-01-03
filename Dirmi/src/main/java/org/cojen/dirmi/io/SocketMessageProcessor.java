@@ -459,6 +459,10 @@ public class SocketMessageProcessor implements Closeable {
             }
         }
 
+        public Closeable getCloseable() {
+            return mChannel;
+        }
+
         // Called directly by Reader.
         void close(IOException cause) throws IOException {
             synchronized (mChannel.blockingLock()) {

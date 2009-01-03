@@ -462,5 +462,9 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
         public void disconnect() {
         }
+
+        public Closeable getCloseable() {
+            return null;
+        }
     }
 }

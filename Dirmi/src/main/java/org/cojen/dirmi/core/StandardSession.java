@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.Closeable;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.InputStream;
@@ -945,6 +946,10 @@ public class StandardSession implements Session {
         public final void disconnect() {
             mClosed = true;
             mChannel.disconnect();
+        }
+
+        public Closeable getCloseable() {
+            return mChannel;
         }
 
         public final Object getLocalAddress() {

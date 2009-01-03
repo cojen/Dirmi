@@ -63,7 +63,7 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
         }
         socket.connect(mEndpoint);
         socket.setTcpNoDelay(true);
-        channel = new SocketChannel(socket);
+        channel = new SocketStreamChannel(socket);
         return new PacketStreamChannel(mExecutor, mPool, channel);
     }
 

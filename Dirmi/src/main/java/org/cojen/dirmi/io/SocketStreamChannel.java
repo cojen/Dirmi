@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -27,10 +28,10 @@ import java.net.Socket;
  *
  * @author Brian S O'Neill
  */
-class SocketChannel implements StreamChannel {
+class SocketStreamChannel implements StreamChannel {
     private final Socket mSocket;
 
-    SocketChannel(Socket socket) throws IOException {
+    SocketStreamChannel(Socket socket) throws IOException {
         mSocket = socket;
     }
 
@@ -52,7 +53,7 @@ class SocketChannel implements StreamChannel {
 
     @Override
     public String toString() {
-        return "SocketChannel {localAddress=" + getLocalAddress() +
+        return "SocketStreamChannel {localAddress=" + getLocalAddress() +
             ", remoteAddress=" + getRemoteAddress() + '}';
     }
 
@@ -65,5 +66,17 @@ class SocketChannel implements StreamChannel {
             mSocket.close();
         } catch (IOException e) {
         }
+    }
+
+    public Closeable getCloseable() {
+        // This is a bit frustrating. The Socket class should implement
+        // Closeable, but it doesn't. I could return either streams of the
+        // socket, but accessing them might throw an exception. So, wrap the
+        // socket with a little class.
+        return new Closeable() {
+            public void close() throws IOException {
+                mSocket.close();
+            }
+        };
     }
 }

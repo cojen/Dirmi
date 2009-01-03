@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -130,10 +131,10 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
     }
 
     private class Channel implements StreamChannel {
-        private final InputStream mIn;
-        private final OutputStream mOut;
+        private final PipedInputStream mIn;
+        private final PipedOutputStream mOut;
 
-        Channel(InputStream in, OutputStream out) {
+        Channel(PipedInputStream in, PipedOutputStream out) {
             mIn = in;
             mOut = out;
         }
@@ -162,8 +163,11 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         }
 
         public void close() throws IOException {
-            mIn.close();
             mOut.close();
+        }
+
+        public Closeable getCloseable() {
+            return mOut;
         }
     }
 }

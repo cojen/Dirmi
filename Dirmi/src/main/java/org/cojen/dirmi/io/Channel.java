@@ -28,4 +28,12 @@ public interface Channel extends AddressPair, Closeable {
      * Forcibly close channel, discarding unflushed output and any exceptions.
      */
     void disconnect();
+
+    /**
+     * Returns an internal Closeable object, which is not the same object as
+     * the Channel. This can be used by PhantomReferences for closing
+     * unreferenced Channels. The returned Closeable can be null if Channel
+     * implementation does not require clean up.
+     */
+    Closeable getCloseable();
 }

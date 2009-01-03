@@ -16,7 +16,15 @@
 
 package org.cojen.dirmi.io;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+
+import java.io.Closeable;
 import java.io.IOException;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -52,8 +60,8 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
     final Executor mExecutor;
 
-    // FIXME: StreamChannel close/disconnect needs to unregister from map
-    private final IntHashMap<StreamChannel> mChannelMap;
+    private final IntHashMap<ChannelReference> mChannelMap;
+    private final ReferenceQueue<StreamChannel> mChannelQueue;
 
     private final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
@@ -66,7 +74,8 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     volatile boolean mPinged;
 
     {
-        mChannelMap = new IntHashMap<StreamChannel>();
+        mChannelMap = new IntHashMap<ChannelReference>();
+        mChannelQueue = new ReferenceQueue<StreamChannel>();
         mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
         mCloseLock = new ReentrantReadWriteLock(true);
     }
@@ -163,15 +172,58 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     }
 
     void register(int channelId, StreamChannel channel) {
-        synchronized (mChannelMap) {
-            mChannelMap.put(channelId, channel);
+        final IntHashMap<ChannelReference> map = mChannelMap;
+        final ReferenceQueue<StreamChannel> queue = mChannelQueue;
+
+        synchronized (map) {
+            map.put(channelId, new ChannelReference(channelId, channel, queue));
+        }
+
+        // Clean up unreferenced channels. Do so in separate thread to allow
+        // register method to return right away.
+        final Reference<? extends StreamChannel> firstRef = queue.poll();
+        if (firstRef != null) {
+            Runnable task = new Runnable() {
+                public void run() {
+                    Reference<? extends StreamChannel> ref = firstRef;
+
+                    List<Closeable> toClose = new ArrayList<Closeable>();
+                    synchronized (map) {
+                        do {
+                            ChannelReference channelRef = (ChannelReference) ref;
+                            map.remove(channelRef.mChannelId);
+                            Closeable closable = channelRef.mClosable;
+                            if (closable != null) {
+                                toClose.add(closable);
+                            }
+                        } while ((ref = queue.poll()) != null);
+                    }
+
+                    // Disconnect channels outside of synchronized block.
+                    for (Closeable closable : toClose) {
+                        try {
+                            closable.close();
+                        } catch (IOException e) {
+                            // Ignore.
+                        }
+                    }
+                }
+            };
+
+            try {
+                mExecutor.execute(task);
+            } catch (RejectedExecutionException e) {
+                // Run it in this thread instead.
+                task.run();
+            }
         }
     }
 
     void unregisterAndDisconnect(int channelId, StreamChannel channel) {
         synchronized (mChannelMap) {
-            StreamChannel existing = mChannelMap.get(channelId);
-            if (existing == null || existing == channel) {
+            ChannelReference ref = mChannelMap.get(channelId);
+            StreamChannel existing;
+            if (ref == null || (existing = ref.get()) == null || existing == channel) {
                 mChannelMap.remove(channelId);
             }
         }
@@ -242,13 +294,16 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             }
 
             synchronized (mChannelMap) {
-                for (StreamChannel channel : mChannelMap.values()) {
-                    try {
-                        channel.getOutputStream().flush();
-                    } catch (IOException e) {
-                        // Ignore.
-                    } finally {
-                        channel.disconnect();
+                for (ChannelReference ref : mChannelMap.values()) {
+                    StreamChannel channel = ref.get();
+                    if (channel != null) {
+                        try {
+                            channel.getOutputStream().flush();
+                        } catch (IOException e) {
+                            // Ignore.
+                        } finally {
+                            channel.disconnect();
+                        }
                     }
                 }
 
@@ -266,6 +321,19 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     abstract void preClose() throws IOException;
 
     abstract void closeControlChannel() throws IOException;
+
+    private static class ChannelReference extends WeakReference<StreamChannel> {
+        final int mChannelId;
+        final Closeable mClosable;
+
+        ChannelReference(int channelId, StreamChannel channel,
+                         ReferenceQueue<? super StreamChannel> queue)
+        {
+            super(channel, queue);
+            mChannelId = channelId;
+            mClosable = channel.getCloseable();
+        }
+    }
 
     private static class PingCheckTask extends AbstractPingTask<AbstractStreamBroker> {
         PingCheckTask(AbstractStreamBroker broker) {
