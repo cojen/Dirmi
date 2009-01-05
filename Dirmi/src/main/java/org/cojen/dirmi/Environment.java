@@ -180,10 +180,12 @@ public class Environment implements Closeable {
     {
         Lock lock = closeLock();
         try {
-            Acceptor<Broker<StreamChannel>> brokerAcceptor = createBrokerAcceptor(bindpoint);
+            final Acceptor<Broker<StreamChannel>> brokerAcceptor = createBrokerAcceptor(bindpoint);
 
             brokerAcceptor.accept(new Acceptor.Listener<Broker<StreamChannel>>() {
                 public void established(Broker<StreamChannel> broker) {
+                    brokerAcceptor.accept(this);
+
                     try {
                         createSession(broker, server);
                     } catch (IOException e) {
