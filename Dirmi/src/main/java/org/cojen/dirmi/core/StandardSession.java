@@ -281,6 +281,35 @@ public class StandardSession implements Session {
         mBroker.accept(new Handler());
     }
 
+    public void flush() throws IOException {
+        IOException exception = null;
+
+        ArrayList<InvocationChannel> channels;
+        synchronized (mChannelPool) {
+            // Copy to avoid holding lock while flushing.
+            channels = new ArrayList<InvocationChannel>(mChannelPool);
+        }
+
+        synchronized (mHeldChannelMap) {
+            // Copy to avoid holding lock while flushing.
+            channels.addAll(mHeldChannelMap.keySet());
+        }
+
+        for (int i=channels.size(); --i>=0; ) {
+            try {
+                channels.get(i).flush();
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = e;
+                }
+            }
+        }
+
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
     public void close() throws IOException {
         close(true, true, null, null);
     }

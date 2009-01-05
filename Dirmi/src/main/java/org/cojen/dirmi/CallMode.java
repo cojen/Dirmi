@@ -26,7 +26,8 @@ public enum CallMode {
      * Send the request to the remote endpoint, but don't immediately flush the
      * channel. If asynchronous method uses a {@link Pipe}, flushing the pipe
      * ensures the request is immediately sent. Otherwise, the request is
-     * eventually sent when the channel is reused.
+     * eventually sent when the channel is reused or the session is {@link
+     * Session#flush flushed}.
      */
     EVENTUAL,
 

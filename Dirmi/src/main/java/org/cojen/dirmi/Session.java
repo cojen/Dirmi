@@ -17,6 +17,8 @@
 package org.cojen.dirmi;
 
 import java.io.Closeable;
+import java.io.Flushable;
+import java.io.IOException;
 import java.io.Serializable;
 
 import java.rmi.Remote;
@@ -26,7 +28,7 @@ import java.rmi.Remote;
  *
  * @author Brian S O'Neill
  */
-public interface Session extends Closeable {
+public interface Session extends Closeable, Flushable {
     /**
      * Returns the primary {@link Remote} or {@link Serializable} object
      * exported by remote endpoint.
@@ -42,4 +44,11 @@ public interface Session extends Closeable {
      * @return primary local server object, which can be null
      */
     Object getLocalServer();
+
+    /**
+     * Flushes all channels of this session, including channels used for {@link
+     * Batched batch} calls and {@link CallMode#EVENTUAL eventual} asynchronous
+     * methods.
+     */
+    void flush() throws IOException;
 }
