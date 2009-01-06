@@ -298,6 +298,8 @@ public class StubFactoryGenerator<R extends Remote> {
                                 new TypeDesc[] {TypeDesc.OBJECT});
             }
 
+            boolean anySharedParam = false;
+
             if (paramDescs.length > 0) {
                 // Write parameters to channel.
 
@@ -315,10 +317,16 @@ public class StubFactoryGenerator<R extends Remote> {
                             // Use replacement.
                             param = timeoutVar;
                         }
-                        writeParam(b, paramType, invOutVar, param);
+                        anySharedParam |= writeParam(b, paramType, invOutVar, param);
                     }
                     i++;
                 }
+            }
+
+            if (anySharedParam) {
+                // Reset the stream to allow request params to be freed.
+                b.loadLocal(invOutVar);
+                b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
             }
 
             if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {

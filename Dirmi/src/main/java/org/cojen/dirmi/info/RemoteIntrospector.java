@@ -1101,7 +1101,7 @@ public class RemoteIntrospector {
         }
 
         RParameter toUnshared(boolean unshared) {
-            int flags = unshared ? (mFlags & ~FLAG_UNSHARED) : (mFlags | FLAG_UNSHARED);
+            int flags = unshared ? (mFlags | FLAG_UNSHARED) : (mFlags & ~FLAG_UNSHARED);
             if (flags == mFlags) {
                 return this;
             }

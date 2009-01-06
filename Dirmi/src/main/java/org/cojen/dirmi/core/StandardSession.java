@@ -1011,7 +1011,6 @@ public class StandardSession implements Session {
          */
         final void recycle() {
             try {
-                getOutputStream().reset();
                 mTimestamp = System.currentTimeMillis();
                 synchronized (mChannelPool) {
                     mChannelPool.add(this);
