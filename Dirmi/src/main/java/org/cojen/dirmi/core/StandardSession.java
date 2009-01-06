@@ -489,10 +489,17 @@ public class StandardSession implements Session {
         }
     }
 
-    void handleRequestAsync(final InvocationChannel invChannel) {
+    void handleRequestAsync(final InvocationChannel invChannel, final boolean reset) {
         mExecutor.execute(new Runnable() {
             public void run() {
-                handleRequest(invChannel);
+                try {
+                    if (reset) {
+                        invChannel.getOutputStream().reset();
+                    }
+                    handleRequest(invChannel);
+                } catch (IOException e) {
+                    invChannel.disconnect();
+                }
             }
         });
     }
@@ -1229,10 +1236,21 @@ public class StandardSession implements Session {
                 (getClass().getClassLoader(), new Class[] {type}, handler);
         }
 
-        public boolean finished(final InvocationChannel channel, boolean synchronous) {
+        public boolean finished(InvocationChannel channel, boolean reset, boolean synchronous) {
             if (synchronous) {
                 try {
                     channel.getOutputStream().flush();
+                    if (reset) {
+                        // Reset after flush to avoid blocking if send buffer
+                        // is full. Otherwise, call could deadlock if reader is
+                        // not reading the response from the next invocation on
+                        // this channel. The reset operation will write data,
+                        // but it won't be immediately flushed out of the
+                        // channel's buffer. The buffer needs to have at least
+                        // two bytes to hold the TC_ENDBLOCKDATA and TC_RESET
+                        // opcodes.
+                        channel.getOutputStream().reset();
+                    }
                     return true;
                 } catch (IOException e) {
                     channel.disconnect();
@@ -1242,7 +1260,7 @@ public class StandardSession implements Session {
                 try {
                     // Let another thread process next request while this
                     // thread continues to process active request.
-                    handleRequestAsync(channel);
+                    handleRequestAsync(channel, reset);
                     return false;
                 } catch (RejectedExecutionException e) {
                     return true;

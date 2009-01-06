@@ -132,11 +132,14 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
     private class Channel implements StreamChannel {
         private final PipedInputStream mIn;
-        private final PipedOutputStream mOut;
+        private final OutputStream mOut;
 
         Channel(PipedInputStream in, PipedOutputStream out) {
             mIn = in;
-            mOut = out;
+            // Output needs to have at least 2 bytes to avoid deadlocks caused
+            // by object stream resets. Might as well provide more buffering to
+            // offset the extra overhead.
+            mOut = new BufferedOutputStream(out, 0, 100, 0);
         }
 
         public Object getLocalAddress() {

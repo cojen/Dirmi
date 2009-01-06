@@ -323,15 +323,20 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            if (anySharedParam) {
-                // Reset the stream to allow request params to be freed.
-                b.loadLocal(invOutVar);
-                b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
-            }
-
             if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
+            }
+
+            if (anySharedParam) {
+                // Reset the stream to allow request params to be freed. Do so
+                // after flushing to prevent deadlock if the send buffer has no
+                // space. Reader might not be in a state to read, and there is
+                // no way to explicitly read the reset operation. In order for
+                // this to work, channel buffer needs at least two bytes to
+                // hold the TC_ENDBLOCKDATA and TC_RESET opcodes.
+                b.loadLocal(invOutVar);
+                b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
             }
 
             final Label invokeEnd;

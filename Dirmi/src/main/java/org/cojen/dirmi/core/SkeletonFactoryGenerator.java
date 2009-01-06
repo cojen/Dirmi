@@ -389,7 +389,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 if (method.isAsynchronous() && reuseChannel && !method.isBatched()) {
                     // Call finished method before invocation.
-                    genFinished(b, channelVar, false);
+                    genFinished(b, channelVar, false, false);
                     b.storeLocal(pendingRequestVar);
                 }
 
@@ -580,17 +580,16 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadNull();
                     b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
                                     new TypeDesc[] {THROWABLE_TYPE});
-                    if (retVar != null) {
-                        boolean shared = writeParam(b, method.getReturnType(), invOutVar, retVar);
-                        if (shared) {
-                            // Reset the stream to allow response to be freed.
-                            b.loadLocal(invOutVar);
-                            b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
-                        }
+
+                    boolean doReset;
+                    if (retVar == null) {
+                        doReset = false;
+                    } else {
+                        doReset = writeParam(b, method.getReturnType(), invOutVar, retVar);
                     }
 
                     // Call finished method.
-                    genFinished(b, channelVar, true);
+                    genFinished(b, channelVar, doReset, true);
                     b.returnValue(TypeDesc.BOOLEAN);
                 }
 
@@ -660,7 +659,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null, new TypeDesc[] {THROWABLE_TYPE});
 
             // Call finished method.
-            genFinished(b, channelVar, true);
+            genFinished(b, channelVar, true, true);
             b.returnValue(TypeDesc.BOOLEAN);
         }
 
@@ -709,13 +708,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     // Implementation leaves a boolean on the stack.
-    private void genFinished(CodeBuilder b, LocalVariable channelVar, boolean synchronous) {
+    private void genFinished(CodeBuilder b, LocalVariable channelVar,
+                             boolean reset, boolean synchronous) {
         b.loadThis();
         b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
         b.loadLocal(channelVar);
+        b.loadConstant(reset);
         b.loadConstant(synchronous);
         b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.BOOLEAN,
-                          new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN});
+                          new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN, TypeDesc.BOOLEAN});
     }
 
     private void genAsyncResponse(CodeBuilder b, TypeDesc type, LocalVariable completionVar) {

@@ -64,8 +64,9 @@ public interface SkeletonSupport {
      * Called after channel usage is finished and can be reused for receiving
      * new requests. This method should not throw any exception.
      *
+     * @param reset pass true if object output should be reset
      * @param synchronous pass true for synchronous method
      * @return true if caller should read another request from channel
      */
-    boolean finished(InvocationChannel channel, boolean synchronous);
+    boolean finished(InvocationChannel channel, boolean reset, boolean synchronous);
 }
