@@ -57,7 +57,7 @@ public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
     /**
      * Reads a Throwable which was written via writeThrowable, which may be null.
      */
-    Throwable readThrowable() throws IOException;
+    Throwable readThrowable() throws IOException, ReconstructedException;
 
     /**
      * Writes the given Throwable with additional remote information. Throwable

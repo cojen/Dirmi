@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.reflect.Constructor;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -30,6 +32,8 @@ import java.util.List;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+
+import org.cojen.dirmi.ReconstructedException;
 
 /**
  * 
@@ -238,7 +242,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return (b2 << 24) | (b3 << 16) | (b4 << 8) | b5;
     }
 
-    public Throwable readThrowable() throws IOException {
+    public Throwable readThrowable() throws IOException, ReconstructedException {
         int b = read();
         if (b < 0) {
             throw new EOFException();
@@ -251,6 +255,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         String serverLocalAddress = null;
         String serverRemoteAddress = null;
         Throwable t;
+        Throwable reconstructCause;
         try {
             ObjectInput in = mIn;
             serverLocalAddress = (String) in.readObject();
@@ -265,14 +270,17 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             }
 
             t = (Throwable) in.readObject();
+            reconstructCause = null;
         } catch (IOException e) {
             if ((t = tryReconstruct(chain)) == null) {
                 throw e;
             }
+            reconstructCause = e;
         } catch (ClassNotFoundException e) {
             if ((t = tryReconstruct(chain)) == null) {
                 throw new RemoteException(e.getMessage(), e);
             }
+            reconstructCause = e;
         }
 
         // Now stitch local stack trace after remote trace.
@@ -321,7 +329,11 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             t.setStackTrace(combined);
         }
 
-        return t;
+        if (reconstructCause == null) {
+            return t;
+        }
+
+        throw new ReconstructedException(t, reconstructCause);
     }
 
     private static void addAddress(List<StackTraceElement> list, String message, String addrType,
@@ -337,27 +349,72 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         }
     }
 
-    private RemoteException tryReconstruct(List<ThrowableInfo> chain) {
+    private Throwable tryReconstruct(List<ThrowableInfo> chain) {
         if (chain == null || chain.size() == 0) {
             return null;
         }
 
-        // Reconstruct exception by chaining together RemoteExceptions.
+        // Reconstruct exception by chaining together exceptions.
 
-        RemoteException cause = null;
+        Throwable cause = null;
         for (ThrowableInfo info : chain) {
             if (info != null) {
-                String message = info.mClassName + ": " + info.mMessage;
-                if (cause == null) {
-                    cause = new RemoteException(message);
-                } else {
-                    cause = new RemoteException(message, cause);
-                }
+                cause = tryReconstruct(cause, info.mClassName, info.mMessage);
                 cause.setStackTrace(info.mStackTrace);
             }
         }
 
         return cause;
+    }
+
+    private Throwable tryReconstruct(Throwable cause, String className, String message) {
+        try {
+            // FIXME: use session's class loader
+            Class exClass = Class.forName(className);
+
+            // Find appropriate constructor.
+            Constructor exCtor = null;
+
+            for (Constructor ctor : exClass.getConstructors()) {
+                Class[] paramTypes = ctor.getParameterTypes();
+                if (paramTypes.length < 1) {
+                    continue;
+                }
+                if (!paramTypes[0].isAssignableFrom(String.class)) {
+                    continue;
+                }
+                if (cause == null) {
+                    if (paramTypes.length == 1) {
+                        exCtor = ctor;
+                        break;
+                    }
+                } else {
+                    if (paramTypes.length == 2 &&
+                        paramTypes[1].isAssignableFrom(cause.getClass()))
+                    {
+                        exCtor = ctor;
+                        break;
+                    }
+                }
+            }
+
+            if (exCtor != null && Throwable.class.isAssignableFrom(exClass)) {
+                if (cause == null) {
+                    return (Throwable) exCtor.newInstance(message);
+                } else {
+                    return (Throwable) exCtor.newInstance(message, cause);
+                }
+            }
+        } catch (Exception e) {
+            // Ignore.
+        }
+
+        message = "(cannot reconstruct correct exception class " + className + "): " + message;
+        if (cause == null) {
+            return new RemoteException(message);
+        } else {
+            return new RemoteException(message, cause);
+        }
     }
 
     @Override

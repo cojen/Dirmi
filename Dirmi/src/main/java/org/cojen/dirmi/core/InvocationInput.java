@@ -22,6 +22,8 @@ import java.io.ObjectInput;
 
 import java.rmi.RemoteException;
 
+import org.cojen.dirmi.ReconstructedException;
+
 /**
  *
  * @author Brian S O'Neill
@@ -50,5 +52,5 @@ public interface InvocationInput extends ObjectInput, Closeable {
      * instead, with as much useful information as possible, including server
      * stack trace.
      */
-    Throwable readThrowable() throws IOException;
+    Throwable readThrowable() throws IOException, ReconstructedException;
 }

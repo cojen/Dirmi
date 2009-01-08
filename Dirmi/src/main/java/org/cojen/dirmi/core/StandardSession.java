@@ -66,6 +66,7 @@ import org.cojen.util.SoftValuedHashMap;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
+import org.cojen.dirmi.ReconstructedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Session;
 
@@ -994,7 +995,7 @@ public class StandardSession implements Session {
             return mChannel.getRemoteAddress();
         }
 
-        public final Throwable readThrowable() throws IOException {
+        public final Throwable readThrowable() throws IOException, ReconstructedException {
             return getInputStream().readThrowable();
         }
 
@@ -1472,6 +1473,14 @@ public class StandardSession implements Session {
 
             if (channel != null) {
                 channel.disconnect();
+            }
+
+            if (cause instanceof ReconstructedException) {
+                cause = ((ReconstructedException) cause).getCause();
+            }
+
+            if (remoteFailureEx.isAssignableFrom(cause.getClass())) {
+                return (T) cause;
             }
 
             RemoteException ex;
