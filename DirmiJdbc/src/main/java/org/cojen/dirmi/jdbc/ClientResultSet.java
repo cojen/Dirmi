@@ -41,6 +41,7 @@ import java.util.Calendar;
 import java.util.Map;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.ReconstructedException;
 
 /**
  * 
@@ -136,6 +137,9 @@ public class ClientResultSet implements ResultSet {
         } catch (ClassNotFoundException e) {
             silentClose();
             throw new SQLException(e);
+        } catch (ReconstructedException e) {
+            silentClose();
+            throw new SQLException(e.getCause());
         }
     }
 
