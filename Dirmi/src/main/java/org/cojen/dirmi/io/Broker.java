@@ -26,6 +26,16 @@ import java.io.IOException;
  */
 public interface Broker<C extends Closeable> extends Acceptor<C>, Connector<C>, Closeable {
     /**
+     * @return local address or null if unknown or not applicable
+     */
+    Object getLocalAddress();
+
+    /**
+     * @return remote address or null if unknown or not applicable
+     */
+    Object getRemoteAddress();
+
+    /**
      * Prevents new channels from being created and disconnects all existing channels.
      */
     void close() throws IOException;

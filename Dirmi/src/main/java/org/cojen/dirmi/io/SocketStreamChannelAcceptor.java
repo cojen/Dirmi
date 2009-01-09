@@ -37,15 +37,29 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     final ServerSocket mServerSocket;
     final LinkedBlockingQueue<Acceptor.Listener<StreamChannel>> mListenerQueue;
 
-    public SocketStreamChannelAcceptor(final ScheduledExecutorService executor,
+    public SocketStreamChannelAcceptor(ScheduledExecutorService executor,
                                        SocketAddress bindpoint)
         throws IOException
     {
-        if (executor == null || bindpoint == null) {
-            throw new IllegalArgumentException();
+        this(executor, bindpoint, new ServerSocket());
+    }
+
+    public SocketStreamChannelAcceptor(final ScheduledExecutorService executor,
+                                       SocketAddress bindpoint,
+                                       ServerSocket serverSocket)
+        throws IOException
+    {
+        if (executor == null) {
+            throw new IllegalArgumentException("Must provide an executor");
+        }
+        if (bindpoint == null) {
+            throw new IllegalArgumentException("Must provide a bindpoint");
+        }
+        if (serverSocket == null) {
+            throw new IllegalArgumentException("Must provide a server socket");
         }
         mBindpoint = bindpoint;
-        mServerSocket = new ServerSocket();
+        mServerSocket = serverSocket;
         mServerSocket.bind(bindpoint);
         mListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<StreamChannel>>();
 
@@ -111,6 +125,10 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     @Override
     public String toString() {
         return "SocketStreamChannelAcceptor {bindpoint=" + mBindpoint + '}';
+    }
+
+    public final SocketAddress getBindpoint() {
+        return mBindpoint;
     }
 
     void accepted(StreamChannel channel) {

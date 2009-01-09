@@ -61,6 +61,14 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         }
     }
 
+    public Object getLocalAddress() {
+        return null;
+    }
+
+    public Object getRemoteAddress() {
+        return null;
+    }
+
     public StreamChannel connect() throws IOException {
         int channelId = reserveChannelId();
         StreamChannel channel = null;

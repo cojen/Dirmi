@@ -43,8 +43,11 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
     public SocketStreamChannelConnector(ScheduledExecutorService executor,
                                         SocketAddress endpoint, SocketAddress bindpoint)
     {
-        if (executor == null || endpoint == null) {
-            throw new IllegalArgumentException();
+        if (executor == null) {
+            throw new IllegalArgumentException("Must provide an executor");
+        }
+        if (endpoint == null) {
+            throw new IllegalArgumentException("Must provide an endpoint");
         }
         mExecutor = executor;
         mPool = new StreamChannelPool(executor);
@@ -57,13 +60,16 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
         if (channel != null) {
             return channel;
         }
-        Socket socket = new Socket();
+
+        Socket socket = createSocket();
         if (mBindpoint != null) {
             socket.bind(mBindpoint);
         }
         socket.connect(mEndpoint);
         socket.setTcpNoDelay(true);
+
         channel = new SocketStreamChannel(socket);
+
         return new PacketStreamChannel(mExecutor, mPool, channel);
     }
 
@@ -71,5 +77,17 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
     public String toString() {
         return "SocketStreamChannelConnector {endpoint=" + mEndpoint +
             ", bindpoint=" + mBindpoint + '}';
+    }
+
+    public final SocketAddress getEndpoint() {
+        return mEndpoint;
+    }
+
+    public final SocketAddress getBindpoint() {
+        return mBindpoint;
+    }
+
+    protected Socket createSocket() throws IOException {
+        return new Socket();
     }
 }

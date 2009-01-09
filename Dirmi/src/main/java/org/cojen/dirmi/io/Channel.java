@@ -23,7 +23,17 @@ import java.io.Closeable;
  *
  * @author Brian S O'Neill
  */
-public interface Channel extends AddressPair, Closeable {
+public interface Channel extends Closeable {
+    /**
+     * @return local address or null if unknown
+     */
+    Object getLocalAddress();
+
+    /**
+     * @return remote address or null if unknown
+     */
+    Object getRemoteAddress();
+
     /**
      * Forcibly close channel, discarding unflushed output and any exceptions.
      */

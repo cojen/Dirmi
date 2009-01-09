@@ -26,6 +26,7 @@ import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.Set;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 
@@ -40,8 +41,6 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executor;
 
 import org.cojen.dirmi.util.ExceptionUtils;
 

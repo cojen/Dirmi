@@ -438,13 +438,22 @@ public class StandardSession implements Session {
         return mRemoteServer;
     }
 
+    public Object getRemoteAddress() {
+        return mBroker.getRemoteAddress();
+    }
+
     public Object getLocalServer() {
         return mLocalServer;
     }
 
+    public Object getLocalAddress() {
+        return mBroker.getLocalAddress();
+    }
+
     @Override
     public String toString() {
-        return "Session{broker=" + mBroker + '}';
+        return "Session {localAddress=" + getLocalAddress() +
+            ", remoteAddress=" + getRemoteAddress() + '}';
     }
 
     void sendDisposedStubs() {

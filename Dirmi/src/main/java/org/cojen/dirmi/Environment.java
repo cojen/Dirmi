@@ -79,6 +79,9 @@ public class Environment implements Closeable {
      * Construct environment with a custom thread pool.
      */
     public Environment(ScheduledExecutorService executor) {
+        if (executor == null) {
+            throw new IllegalArgumentException("Must provide an executor");
+        }
         mExecutor = executor;
         mCloseableSet = new WeakIdentityMap<Closeable, Object>();
         mCloseLock = new ReentrantReadWriteLock(true);
@@ -88,7 +91,7 @@ public class Environment implements Closeable {
      * Attempts to connect to remote host, blocking until session is
      * established.
      *
-     * @param host name of remote host
+     * @param host required name of remote host
      * @param port remote port
      */
     public Session createSession(String host, int port) throws IOException {
@@ -99,7 +102,7 @@ public class Environment implements Closeable {
      * Attempts to connect to remote host, blocking until session is
      * established.
      *
-     * @param endpoint address of remote host
+     * @param endpoint required address of remote host
      */
     public Session createSession(SocketAddress endpoint) throws IOException {
         return createSession(endpoint, null, null);
@@ -109,8 +112,8 @@ public class Environment implements Closeable {
      * Attempts to connect to remote host, blocking until session is
      * established.
      *
-     * @param endpoint address of remote host
-     * @param bindpoint address of local host; pass null for default
+     * @param endpoint required address of remote host
+     * @param bindpoint optional address of local host
      * @param server optional primary server object to export; must be Remote
      * or Serializable
      */
@@ -125,7 +128,6 @@ public class Environment implements Closeable {
                 new SocketStreamChannelConnector(mExecutor, endpoint, bindpoint);
             Broker<StreamChannel> broker =
                 new StreamChannelConnectorBroker(mExecutor, channel, connector);
-
             return createSession(broker, server);
         } finally {
             lock.unlock();
@@ -136,7 +138,8 @@ public class Environment implements Closeable {
      * Attempts to connect to remote host, blocking until session is
      * established. Only one session can be created per broker instance.
      *
-     * @param broker broker for establishing connections; must always connect to same remote host
+     * @param broker required broker for establishing connections; must always
+     * connect to same remote host
      * @param server optional primary server object to export; must be Remote
      * or Serializable
      */
@@ -170,45 +173,18 @@ public class Environment implements Closeable {
      * during session establishment are passed to the thread's uncaught
      * exception handler.
      *
-     * @param bindpoint address for accepting socket connections
+     * @param bindpoint required address for accepting socket connections
      * @param server shared server object to export; must be Remote or
      * Serializable
      * @return object which can be closed to stop accepting sessions
      */
-    public Closeable acceptSessions(SocketAddress bindpoint, final Object server)
+    public Closeable acceptSessions(SocketAddress bindpoint, Object server)
         throws IOException
     {
         Lock lock = closeLock();
         try {
-            final Acceptor<Broker<StreamChannel>> brokerAcceptor = createBrokerAcceptor(bindpoint);
-
-            brokerAcceptor.accept(new Acceptor.Listener<Broker<StreamChannel>>() {
-                public void established(Broker<StreamChannel> broker) {
-                    brokerAcceptor.accept(this);
-
-                    try {
-                        createSession(broker, server);
-                    } catch (IOException e) {
-                        try {
-                            broker.close();
-                        } catch (IOException e2) {
-                            // Ignore.
-                        }
-                    }
-                }
-
-                public void failed(IOException e) {
-                    Thread t = Thread.currentThread();
-                    try {
-                        t.getUncaughtExceptionHandler().uncaughtException(t, e);
-                    } catch (Throwable e2) {
-                        // I give up.
-                    }
-                    // Yield just in case exceptions are out of control.
-                    t.yield();
-                }
-            });
-
+            Acceptor<Broker<StreamChannel>> brokerAcceptor = createBrokerAcceptor(bindpoint);
+            brokerAcceptor.accept(new BrokerListener(brokerAcceptor, server));
             return brokerAcceptor;
         } finally {
             lock.unlock();
@@ -216,20 +192,17 @@ public class Environment implements Closeable {
     }
 
     /**
-     * Returns immediately and asynchronously accepts brokers. Sessions can be
-     * created from brokers by calling the {@link #createSession(Broker,
-     * Object)} method. Compared to the {@link #acceptSessions}, this method
+     * Returns an acceptor used for asynchronously accepting brokers. Sessions
+     * can be created from brokers by calling the {@link #createSession(Broker,
+     * Object)} method. Compared to {@link #acceptSessions}, this method
      * provides more control over how sessions are accepted.
      *
-     * @param bindpoint address for accepting socket connections
+     * @param bindpoint required address for accepting socket connections
      * @return an acceptor of brokers
      */
     public Acceptor<Broker<StreamChannel>> createBrokerAcceptor(SocketAddress bindpoint)
         throws IOException
     {
-        if (bindpoint == null) {
-            throw new IllegalArgumentException("Must provide a bindpoint");
-        }
         Lock lock = closeLock();
         try {
             Acceptor<StreamChannel> streamAcceptor =
@@ -321,5 +294,39 @@ public class Environment implements Closeable {
             addToClosableSet(processor);
         }
         return processor;
+    }
+
+    private class BrokerListener implements Acceptor.Listener<Broker<StreamChannel>> {
+        private final Acceptor<Broker<StreamChannel>> mAcceptor;
+        private final Object mServer;
+
+        BrokerListener(Acceptor<Broker<StreamChannel>> acceptor, Object server) {
+            mAcceptor = acceptor;
+            mServer = server;
+        }
+
+        public void established(Broker<StreamChannel> broker) {
+            mAcceptor.accept(this);
+            try {
+                createSession(broker, mServer);
+            } catch (IOException e) {
+                try {
+                    broker.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+            }
+        }
+
+        public void failed(IOException e) {
+            Thread t = Thread.currentThread();
+            try {
+                t.getUncaughtExceptionHandler().uncaughtException(t, e);
+            } catch (Throwable e2) {
+                // I give up.
+            }
+            // Yield just in case exceptions are out of control.
+            t.yield();
+        }
     }
 }

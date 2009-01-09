@@ -327,6 +327,14 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
             }
         }
 
+        public Object getLocalAddress() {
+            return mControlChannel.getLocalAddress();
+        }
+
+        public Object getRemoteAddress() {
+            return mControlChannel.getRemoteAddress();
+        }
+
         public StreamChannel connect() throws IOException {
             // Quick check to see if closed.
             closeLock().unlock();

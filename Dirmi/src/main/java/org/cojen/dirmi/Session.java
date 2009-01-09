@@ -38,12 +38,22 @@ public interface Session extends Closeable, Flushable {
     Object getRemoteServer();
 
     /**
+     * @return remote session address or null if unknown or not applicable
+     */
+    Object getRemoteAddress();
+
+    /**
      * Returns the primary {@link Remote} or {@link Serializable} object
      * exported by local endpoint.
      *
      * @return primary local server object, which can be null
      */
     Object getLocalServer();
+
+    /**
+     * @return local session address or null if unknown or not applicable
+     */
+    Object getLocalAddress();
 
     /**
      * Flushes all channels of this session, including channels used for {@link
