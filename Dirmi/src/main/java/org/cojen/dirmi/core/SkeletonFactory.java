@@ -31,5 +31,5 @@ public interface SkeletonFactory<R extends Remote> {
      * @param support for reusing channels
      * @param remoteServer server implementation of Remote object
      */
-    Skeleton createSkeleton(SkeletonSupport support, R remoteServer);
+    Skeleton<R> createSkeleton(SkeletonSupport support, R remoteServer);
 }

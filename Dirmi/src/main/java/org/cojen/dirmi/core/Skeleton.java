@@ -34,11 +34,11 @@ import org.cojen.dirmi.util.VersionedIdentifier;
  * @author Brian S O'Neill
  * @see SkeletonFactory
  */
-public interface Skeleton extends Unreferenced {
+public interface Skeleton<R extends Remote> extends Unreferenced {
     /**
      * Returns the Remote object managed by this Skeleton.
      */
-    Remote getRemoteServer();
+    R getRemoteServer();
 
     /**
      * Invoke method in server-side instance. Any exception thrown from the
