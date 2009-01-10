@@ -177,7 +177,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
             mOut.close();
         }
 
-        public Closeable getCloseable() {
+        public Closeable getCloser() {
             return mOut;
         }
     }

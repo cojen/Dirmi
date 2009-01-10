@@ -42,7 +42,8 @@ import org.cojen.util.IntHashMap;
 import org.cojen.dirmi.util.Random;
 
 /**
- * Implementation shared by {@link StreamConnectorBroker} and {@link StreamBrokerAcceptor}.
+ * Implementation shared by {@link StreamChannelConnectorBroker} and {@link
+ * StreamChannelBrokerAcceptor}.
  *
  * @author Brian S O'Neill
  */
@@ -208,17 +209,17 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             do {
                 ChannelReference channelRef = (ChannelReference) ref;
                 map.remove(channelRef.mChannelId);
-                Closeable closable = channelRef.mClosable;
-                if (closable != null) {
-                    toClose.add(closable);
+                Closeable closer = channelRef.mCloser;
+                if (closer != null) {
+                    toClose.add(closer);
                 }
             } while ((ref = queue.poll()) != null);
         }
 
         // Disconnect channels outside of synchronized block.
-        for (Closeable closable : toClose) {
+        for (Closeable closer : toClose) {
             try {
-                closable.close();
+                closer.close();
             } catch (IOException e) {
                 // Ignore.
             }
@@ -340,14 +341,14 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
     private static class ChannelReference extends WeakReference<StreamChannel> {
         final int mChannelId;
-        final Closeable mClosable;
+        final Closeable mCloser;
 
         ChannelReference(int channelId, StreamChannel channel,
                          ReferenceQueue<? super StreamChannel> queue)
         {
             super(channel, queue);
             mChannelId = channelId;
-            mClosable = channel.getCloseable();
+            mCloser = channel.getCloser();
         }
     }
 

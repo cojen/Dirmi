@@ -458,7 +458,7 @@ public class SocketMessageProcessor implements Closeable {
             }
         }
 
-        public Closeable getCloseable() {
+        public Closeable getCloser() {
             return mChannel;
         }
 

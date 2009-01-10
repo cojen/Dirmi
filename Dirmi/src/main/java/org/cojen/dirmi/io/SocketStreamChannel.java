@@ -68,15 +68,23 @@ class SocketStreamChannel implements StreamChannel {
         }
     }
 
-    public Closeable getCloseable() {
+    public Closeable getCloser() {
         // This is a bit frustrating. The Socket class should implement
         // Closeable, but it doesn't. I could return either streams of the
         // socket, but accessing them might throw an exception. So, wrap the
         // socket with a little class.
-        return new Closeable() {
-            public void close() throws IOException {
-                mSocket.close();
-            }
-        };
+        return new Closer(mSocket);
+    }
+
+    private static class Closer implements Closeable {
+        private final Socket mSocket;
+
+        Closer(Socket socket) {
+            mSocket = socket;
+        }
+
+        public void close() throws IOException {
+            mSocket.close();
+        }
     }
 }

@@ -24,7 +24,7 @@ import java.io.OutputStream;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Buffers I/O for a channel and supports channel recycling. Protocol
@@ -33,9 +33,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
  * @author Brian S O'Neill
  */
 class PacketStreamChannel implements StreamChannel {
-    private static final AtomicIntegerFieldUpdater<PacketStreamChannel> cClosedUpdater =
-        AtomicIntegerFieldUpdater.newUpdater(PacketStreamChannel.class, "mClosed");
-
     final Executor mExecutor;
     private final Recycler<StreamChannel> mRecycler;
 
@@ -43,7 +40,7 @@ class PacketStreamChannel implements StreamChannel {
     private final In mIn;
     private final Out mOut;
 
-    private volatile int mClosed;
+    private final AtomicBoolean mClosed = new AtomicBoolean();
 
     PacketStreamChannel(Executor executor, Recycler<StreamChannel> recycler, StreamChannel channel)
         throws IOException
@@ -87,7 +84,7 @@ class PacketStreamChannel implements StreamChannel {
     }
 
     public void close() throws IOException {
-        if (cClosedUpdater.compareAndSet(this, 0, 1)) {
+        if (mClosed.compareAndSet(false, true)) {
             mIn.doClose(true);
             try {
                 mOut.doClose();
@@ -99,21 +96,23 @@ class PacketStreamChannel implements StreamChannel {
     }
 
     public void disconnect() {
-        if (cClosedUpdater.compareAndSet(this, 0, 1)) {
+        if (mClosed.compareAndSet(false, true)) {
             mChannel.disconnect();
             mIn.doClose(false);
         }
     }
 
-    public Closeable getCloseable() {
-        return mChannel;
+    public Closeable getCloser() {
+        // Don't return direct reference to wrapped channel, as this interferes
+        // with channel recycling.
+        return new Closer(mChannel, mClosed);
     }
 
     // Should only be called by executed task, allowing recycler operation to
     // safely block.
     void reachedEOF() {
         try {
-            if (cClosedUpdater.compareAndSet(this, 0, 1)) {
+            if (mClosed.compareAndSet(false, true)) {
                 mOut.doClose();
             }
             if (mRecycler != null) {
@@ -123,6 +122,22 @@ class PacketStreamChannel implements StreamChannel {
             }
         } catch (IOException e) {
             disconnect();
+        }
+    }
+
+    private static class Closer implements Closeable {
+        private final StreamChannel mChannel;
+        private final AtomicBoolean mClosed;
+
+        Closer(StreamChannel channel, AtomicBoolean closed) {
+            mChannel = channel;
+            mClosed = closed;
+        }
+
+        public void close() throws IOException {
+            if (mClosed.compareAndSet(false, true)) {
+                mChannel.close();
+            }
         }
     }
 

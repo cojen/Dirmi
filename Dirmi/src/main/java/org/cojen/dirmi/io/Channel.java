@@ -42,8 +42,9 @@ public interface Channel extends Closeable {
     /**
      * Returns an internal Closeable object, which is not the same object as
      * the Channel. This can be used by PhantomReferences for closing
-     * unreferenced Channels. The returned Closeable can be null if Channel
-     * implementation does not require clean up.
+     * unreferenced Channels, and so the closer must not refer to this
+     * channel. The closer can be null if Channel implementation does not
+     * require clean up.
      */
-    Closeable getCloseable();
+    Closeable getCloser();
 }

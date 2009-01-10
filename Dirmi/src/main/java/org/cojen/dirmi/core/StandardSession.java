@@ -992,7 +992,7 @@ public class StandardSession implements Session {
             mChannel.disconnect();
         }
 
-        public Closeable getCloseable() {
+        public Closeable getCloser() {
             return mChannel;
         }
 
