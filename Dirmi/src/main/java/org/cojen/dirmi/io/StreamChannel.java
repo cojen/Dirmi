@@ -29,4 +29,14 @@ public interface StreamChannel extends Channel {
     InputStream getInputStream() throws IOException;
 
     OutputStream getOutputStream() throws IOException;
+
+    /**
+     * Returns true if channel has not been closed.
+     */
+    boolean isOpen();
+
+    /**
+     * Called if remote endpoint has closed channel.
+     */
+    void remoteClose() throws IOException;
 }

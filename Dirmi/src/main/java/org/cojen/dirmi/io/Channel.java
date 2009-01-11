@@ -47,4 +47,10 @@ public interface Channel extends Closeable {
      * require clean up.
      */
     Closeable getCloser();
+
+    /**
+     * Add a listener which is called when channel is explicitly closed. It is
+     * not called if channel is disconnected.
+     */
+    void addCloseListener(CloseListener listener);
 }

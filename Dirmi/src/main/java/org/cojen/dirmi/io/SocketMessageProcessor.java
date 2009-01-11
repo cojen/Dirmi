@@ -125,9 +125,9 @@ public class SocketMessageProcessor implements Closeable {
         serverChannel.configureBlocking(false);
 
         class Accept implements Registerable, Selectable<SocketChannel> {
-            private final Acceptor.Listener<MessageChannel> mListener;
+            private final AcceptListener<MessageChannel> mListener;
 
-            Accept(Acceptor.Listener<MessageChannel> listener) {
+            Accept(AcceptListener<MessageChannel> listener) {
                 mListener = listener;
             }
 
@@ -163,7 +163,7 @@ public class SocketMessageProcessor implements Closeable {
         };
 
         return new Acceptor<MessageChannel>() {
-            public void accept(Acceptor.Listener<MessageChannel> listener) {
+            public void accept(AcceptListener<MessageChannel> listener) {
                 enqueueRegister(new Accept(listener));
             }
 
@@ -351,7 +351,7 @@ public class SocketMessageProcessor implements Closeable {
         }
     }
 
-    private class Chan implements MessageChannel {
+    private class Chan extends AbstractChannel implements MessageChannel {
         private static final int MAX_MESSAGE_SIZE = 32768 + 127;
 
         private final SocketChannel mChannel;
@@ -447,12 +447,12 @@ public class SocketMessageProcessor implements Closeable {
         }
 
         public void close() throws IOException {
-            close(null);
+            close(null, false);
         }
 
         public void disconnect() {
             try {
-                close(null);
+                close(null, true);
             } catch (IOException e) {
                 // Ignore.
             }
@@ -463,21 +463,29 @@ public class SocketMessageProcessor implements Closeable {
         }
 
         // Called directly by Reader.
-        void close(IOException cause) throws IOException {
-            synchronized (mChannel.blockingLock()) {
-                if (cause == null || mCause == null) {
-                    mCause = cause;
-                }
-                if (mChannel.isOpen()) {
-                    try {
-                        mChannel.close();
-                    } finally {
+        void close(IOException cause, boolean disconnect) throws IOException {
+            boolean wasClosed = false;
+            try {
+                synchronized (mChannel.blockingLock()) {
+                    if (cause == null || mCause == null) {
+                        mCause = cause;
+                    }
+                    if (mChannel.isOpen()) {
+                        wasClosed = true;
                         try {
-                            mSelector.close();
-                        } catch (IOException e) {
-                            uncaughtException(e);
+                            mChannel.close();
+                        } finally {
+                            try {
+                                mSelector.close();
+                            } catch (IOException e) {
+                                uncaughtException(e);
+                            }
                         }
                     }
+                }
+            } finally {
+                if (wasClosed && !disconnect) {
+                    closed();
                 }
             }
         }
@@ -485,7 +493,7 @@ public class SocketMessageProcessor implements Closeable {
         private void throwException(IOException e) throws IOException {
             synchronized (mChannel.blockingLock()) {
                 try {
-                    close(e);
+                    close(e, true);
                 } catch (IOException e2) {
                     uncaughtException(e2);
                 }
@@ -683,7 +691,7 @@ public class SocketMessageProcessor implements Closeable {
                 if (e instanceof EOF) {
                     e = null;
                 }
-                mChan.close(e);
+                mChan.close(e, true);
             } catch (IOException e2) {
                 uncaughtException(e2);
             } finally {

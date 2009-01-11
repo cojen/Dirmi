@@ -111,6 +111,16 @@ public class PipedInputStream extends InputStream {
         }
     }
 
+    public boolean isConnected() {
+        mLock.lock();
+        try {
+            return mPout != null;
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    @Override
     public String toString() {
         String superStr = superToString();
 

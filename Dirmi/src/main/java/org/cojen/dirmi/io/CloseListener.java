@@ -24,16 +24,6 @@ import java.io.IOException;
  *
  * @author Brian S O'Neill
  */
-public interface Acceptor<C extends Closeable> extends Closeable {
-    /**
-     * Returns immediately and calls established method on listener
-     * asynchronously. Only one channel is accepted per invocation of this
-     * method.
-     */
-    void accept(AcceptListener<C> listener);
-
-    /**
-     * Prevents new channels from being accepted.
-     */
-    void close() throws IOException;
+public interface CloseListener {
+    void closed();
 }

@@ -131,6 +131,10 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
     }
 
     @Override
+    void channelClosed(int channelId) {
+    }
+
+    @Override
     void preClose() {
     }
 
@@ -138,7 +142,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
     void closeControlChannel() {
     }
 
-    private class Channel implements StreamChannel {
+    private class Channel extends AbstractChannel implements StreamChannel {
         private final PipedInputStream mIn;
         private final OutputStream mOut;
 
@@ -168,13 +172,25 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
         public void disconnect() {
             try {
-                close();
+                mOut.close();
             } catch (IOException e) {
             }
         }
 
         public void close() throws IOException {
-            mOut.close();
+            try {
+                mOut.close();
+            } finally {
+                closed();
+            }
+        }
+
+        public boolean isOpen() {
+            return mIn.isConnected();
+        }
+
+        public void remoteClose() throws IOException {
+            close();
         }
 
         public Closeable getCloser() {

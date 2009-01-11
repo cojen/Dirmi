@@ -47,7 +47,7 @@ import org.cojen.dirmi.util.Random;
 public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChannel>> {
     final Acceptor<StreamChannel> mAcceptor;
     final IntHashMap<TheBroker> mBrokerMap;
-    final LinkedBlockingQueue<Acceptor.Listener<Broker<StreamChannel>>> mBrokerListenerQueue;
+    final LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>> mBrokerListenerQueue;
 
     final ScheduledExecutorService mExecutor;
 
@@ -59,11 +59,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
     {
         mAcceptor = acceptor;
         mBrokerMap = new IntHashMap<TheBroker>();
-        mBrokerListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<Broker<StreamChannel>>>();
+        mBrokerListenerQueue = new LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>>();
         mExecutor = executor;
         mCloseLock = new ReentrantReadWriteLock(true);
 
-        acceptor.accept(new Acceptor.Listener<StreamChannel>() {
+        acceptor.accept(new AcceptListener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 acceptor.accept(this);
 
@@ -96,7 +96,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
                         Lock lock = closeLock();
                         try {
-                            Acceptor.Listener<Broker<StreamChannel>> listener = pollListener();
+                            AcceptListener<Broker<StreamChannel>> listener = pollListener();
                             if (listener != null) {
                                 listener.established(broker);
                             } else {
@@ -139,6 +139,14 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                         break;
                     }
 
+                    case AbstractStreamBroker.OP_CHANNEL_CLOSE: {
+                        int channelId = in.readInt();
+                        // Close is expected to recycle channel: PacketStreamChannel.
+                        channel.close();
+                        broker.remoteChannelClose(channelId);
+                        break;
+                    }
+
                     default:
                         // Unknown operation.
                         channel.disconnect();
@@ -154,7 +162,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
                     if (e.getCause() instanceof RejectedExecutionException) {
                         // Okay, this is important. It was thrown by Broker constructor.
-                        Acceptor.Listener<Broker<StreamChannel>> listener = pollListener();
+                        AcceptListener<Broker<StreamChannel>> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -163,7 +171,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
             }
 
             public void failed(IOException e) {
-                Acceptor.Listener<Broker<StreamChannel>> listener;
+                AcceptListener<Broker<StreamChannel>> listener;
                 if ((listener = pollListener()) != null) {
                     listener.failed(e);
                 }
@@ -179,7 +187,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
      * asynchronously. Only one broker is accepted per invocation of this
      * method.
      */
-    public void accept(final Acceptor.Listener<Broker<StreamChannel>> listener) {
+    public void accept(final AcceptListener<Broker<StreamChannel>> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -255,7 +263,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         return lock;
     }
 
-    Acceptor.Listener<Broker<StreamChannel>> pollListener() {
+    AcceptListener<Broker<StreamChannel>> pollListener() {
         try {
             return mBrokerListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -370,6 +378,18 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         }
 
         @Override
+        void channelClosed(int channelId) throws IOException {
+            if (!isClosed()) {
+                DataOutputStream out = mControlOut;
+                synchronized (out) {
+                    out.write(OP_CHANNEL_CLOSE);
+                    out.writeInt(channelId);
+                    out.flush();
+                }
+            }
+        }
+
+        @Override
         void preClose() {
             closed(this);
 
@@ -468,11 +488,21 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         public void close() {
         }
 
+        public boolean isOpen() {
+            return false;
+        }
+
+        public void remoteClose() {
+        }
+
         public void disconnect() {
         }
 
         public Closeable getCloser() {
             return null;
+        }
+
+        public void addCloseListener(CloseListener listener) {
         }
     }
 }

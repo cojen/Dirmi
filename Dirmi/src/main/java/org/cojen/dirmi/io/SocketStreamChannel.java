@@ -28,8 +28,9 @@ import java.net.Socket;
  *
  * @author Brian S O'Neill
  */
-class SocketStreamChannel implements StreamChannel {
+class SocketStreamChannel extends AbstractChannel implements StreamChannel {
     private final Socket mSocket;
+    private volatile boolean mClosed;
 
     SocketStreamChannel(Socket socket) throws IOException {
         mSocket = socket;
@@ -58,13 +59,28 @@ class SocketStreamChannel implements StreamChannel {
     }
 
     public void close() throws IOException {
-        mSocket.close();
+        mClosed = true;
+        try {
+            mSocket.close();
+        } finally {
+            closed();
+        }
+    }
+
+    public boolean isOpen() {
+        return !mClosed;
+    }
+
+    public void remoteClose() throws IOException {
+        close();
     }
 
     public void disconnect() {
+        mClosed = true;
         try {
             mSocket.close();
         } catch (IOException e) {
+            // Ignore.
         }
     }
 

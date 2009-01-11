@@ -49,7 +49,7 @@ class BufferedOutputStream extends AbstractBufferedOutputStream {
     }
 
     @Override
-    public boolean flush(boolean force) throws IOException {
+    protected boolean flush(boolean force) throws IOException {
         try {
             synchronized (this) {
                 if (super.flush(force)) {

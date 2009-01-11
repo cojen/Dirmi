@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     final SocketAddress mBindpoint;
     final ServerSocket mServerSocket;
-    final LinkedBlockingQueue<Acceptor.Listener<StreamChannel>> mListenerQueue;
+    final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
     public SocketStreamChannelAcceptor(ScheduledExecutorService executor,
                                        SocketAddress bindpoint)
@@ -61,7 +61,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
         mBindpoint = bindpoint;
         mServerSocket = serverSocket;
         mServerSocket.bind(bindpoint);
-        mListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<StreamChannel>>();
+        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
 
         final Recycler<StreamChannel> recycler = new Recycler<StreamChannel>() {
             public void recycled(StreamChannel channel) {
@@ -77,7 +77,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
                     try {
                         socket = mServerSocket.accept();
                     } catch (IOException e) {
-                        Acceptor.Listener<StreamChannel> listener;
+                        AcceptListener<StreamChannel> listener;
                         if ((listener = pollListener()) != null) {
                             listener.failed(e);
                         }
@@ -104,7 +104,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
                         } catch (IOException e2) {
                             // Ignore.
                         }
-                        Acceptor.Listener<StreamChannel> listener = pollListener();
+                        AcceptListener<StreamChannel> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -114,7 +114,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
         });
     }
     
-    public void accept(Acceptor.Listener<StreamChannel> listener) {
+    public void accept(AcceptListener<StreamChannel> listener) {
         mListenerQueue.add(listener);
     }
 
@@ -132,7 +132,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     }
 
     void accepted(StreamChannel channel) {
-        Acceptor.Listener<StreamChannel> listener = pollListener();
+        AcceptListener<StreamChannel> listener = pollListener();
         if (listener != null) {
             listener.established(channel);
         } else {
@@ -141,7 +141,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
         }
     }
 
-    Acceptor.Listener<StreamChannel> pollListener() {
+    AcceptListener<StreamChannel> pollListener() {
         try {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {

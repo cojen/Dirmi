@@ -20,20 +20,20 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * 
+ * Listener used by {@link Acceptor}.
  *
  * @author Brian S O'Neill
  */
-public interface Acceptor<C extends Closeable> extends Closeable {
+public interface AcceptListener<C extends Closeable> {
     /**
-     * Returns immediately and calls established method on listener
-     * asynchronously. Only one channel is accepted per invocation of this
-     * method.
+     * Called at most once as soon as channel has been established. This
+     * method may safely block, and it can interact with the channel too.
      */
-    void accept(AcceptListener<C> listener);
+    void established(C channel);
 
     /**
-     * Prevents new channels from being accepted.
+     * Called when channel cannot be established. This method may safely
+     * block.
      */
-    void close() throws IOException;
+    void failed(IOException e);
 }

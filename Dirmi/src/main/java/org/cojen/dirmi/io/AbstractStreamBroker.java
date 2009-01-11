@@ -65,7 +65,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     private final IntHashMap<ChannelReference> mChannelMap;
     private final ReferenceQueue<StreamChannel> mChannelQueue;
 
-    private final LinkedBlockingQueue<Acceptor.Listener<StreamChannel>> mListenerQueue;
+    private final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
@@ -83,7 +83,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
         mChannelMap = new IntHashMap<ChannelReference>();
         mChannelQueue = new ReferenceQueue<StreamChannel>();
-        mListenerQueue = new LinkedBlockingQueue<Acceptor.Listener<StreamChannel>>();
+        mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
         mCloseLock = new ReentrantReadWriteLock(true);
 
         if (executor instanceof ScheduledExecutorService) {
@@ -117,7 +117,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         }
     }
 
-    public void accept(final Acceptor.Listener<StreamChannel> listener) {
+    public void accept(final AcceptListener<StreamChannel> listener) {
         try {
             Lock lock = closeLock();
             try {
@@ -141,7 +141,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
     void accepted(int channelId, StreamChannel channel) {
         register(channelId, channel);
 
-        Acceptor.Listener<StreamChannel> listener = pollListener();
+        AcceptListener<StreamChannel> listener = pollListener();
         if (listener != null) {
             listener.established(channel);
         } else {
@@ -150,7 +150,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         }
     }
 
-    Acceptor.Listener<StreamChannel> pollListener() {
+    AcceptListener<StreamChannel> pollListener() {
         try {
             return mListenerQueue.poll(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -169,7 +169,22 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         return channelId;
     }
 
-    void register(int channelId, StreamChannel channel) {
+    void register(final int channelId, final StreamChannel channel) {
+        channel.addCloseListener(new CloseListener() {
+            public void closed() {
+                if (unregister(channelId, channel)) {
+                    try {
+                        channelClosed(channelId);
+                    } catch (IOException e) {
+                        // If this happens, then endpoint hangs on to channel
+                        // until it closes it explicitly. Control connection is
+                        // likely broken anyhow, and ping test will probably
+                        // fail soon.
+                    }
+                }
+            }
+        });
+
         final IntHashMap<ChannelReference> map = mChannelMap;
         final ReferenceQueue<StreamChannel> queue = mChannelQueue;
 
@@ -226,14 +241,38 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         }
     }
 
-    void unregisterAndDisconnect(int channelId, StreamChannel channel) {
+    void remoteChannelClose(int channelId) {
         synchronized (mChannelMap) {
-            ChannelReference ref = mChannelMap.get(channelId);
-            StreamChannel existing;
-            if (ref == null || (existing = ref.get()) == null || existing == channel) {
-                mChannelMap.remove(channelId);
+            ChannelReference ref = mChannelMap.remove(channelId);
+            if (ref != null) {
+                StreamChannel channel = ref.get();
+                if (channel != null) {
+                    try {
+                        channel.remoteClose();
+                    } catch (IOException e) {
+                        // Ignore.
+                    }
+                }
             }
         }
+    }
+
+    boolean unregister(int channelId, StreamChannel channel) {
+        synchronized (mChannelMap) {
+            if (mChannelMap.containsKey(channelId)) {
+                ChannelReference ref = mChannelMap.get(channelId);
+                StreamChannel existing = ref.get();
+                if (existing == null || existing == channel) {
+                    mChannelMap.remove(channelId);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void unregisterAndDisconnect(int channelId, StreamChannel channel) {
+        unregister(channelId, channel);
         if (channel != null) {
             channel.disconnect();
         }
@@ -297,7 +336,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                 pingCheckTask.cancel(true);
             }
 
-            Acceptor.Listener<StreamChannel> listener;
+            AcceptListener<StreamChannel> listener;
             while ((listener = mListenerQueue.poll()) != null) {
                 listener.failed(new IOException(reason));
             }
@@ -312,14 +351,16 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
             synchronized (mChannelMap) {
                 for (ChannelReference ref : mChannelMap.values()) {
-                    StreamChannel channel = ref.get();
-                    if (channel != null) {
-                        try {
-                            channel.getOutputStream().flush();
-                        } catch (IOException e) {
-                            // Ignore.
-                        } finally {
+                    if (ref != null) {
+                        StreamChannel channel = ref.get();
+                        if (channel != null) {
+                            try {
+                                channel.getOutputStream().flush();
+                            } catch (IOException e) {
+                                // Ignore.
+                            } finally {
                             channel.disconnect();
+                            }
                         }
                     }
                 }
@@ -334,6 +375,11 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
             lock.unlock();
         }
     }
+
+    /**
+     * Called when a channel has been explicitly closed.
+     */
+    abstract void channelClosed(int channelId) throws IOException;
 
     abstract void preClose() throws IOException;
 

@@ -74,7 +74,10 @@ import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
 
 import org.cojen.dirmi.io.Acceptor;
+import org.cojen.dirmi.io.AcceptListener;
 import org.cojen.dirmi.io.Broker;
+import org.cojen.dirmi.io.Channel;
+import org.cojen.dirmi.io.CloseListener;
 import org.cojen.dirmi.io.StreamChannel;
 
 import org.cojen.dirmi.util.AbstractIdentifier;
@@ -194,7 +197,7 @@ public class StandardSession implements Session {
         mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
         // Accept bootstrap request which replies with server and admin objects.
-        mBroker.accept(new Acceptor.Listener<StreamChannel>() {
+        mBroker.accept(new AcceptListener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
@@ -220,7 +223,11 @@ public class StandardSession implements Session {
                 } catch (Exception e) {
                     // Ignore. Let receive code detect communication error.
                 } finally {
-                    channel.disconnect();
+                    try {
+                        channel.close();
+                    } catch (IOException e) {
+                        // Ignore.
+                    }
                 }
             }
 
@@ -258,7 +265,11 @@ public class StandardSession implements Session {
                 throw io;
             }
         } finally {
-            channel.disconnect();
+            try {
+                channel.close();
+            } catch (IOException e) {
+                // Ignore.
+            }
         }
 
         try {
@@ -551,7 +562,11 @@ public class StandardSession implements Session {
 
                 // Connection must be closed in order to discard any unread
                 // input arguments and piled up asynchronous calls.
-                invChannel.disconnect();
+                try {
+                    invChannel.close();
+                } catch (IOException e) {
+                    // Ignore.
+                }
 
                 return;
             }
@@ -597,7 +612,7 @@ public class StandardSession implements Session {
 
                 // Connection must be closed in order to discard any unread
                 // input arguments and piled up asynchronous calls.
-                invChannel.disconnect();
+                invChannel.close();
             } catch (IOException e) {
                 if (!mClosing) {
                     uncaughtException(e);
@@ -921,13 +936,17 @@ public class StandardSession implements Session {
                 } catch (IOException e) {
                     // Ignore.
                 } finally {
-                    pooledChannel.disconnect();
+                    try {
+                        pooledChannel.close();
+                    } catch (IOException e) {
+                        // Ignore.
+                    }
                 }
             }
         }
     }
 
-    private class Handler implements Acceptor.Listener<StreamChannel> {
+    private class Handler implements AcceptListener<StreamChannel> {
         public void established(StreamChannel channel) {
             mBroker.accept(this);
             InvocationChannel invChan;
@@ -956,7 +975,6 @@ public class StandardSession implements Session {
     private class InvocationChan extends AbstractInvocationChannel {
         private final StreamChannel mChannel;
 
-        private volatile boolean mClosed;
         private volatile long mTimestamp;
 
         InvocationChan(StreamChannel channel) throws IOException {
@@ -974,26 +992,55 @@ public class StandardSession implements Session {
         }
 
         public final void close() throws IOException {
-            mClosed = true;
+            final boolean wasOpen = isOpen();
+            IOException exception = null;
 
             try {
                 mInvOut.doClose();
-                mInvIn.doClose();
             } catch (IOException e) {
-                mChannel.disconnect();
-                throw e;
+                exception = e;
             }
 
-            mChannel.close();
+            try {
+                mInvIn.doClose();
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = e;
+                }
+            }
+
+            try {
+                mChannel.close();
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = e;
+                }
+            }
+
+            if (wasOpen && exception != null) {
+                mChannel.disconnect();
+                throw exception;
+            }
+        }
+
+        public final boolean isOpen() {
+            return mChannel.isOpen();
+        }
+
+        public final void remoteClose() throws IOException {
+            mChannel.remoteClose();
         }
 
         public final void disconnect() {
-            mClosed = true;
             mChannel.disconnect();
         }
 
         public Closeable getCloser() {
             return mChannel;
+        }
+
+        public void addCloseListener(CloseListener listener) {
+            mChannel.addCloseListener(listener);
         }
 
         public final Object getLocalAddress() {
@@ -1017,10 +1064,6 @@ public class StandardSession implements Session {
             String hashCode = Integer.toHexString(hashCode());
             return "Pipe@" + hashCode + " {localAddress=" + mChannel.getLocalAddress() +
                 ", remoteAddress=" + mChannel.getRemoteAddress() + '}';
-        }
-
-        final boolean isClosed() {
-            return mClosed;
         }
 
         /**
@@ -1481,7 +1524,11 @@ public class StandardSession implements Session {
             releaseLocalChannel();
 
             if (channel != null) {
-                channel.disconnect();
+                try {
+                    channel.close();
+                } catch (IOException e) {
+                    // Ignore.
+                }
             }
 
             if (cause instanceof ReconstructedException) {
@@ -1584,14 +1631,9 @@ public class StandardSession implements Session {
                 return true;
             }
             if (closeTask.cancel(false)) {
-                if (channel instanceof InvocationChan) {
-                    // Future interface cannot be queried to determine if task
-                    // is currently running. Confirm that channel was not closed.
-                    if (((InvocationChan) channel).isClosed()) {
-                        return false;
-                    }
-                }
-                return true;
+                // Future interface cannot be queried to determine if task
+                // is currently running. Confirm that channel was not closed.
+                return channel.isOpen();
             }
             return false;
         }
@@ -1605,6 +1647,7 @@ public class StandardSession implements Session {
         }
 
         public void run() {
+            // Disconnect to force immediate wakeup of blocked call to socket.
             mChannel.disconnect();
         }
     }

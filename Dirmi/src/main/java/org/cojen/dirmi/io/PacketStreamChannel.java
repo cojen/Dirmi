@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author Brian S O'Neill
  */
-class PacketStreamChannel implements StreamChannel {
+class PacketStreamChannel extends AbstractChannel implements StreamChannel {
     final Executor mExecutor;
     private final Recycler<StreamChannel> mRecycler;
 
@@ -85,14 +85,34 @@ class PacketStreamChannel implements StreamChannel {
 
     public void close() throws IOException {
         if (mClosed.compareAndSet(false, true)) {
-            mIn.doClose(true);
+            // Flush and close output before input to prevent channel from
+            // being recycled before flush has finished.
             try {
                 mOut.doClose();
             } catch (IOException e) {
-                disconnect();
+                mChannel.disconnect();
                 throw e;
             }
+
+            try {
+                mIn.doClose(true);
+            } catch (RejectedExecutionException e) {
+                // Don't recycle channel.
+                mChannel.disconnect();
+                return;
+            }
+
+            closed();
         }
+    }
+
+    public boolean isOpen() {
+        return mChannel.isOpen() && mOut.isOpen() && !mClosed.get();
+    }
+
+    public void remoteClose() throws IOException {
+        // Only close the output in order to allow remaining input to be read.
+        mOut.remoteClose();
     }
 
     public void disconnect() {
@@ -142,8 +162,10 @@ class PacketStreamChannel implements StreamChannel {
     }
 
     private class In extends BufferedInputStream {
-        // -2: Input closed; throw IOException
-        // -1: No more packets; return EOF
+        private static final int INPUT_CLOSED = -2, INPUT_EOF = -1;
+
+        // INPUT_CLOSED: Throw IOException
+        // INPUT_EOF: No more packets; return EOF
         //  0: Call readNext to read next packet size
         // >0: Bytes remaining in current packet
         private int mRemaining;
@@ -165,11 +187,11 @@ class PacketStreamChannel implements StreamChannel {
         public synchronized int read() throws IOException {
             int remaining = mRemaining;
             if (remaining <= 0 && (remaining = remaining()) <= 0) {
-                return -1;
+                return INPUT_EOF;
             }
             int b = super.read();
             if (b < 0) {
-                mRemaining = -2;
+                mRemaining = INPUT_CLOSED;
                 throw new IOException("Closed");
             }
             mRemaining = remaining - 1;
@@ -180,7 +202,7 @@ class PacketStreamChannel implements StreamChannel {
         public synchronized int read(byte[] b, int off, int len) throws IOException {
             int remaining = mRemaining;
             if (remaining <= 0 && (remaining = remaining()) <= 0) {
-                return -1;
+                return INPUT_EOF;
             }
             if (len > remaining) {
                 len = remaining;
@@ -190,7 +212,7 @@ class PacketStreamChannel implements StreamChannel {
                 if (len <= 0) {
                     return amt;
                 }
-                mRemaining = -2;
+                mRemaining = INPUT_CLOSED;
                 throw new IOException("Closed");
             }
             mRemaining = remaining - amt;
@@ -217,7 +239,7 @@ class PacketStreamChannel implements StreamChannel {
 
             if (remaining <= 0) {
                 if (remaining < 0) {
-                    if (remaining == -1) {
+                    if (remaining == INPUT_EOF) {
                         return 0;
                     }
                     throw new IOException("Closed");
@@ -242,11 +264,14 @@ class PacketStreamChannel implements StreamChannel {
             PacketStreamChannel.this.close();
         }
 
-        void doClose(boolean drain) {
+        /**
+         * @throws RejectedExecutionException if drain is true and executor has no threads
+         */
+        void doClose(boolean drain) throws RejectedExecutionException {
             final int remaining;
             synchronized (this) {
                 remaining = mRemaining;
-                mRemaining = -2;
+                mRemaining = INPUT_CLOSED;
             }
             if (drain && remaining >= 0) {
                 mExecutor.execute(new Runnable() {
@@ -314,7 +339,7 @@ class PacketStreamChannel implements StreamChannel {
                     int b = super.read();
                     if (b <= 0) {
                         if (b == 0) {
-                            remaining = -1;
+                            remaining = INPUT_EOF;
                             try {
                                 mExecutor.execute(new Runnable() {
                                     public void run() {
@@ -325,7 +350,7 @@ class PacketStreamChannel implements StreamChannel {
                                 disconnect();
                             }
                         } else {
-                            remaining = -2;
+                            remaining = INPUT_CLOSED;
                         }
                     } else if (b < 128) {
                         remaining = b;
@@ -333,7 +358,7 @@ class PacketStreamChannel implements StreamChannel {
                         remaining = ((b & 0x7f) << 8) + 128;
                         b = super.read();
                         if (b < 0) {
-                            remaining = -2;
+                            remaining = INPUT_CLOSED;
                         } else {
                             remaining += b;
                         }
@@ -343,8 +368,8 @@ class PacketStreamChannel implements StreamChannel {
                 }
 
                 if (remaining <= 0) {
-                    if (remaining == -1) {
-                        return -1;
+                    if (remaining == INPUT_EOF) {
+                        return INPUT_EOF;
                     }
                     throw new IOException("Closed");
                 }
@@ -357,9 +382,12 @@ class PacketStreamChannel implements StreamChannel {
     private class Out extends BufferedOutputStream {
         static final int MAX_SIZE = 32768 + 127;
 
-        // 0: open
-        // 1: closing
-        // 2: closed
+        private static final int
+            OPEN = 0,
+            REMOTE_CLOSE = 1,
+            CLOSING = 2,
+            CLOSED = 3;
+
         private int mState;
 
         Out(OutputStream out) {
@@ -377,17 +405,13 @@ class PacketStreamChannel implements StreamChannel {
 
         @Override
         public synchronized void write(int b) throws IOException {
-            if (mState != 0) {
-                throw new IOException("Closed");
-            }
+            checkOpen();
             super.write(b);
         }
 
         @Override
         public synchronized void write(byte[] b, int off, int len) throws IOException {
-            if (mState != 0) {
-                throw new IOException("Closed: " + this);
-            }
+            checkOpen();
             super.write(b, off, len);
         }
 
@@ -396,12 +420,24 @@ class PacketStreamChannel implements StreamChannel {
             PacketStreamChannel.this.close();
         }
 
+        synchronized boolean isOpen() {
+            return mState == OPEN;
+        }
+
+        synchronized void remoteClose() throws IOException {
+            if (mState == OPEN) {
+                mState = REMOTE_CLOSE;
+            }
+        }
+
         synchronized void doClose() throws IOException {
-            try {
-                mState = 1;
-                flush(true);
-            } finally {
-                mState = 2;
+            if (mState != CLOSED) {
+                try {
+                    mState = CLOSING;
+                    flush(true);
+                } finally {
+                    mState = CLOSED;
+                }
             }
         }
 
@@ -418,7 +454,7 @@ class PacketStreamChannel implements StreamChannel {
                 }
             }
 
-            if (mState == 1) {
+            if (mState == CLOSING) {
                 buffer[offset + length] = 0;
                 length++;
             }
@@ -429,6 +465,16 @@ class PacketStreamChannel implements StreamChannel {
         @Override
         protected void disconnect() {
             PacketStreamChannel.this.disconnect();
+        }
+
+        private void checkOpen() throws IOException {
+            if (mState != OPEN) {
+                String message = "Closed";
+                if (mState == REMOTE_CLOSE) {
+                    message = message.concat(" by remote endpoint");
+                }
+                throw new IOException(message);
+            }
         }
     }
 }

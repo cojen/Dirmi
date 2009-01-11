@@ -45,7 +45,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
     private IOException mOpenException;
 
     public StreamChannelConnectorBroker(ScheduledExecutorService executor,
-                                        final MessageChannel controlChannel,
+                                        MessageChannel controlChannel,
                                         Connector<StreamChannel> connector)
         throws IOException
     {
@@ -93,7 +93,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
                         accepted(channelId, channel);
                     } catch (IOException e) {
                         unregisterAndDisconnect(channelId, channel);
-                        Acceptor.Listener<StreamChannel> listener = pollListener();
+                        AcceptListener<StreamChannel> listener = pollListener();
                         if (listener != null) {
                             listener.failed(e);
                         }
@@ -101,10 +101,17 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
                     break;
                 }
 
+                case OP_CHANNEL_CLOSE: {
+                    int channelId = (mMessage[1] << 24) | ((mMessage[2] & 0xff) << 16)
+                        | ((mMessage[3] & 0xff) << 8) | (mMessage[4] & 0xff);
+                    remoteChannelClose(channelId);
+                    break;
+                }
+
                 case OP_PING: {
                     mPinged = true;
                     try {
-                        controlChannel.send(ByteBuffer.wrap(new byte[] {OP_PONG}));
+                        mControlChannel.send(ByteBuffer.wrap(new byte[] {OP_PONG}));
                     } catch (IOException e) {
                         String message = "Broker is closed: Ping failure";
                         if (e.getMessage() != null) {
@@ -188,6 +195,22 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
         } catch (IOException e) {
             unregisterAndDisconnect(channelId, channel);
             throw e;
+        }
+    }
+
+    @Override
+    void channelClosed(int channelId) throws IOException {
+        if (!isClosed()) {
+            // It does seem odd to open a connection to close another,
+            // except connector implementation is likely recycling
+            // connections: PacketStreamChannel.
+            StreamChannel channel = mConnector.connect();
+            DataOutputStream out = new DataOutputStream(channel.getOutputStream());
+            out.write(OP_CHANNEL_CLOSE);
+            out.writeInt(brokerId());
+            out.writeInt(channelId);
+            out.flush();
+            channel.close();
         }
     }
 

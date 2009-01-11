@@ -33,6 +33,7 @@ import org.cojen.util.WeakIdentityMap;
 import org.cojen.dirmi.core.StandardSession;
 
 import org.cojen.dirmi.io.Acceptor;
+import org.cojen.dirmi.io.AcceptListener;
 import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.Connector;
 import org.cojen.dirmi.io.MessageChannel;
@@ -296,7 +297,7 @@ public class Environment implements Closeable {
         return processor;
     }
 
-    private class BrokerListener implements Acceptor.Listener<Broker<StreamChannel>> {
+    private class BrokerListener implements AcceptListener<Broker<StreamChannel>> {
         private final Acceptor<Broker<StreamChannel>> mAcceptor;
         private final Object mServer;
 
