@@ -26,7 +26,7 @@ import java.rmi.RemoteException;
 /**
  * Identify a method as being asynchronous, which does not imply
  * non-blocking. It merely means that the caller does not wait for the remote
- * method to finish. An asynchronous method will likely block if the network
+ * method to finish. An asynchronous method will likely block if the transport
  * layer is backed up.
  *
  * <p>An asynchronous method must declare returning void, {@link Pipe}, or
