@@ -17,6 +17,7 @@
 package org.cojen.dirmi.core;
 
 import java.rmi.Remote;
+import java.rmi.server.Unreferenced;
 
 import org.cojen.dirmi.util.Identifier;
 import org.cojen.dirmi.util.VersionedIdentifier;
@@ -46,6 +47,9 @@ class EmptySkeletonFactory implements SkeletonFactory {
             }
 
             public void unreferenced() {
+                if (remoteServer instanceof Unreferenced) {
+                    ((Unreferenced) remoteServer).unreferenced();
+                }
             }
         };
     }
