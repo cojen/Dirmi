@@ -1535,7 +1535,7 @@ public class StandardSession implements Session {
                 cause = ((ReconstructedException) cause).getCause();
             }
 
-            if (remoteFailureEx.isAssignableFrom(cause.getClass())) {
+            if (cause != null && remoteFailureEx.isAssignableFrom(cause.getClass())) {
                 return (T) cause;
             }
 

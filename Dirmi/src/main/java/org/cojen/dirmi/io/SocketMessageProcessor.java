@@ -507,7 +507,7 @@ public class SocketMessageProcessor implements Closeable {
         }
     }
 
-    private class Reader implements Registerable, Selectable<MessageReceiver>, Runnable {
+    private class Reader implements Registerable, Selectable<MessageReceiver> {
         // Assume messages are small.
         private static final int BUFFER_SIZE = 512;
 
@@ -666,10 +666,6 @@ public class SocketMessageProcessor implements Closeable {
 
         public void selectedExecute(MessageReceiver receiver) {
             receiver.process();
-        }
-
-        public void run() {
-            selectedExecute(null);
         }
 
         private MessageReceiver dequeue(SelectionKey key) {

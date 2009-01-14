@@ -417,6 +417,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                 }
             }
 
+            mCommand = null;
             return command;
         }
 
@@ -444,7 +445,6 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                     // stack while we wait for another command.
                     command = null;
 
-                    mCommand = null;
                     threadAvailable(this);
                 }
             } finally {
