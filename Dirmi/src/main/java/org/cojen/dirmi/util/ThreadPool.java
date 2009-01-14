@@ -35,7 +35,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Custom thread pool implementation which is slightly more efficient than the
- * default JDK1.6 thread pool and also provides scheduling services.
+ * default JDK1.6 thread pool and also provides scheduling services. More
+ * importantly, this implementation immediately removes cancelled tasks (in
+ * O(log n) time) instead of leaking memory.
  *
  * @author Brian S O'Neill
  */
