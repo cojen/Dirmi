@@ -298,6 +298,7 @@ public class StubFactoryGenerator<R extends Remote> {
                                 new TypeDesc[] {TypeDesc.OBJECT});
             }
 
+            boolean returnPipe = false;
             boolean anySharedParam = false;
 
             if (paramDescs.length > 0) {
@@ -309,6 +310,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 int i = 0;
                 for (RemoteParameter paramType : method.getParameterTypes()) {
                     if (lookForPipe && Pipe.class == paramType.getType()) {
+                        returnPipe = true;
                         lookForPipe = false;
                         // Don't pass the Pipe to server.
                     } else {
@@ -328,7 +330,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
 
-            if (anySharedParam) {
+            if (anySharedParam && !returnPipe) {
                 // Reset the stream to allow request params to be freed. Do so
                 // after flushing to prevent deadlock if the send buffer has no
                 // space. Reader might not be in a state to read, and there is
@@ -337,6 +339,11 @@ public class StubFactoryGenerator<R extends Remote> {
                 // hold the TC_ENDBLOCKDATA and TC_RESET opcodes.
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
+
+                // Note: Stream is not reset if returning a Pipe. Let user
+                // control when reset should be sent, if at all. This also
+                // prevents problems when remote endpoint closes Pipe before
+                // reset is called.
             }
 
             final Label invokeEnd;
@@ -353,7 +360,7 @@ public class StubFactoryGenerator<R extends Remote> {
             if (method.isAsynchronous()) {
                 invokeEnd = b.createLabel().setLocation();
 
-                if (returnDesc != null && Pipe.class == returnDesc.toClass()) {
+                if (returnPipe) {
                     // Return channel; as a Pipe.
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
