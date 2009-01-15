@@ -48,7 +48,7 @@ import org.cojen.dirmi.util.ThreadPool;
 
 /**
  * Sharable environment for creating and accepting remote sessions. All
- * sessions created from an environment share a thread pool.
+ * sessions created from an environment share an executor.
  *
  * @author Brian S O'Neill
  */
@@ -77,7 +77,15 @@ public class Environment implements Closeable {
     }
 
     /**
-     * Construct environment with a custom thread pool.
+     * Construct environment with the given maximum number of threads and
+     * uncaught exception handler.
+     */
+    public Environment(int maxThreads, Thread.UncaughtExceptionHandler handler) {
+        this(new ThreadPool(maxThreads, false, "dirmi", handler));
+    }
+
+    /**
+     * Construct environment with a custom executor.
      */
     public Environment(ScheduledExecutorService executor) {
         if (executor == null) {
@@ -215,6 +223,13 @@ public class Environment implements Closeable {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Returns the executor used by this environment.
+     */
+    public ScheduledExecutorService executor() {
+        return mExecutor;
     }
 
     /**
