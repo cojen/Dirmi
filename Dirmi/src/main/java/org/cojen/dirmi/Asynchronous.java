@@ -38,20 +38,14 @@ import java.rmi.RemoteException;
  * <pre>
  * <b>&#64;Asynchronous</b>
  * void sendMessage(String data) throws RemoteException;
- * </pre>
  *
- * <pre>
  * <b>&#64;Asynchronous</b>
  * &#64;RemoteFailure(exception=FileNotFoundException.class)
  * Pipe readFile(String name, Pipe pipe) throws FileNotFoundException;
- * </pre>
  *
- * <pre>
  * <b>&#64;Asynchronous</b>
  * Future&lt;Image&gt; generateImage(int width, int height, Object data) throws RemoteException;
- * </pre>
  *
- * <pre>
  * <b>&#64;Asynchronous(CallMode.ACKNOWLEDGED)</b>
  * void launchBuild(Object params, ProgressCallback callback) throws RemoteException;
  * </pre>

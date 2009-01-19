@@ -26,30 +26,88 @@ import java.io.OutputStream;
 
 /**
  * A pipe is a bidirectional stream which can be passed via an {@link
- * Asynchronous asynchronous} remote method. Client and server see the streams
- * swapped with respect to each other. Pipes can remain open as long as the
- * session is open, and all pipes are closed when the session is closed.
- *
- * <p>Methods which use pipes may also utilize {@link Timeout timeouts}. It
- * only applies to the sending of the request, however. All other operations on
- * the pipe do not have a timeout applied.
+ * Asynchronous asynchronous} remote method. Pipes can remain open as long as
+ * the session is open, and all pipes are closed when the session is
+ * closed. Here's an example remote method declaration which uses a pipe:
  *
  * <pre>
- * &#64;Asynchronous
- * <b>Pipe</b> uploadFile(String name, <b>Pipe</b> pipe) throws RemoteException, IOException;
+ * <b>&#64;Asynchronous</b>
+ * <b>Pipe</b> uploadFile(String name, <b>Pipe</b> pipe) throws RemoteException;
  * </pre>
+ *
+ * The remote method declaration requires the return type to be a pipe and one
+ * parameter must also be a pipe. The client-side invocation of the remote
+ * method simply passes null for the pipe parameter, and the server-side
+ * implementation returns null instead of a pipe. Example client call:
+ *
+ * <pre>
+ *     Pipe pipe = server.uploadFile("notes.txt", null);
+ *     byte[] notes = ...
+ *     pipe.writeInt(notes.length);
+ *     pipe.write(notes);
+ *     pipe.close();
+ * </pre>
+ *
+ * The remote method implementation might look like this:
+ *
+ * <pre>
+ * public Pipe uploadFile(String name, Pipe pipe) {
+ *     byte[] notes = new byte[pipe.readInt()];
+ *     pipe.readFully(notes);
+ *     pipe.close();
+ *     ...
+ *     return null;
+ * }
+ * </pre>
+ *
+ * Pipes are an extension of the remote method invocation itself, which is why
+ * only one pipe can be passed per call. Any arguments which were passed along
+ * with the pipe are written to the same underlying object stream. For
+ * long-lived pipes, be sure to call {@link #reset} occasionally to allow any
+ * previously written objects to be freed.
+ *
+ * <p>If the pipe is used to pass additional method arguments, consider
+ * declaring the method with the {@link CallMode#EVENTUAL eventual} calling
+ * mode. By calling {@link #flush} after all arguments are written, the number
+ * of transported packets is reduced. For the above example, the remote method
+ * can be declared as:
+ *
+ * <pre>
+ * <b>&#64;Asynchronous(CallMode.EVENTUAL)</b>
+ * Pipe uploadFile(String name, Pipe pipe) throws RemoteException;
+ * </pre>
+ *
+ * The example client call doesn't need to do anything different, since closing
+ * the pipe implicitly flushes it. If the server is required to return a value
+ * over the pipe, then the client call might be written as:
+ *
+ * <pre>
+ *     Pipe pipe = server.uploadFile("notes.txt", null);
+ *     byte[] notes = ...
+ *     pipe.writeInt(notes.length);
+ *     pipe.write(notes);
+ *     // Flush to ensure arguments and file are transported.
+ *     pipe.flush();
+ *     // Read server response.
+ *     Object response = pipe.readObject();
+ *     pipe.close();
+ * </pre>
+ *
+ * Methods which use pipes may also utilize {@link Timeout timeouts}. It
+ * only applies to the sending of the request, however. All other operations on
+ * the pipe do not have a timeout applied.
  *
  * @author Brian S O'Neill
  */
 public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
     /**
-     * Returns the Pipe's InputStream which also implements ObjectInput.
+     * Returns the pipe's InputStream which also implements ObjectInput.
      * Closing the stream is equivalent to closing the pipe.
      */
     InputStream getInputStream() throws IOException;
 
     /**
-     * Returns the Pipe's OutputStream which also implements ObjectOutput.
+     * Returns the pipe's OutputStream which also implements ObjectOutput.
      * Closing the stream is equivalent to closing the pipe.
      */
     OutputStream getOutputStream() throws IOException;
@@ -70,4 +128,15 @@ public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
      * them to get freed.
      */
     void reset() throws IOException;
+
+    /**
+     * Flushes the pipe by writing any buffered output to the transport layer.
+     */
+    void flush() throws IOException;
+
+    /**
+     * Closes both the input and output of the pipe. Any buffered output is
+     * flushed first.
+     */
+    void close() throws IOException;
 }

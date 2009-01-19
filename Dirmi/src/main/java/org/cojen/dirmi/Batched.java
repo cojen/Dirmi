@@ -40,9 +40,7 @@ import java.rmi.Remote;
  * <pre>
  * <b>&#64;Batched</b>
  * void setOption(int option) throws RemoteException;
- * </pre>
  *
- * <pre>
  * <b>&#64;Batched</b>
  * RemoteAccess login(String user, String password) throws RemoteException, AuthFailure;
  * </pre>
