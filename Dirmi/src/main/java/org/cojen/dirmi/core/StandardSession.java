@@ -1239,7 +1239,7 @@ public class StandardSession implements Session {
             throws RemoteException
         {
             try {
-                completion.complete(response.get());
+                completion.complete(response == null ? null : response.get());
             } catch (InterruptedException e) {
                 completion.exception(e);
             } catch (ExecutionException e) {

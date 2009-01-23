@@ -634,6 +634,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Handler for asynchronous methods (if any). Re-throw exception
         // wrapped in AsynchronousInvocationException.
+        // FIXME: If returns Future or Completion, pass exception to it.
         if (asyncExceptionBounds.size() > 0) {
             for (Label[] pair : asyncExceptionBounds) {
                 b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
