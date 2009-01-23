@@ -548,17 +548,23 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                    new TypeDesc[] {THROWABLE_TYPE});
                     b.throwObject();
                 } else if (method.isBatched()) {
-                    batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
-
-                    genAsyncResponse(b, returnDesc, completionVar);
+                    if (completionVar == null) {
+                        batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
+                        genAsyncResponse(b, returnDesc);
+                    } else {
+                        genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
+                    }
 
                     // Return true so that next batch request is handled in same thread.
                     b.loadConstant(true);
                     b.returnValue(TypeDesc.BOOLEAN);
                 } else if (method.isAsynchronous()) {
-                    asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
-
-                    genAsyncResponse(b, returnDesc, completionVar);
+                    if (completionVar == null) {
+                        asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
+                        genAsyncResponse(b, returnDesc);
+                    } else {
+                        genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
+                    }
 
                     b.loadLocal(pendingRequestVar);
                     b.returnValue(TypeDesc.BOOLEAN);
@@ -634,7 +640,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         // Handler for asynchronous methods (if any). Re-throw exception
         // wrapped in AsynchronousInvocationException.
-        // FIXME: If returns Future or Completion, pass exception to it.
         if (asyncExceptionBounds.size() > 0) {
             for (Label[] pair : asyncExceptionBounds) {
                 b.exceptionHandler(pair[0], pair[1], Throwable.class.getName());
@@ -722,9 +727,18 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                           new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN, TypeDesc.BOOLEAN});
     }
 
-    private void genAsyncResponse(CodeBuilder b, TypeDesc type, LocalVariable completionVar) {
+    private void genAsyncResponse(CodeBuilder b, TypeDesc type) {
+        genAsyncResponse(b, type, null, null, null);
+    }
+
+    private void genAsyncResponse(CodeBuilder b, TypeDesc type,
+                                  LocalVariable completionVar, Label tryStart, Label tryEnd)
+    {
         if (completionVar == null) {
             // Cannot write response so chuck it.
+            if (tryStart != null || tryEnd != null) {
+                throw new IllegalArgumentException();
+            }
             if (type != null) {
                 if (type.isDoubleWord()) {
                     b.pop2();
@@ -733,6 +747,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 }
             }
         } else {
+            TypeDesc remoteCompletionType = TypeDesc.forClass(RemoteCompletion.class);
+
             LocalVariable valueVar = b.createLocalVariable(null, type);
             b.storeLocal(valueVar);
             b.loadThis();
@@ -741,7 +757,20 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadLocal(completionVar);
             b.invokeInterface(SKEL_SUPPORT_TYPE, "completion",
                               null, new TypeDesc[] {TypeDesc.forClass(Future.class),
-                                                    TypeDesc.forClass(RemoteCompletion.class)});
+                                                    remoteCompletionType});
+
+            if (tryStart != null || tryEnd != null) {
+                Label skip = b.createLabel();
+                b.branch(skip);
+                b.exceptionHandler(tryStart, tryEnd, Throwable.class.getName());
+                LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
+                b.storeLocal(throwableVar);
+                b.loadLocal(completionVar);
+                b.loadLocal(throwableVar);
+                b.invokeInterface(remoteCompletionType, "exception",
+                                  null, new TypeDesc[] {THROWABLE_TYPE});
+                skip.setLocation();
+            }
         }
     }
 
