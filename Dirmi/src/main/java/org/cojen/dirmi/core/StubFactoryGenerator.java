@@ -366,6 +366,13 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
                 } else if (compVar != null) {
+                    // Finished with channel.
+                    if (method.isBatched()) {
+                        genBatched(b, channelVar, closeTaskVar);
+                    } else {
+                        genFinished(b, channelVar, closeTaskVar);
+                    }
+
                     b.loadLocal(compVar);
                     b.returnValue(returnDesc);
                 } else if (method.isBatched() && returnDesc != null &&
