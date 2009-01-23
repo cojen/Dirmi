@@ -261,8 +261,8 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
         synchronized (mChannelMap) {
             if (mChannelMap.containsKey(channelId)) {
                 ChannelReference ref = mChannelMap.get(channelId);
-                StreamChannel existing = ref.get();
-                if (existing == null || existing == channel) {
+                StreamChannel existing;
+                if (ref == null || (existing = ref.get()) == null || existing == channel) {
                     mChannelMap.remove(channelId);
                     return true;
                 }
