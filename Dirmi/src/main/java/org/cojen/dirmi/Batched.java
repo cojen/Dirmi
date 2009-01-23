@@ -20,6 +20,7 @@ import java.lang.annotation.*;
 
 import java.lang.reflect.UndeclaredThrowableException;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import java.rmi.Remote;
@@ -32,10 +33,12 @@ import java.rmi.Remote;
  * sent. If the current thread exits before releasing the channel, the batched
  * request is eventually sent.
  *
- * <p>A batched method must declare returning void, a {@link Remote} object, or
- * {@link Future}. Returning a {@code Remote} object allows batched calls to be
- * chained together. See {@link Asynchronous} for information regarding the use
- * of {@code Future}.
+ * <p>A batched method must declare returning void, a {@link Remote} object,
+ * {@link Completion} or {@link Future}. Returning a {@code Remote} object
+ * allows batched calls to be chained together. A batched task represented by a
+ * Completion or Future cannot be cancelled, at least not
+ * directly. Implementations of batched future methods should return a factory
+ * generated {@link Response response}.
  *
  * <pre>
  * <b>&#64;Batched</b>
@@ -53,6 +56,12 @@ import java.rmi.Remote;
  * returned from batched methods at or after the exception being thrown will be
  * bogus. Attempts to invoke methods on these objects will also throw the
  * original exception, possibly wrapped.
+ *
+ * <p>Any exception thrown by a batched method which returns a {@link
+ * Completion} or {@link Future} is passed to the caller via the returned
+ * object. Upon calling {@link Future#get get}, an {@link ExecutionException}
+ * is thrown. A communication failure while sending the request is thrown
+ * directly to the caller and not through the {@code Future}.
  *
  * @author Brian S O'Neill
  * @see Asynchronous

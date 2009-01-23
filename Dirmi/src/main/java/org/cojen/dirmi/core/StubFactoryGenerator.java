@@ -48,6 +48,7 @@ import org.cojen.util.SoftValuedHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.CallMode;
+import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Pipe;
 
 import org.cojen.dirmi.info.RemoteInfo;
@@ -266,15 +267,15 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeLocal(closeTaskVar);
             }
 
-            LocalVariable futureVar = null;
-            if (method.isAsynchronous() &&
-                returnDesc != null && Future.class == returnDesc.toClass())
+            LocalVariable compVar = null;
+            if (method.isAsynchronous() && returnDesc != null &&
+                (Future.class == returnDesc.toClass() || Completion.class == returnDesc.toClass()))
             {
-                futureVar = b.createLocalVariable(null, TypeDesc.forClass(Future.class));
+                compVar = b.createLocalVariable(null, TypeDesc.forClass(Completion.class));
                 b.loadThis();
                 b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
-                b.invokeInterface(STUB_SUPPORT_TYPE, "createFuture", futureVar.getType(), null);
-                b.storeLocal(futureVar);
+                b.invokeInterface(STUB_SUPPORT_TYPE, "createCompletion", compVar.getType(), null);
+                b.storeLocal(compVar);
             }
 
             final Label invokeStart = b.createLabel().setLocation();
@@ -289,11 +290,11 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.invokeVirtual(IDENTIFIER_TYPE, "write", null, new TypeDesc[] {DATA_OUTPUT_TYPE});
 
-            if (futureVar != null) {
+            if (compVar != null) {
                 // Write the Future first to allow any parameter reading
                 // problems to be reported as an exception.
                 b.loadLocal(invOutVar);
-                b.loadLocal(futureVar);
+                b.loadLocal(compVar);
                 b.invokeVirtual(invOutVar.getType(), "writeUnshared", null,
                                 new TypeDesc[] {TypeDesc.OBJECT});
             }
@@ -364,8 +365,8 @@ public class StubFactoryGenerator<R extends Remote> {
                     // Return channel; as a Pipe.
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
-                } else if (futureVar != null) {
-                    b.loadLocal(futureVar);
+                } else if (compVar != null) {
+                    b.loadLocal(compVar);
                     b.returnValue(returnDesc);
                 } else if (method.isBatched() && returnDesc != null &&
                            Remote.class.isAssignableFrom(returnDesc.toClass()))

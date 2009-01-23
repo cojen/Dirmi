@@ -16,13 +16,15 @@
 
 package org.cojen.dirmi;
 
+import java.util.Queue;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Generates responses for an {@link Asynchronous} method which returns a
- * {@link Future}.
+ * Generates responses for {@link Asynchronous} or {@link Batched} methods
+ * which return a {@link Completion} or {@link Future}.
  *
  * @author Brian S O'Neill
  */
@@ -31,49 +33,47 @@ public class Response {
     }
 
     /**
-     * Returns a {@code Future} which always returns the given value.
+     * Returns a {@code Completion} which always returns the given value.
      */
-    public static <V> Future<V> complete(final V value) {
-        return new Future<V>() {
-            public boolean cancel(boolean mayInterrupt) {
-                return false;
-            }
-            public boolean isCancelled() {
-                return false;
-            }
-            public boolean isDone() {
-                return true;
-            }
+    public static <V> Completion<V> complete(final V value) {
+        return new AbstractCompletion<V>() {
             public V get() {
-                return value;
-            }
-            public V get(long timeout, TimeUnit init) {
                 return value;
             }
         };
     }
 
     /**
-     * Returns a {@code Future} which always throws an {@link
+     * Returns a {@code Completion} which always throws an {@link
      * ExecutionException} wrapping the given cause.
      */
-    public static <V> Future<V> exception(final Throwable cause) {
-        return new Future<V>() {
-            public boolean cancel(boolean mayInterrupt) {
-                return false;
-            }
-            public boolean isCancelled() {
-                return false;
-            }
-            public boolean isDone() {
-                return true;
-            }
+    public static <V> Completion<V> exception(final Throwable cause) {
+        return new AbstractCompletion<V>() {
             public V get() throws ExecutionException {
                 throw new ExecutionException(cause);
             }
-            public V get(long timeout, TimeUnit init) throws ExecutionException {
-                throw new ExecutionException(cause);
-            }
         };
+    }
+
+    private static abstract class AbstractCompletion<V> implements Completion<V> {
+        public void register(Queue<? super Completion<V>> queue) {
+            // FIXME
+        }
+
+        public boolean cancel(boolean mayInterrupt) {
+            return false;
+        }
+
+        public boolean isCancelled() {
+            return false;
+        }
+
+        public boolean isDone() {
+            return true;
+        }
+
+        public V get(long timeout, TimeUnit init) throws ExecutionException, InterruptedException {
+            return get();
+        }
     }
 }

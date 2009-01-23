@@ -47,6 +47,7 @@ import org.cojen.util.WeakIdentityMap;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
+import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Timeout;
@@ -217,18 +218,19 @@ public class RemoteIntrospector {
                                      "exactly one matching Pipe input parameter: " +
                                      method.methodDesc());
                             }
-                        } else if (Future.class == returnType) {
+                        } else if (Future.class == returnType || Completion.class == returnType) {
                             // Okay.
                         } else if (method.isBatched()) {
                             if (!Remote.class.isAssignableFrom(returnType)) {
                                 throw new IllegalArgumentException
                                     ("Asynchronous batched method must return void, " +
-                                     "a Remote object, or Future: " + method.methodDesc());
+                                     "a Remote object, Completion or Future: "
+                                     + method.methodDesc());
                             }
                         } else {
                             throw new IllegalArgumentException
-                                ("Asynchronous method must return void, Pipe, or Future: " +
-                                 method.methodDesc());
+                                ("Asynchronous method must return void, Pipe, " +
+                                 "Completion or Future: " + method.methodDesc());
                         }
                     }
                 }

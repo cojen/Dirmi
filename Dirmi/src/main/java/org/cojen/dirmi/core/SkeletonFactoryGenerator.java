@@ -46,6 +46,7 @@ import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.CallMode;
+import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.Pipe;
 
@@ -321,8 +322,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 boolean reuseChannel = true;
 
                 LocalVariable completionVar = null;
-                if (method.isAsynchronous() &&
-                    returnDesc != null && Future.class == returnDesc.toClass())
+                if (method.isAsynchronous() && returnDesc != null &&
+                    (Future.class == returnDesc.toClass() ||
+                     Completion.class == returnDesc.toClass()))
                 {
                     // Read the Future completion object early.
                     completionVar = b.createLocalVariable

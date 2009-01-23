@@ -29,11 +29,11 @@ import java.rmi.RemoteException;
  * method to finish. An asynchronous method will likely block if the transport
  * layer is backed up.
  *
- * <p>An asynchronous method must declare returning void, {@link Pipe}, or
- * {@link Future}. An asynchronous task represented by a {@code Future} cannot
- * be cancelled, at least not via the {@code Future} object. Implementations of
- * asynchronous future methods should return a factory generated {@link
- * Response response}.
+ * <p>An asynchronous method must declare returning void, {@link Pipe}, {@link
+ * Completion} or {@link Future}. An asynchronous task represented by a {@code
+ * Completion} or {@code Future} cannot be cancelled, at least not directly.
+ * Implementations of asynchronous future methods should return a factory
+ * generated {@link Response response}.
  *
  * <pre>
  * <b>&#64;Asynchronous</b>
@@ -58,10 +58,10 @@ import java.rmi.RemoteException;
  * instead passed to the thread's uncaught exception handler.
  *
  * <p>Any exception thrown by an asynchronous method which returns a {@link
- * Future} is passed to the caller via the {@code Future}. Upon calling {@link
- * Future#get get}, an {@link ExecutionException} is thrown. A communication
- * failure while sending the request is thrown directly to the caller and not
- * through the {@code Future}.
+ * Completion} or {@link Future} is passed to the caller via the returned
+ * object. Upon calling {@link Future#get get}, an {@link ExecutionException}
+ * is thrown. A communication failure while sending the request is thrown
+ * directly to the caller and not through the {@code Future}.
  *
  * @author Brian S O'Neill
  * @see Batched

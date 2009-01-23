@@ -20,21 +20,38 @@ import java.rmi.RemoteException;
 
 import java.rmi.server.Unreferenced;
 
+import java.util.Queue;
+
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
+
+import org.cojen.dirmi.Completion;
 
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-class RemoteCompletionServer<V> implements Future<V>, RemoteCompletion<V>, Unreferenced {
+class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, Unreferenced {
     private V mValue;
     private Throwable mComplete;
+    private Queue<? super Completion<V>> mQueue;
 
     RemoteCompletionServer() {
+    }
+
+    public synchronized void register(Queue<? super Completion<V>> completionQueue) {
+        if (completionQueue == null) {
+            throw new IllegalArgumentException("Completion queue is null");
+        }
+        if (mQueue != null) {
+            throw new IllegalStateException("Already registered with a completion queue");
+        }
+        mQueue = completionQueue;
+        if (mComplete != null) {
+            completionQueue.add(this);
+        }
     }
 
     public boolean cancel(boolean mayInterrupt) {
@@ -90,7 +107,7 @@ class RemoteCompletionServer<V> implements Future<V>, RemoteCompletion<V>, Unref
         if (mComplete == null) {
             mValue = value;
             mComplete = Complete.THE;
-            notifyAll();
+            done();
         }
     }
 
@@ -100,14 +117,22 @@ class RemoteCompletionServer<V> implements Future<V>, RemoteCompletion<V>, Unref
                 cause = new NullPointerException("Exception cause is null");
             }
             mComplete = cause;
-            notifyAll();
+            done();
         }
     }
 
     public synchronized void unreferenced() {
         if (mComplete == null) {
             mComplete = new RemoteException("Session closed");
-            notifyAll();
+            done();
+        }
+    }
+
+    // Caller must be synchronized.
+    private void done() {
+        notifyAll();
+        if (mQueue != null) {
+            mQueue.add(this);
         }
     }
 

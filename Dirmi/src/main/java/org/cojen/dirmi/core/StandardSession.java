@@ -64,6 +64,7 @@ import org.cojen.util.WeakValuedHashMap;
 import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.Asynchronous;
+import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
 import org.cojen.dirmi.ReconstructedException;
@@ -1451,7 +1452,7 @@ public class StandardSession implements Session {
             return closeTask;
         }
 
-        public <V> Future<V> createFuture() {
+        public <V> Completion<V> createCompletion() {
             return new RemoteCompletionServer<V>();
         }
 

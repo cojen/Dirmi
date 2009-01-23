@@ -22,6 +22,8 @@ import java.rmi.RemoteException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.cojen.dirmi.Completion;
+
 /**
  * Object passed to a Stub instance in order for it to actually communicate
  * with a remote object.
@@ -67,11 +69,11 @@ public interface StubSupport {
                                            double timeout, TimeUnit unit) throws T;
 
     /**
-     * Used by asynchronous methods which return a Future.
+     * Used by asynchronous methods which return a Future or Completion.
      *
-     * @return future which also implements RemoteCompletion
+     * @return completion which also implements RemoteCompletion
      */
-    <V> Future<V> createFuture();
+    <V> Completion<V> createCompletion();
 
     /**
      * Used by batched methods which return a Remote object. This method writes
