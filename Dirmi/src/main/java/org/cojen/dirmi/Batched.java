@@ -36,7 +36,7 @@ import java.rmi.Remote;
  * <p>A batched method must declare returning void, a {@link Remote} object,
  * {@link Completion} or {@link Future}. Returning a {@code Remote} object
  * allows batched calls to be chained together. A batched task represented by a
- * Completion or Future cannot be cancelled, at least not
+ * {@code Completion} or {@code Future} cannot be cancelled, at least not
  * directly. Implementations of batched future methods should return a factory
  * generated {@link Response response}.
  *
