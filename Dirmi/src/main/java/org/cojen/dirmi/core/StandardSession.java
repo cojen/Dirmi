@@ -511,14 +511,14 @@ public class StandardSession implements Session {
         }
     }
 
-    void handleRequestAsync(final InvocationChannel invChannel, final boolean reset) {
+    void handleRequestsAsync(final InvocationChannel invChannel, final boolean reset) {
         mExecutor.execute(new Runnable() {
             public void run() {
                 try {
                     if (reset) {
                         invChannel.getOutputStream().reset();
                     }
-                    handleRequest(invChannel);
+                    handleRequests(invChannel);
                 } catch (IOException e) {
                     invChannel.disconnect();
                 }
@@ -526,7 +526,7 @@ public class StandardSession implements Session {
         });
     }
 
-    void handleRequest(InvocationChannel invChannel) {
+    void handleRequests(InvocationChannel invChannel) {
         BatchedInvocationException batchedException = null;
 
         while (true) {
@@ -937,11 +937,13 @@ public class StandardSession implements Session {
                 } catch (IOException e) {
                     // Ignore.
                 } finally {
-                    try {
-                        pooledChannel.close();
-                    } catch (IOException e) {
-                        // Ignore.
-                    }
+                    // Don't close, but disconnect idle channel to ensure
+                    // underlying socket is really closed. Otherwise, it might
+                    // go into another pool and sit idle. Besides, the remote
+                    // endpoint responds to the closed channel by disconnecting
+                    // it in the handleRequests method. This prevents socket
+                    // pooling from working anyhow.
+                    pooledChannel.disconnect();
                 }
             }
         }
@@ -957,7 +959,7 @@ public class StandardSession implements Session {
                 failed(e);
                 return;
             }
-            handleRequest(invChan);
+            handleRequests(invChan);
         }
 
         public void failed(IOException e) {
@@ -1312,9 +1314,9 @@ public class StandardSession implements Session {
                 }
             } else {
                 try {
-                    // Let another thread process next request while this
+                    // Let another thread process next requests while this
                     // thread continues to process active request.
-                    handleRequestAsync(channel, reset);
+                    handleRequestsAsync(channel, reset);
                     return false;
                 } catch (RejectedExecutionException e) {
                     return true;

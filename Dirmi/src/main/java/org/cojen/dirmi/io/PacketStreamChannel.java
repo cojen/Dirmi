@@ -94,13 +94,7 @@ class PacketStreamChannel extends AbstractChannel implements StreamChannel {
                 throw e;
             }
 
-            try {
-                mIn.doClose(true);
-            } catch (RejectedExecutionException e) {
-                // Don't recycle channel.
-                mChannel.disconnect();
-                return;
-            }
+            mIn.doClose(mChannel);
 
             closed();
         }
@@ -118,7 +112,7 @@ class PacketStreamChannel extends AbstractChannel implements StreamChannel {
     public void disconnect() {
         if (mClosed.compareAndSet(false, true)) {
             mChannel.disconnect();
-            mIn.doClose(false);
+            mIn.doClose(null);
         }
     }
 
@@ -265,24 +259,35 @@ class PacketStreamChannel extends AbstractChannel implements StreamChannel {
         }
 
         /**
-         * @throws RejectedExecutionException if drain is true and executor has no threads
+         * @param channel pass underlying channel if stream should be drained
          */
-        void doClose(boolean drain) throws RejectedExecutionException {
+        void doClose(final StreamChannel channel) {
             final int remaining;
             synchronized (this) {
                 remaining = mRemaining;
                 mRemaining = INPUT_CLOSED;
             }
-            if (drain && remaining >= 0) {
-                mExecutor.execute(new Runnable() {
-                    public void run() {
-                        drain(remaining);
-                    }
-                });
+
+            if (channel != null && remaining >= 0) {
+                try {
+                    mExecutor.execute(new Runnable() {
+                        public void run() {
+                            if (!drain(remaining)) {
+                                channel.disconnect();
+                            }
+                        }
+                    });
+                } catch (RejectedExecutionException e) {
+                    // Don't recycle channel.
+                    channel.disconnect();
+                }
             }
         }
 
-        synchronized void drain(int remaining) {
+        /**
+         * @return false if channel should be disconnected
+         */
+        synchronized boolean drain(int remaining) {
             try {
                 while (true) {
                     skipAll(remaining);
@@ -292,24 +297,23 @@ class PacketStreamChannel extends AbstractChannel implements StreamChannel {
                     if (b <= 0) {
                         if (b == 0) {
                             reachedEOF();
+                            return true;
                         } else {
-                            disconnect();
+                            return false;
                         }
-                        return;
                     } else if (b < 128) {
                         remaining = b;
                     } else {
                         remaining = ((b & 0x7f) << 8) + 128;
                         b = super.read();
                         if (b < 0) {
-                            disconnect();
-                            return;
+                            return false;
                         }
                         remaining += b;
                     }
                 }
             } catch (IOException e) {
-                disconnect();
+                return false;
             }
         }
 
