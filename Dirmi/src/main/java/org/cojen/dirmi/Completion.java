@@ -19,12 +19,14 @@ package org.cojen.dirmi;
 import java.util.Queue;
 
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * A {@code Completion} is a {@link Future} which also allows registration into
  * a completion queue. By polling results from the completion queue (which can
- * be blocking), multiple {@link Asynchronous asynchronous} methods can be more
- * easily managed.
+ * be blocking), multiple {@link Asynchronous asynchronous} methods can be
+ * tracked. The queue implementation must be thread-safe, and an ideal choice
+ * is {@link LinkedBlockingQueue}.
  *
  * @author Brian S O'Neill
  */
@@ -34,6 +36,8 @@ public interface Completion<V> extends Future<V> {
      * when done. If future is already done by the time register is called, it
      * is immediately enqueued.
      *
+     * @param completionQueue thread-safe queue to receive finished
+     * asynchronous results
      * @throws IllegalArgumentException if completion queue argument is null
      * @throws IllegalStateException if already registered with a completion queue
      */
