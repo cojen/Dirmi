@@ -97,8 +97,8 @@ import java.util.concurrent.TimeUnit;
  *         throws RemoteException;
  *
  *     // The timeout parameter is explicitly annotated, because of its non-standard
- *     // argument position. If runtime unit is is null, it assumed to be seconds
- *     // because of interface level annotation.
+ *     // argument position. If runtime unit is null, seconds is assumed because
+ *     // of interface level annotation.
  *     void runReport(String param, <b>&#64;TimeoutParam</b> TimeUnit unit, <b>&#64;TimeoutParam</b> int timeout)
  *         throws RemoteException;
  * }
