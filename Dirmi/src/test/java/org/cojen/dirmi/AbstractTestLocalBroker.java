@@ -44,13 +44,16 @@ public abstract class AbstractTestLocalBroker {
         }
     }
 
+    protected PipedBroker localBroker;
+    protected PipedBroker remoteBroker;
+
     protected Session localSession;
     protected Session remoteSession;
 
     @Before
     public void setUp() throws Exception {
-        final PipedBroker localBroker = new PipedBroker(env.executor());
-        final PipedBroker remoteBroker = new PipedBroker(env.executor(), localBroker);
+        localBroker = new PipedBroker(env.executor());
+        remoteBroker = new PipedBroker(env.executor(), localBroker);
 
         class RemoteCreate implements Runnable {
             private IOException exception;
