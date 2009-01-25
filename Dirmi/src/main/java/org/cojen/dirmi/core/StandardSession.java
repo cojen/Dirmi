@@ -60,6 +60,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+
 import org.cojen.util.WeakValuedHashMap;
 import org.cojen.util.SoftValuedHashMap;
 
@@ -69,6 +71,7 @@ import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
 import org.cojen.dirmi.ReconstructedException;
 import org.cojen.dirmi.RemoteTimeoutException;
+import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
 
 import org.cojen.dirmi.info.RemoteInfo;
@@ -975,10 +978,18 @@ public class StandardSession implements Session {
         }
     }
 
-    private class InvocationChan extends AbstractInvocationChannel {
+    static final AtomicReferenceFieldUpdater<InvocationChan, Future>
+        timeoutTaskUpdater = AtomicReferenceFieldUpdater.newUpdater
+        (InvocationChan.class, Future.class, "mTimeoutTask");
+
+    static final Future<Object> timedOut = Response.complete(null);
+
+    private final class InvocationChan extends AbstractInvocationChannel {
         private final StreamChannel mChannel;
 
         private volatile long mTimestamp;
+
+        volatile Future<?> mTimeoutTask;
 
         InvocationChan(StreamChannel channel) throws IOException {
             super(new ResolvingObjectInputStream(channel.getInputStream()),
@@ -994,8 +1005,8 @@ public class StandardSession implements Session {
             return mInvOut;
         }
 
-        public final void close() throws IOException {
-            final boolean wasOpen = isOpen();
+        public void close() throws IOException {
+            final boolean wasOpen = replaceTimeout(null, 0, null) > 0;
             IOException exception = null;
 
             try {
@@ -1026,15 +1037,16 @@ public class StandardSession implements Session {
             }
         }
 
-        public final boolean isOpen() {
+        public boolean isOpen() {
             return mChannel.isOpen();
         }
 
-        public final void remoteClose() throws IOException {
+        public void remoteClose() throws IOException {
             mChannel.remoteClose();
         }
 
-        public final void disconnect() {
+        public void disconnect() {
+            cancelTimeout();
             mChannel.disconnect();
         }
 
@@ -1046,20 +1058,75 @@ public class StandardSession implements Session {
             mChannel.addCloseListener(listener);
         }
 
-        public final Object getLocalAddress() {
+        public Object getLocalAddress() {
             return mChannel.getLocalAddress();
         }
 
-        public final Object getRemoteAddress() {
+        public Object getRemoteAddress() {
             return mChannel.getRemoteAddress();
         }
 
-        public final Throwable readThrowable() throws IOException, ReconstructedException {
+        public Throwable readThrowable() throws IOException, ReconstructedException {
             return getInputStream().readThrowable();
         }
 
-        public final void writeThrowable(Throwable t) throws IOException {
+        public void writeThrowable(Throwable t) throws IOException {
             getOutputStream().writeThrowable(t);
+        }
+
+        public boolean startTimeout(long timeout, TimeUnit unit) throws IOException {
+            TimeoutTask task = new TimeoutTask();
+            // Needs to be synchronized to prevent race with execution of task
+            // not know its corresponding future. This blocks task execution
+            // until future is set.
+            synchronized (task) {
+                try {
+                    return replaceTimeout(task, timeout, unit) > 0;
+                } catch (RejectedExecutionException e) {
+                    throw new IOException("Unable to schedule timeout", e);
+                }
+            }
+        }
+
+        public boolean cancelTimeout() {
+            return replaceTimeout(null, 0, null) != 0;
+        }
+
+        /**
+         * @return -1: closed; 0: timed out; 1: replaced
+         */
+        private int replaceTimeout(TimeoutTask task, long timeout, TimeUnit unit)
+            throws RejectedExecutionException
+        {
+            Future<?> existingTask;
+            Future<?> futureTask = null;
+            do {
+                if (futureTask != null) {
+                    futureTask.cancel(false);
+                    task.setFuture(futureTask = null);
+                }
+                existingTask = mTimeoutTask;
+                if (existingTask != null) {
+                    existingTask.cancel(false);
+                    if (existingTask == timedOut) {
+                        return 0;
+                    }
+                }
+                if (!isOpen()) {
+                    return -1;
+                }
+                if (task != null) {
+                    task.setFuture(futureTask = mExecutor.schedule(task, timeout, unit));
+                }
+            } while (!timeoutTaskUpdater.compareAndSet(this, existingTask, futureTask));
+            return 1;
+        }
+
+        void timedOut(Future<?> expect) {
+            if (timeoutTaskUpdater.compareAndSet(this, expect, timedOut)) {
+                // Disconnect to force immediate wakeup of blocked call to socket.
+                mChannel.disconnect();
+            }
         }
 
         @Override
@@ -1086,6 +1153,21 @@ public class StandardSession implements Session {
 
         long getIdleTimestamp() {
             return mTimestamp;
+        }
+
+        private class TimeoutTask implements Runnable {
+            private Future<?> mMyFuture;
+
+            public synchronized void run() {
+                Future<?> myFuture = mMyFuture;
+                if (myFuture != null) {
+                    timedOut(myFuture);
+                }
+            }
+
+            synchronized void setFuture(Future<?> future) {
+                mMyFuture = future;
+            }
         }
     }
 
@@ -1358,15 +1440,15 @@ public class StandardSession implements Session {
             }
         }
 
-        public <T extends Throwable> Future<?> invoke(Class<T> remoteFailureEx,
-                                                      InvocationChannel channel,
-                                                      long timeout, TimeUnit unit)
+        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
+                                                 InvocationChannel channel,
+                                                 long timeout, TimeUnit unit)
             throws T
         {
             if (timeout <= 0) {
                 if (timeout < 0) {
                     invoke(remoteFailureEx, channel);
-                    return null;
+                    return;
                 } else {
                     // Fail immediately if zero timeout.
                     throw failed(remoteFailureEx, channel,
@@ -1374,31 +1456,28 @@ public class StandardSession implements Session {
                 }
             }
 
-            Future<?> closeTask;
             try {
-                closeTask = mExecutor.schedule(new CloseTask(channel), timeout, unit);
-            } catch (RejectedExecutionException e) {
+                channel.startTimeout(timeout, unit);
+            } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
 
             try {
                 mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
-                throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
+                throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
-
-            return closeTask;
         }
 
-        public <T extends Throwable> Future<?> invoke(Class<T> remoteFailureEx,
-                                                      InvocationChannel channel,
-                                                      double timeout, TimeUnit unit)
+        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
+                                                 InvocationChannel channel,
+                                                 double timeout, TimeUnit unit)
             throws T
         {
             if (timeout <= 0) {
                 if (timeout < 0) {
                     invoke(remoteFailureEx, channel);
-                    return null;
+                    return;
                 } else {
                     // Fail immediately if zero timeout.
                     throw failed(remoteFailureEx, channel,
@@ -1437,21 +1516,17 @@ public class StandardSession implements Session {
 
             long nanoTimeout = (long) (timeout * factor);
 
-            Future<?> closeTask;
             try {
-                closeTask = mExecutor.schedule
-                    (new CloseTask(channel), nanoTimeout, TimeUnit.NANOSECONDS);
-            } catch (RejectedExecutionException e) {
+                channel.startTimeout(nanoTimeout, TimeUnit.NANOSECONDS);
+            } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
 
             try {
                 mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
-                throw failed(remoteFailureEx, channel, e, timeout, unit, closeTask);
+                throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
-
-            return closeTask;
         }
 
         public <V> Completion<V> createCompletion() {
@@ -1487,36 +1562,32 @@ public class StandardSession implements Session {
         }
 
         public void batched(InvocationChannel channel) {
-            batched(channel, null);
+            holdLocalChannel(channel);
         }
  
-        public void batched(InvocationChannel channel, Future<?> closeTask) {
-            if (cancelCloseTask(channel, closeTask) && channel instanceof InvocationChan) {
+        public void batchedAndCancelTimeout(InvocationChannel channel) {
+            if (channel.cancelTimeout()) {
                 holdLocalChannel(channel);
             } else {
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                channel.disconnect();
             }
         }
 
         public void finished(InvocationChannel channel) {
-            finished(channel, null);
-        }
-
-        public void finished(InvocationChannel channel, Future<?> closeTask) {
             releaseLocalChannel();
-
-            if (cancelCloseTask(channel, closeTask) && channel instanceof InvocationChan) {
+            if (channel instanceof InvocationChan) {
                 ((InvocationChan) channel).recycle();
             } else {
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                channel.disconnect();
+            }
+        }
+
+        public void finishedAndCancelTimeout(InvocationChannel channel) {
+            releaseLocalChannel();
+            if (channel.cancelTimeout() && channel instanceof InvocationChan) {
+                ((InvocationChan) channel).recycle();
+            } else {
+                channel.disconnect();
             }
         }
 
@@ -1580,25 +1651,25 @@ public class StandardSession implements Session {
             return (T) ex;
         }
 
-        public <T extends Throwable> T failed(Class<T> remoteFailureEx,
-                                              InvocationChannel channel,
-                                              Throwable cause,
-                                              long timeout, TimeUnit unit, Future<?> closeTask)
+        public <T extends Throwable> T failedAndCancelTimeout(Class<T> remoteFailureEx,
+                                                              InvocationChannel channel,
+                                                              Throwable cause,
+                                                              long timeout, TimeUnit unit)
         {
-            if (!cancelCloseTask(channel, closeTask) && cause instanceof IOException) {
-                // Since close task ran, assume cause is timeout.
+            if (!channel.cancelTimeout() && cause instanceof IOException) {
+                // Since cancel task ran, assume cause is timeout.
                 cause = new RemoteTimeoutException(timeout, unit);
             }
             return failed(remoteFailureEx, channel, cause);
         }
 
-        public <T extends Throwable> T failed(Class<T> remoteFailureEx,
-                                              InvocationChannel channel,
-                                              Throwable cause,
-                                              double timeout, TimeUnit unit, Future<?> closeTask)
+        public <T extends Throwable> T failedAndCancelTimeout(Class<T> remoteFailureEx,
+                                                              InvocationChannel channel,
+                                                              Throwable cause,
+                                                              double timeout, TimeUnit unit)
         {
-            if (!cancelCloseTask(channel, closeTask) && cause instanceof IOException) {
-                // Since close task ran, assume cause is timeout.
+            if (!channel.cancelTimeout() && cause instanceof IOException) {
+                // Since cancel task ran, assume cause is timeout.
                 cause = new RemoteTimeoutException(timeout, unit);
             }
             return failed(remoteFailureEx, channel, cause);
@@ -1624,34 +1695,6 @@ public class StandardSession implements Session {
 
         VersionedIdentifier unreachable() {
             return mStubRefs.remove(mObjID) == null ? null : mObjID;
-        }
-
-        /**
-         * @return true if channel was not closed
-         */
-        private boolean cancelCloseTask(InvocationChannel channel, Future<?> closeTask) {
-            if (closeTask == null) {
-                return true;
-            }
-            if (closeTask.cancel(false)) {
-                // Future interface cannot be queried to determine if task
-                // is currently running. Confirm that channel was not closed.
-                return channel.isOpen();
-            }
-            return false;
-        }
-    }
-
-    private static class CloseTask implements Runnable {
-        private final InvocationChannel mChannel;
-
-        CloseTask(InvocationChannel channel) {
-            mChannel = channel;
-        }
-
-        public void run() {
-            // Disconnect to force immediate wakeup of blocked call to socket.
-            mChannel.disconnect();
         }
     }
 }

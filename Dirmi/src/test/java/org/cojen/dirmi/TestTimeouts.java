@@ -155,6 +155,27 @@ public class TestTimeouts extends AbstractTestLocalBroker {
         } catch (RemoteTimeoutException e) {
             assertEquals("Timed out after 100 milliseconds", e.getMessage());
         }
+
+
+        // Verify that abnormal errors don't cause timeout exception.
+
+        env.executor().execute(new Runnable() {
+            public void run() {
+                try {
+                    sleep(1000);
+                    remoteSession.close();
+                } catch (Exception e) {
+                }
+            }
+        });
+
+        try {
+            remote.slow(3000, 2000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            fail();
+        } catch (RemoteException e) {
+        }
     }
 
     @Test

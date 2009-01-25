@@ -24,6 +24,8 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * A pipe is a bidirectional stream which can be passed via an {@link
  * Asynchronous asynchronous} remote method. Pipes can remain open as long as
@@ -93,9 +95,10 @@ import java.io.OutputStream;
  *     pipe.close();
  * </pre>
  *
- * Methods which use pipes may also utilize {@link Timeout timeouts}. It
- * only applies to the sending of the request, however. All other operations on
- * the pipe do not have a timeout applied.
+ * Methods which use pipes may also utilize {@link Timeout timeouts}. When
+ * using the {@link CallMode#EVENTUAL eventual} calling mode, the timeout must
+ * be explicitly {@link #cancelTimeout cancelled}. With other modes, the
+ * timeout only applies to the sending of the request.
  *
  * @author Brian S O'Neill
  */
@@ -133,6 +136,28 @@ public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
      * Flushes the pipe by writing any buffered output to the transport layer.
      */
     void flush() throws IOException;
+
+    /**
+     * Starts a task which forcibly closes this pipe after the timeout has
+     * elapsed, unless it is {@link #cancelTimeout cancelled} in time. If a
+     * timeout is already in progress when this method is called, it is
+     * replaced with a new timeout.
+     *
+     * @return false if task could not be started because existing timeout
+     * could not be cancelled or pipe is closed
+     * @throws IOException if task could not be scheduled
+     */
+    boolean startTimeout(long timeout, TimeUnit unit) throws IOException;
+
+    /**
+     * Cancels a timeout task which was started by {@link #startTimeout
+     * startTimeout} or an initial timeout when using the {@link
+     * CallMode#EVENTUAL eventual} calling mode. If no timeout task exists when
+     * this method is called, it does nothing and returns true.
+     *
+     * @return false if too late to cancel task and pipe will be closed
+     */
+    boolean cancelTimeout();
 
     /**
      * Closes both the input and output of the pipe. Any buffered output is

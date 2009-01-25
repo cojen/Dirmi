@@ -99,13 +99,6 @@ public class RemoteTimeoutsServer implements RemoteTimeouts {
     }
 
     private void sleep(long millis) {
-        long start = System.currentTimeMillis();
-        do {
-            try {
-                Thread.sleep(millis);
-            } catch (InterruptedException e) {
-            }
-            millis -= System.currentTimeMillis() - start;
-        } while (millis > 0);
+        AbstractTestLocalBroker.sleep(millis);
     }
 }

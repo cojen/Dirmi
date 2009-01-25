@@ -44,6 +44,17 @@ public abstract class AbstractTestLocalBroker {
         }
     }
 
+    static void sleep(long millis) {
+        long start = System.currentTimeMillis();
+        do {
+            try {
+                Thread.sleep(millis);
+            } catch (InterruptedException e) {
+            }
+            millis -= System.currentTimeMillis() - start;
+        } while (millis > 0);
+    }
+
     protected PipedBroker localBroker;
     protected PipedBroker remoteBroker;
 

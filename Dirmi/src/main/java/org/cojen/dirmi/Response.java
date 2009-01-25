@@ -57,7 +57,7 @@ public class Response {
 
     private static abstract class AbstractCompletion<V> implements Completion<V> {
         public void register(Queue<? super Completion<V>> queue) {
-            // FIXME
+            throw new UnsupportedOperationException();
         }
 
         public boolean cancel(boolean mayInterrupt) {
