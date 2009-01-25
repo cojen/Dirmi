@@ -187,7 +187,14 @@ class CodeBuilderUtil {
             methodName = type.getRootName();
             methodName = "write" +
                 Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
-            methodType = type;
+            switch (type.getTypeCode()) {
+            case TypeDesc.BYTE_CODE: case TypeDesc.SHORT_CODE: case TypeDesc.CHAR_CODE:
+                methodType = TypeDesc.INT;
+                break;
+            default:
+                methodType = type;
+                break;
+            }
         } else if (param.isUnshared()) {
             shared = false;
             if (TypeDesc.STRING == type) {

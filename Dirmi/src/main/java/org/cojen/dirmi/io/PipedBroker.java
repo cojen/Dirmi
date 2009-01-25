@@ -172,6 +172,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
         public void disconnect() {
             try {
+                mIn.close();
                 mOut.close();
             } catch (IOException e) {
             }
@@ -179,6 +180,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
         public void close() throws IOException {
             try {
+                mIn.close();
                 mOut.close();
             } finally {
                 closed();

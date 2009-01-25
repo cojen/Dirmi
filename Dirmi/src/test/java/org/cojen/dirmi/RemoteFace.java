@@ -29,8 +29,6 @@ import java.sql.SQLException;
  * @author Brian S O'Neill
  */
 public interface RemoteFace extends Remote {
-    // Synchronous methods
-
     void doIt() throws RemoteException;
 
     String getMessage() throws RemoteException;

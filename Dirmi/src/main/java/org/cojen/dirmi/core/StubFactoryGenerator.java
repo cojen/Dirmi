@@ -223,7 +223,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 for (RemoteParameter paramType : method.getParameterTypes()) {
                     if (paramType.isTimeout()) {
                         timeoutVar = b.getParameter(i);
-                        TypeDesc desc = timeoutVar.getType();
+                        TypeDesc desc = timeoutVar.getType().toPrimitiveType();
                         if (desc == TypeDesc.FLOAT || desc == TypeDesc.DOUBLE) {
                             timeoutType = TypeDesc.DOUBLE;
                         }
@@ -655,7 +655,11 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
 
                 // Use the high precision value for the actual timeout.
-                b.loadConstant(timeout);
+                if (timeoutType == TypeDesc.DOUBLE) {
+                    b.loadConstant((double) timeout);
+                } else {
+                    b.loadConstant(timeout);
+                }
                 b.branch(ready);
 
                 notNull.setLocation();

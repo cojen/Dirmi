@@ -152,7 +152,12 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
 
     AcceptListener<StreamChannel> pollListener() {
         try {
-            return mListenerQueue.poll(10, TimeUnit.SECONDS);
+            AcceptListener<StreamChannel> listener = mListenerQueue.poll(10, TimeUnit.SECONDS);
+            if (listener == ClosedListener.THE) {
+                mListenerQueue.add(listener);
+                listener = null;
+            }
+            return listener;
         } catch (InterruptedException e) {
             return null;
         }
@@ -341,6 +346,9 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                 listener.failed(new IOException(reason));
             }
 
+            // Wake up any waiters.
+            mListenerQueue.add(ClosedListener.THE);
+
             IOException exception = null;
 
             try {
@@ -436,5 +444,13 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                 broker.doPingCheck();
             }
         }
+    }
+
+    private static final class ClosedListener implements AcceptListener<StreamChannel> {
+        static final ClosedListener THE = new ClosedListener();
+
+        private ClosedListener() {}
+        public void established(StreamChannel channel) {}
+        public void failed(IOException e) {}
     }
 }

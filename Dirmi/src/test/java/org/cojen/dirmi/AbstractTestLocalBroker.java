@@ -91,17 +91,21 @@ public abstract class AbstractTestLocalBroker {
         if (env != null) {
             env.executor().execute(new Runnable() {
                 public void run() {
-                    try {
-                        remoteSession.close();
-                    } catch (IOException e) {
+                    if (remoteSession != null) {
+                        try {
+                            remoteSession.close();
+                        } catch (IOException e) {
+                        }
+                        remoteSession = null;
                     }
-                    remoteSession = null;
                 }
             });
         }
 
-        localSession.close();
-        localSession = null;
+        if (localSession != null) {
+            localSession.close();
+            localSession = null;
+        }
     }
 
     protected abstract Object createLocalServer();
