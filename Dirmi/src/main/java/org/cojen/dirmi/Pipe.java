@@ -65,14 +65,14 @@ import java.util.concurrent.TimeUnit;
  * Pipes are an extension of the remote method invocation itself, which is why
  * only one pipe can be passed per call. Any arguments which were passed along
  * with the pipe are written to the same underlying object stream. For
- * long-lived pipes, be sure to call {@link #reset} occasionally to allow any
- * previously written objects to be freed.
+ * long-lived pipes, be sure to call {@link #reset reset} occasionally to allow
+ * any previously written objects to be freed.
  *
  * <p>If the pipe is used to pass additional method arguments, consider
  * declaring the method with the {@link CallMode#EVENTUAL eventual} calling
- * mode. By calling {@link #flush} after all arguments are written, the number
- * of transported packets is reduced. For the above example, the remote method
- * can be declared as:
+ * mode. By calling {@link #flush flush} after all arguments are written, the
+ * number of transported packets is reduced. For the above example, the remote
+ * method can be declared as:
  *
  * <pre>
  * <b>&#64;Asynchronous(CallMode.EVENTUAL)</b>
@@ -95,10 +95,11 @@ import java.util.concurrent.TimeUnit;
  *     pipe.close();
  * </pre>
  *
- * Methods which use pipes may also utilize {@link Timeout timeouts}. When
- * using the {@link CallMode#EVENTUAL eventual} calling mode, the timeout must
- * be explicitly {@link #cancelTimeout cancelled}. With other modes, the
- * timeout only applies to the sending of the request.
+ * Methods which use pipes may also utilize {@link Timeout timeout}
+ * annotations. A timeout task is started when the remote method is invoked,
+ * and it must be explicitly {@link #cancelTimeout cancelled} upon receiving
+ * the pipe. Timeout tasks may also be explicitly {@link #startTimeout started}
+ * without requiring the annotation.
  *
  * @author Brian S O'Neill
  */
