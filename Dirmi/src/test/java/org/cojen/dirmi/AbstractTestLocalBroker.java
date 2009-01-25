@@ -1,0 +1,107 @@
+/*
+ *  Copyright 2009 Brian S O'Neill
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
+package org.cojen.dirmi;
+
+import java.io.IOException;
+
+import org.junit.*;
+
+import org.cojen.dirmi.io.PipedBroker;
+
+/**
+ * 
+ *
+ * @author Brian S O'Neill
+ */
+@Ignore
+public abstract class AbstractTestLocalBroker {
+    protected static Environment env;
+
+    @BeforeClass
+    public static void createEnv() {
+        env = new Environment();
+    }
+
+    @AfterClass
+    public static void closeEnv() throws Exception {
+        if (env != null) {
+            env.close();
+            env = null;
+        }
+    }
+
+    protected Session localSession;
+    protected Session remoteSession;
+
+    @Before
+    public void setUp() throws Exception {
+        final PipedBroker localBroker = new PipedBroker(env.executor());
+        final PipedBroker remoteBroker = new PipedBroker(env.executor(), localBroker);
+
+        class RemoteCreate implements Runnable {
+            private IOException exception;
+            private Session session;
+
+            public synchronized void run() {
+                try {
+                    session = env.createSession(remoteBroker, createRemoteServer());
+                } catch (IOException e) {
+                    exception = e;
+                }
+                notifyAll();
+            }
+
+            public synchronized Session waitForSession() throws Exception {
+                while (exception == null && session == null) {
+                    wait();
+                }
+                if (exception != null) {
+                    throw exception;
+                }
+                return session;
+            }
+        }
+
+        RemoteCreate rc = new RemoteCreate();
+        env.executor().execute(rc);
+
+        localSession = env.createSession(localBroker, createLocalServer());
+        remoteSession = rc.waitForSession();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        if (env != null) {
+            env.executor().execute(new Runnable() {
+                public void run() {
+                    try {
+                        remoteSession.close();
+                    } catch (IOException e) {
+                    }
+                    remoteSession = null;
+                }
+            });
+        }
+
+        localSession.close();
+        localSession = null;
+    }
+
+    protected abstract Object createLocalServer();
+
+    protected abstract Object createRemoteServer();
+}
