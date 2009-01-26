@@ -119,6 +119,10 @@ public class RemoteTimeoutsServer implements RemoteTimeouts {
         return new RemoteTimeoutsServer2();
     }
 
+    public RemoteTimeouts3 createRemoteTimeouts3() {
+        return new RemoteTimeoutsServer3();
+    }
+
     private void sleep(long millis) {
         AbstractTestLocalBroker.sleep(millis);
     }

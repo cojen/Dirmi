@@ -80,4 +80,6 @@ public interface RemoteTimeouts extends Remote {
         throws RemoteException;
 
     RemoteTimeouts2 createRemoteTimeouts2() throws RemoteException;
+
+    RemoteTimeouts3 createRemoteTimeouts3() throws RemoteException;
 }

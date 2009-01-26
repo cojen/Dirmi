@@ -433,4 +433,55 @@ public class TestTimeouts extends AbstractTestLocalBroker {
             assertEquals("Timed out after 2000 milliseconds", e.getMessage());
         }
     }
+
+    @Test
+    public void interfaceDefaultTimeoutAmdUnit() throws Exception {
+        RemoteTimeouts3 remote3;
+        {
+            RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+            remote3 = remote.createRemoteTimeouts3();
+        }
+
+        try {
+            remote3.slow(3000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 1 second", e.getMessage());
+        }
+
+        try {
+            remote3.slow2(4000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 2 seconds", e.getMessage());
+        }
+
+        try {
+            remote3.slow3(4000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 1500 milliseconds", e.getMessage());
+        }
+
+        try {
+            remote3.slow4(1000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 1 millisecond", e.getMessage());
+        }
+
+        try {
+            remote3.slow5(4000, 2);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 2 seconds", e.getMessage());
+        }
+
+        try {
+            remote3.slow6(1000, TimeUnit.MICROSECONDS);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 1 microsecond", e.getMessage());
+        }
+    }
 }
