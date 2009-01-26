@@ -78,4 +78,6 @@ public interface RemoteTimeouts extends Remote {
     @TimeoutUnit(TimeUnit.MINUTES)
     TimeUnit slow(long sleepMillis, @TimeoutParam TimeUnit unit, @TimeoutParam int timeout)
         throws RemoteException;
+
+    RemoteTimeouts2 createRemoteTimeouts2() throws RemoteException;
 }

@@ -406,4 +406,31 @@ public class TestTimeouts extends AbstractTestLocalBroker {
         unit = remote.slow(1L, null, 1);
         assertEquals(TimeUnit.MINUTES, unit);
     }
+
+    @Test
+    public void interfaceDefaultTimeout() throws Exception {
+        RemoteTimeouts2 remote2;
+        {
+            RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+            remote2 = remote.createRemoteTimeouts2();
+        }
+
+        assertEquals(new Long(-100), remote2.slow(1, new Long(-100)));
+
+        try {
+            remote2.slow(3000, new Long(2));
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 2 milliseconds", e.getMessage());
+        }
+
+        assertEquals(new Long(2000), remote2.slow(100, (Long) null));
+
+        try {
+            remote2.slow(3000, (Long) null);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 2000 milliseconds", e.getMessage());
+        }
+    }
 }
