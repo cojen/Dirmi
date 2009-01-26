@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.rmi.RemoteException;
 
+import java.util.concurrent.TimeUnit;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
@@ -361,5 +363,47 @@ public class TestTimeouts extends AbstractTestLocalBroker {
         }
 
         assertEquals(new Float(-1), remote.slow((Float) null, 100));
+    }
+
+    @Test
+    public void unitParam() throws Exception {
+        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+
+        try {
+            remote.slow(60000, 1, TimeUnit.SECONDS);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 1 second", e.getMessage());
+        }
+
+        TimeUnit unit = remote.slow(1, 1000, null);
+        assertEquals(TimeUnit.MILLISECONDS, unit);
+
+        try {
+            remote.slow(60000, 60, null);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 60 milliseconds", e.getMessage());
+        }
+
+        try {
+            remote.slow(0.03125, TimeUnit.MINUTES, 60000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 0.03125 minutes", e.getMessage());
+        }
+
+        unit = remote.slow(1000.0, null, 1);
+        assertEquals(TimeUnit.MILLISECONDS, unit);
+
+        try {
+            remote.slow(60.0, null, 60000);
+            fail();
+        } catch (RemoteTimeoutException e) {
+            assertEquals("Timed out after 60.0 milliseconds", e.getMessage());
+        }
+
+        unit = remote.slow(1L, null, 1);
+        assertEquals(TimeUnit.MINUTES, unit);
     }
 }

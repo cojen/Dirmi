@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.rmi.RemoteException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * 
  *
@@ -96,6 +98,21 @@ public class RemoteTimeoutsServer implements RemoteTimeouts {
     public Float slow(Float timeout, long sleepMillis) {
         sleep(sleepMillis);
         return timeout;
+    }
+
+    public TimeUnit slow(long sleepMillis, int timeout, TimeUnit unit) {
+        sleep(sleepMillis);
+        return unit;
+    }
+
+    public TimeUnit slow(double timeout, TimeUnit unit, long sleepMillis) {
+        sleep(sleepMillis);
+        return unit;
+    }
+
+    public TimeUnit slow(long sleepMillis, TimeUnit unit, int timeout) {
+        sleep(sleepMillis);
+        return unit;
     }
 
     private void sleep(long millis) {

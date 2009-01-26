@@ -66,4 +66,16 @@ public interface RemoteTimeouts extends Remote {
     Float slow(long sleepMillis, @TimeoutParam Float timeout) throws RemoteException;
 
     Float slow(@TimeoutParam Float timeout, long sleepMillis) throws RemoteException;
+
+    // With unit parameters.
+
+    TimeUnit slow(long sleepMillis, @TimeoutParam int timeout, TimeUnit unit)
+        throws RemoteException;
+
+    TimeUnit slow(@TimeoutParam double timeout, @TimeoutParam TimeUnit unit, long sleepMillis)
+        throws RemoteException;
+
+    @TimeoutUnit(TimeUnit.MINUTES)
+    TimeUnit slow(long sleepMillis, @TimeoutParam TimeUnit unit, @TimeoutParam int timeout)
+        throws RemoteException;
 }

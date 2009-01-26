@@ -144,6 +144,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
     private class Channel extends AbstractChannel implements StreamChannel {
         private final PipedInputStream mIn;
+        private final PipedOutputStream mPout;
         private final OutputStream mOut;
 
         Channel(PipedInputStream in, PipedOutputStream out) {
@@ -151,6 +152,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
             // Output needs to have at least 2 bytes to avoid deadlocks caused
             // by object stream resets. Might as well provide more buffering to
             // offset the extra overhead.
+            mPout = out;
             mOut = new BufferedOutputStream(out, 0, 100, 0);
         }
 
@@ -173,7 +175,8 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         public void disconnect() {
             try {
                 mIn.close();
-                mOut.close();
+                // Don't flush the buffer since it might block.
+                mPout.close();
             } catch (IOException e) {
             }
         }

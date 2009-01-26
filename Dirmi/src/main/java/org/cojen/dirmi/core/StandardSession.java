@@ -1598,11 +1598,7 @@ public class StandardSession implements Session {
             releaseLocalChannel();
 
             if (channel != null) {
-                try {
-                    channel.close();
-                } catch (IOException e) {
-                    // Ignore.
-                }
+                channel.disconnect();
             }
 
             if (cause instanceof ReconstructedException) {
