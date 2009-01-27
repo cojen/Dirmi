@@ -1171,6 +1171,9 @@ public class StandardSession implements Session {
         }
     }
 
+    // FIXME: Override writeClassDescriptor/readClassDescriptor to write
+    // Identifiers for classes. This reduces the stream serialization overhead.
+
     private class ResolvingObjectInputStream extends ObjectInputStream {
         ResolvingObjectInputStream(InputStream in) throws IOException {
             super(in);
