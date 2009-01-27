@@ -33,20 +33,46 @@ import java.util.concurrent.locks.Lock;
  * @author Brian S O'Neill
  */
 public class PipedBroker extends AbstractStreamBroker implements Broker<StreamChannel> {
+    private static final int DEFAULT_BUFFER_SIZE = 100;
+
+    private final int mBufferSize;
     private PipedBroker mEndpoint;
 
     /**
      * Creates an unconnected broker.
      */
     public PipedBroker(Executor executor) {
+        this(executor, DEFAULT_BUFFER_SIZE);
+    }
+
+    /**
+     * Creates an unconnected broker.
+     */
+    public PipedBroker(Executor executor, int bufferSize) {
         super(executor);
+        if (bufferSize < 2) {
+            // Output needs to have at least 2 bytes to avoid deadlocks caused
+            // by object stream resets. Default is larger to provide more
+            // buffering to offset the extra overhead.
+            bufferSize = 2;
+        }
+        mBufferSize = bufferSize;
     }
 
     /**
      * Creates a connected broker.
      */
     public PipedBroker(Executor executor, PipedBroker endpoint) throws IOException {
-        super(executor);
+        this(executor, DEFAULT_BUFFER_SIZE, endpoint);
+    }
+
+    /**
+     * Creates a connected broker.
+     */
+    public PipedBroker(Executor executor, int bufferSize, PipedBroker endpoint)
+        throws IOException
+    {
+        this(executor, bufferSize);
         Lock lock = closeLock();
         try {
             Lock endpointLock = endpoint.closeLock();
@@ -76,7 +102,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
             PipedInputStream pin = new PipedInputStream();
             PipedOutputStream pout = new PipedOutputStream();
             mEndpoint.accept(pin, pout);
-            channel = new Channel(pin, pout);
+            channel = new Channel(pin, pout, mBufferSize);
             Lock lock = closeLock();
             try {
                 register(channelId, channel);
@@ -101,7 +127,7 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         try {
             PipedInputStream myPin = new PipedInputStream(pout);
             PipedOutputStream myPout = new PipedOutputStream(pin);
-            channel = new Channel(myPin, myPout);
+            channel = new Channel(myPin, myPout, mBufferSize);
             final StreamChannel fchannel = channel;
             Lock lock = closeLock();
             try {
@@ -147,13 +173,10 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         private final PipedOutputStream mPout;
         private final OutputStream mOut;
 
-        Channel(PipedInputStream in, PipedOutputStream out) {
+        Channel(PipedInputStream in, PipedOutputStream out, int bufferSize) {
             mIn = in;
-            // Output needs to have at least 2 bytes to avoid deadlocks caused
-            // by object stream resets. Might as well provide more buffering to
-            // offset the extra overhead.
             mPout = out;
-            mOut = new BufferedOutputStream(out, 0, 100, 0);
+            mOut = new BufferedOutputStream(out, 0, bufferSize, 0);
         }
 
         public Object getLocalAddress() {

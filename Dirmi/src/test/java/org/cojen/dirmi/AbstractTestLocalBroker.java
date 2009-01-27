@@ -18,9 +18,13 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import java.util.concurrent.Executor;
+
 import org.junit.*;
 
+import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.PipedBroker;
+import org.cojen.dirmi.io.StreamChannel;
 
 /**
  * 
@@ -55,16 +59,17 @@ public abstract class AbstractTestLocalBroker {
         } while (millis > 0);
     }
 
-    protected PipedBroker localBroker;
-    protected PipedBroker remoteBroker;
+    protected Broker<StreamChannel> localBroker;
+    protected Broker<StreamChannel> remoteBroker;
 
     protected Session localSession;
     protected Session remoteSession;
 
     @Before
     public void setUp() throws Exception {
-        localBroker = new PipedBroker(env.executor());
-        remoteBroker = new PipedBroker(env.executor(), localBroker);
+        Broker<StreamChannel>[] brokers = createBrokers(env.executor());
+        localBroker = brokers[0];
+        remoteBroker = brokers[1];
 
         class RemoteCreate implements Runnable {
             private IOException exception;
@@ -95,6 +100,12 @@ public abstract class AbstractTestLocalBroker {
 
         localSession = env.createSession(localBroker, createLocalServer());
         remoteSession = rc.waitForSession();
+    }
+
+    protected Broker<StreamChannel>[] createBrokers(Executor executor) throws IOException {
+        PipedBroker localBroker = new PipedBroker(executor);
+        PipedBroker remoteBroker = new PipedBroker(executor, localBroker);
+        return new Broker[] {localBroker, remoteBroker};
     }
 
     @After
