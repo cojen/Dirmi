@@ -33,34 +33,31 @@ import java.util.concurrent.TimeUnit;
  * @author Brian S O'Neill
  */
 public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
-    final SocketAddress mBindpoint;
+    final SocketAddress mLocalAddress;
     final ServerSocket mServerSocket;
     final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
     public SocketStreamChannelAcceptor(ScheduledExecutorService executor,
-                                       SocketAddress bindpoint)
+                                       SocketAddress localAddress)
         throws IOException
     {
-        this(executor, bindpoint, new ServerSocket());
+        this(executor, localAddress, new ServerSocket());
     }
 
     public SocketStreamChannelAcceptor(final ScheduledExecutorService executor,
-                                       SocketAddress bindpoint,
+                                       SocketAddress localAddress,
                                        ServerSocket serverSocket)
         throws IOException
     {
         if (executor == null) {
             throw new IllegalArgumentException("Must provide an executor");
         }
-        if (bindpoint == null) {
-            throw new IllegalArgumentException("Must provide a bindpoint");
-        }
         if (serverSocket == null) {
             throw new IllegalArgumentException("Must provide a server socket");
         }
-        mBindpoint = bindpoint;
         mServerSocket = serverSocket;
-        mServerSocket.bind(bindpoint);
+        mServerSocket.bind(localAddress);
+        mLocalAddress = mServerSocket.getLocalSocketAddress();
         mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
 
         final Recycler<StreamChannel> recycler = new Recycler<StreamChannel>() {
@@ -124,11 +121,11 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
 
     @Override
     public String toString() {
-        return "SocketStreamChannelAcceptor {bindpoint=" + mBindpoint + '}';
+        return "SocketStreamChannelAcceptor {localAddress=" + mLocalAddress + '}';
     }
 
-    public final SocketAddress getBindpoint() {
-        return mBindpoint;
+    public final SocketAddress getLocalAddress() {
+        return mLocalAddress;
     }
 
     void accepted(StreamChannel channel) {

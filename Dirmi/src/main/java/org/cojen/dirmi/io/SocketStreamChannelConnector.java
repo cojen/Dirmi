@@ -31,28 +31,28 @@ import java.util.concurrent.ScheduledExecutorService;
 public class SocketStreamChannelConnector implements Connector<StreamChannel> {
     private final ScheduledExecutorService mExecutor;
     private final StreamChannelPool mPool;
-    private final SocketAddress mEndpoint;
-    private final SocketAddress mBindpoint;
+    private final SocketAddress mRemoteAddress;
+    private final SocketAddress mLocalAddress;
 
     public SocketStreamChannelConnector(ScheduledExecutorService executor,
-                                        SocketAddress endpoint)
+                                        SocketAddress remoteAddress)
     {
-        this(executor, endpoint, null);
+        this(executor, remoteAddress, null);
     }
 
     public SocketStreamChannelConnector(ScheduledExecutorService executor,
-                                        SocketAddress endpoint, SocketAddress bindpoint)
+                                        SocketAddress remoteAddress, SocketAddress localAddress)
     {
         if (executor == null) {
             throw new IllegalArgumentException("Must provide an executor");
         }
-        if (endpoint == null) {
-            throw new IllegalArgumentException("Must provide an endpoint");
+        if (remoteAddress == null) {
+            throw new IllegalArgumentException("Must provide a remote address");
         }
         mExecutor = executor;
         mPool = new StreamChannelPool(executor);
-        mEndpoint = endpoint;
-        mBindpoint = bindpoint;
+        mRemoteAddress = remoteAddress;
+        mLocalAddress = localAddress;
     }
 
     public StreamChannel connect() throws IOException {
@@ -62,10 +62,10 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
         }
 
         Socket socket = createSocket();
-        if (mBindpoint != null) {
-            socket.bind(mBindpoint);
+        if (mLocalAddress != null) {
+            socket.bind(mLocalAddress);
         }
-        socket.connect(mEndpoint);
+        socket.connect(mRemoteAddress);
         socket.setTcpNoDelay(true);
 
         channel = new SocketStreamChannel(socket);
@@ -75,16 +75,16 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
 
     @Override
     public String toString() {
-        return "SocketStreamChannelConnector {endpoint=" + mEndpoint +
-            ", bindpoint=" + mBindpoint + '}';
+        return "SocketStreamChannelConnector {remoteAddress=" + mRemoteAddress +
+            ", localAddress=" + mLocalAddress + '}';
     }
 
-    public final SocketAddress getEndpoint() {
-        return mEndpoint;
+    public final SocketAddress getRemoteAddress() {
+        return mRemoteAddress;
     }
 
-    public final SocketAddress getBindpoint() {
-        return mBindpoint;
+    public final SocketAddress getLocalAddress() {
+        return mLocalAddress;
     }
 
     protected Socket createSocket() throws IOException {

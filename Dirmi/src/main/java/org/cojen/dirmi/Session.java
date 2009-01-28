@@ -27,6 +27,7 @@ import java.rmi.Remote;
  * Remote method invocation session.
  *
  * @author Brian S O'Neill
+ * @see Environment
  */
 public interface Session extends Closeable, Flushable {
     /**

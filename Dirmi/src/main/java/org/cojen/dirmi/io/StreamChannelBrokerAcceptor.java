@@ -182,6 +182,10 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         });
     }
 
+    public Object getLocalAddress() {
+        return mAcceptor.getLocalAddress();
+    }
+
     /**
      * Returns immediately and calls established method on listener
      * asynchronously. Only one broker is accepted per invocation of this

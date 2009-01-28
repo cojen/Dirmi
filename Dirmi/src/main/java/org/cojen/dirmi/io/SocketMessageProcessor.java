@@ -81,28 +81,36 @@ public class SocketMessageProcessor implements Closeable {
         executor.execute(new ReadTask());
     }
 
-    public Connector<MessageChannel> newConnector(SocketAddress endpoint) {
-        return newConnector(endpoint, null);
+    public Connector<MessageChannel> newConnector(SocketAddress remoteAddress) {
+        return newConnector(remoteAddress, null);
     }
 
-    public Connector<MessageChannel> newConnector(final SocketAddress endpoint,
-                                                  final SocketAddress bindpoint)
+    public Connector<MessageChannel> newConnector(final SocketAddress remoteAddress,
+                                                  final SocketAddress localAddress)
     {
-        if (endpoint == null) {
+        if (remoteAddress == null) {
             throw new IllegalArgumentException();
         }
 
         return new Connector<MessageChannel>() {
+            public Object getRemoteAddress() {
+                return remoteAddress;
+            }
+
+            public Object getLocalAddress() {
+                return localAddress;
+            }
+
             public MessageChannel connect() throws IOException {
                 final SocketChannel channel = SocketChannel.open();
                 channel.socket().setTcpNoDelay(true);
 
-                if (bindpoint != null) {
-                    channel.socket().bind(bindpoint);
+                if (localAddress != null) {
+                    channel.socket().bind(localAddress);
                 }
 
                 channel.configureBlocking(true);
-                channel.socket().connect(endpoint);
+                channel.socket().connect(remoteAddress);
                 channel.configureBlocking(false);
 
                 return new Chan(channel);
@@ -110,18 +118,19 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageConnector {endpoint=" + endpoint + ", bindpoint=" + bindpoint + '}';
+                return "MessageConnector {remoteAddress=" + remoteAddress +
+                    ", localAddress=" + localAddress + '}';
             }
         };
     }
 
-    public Acceptor<MessageChannel> newAcceptor(final SocketAddress bindpoint) throws IOException {
-        if (bindpoint == null) {
+    public Acceptor<MessageChannel> newAcceptor(final SocketAddress localAddress) throws IOException {
+        if (localAddress == null) {
             throw new IllegalArgumentException();
         }
 
         final ServerSocketChannel serverChannel = ServerSocketChannel.open();
-        serverChannel.socket().bind(bindpoint);
+        serverChannel.socket().bind(localAddress);
         serverChannel.configureBlocking(false);
 
         class Accept implements Registerable, Selectable<SocketChannel> {
@@ -163,6 +172,10 @@ public class SocketMessageProcessor implements Closeable {
         };
 
         return new Acceptor<MessageChannel>() {
+            public Object getLocalAddress() {
+                return localAddress;
+            }
+
             public void accept(AcceptListener<MessageChannel> listener) {
                 enqueueRegister(new Accept(listener));
             }
@@ -173,7 +186,7 @@ public class SocketMessageProcessor implements Closeable {
 
             @Override
             public String toString() {
-                return "MessageAcceptor {bindpoint=" + bindpoint + '}';
+                return "MessageAcceptor {localAddress=" + localAddress + '}';
             }
         };
     }

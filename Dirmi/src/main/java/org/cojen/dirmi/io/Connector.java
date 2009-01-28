@@ -26,6 +26,16 @@ import java.io.IOException;
  */
 public interface Connector<C extends Closeable> {
     /**
+     * @return remote address of connected channels or null if unknown
+     */
+    Object getRemoteAddress();
+
+    /**
+     * @return local address of connected channels or null if unknown
+     */
+    Object getLocalAddress();
+
+    /**
      * Returns a new channel, possibly blocking until it has been established.
      */
     C connect() throws IOException;

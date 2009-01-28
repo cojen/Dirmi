@@ -26,6 +26,11 @@ import java.io.IOException;
  */
 public interface Acceptor<C extends Closeable> extends Closeable {
     /**
+     * @return local address of accepted channels or null if unknown
+     */
+    Object getLocalAddress();
+
+    /**
      * Returns immediately and calls established method on listener
      * asynchronously. Only one channel is accepted per invocation of this
      * method.
