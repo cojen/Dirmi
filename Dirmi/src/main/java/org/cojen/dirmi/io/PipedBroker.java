@@ -61,6 +61,8 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
     /**
      * Creates a connected broker.
+     *
+     * @throws IOException if endpoint is closed
      */
     public PipedBroker(Executor executor, PipedBroker endpoint) throws IOException {
         this(executor, DEFAULT_BUFFER_SIZE, endpoint);
@@ -68,6 +70,8 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
 
     /**
      * Creates a connected broker.
+     *
+     * @throws IOException if endpoint is closed
      */
     public PipedBroker(Executor executor, int bufferSize, PipedBroker endpoint)
         throws IOException
@@ -88,11 +92,23 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
     }
 
     public Object getLocalAddress() {
-        return null;
+        return this.toString();
     }
 
     public Object getRemoteAddress() {
-        return null;
+        PipedBroker endpoint = mEndpoint;
+        if (endpoint == null) {
+            try {
+                Lock lock = closeLock();
+                try {
+                    endpoint = mEndpoint;
+                } finally {
+                    lock.unlock();
+                }
+            } catch (IOException e) {
+            }
+        }
+        return endpoint == null ? null : endpoint.toString();
     }
 
     public StreamChannel connect() throws IOException {
@@ -180,11 +196,11 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
         }
 
         public Object getLocalAddress() {
-            return PipedBroker.this.toString();
+            return mIn.toString();
         }
 
         public Object getRemoteAddress() {
-            return PipedBroker.this.mEndpoint.toString();
+            return mPout.toString();
         }
 
         public InputStream getInputStream() throws IOException {

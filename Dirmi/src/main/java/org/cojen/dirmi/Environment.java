@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import java.util.concurrent.locks.Lock;
@@ -38,6 +39,7 @@ import org.cojen.dirmi.io.AcceptListener;
 import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.Connector;
 import org.cojen.dirmi.io.MessageChannel;
+import org.cojen.dirmi.io.PipedBroker;
 import org.cojen.dirmi.io.SocketMessageProcessor;
 import org.cojen.dirmi.io.SocketStreamChannelAcceptor;
 import org.cojen.dirmi.io.SocketStreamChannelConnector;
@@ -95,6 +97,63 @@ public class Environment implements Closeable {
         mExecutor = executor;
         mCloseableSet = new WeakIdentityMap<Closeable, Object>();
         mCloseLock = new ReentrantReadWriteLock(true);
+    }
+
+    /**
+     * Creates two locally connected sessions, which is useful for testing.
+     *
+     * @return two Session objects connected to each other
+     * @throws RejectedExecutionException if thread pool is full
+     */
+    public Session[] createLocalSessions() {
+        final PipedBroker broker_0, broker_1;
+        broker_0 = new PipedBroker(mExecutor);
+        try {
+            broker_1 = new PipedBroker(mExecutor, broker_0);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+
+        class Create implements Runnable {
+            private IOException mException;
+            private Session mSession;
+
+            public synchronized void run() {
+                try {
+                    mSession = createSession(broker_0);
+                } catch (IOException e) {
+                    mException = e;
+                }
+                notifyAll();
+            }
+
+            public synchronized Session waitForSession() throws IOException {
+                while (mException == null && mSession == null) {
+                    try {
+                        wait();
+                    } catch (InterruptedException e) {
+                        // Ignore.
+                    }
+                }
+                if (mException != null) {
+                    throw mException;
+                }
+                return mSession;
+            }
+        }
+
+        Create create = new Create();
+        mExecutor.execute(create);
+
+        final Session session_0, session_1;
+        try {
+            session_0 = createSession(broker_1);
+            session_1 = create.waitForSession();
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+
+        return new Session[] {session_0, session_1};
     }
 
     /**

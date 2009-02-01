@@ -33,14 +33,14 @@ import org.cojen.dirmi.io.AcceptListener;
 public interface SessionAcceptor extends Closeable {
     /**
      * Returns immediately and starts automatically accepting all sessions
-     * asynchronously, exchanging a shared object. Any object provided by
-     * remote client session during exchange is discarded. Exceptions thrown
-     * during session establishment are passed to the thread's uncaught
-     * exception handler. The {@link #accept(SessionListener) accept} method may
-     * be called at any time to switch to manual session acceptance.
+     * asynchronously, sending a shared object. No attempt is made to receive
+     * objects sent by remote client sessions. Exceptions thrown during session
+     * establishment are passed to the thread's uncaught exception handler. The
+     * {@link #accept(SessionListener) accept} method may be called at any time
+     * to switch to manual session acceptance.
      *
-     * @param shared shared remote or serializable object to exchange with
-     * accepted sessions
+     * @param shared shared remote or serializable object to send to accepted
+     * sessions
      */
     void acceptAll(Object shared);
 

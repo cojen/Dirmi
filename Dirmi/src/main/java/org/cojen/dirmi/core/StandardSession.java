@@ -50,6 +50,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -58,7 +59,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -74,6 +74,7 @@ import org.cojen.dirmi.ReconstructedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.TimeoutParam;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
@@ -105,7 +106,7 @@ public class StandardSession implements Session {
     final Broker<StreamChannel> mBroker;
     final ScheduledExecutorService mExecutor;
 
-    final SynchronousQueue<Object> mExchangeQueue = new SynchronousQueue<Object>();
+    final BlockingQueue<Object> mReceiveQueue = new ArrayBlockingQueue<Object>(1);
 
     // Queue for reclaimed phantom references.
     final ReferenceQueue<Object> mReferenceQueue;
@@ -292,36 +293,71 @@ public class StandardSession implements Session {
         mBroker.accept(new Handler());
     }
 
-    public Object exchange(Object obj) throws RemoteException {
-        return exchange(obj, -1, null);
+    public void send(Object obj) throws RemoteException {
+        send(obj, -1, null);
     }
 
-    public Object exchange(Object obj, long timeout, TimeUnit unit) throws RemoteException {
-        if (unit == null && timeout >= 0) {
+    public void send(Object obj, long timeout, TimeUnit unit) throws RemoteException {
+        if (timeout >= 0 && unit == null) {
             throw new NullPointerException("TimeUnit is null");
         }
         try {
-            mRemoteAdmin.enqueueForExchange(obj);
             if (timeout < 0) {
-                obj = mExchangeQueue.take();
-            } else if ((obj = mExchangeQueue.poll(timeout, unit)) == null) {
+                mRemoteAdmin.enqueue(obj);
+            } else if (!mRemoteAdmin.enqueue(obj, timeout, unit)) {
                 throw new RemoteTimeoutException(timeout, unit);
             }
-            return obj == mExchangeQueue ? null : obj;
-        } catch (InterruptedException e) {
-            try {
-                closeOnFailure(e.toString(), e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
-            throw new RemoteException(e.toString(), e);
+        } catch (RemoteTimeoutException e) {
+            throw e;
         } catch (RemoteException e) {
             try {
-                closeOnFailure(e.toString(), e);
+                closeOnFailure("Closed: " + e, e);
             } catch (IOException e2) {
                 // Ignore.
             }
             throw e;
+        } catch (InterruptedException e) {
+            try {
+                closeOnFailure("Closed: " + e, e);
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw new RemoteException(e.toString(), e);
+        }
+    }
+
+    public Object receive() throws RemoteException {
+        return receive(-1, null);
+    }
+
+    public Object receive(long timeout, TimeUnit unit) throws RemoteException {
+        if (timeout >= 0 && unit == null) {
+            throw new NullPointerException("TimeUnit is null");
+        }
+        try {
+            Object obj;
+            if (timeout < 0) {
+                obj = mReceiveQueue.take();
+            } else if ((obj = mReceiveQueue.poll(timeout, unit)) == null) {
+                throw new RemoteTimeoutException(timeout, unit);
+            }
+            return obj == mReceiveQueue ? null : obj;
+        } catch (RemoteTimeoutException e) {
+            throw e;
+        } catch (RemoteException e) {
+            try {
+                closeOnFailure("Closed: " + e, e);
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
+        } catch (InterruptedException e) {
+            try {
+                closeOnFailure("Closed: " + e, e);
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw new RemoteException(e.toString(), e);
         }
     }
 
@@ -773,8 +809,10 @@ public class StandardSession implements Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
-            @Asynchronous
-            void enqueueForExchange(Object obj) throws RemoteException;
+            void enqueue(Object obj) throws RemoteException, InterruptedException;
+
+            boolean enqueue(Object obj, @TimeoutParam long timeout, @TimeoutParam TimeUnit unit)
+                throws RemoteException, InterruptedException;
 
             /**
              * Returns RemoteInfo object from server.
@@ -808,17 +846,22 @@ public class StandardSession implements Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public void enqueueForExchange(Object obj) {
-            try {
+        public void enqueue(Object obj) throws InterruptedException {
+            if (obj == null) {
                 // Use the queue itself to indicate null.
-                mExchangeQueue.put(obj == null ? mExchangeQueue : obj);
-            } catch (InterruptedException e) {
-                try {
-                    closeOnFailure(e.toString(), e);
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                obj = mReceiveQueue;
             }
+            mReceiveQueue.put(obj);
+        }
+
+        public boolean enqueue(Object obj, long timeout, TimeUnit unit)
+            throws InterruptedException
+        {
+            if (obj == null) {
+                // Use the queue itself to indicate null.
+                obj = mReceiveQueue;
+            }
+            return mReceiveQueue.offer(obj, timeout, unit);
         }
 
         public RemoteInfo getRemoteInfo(VersionedIdentifier typeID) throws NoSuchClassException {

@@ -137,7 +137,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
                 mBrokerAcceptor.accept(this);
             }
             try {
-                mEnv.createSession(broker).exchange(mShared);
+                mEnv.createSession(broker).send(mShared);
             } catch (IOException e) {
                 try {
                     broker.close();

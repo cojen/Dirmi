@@ -27,37 +27,14 @@ import java.rmi.RemoteException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Remote method invocation session. After a session is established, call an
- * {@link #exchange exchange} method to send/receive primary remote
- * objects. Client sessions usually pass null to the exchange method, and
- * server sessions pass a remote server instance.
+ * Remote method invocation session. Basic communication between sessions is
+ * provided by the {@link #send send} and {@link #receive receive} methods,
+ * which behave like a blocking queue with a capacity of one.
  *
  * @author Brian S O'Neill
  * @see Environment
  */
 public interface Session extends Closeable, Flushable {
-    /**
-     * Exchanges a {@link Remote} or {@link Serializable} object with the
-     * remote session. This method blocks if remote session is not exchanging as
-     * well. Any failure during the exchange forces the session to be closed.
-     *
-     * @param obj remote or serializable object to exchange; can be null
-     * @return remote or serializable object from remote session; can be null
-     */
-    Object exchange(Object obj) throws RemoteException;
-
-    /**
-     * Exchanges a {@link Remote} or {@link Serializable} object with the
-     * remote session. This method blocks if remote session is not exchanging as
-     * well. Any failure during the exchange forces the session to be closed.
-     *
-     * @param obj remote or serializable object to exchange; can be null
-     * @param timeout how long to wait before closing session, in units of {@code unit}
-     * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
-     * @return remote or serializable object from remote session; can be null
-     */
-    Object exchange(Object obj, long timeout, TimeUnit unit) throws RemoteException;
-
     /**
      * @return local session address or null if unknown or not applicable
      */
@@ -67,6 +44,48 @@ public interface Session extends Closeable, Flushable {
      * @return remote session address or null if unknown or not applicable
      */
     Object getRemoteAddress();
+
+    /**
+     * Sends a {@link Remote} or {@link Serializable} object to be received by
+     * the remote session. Any failure during the send forces the session to be
+     * closed.
+     *
+     * @param obj remote or serializable object to send; can be null
+     */
+    void send(Object obj) throws RemoteException;
+
+    /**
+     * Sends a {@link Remote} or {@link Serializable} object to be received by
+     * the remote session. Any non-timeout failure during the send forces the
+     * session to be closed.
+     *
+     * @param obj remote or serializable object to send; can be null
+     * @param timeout how long to wait before closing session, in units of {@code unit}
+     * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
+     * @throws RemoteTimeoutException if timeout elapses
+     */
+    void send(Object obj, long timeout, TimeUnit unit) throws RemoteException;
+
+    /**
+     * Receives a {@link Remote} or {@link Serializable} object sent by the
+     * remote session. Any failure during the receive forces the session to be
+     * closed.
+     *
+     * @return remote or serializable object from remote session; can be null
+     */
+    Object receive() throws RemoteException;
+
+    /**
+     * Receives a {@link Remote} or {@link Serializable} object sent by the
+     * remote session. Any non-timeout failure during the receive forces the
+     * session to be closed.
+     *
+     * @param timeout how long to wait before closing session, in units of {@code unit}
+     * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
+     * @return remote or serializable object from remote session; can be null
+     * @throws RemoteTimeoutException if timeout elapses
+     */
+    Object receive(long timeout, TimeUnit unit) throws RemoteException;
 
     /**
      * Flushes all channels of this session, including channels used for {@link
