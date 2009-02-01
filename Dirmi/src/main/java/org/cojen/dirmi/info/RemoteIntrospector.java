@@ -156,6 +156,11 @@ public class RemoteIntrospector {
                     ("Remote interface must extend java.rmi.Remote: " + remote.getName());
             }
 
+            if (java.io.Serializable.class.isAssignableFrom(remote)) {
+                throw new IllegalArgumentException
+                    ("Remote interface cannot extend java.io.Serializable: " + remote.getName());
+            }
+
             Map<String, RMethod> methodMap = new LinkedHashMap<String, RMethod>();
 
             for (Method m : remote.getMethods()) {
