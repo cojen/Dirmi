@@ -58,6 +58,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -104,6 +105,8 @@ public class StandardSession implements Session {
     final Broker<StreamChannel> mBroker;
     final ScheduledExecutorService mExecutor;
 
+    final SynchronousQueue<Object> mExchangeQueue = new SynchronousQueue<Object>();
+
     // Queue for reclaimed phantom references.
     final ReferenceQueue<Object> mReferenceQueue;
 
@@ -142,9 +145,6 @@ public class StandardSession implements Session {
     // unreachable, its entry in this map must be removed to reclaim memory.
     final ConcurrentMap<VersionedIdentifier, StubRef> mStubRefs;
 
-    final Object mLocalServer;
-    final Object mRemoteServer;
-
     // Remote Admin object.
     final Hidden.Admin mRemoteAdmin;
 
@@ -166,10 +166,8 @@ public class StandardSession implements Session {
     /**
      * @param executor shared executor for remote methods
      * @param broker channel broker must always connect to same remote server
-     * @param server optional server object to export
      */
-    public StandardSession(ScheduledExecutorService executor,
-                           Broker<StreamChannel> broker, final Object server)
+    public StandardSession(ScheduledExecutorService executor, Broker<StreamChannel> broker)
         throws IOException
     {
         if (broker == null) {
@@ -184,7 +182,6 @@ public class StandardSession implements Session {
         mBroker = broker;
         mExecutor = executor;
         mReferenceQueue = new ReferenceQueue<Object>();
-        mLocalServer = server;
 
         mSkeletonFactories = new ConcurrentHashMap<VersionedIdentifier, SkeletonFactory>();
         mRemoteSkeletonFactories = new SoftValuedHashMap<Identifier, SkeletonFactory>();
@@ -219,7 +216,6 @@ public class StandardSession implements Session {
                         if (version != PROTOCOL_VERSION) {
                             return;
                         }
-                        out.writeUnshared(server);
                         out.writeUnshared(new AdminImpl());
                     } finally {
                         out.flush();
@@ -261,7 +257,6 @@ public class StandardSession implements Session {
             }
 
             try {
-                mRemoteServer = in.readUnshared();
                 mRemoteAdmin = (Hidden.Admin) in.readUnshared();
             } catch (ClassNotFoundException e) {
                 IOException io = new IOException();
@@ -295,6 +290,39 @@ public class StandardSession implements Session {
 
         // Begin accepting new requests.
         mBroker.accept(new Handler());
+    }
+
+    public Object exchange(Object obj) throws RemoteException {
+        return exchange(obj, -1, null);
+    }
+
+    public Object exchange(Object obj, long timeout, TimeUnit unit) throws RemoteException {
+        if (unit == null && timeout >= 0) {
+            throw new NullPointerException("TimeUnit is null");
+        }
+        try {
+            mRemoteAdmin.enqueueForExchange(obj);
+            if (timeout < 0) {
+                obj = mExchangeQueue.take();
+            } else if ((obj = mExchangeQueue.poll(timeout, unit)) == null) {
+                throw new RemoteTimeoutException(timeout, unit);
+            }
+            return obj == mExchangeQueue ? null : obj;
+        } catch (InterruptedException e) {
+            try {
+                closeOnFailure(e.toString(), e);
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw new RemoteException(e.toString(), e);
+        } catch (RemoteException e) {
+            try {
+                closeOnFailure(e.toString(), e);
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
+        }
     }
 
     public void flush() throws IOException {
@@ -449,16 +477,8 @@ public class StandardSession implements Session {
         return false;
     }
 
-    public Object getRemoteServer() {
-        return mRemoteServer;
-    }
-
     public Object getRemoteAddress() {
         return mBroker.getRemoteAddress();
-    }
-
-    public Object getLocalServer() {
-        return mLocalServer;
     }
 
     public Object getLocalAddress() {
@@ -753,6 +773,9 @@ public class StandardSession implements Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
+            @Asynchronous
+            void enqueueForExchange(Object obj) throws RemoteException;
+
             /**
              * Returns RemoteInfo object from server.
              */
@@ -785,6 +808,19 @@ public class StandardSession implements Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
+        public void enqueueForExchange(Object obj) {
+            try {
+                // Use the queue itself to indicate null.
+                mExchangeQueue.put(obj == null ? mExchangeQueue : obj);
+            } catch (InterruptedException e) {
+                try {
+                    closeOnFailure(e.toString(), e);
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+            }
+        }
+
         public RemoteInfo getRemoteInfo(VersionedIdentifier typeID) throws NoSuchClassException {
             Class remoteType = (Class) typeID.tryRetrieve();
             if (remoteType == null) {

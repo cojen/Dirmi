@@ -43,7 +43,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow1() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         remote.slow(1);
 
@@ -59,7 +59,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow2() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals("foo", remote.slow(1, "foo"));
 
@@ -73,7 +73,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow3() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(1, remote.slow(1, (byte) 1));
 
@@ -87,7 +87,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow4() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Byte((byte) 1), remote.slow(1, new Byte((byte) 1)));
 
@@ -103,7 +103,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow5() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(30000, remote.slow(1, (short) 30000));
 
@@ -117,7 +117,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow6() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Short((short) -100), remote.slow(1, new Short((short) -100)));
 
@@ -140,7 +140,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow7() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         try {
             remote.slow(1, 0);
@@ -182,7 +182,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow8() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Integer(-100), remote.slow(1, new Integer(-100)));
 
@@ -205,7 +205,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow9() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         try {
             remote.slow(1, (long) 0);
@@ -226,7 +226,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow10() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Long(-100), remote.slow(1, new Long(-100)));
 
@@ -242,7 +242,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow11() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         try {
             remote.slow(1, (double) 0);
@@ -277,7 +277,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow12() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Double(-100), remote.slow(1, new Double(-100)));
 
@@ -300,7 +300,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow13() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         try {
             remote.slow(1, (float) 0);
@@ -335,7 +335,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow14() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Float(-100), remote.slow(1, new Float(-100)));
 
@@ -351,7 +351,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void slow15() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         assertEquals(new Float(-100), remote.slow(new Float(-100), 1));
 
@@ -367,7 +367,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
 
     @Test
     public void unitParam() throws Exception {
-        RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+        RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
 
         try {
             remote.slow(60000, 1, TimeUnit.SECONDS);
@@ -411,7 +411,7 @@ public class TestTimeouts extends AbstractTestLocalBroker {
     public void interfaceDefaultTimeout() throws Exception {
         RemoteTimeouts2 remote2;
         {
-            RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+            RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
             remote2 = remote.createRemoteTimeouts2();
         }
 
@@ -435,10 +435,10 @@ public class TestTimeouts extends AbstractTestLocalBroker {
     }
 
     @Test
-    public void interfaceDefaultTimeoutAmdUnit() throws Exception {
+    public void interfaceDefaultTimeoutAndUnit() throws Exception {
         RemoteTimeouts3 remote3;
         {
-            RemoteTimeouts remote = (RemoteTimeouts) localSession.getRemoteServer();
+            RemoteTimeouts remote = (RemoteTimeouts) remoteServer;
             remote3 = remote.createRemoteTimeouts3();
         }
 

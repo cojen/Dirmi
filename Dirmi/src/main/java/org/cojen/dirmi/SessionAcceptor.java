@@ -23,7 +23,6 @@ import java.io.Serializable;
 import java.rmi.Remote;
 
 import org.cojen.dirmi.io.AcceptListener;
-import org.cojen.dirmi.io.Acceptor;
 
 /**
  * Accepts sessions from remote endpoints.
@@ -31,32 +30,29 @@ import org.cojen.dirmi.io.Acceptor;
  * @author Brian S O'Neill
  * @see Environment
  */
-public interface SessionAcceptor extends Acceptor<Session>, Closeable {
+public interface SessionAcceptor extends Closeable {
     /**
      * Returns immediately and starts automatically accepting all sessions
-     * asynchronously. Any exceptions during session establishment are passed
-     * to the thread's uncaught exception handler. The {@link
-     * #accept(AcceptListener) accept} method may be called to switch to manual
-     * session acceptance.
+     * asynchronously, exchanging a shared object. Any object provided by
+     * remote client session during exchange is discarded. Exceptions thrown
+     * during session establishment are passed to the thread's uncaught
+     * exception handler. The {@link #accept(SessionListener) accept} method may
+     * be called at any time to switch to manual session acceptance.
+     *
+     * @param shared shared remote or serializable object to exchange with
+     * accepted sessions
      */
-    void acceptAll();
+    void acceptAll(Object shared);
 
     /**
      * Returns immediately and calls established method on listener
      * asynchronously. Only one session is accepted per invocation of this
      * method. If no listener is accepting incoming sessions, then the session
      * is closed after a timeout elapses. The {@link #acceptAll acceptAll}
-     * method may be called to switch to automatic session acceptance.
+     * method may be called at any time to switch to automatic session
+     * acceptance.
      */
-    void accept(AcceptListener<Session> listener);
-
-    /**
-     * Returns the primary {@link Remote} or {@link Serializable} object
-     * exported by local endpoint.
-     *
-     * @return primary local server object, which can be null
-     */
-    Object getLocalServer();
+    void accept(SessionListener listener);
 
     /**
      * @return local address of accepted sessions or null if unknown

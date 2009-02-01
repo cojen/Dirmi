@@ -65,6 +65,9 @@ public abstract class AbstractTestLocalBroker {
     protected Session localSession;
     protected Session remoteSession;
 
+    protected Object localServer;
+    protected Object remoteServer;
+
     @Before
     public void setUp() throws Exception {
         Broker<StreamChannel>[] brokers = createBrokers(env.executor());
@@ -77,7 +80,8 @@ public abstract class AbstractTestLocalBroker {
 
             public synchronized void run() {
                 try {
-                    session = env.createSession(remoteBroker, createRemoteServer());
+                    session = env.createSession(remoteBroker);
+                    session.exchange(createRemoteServer());
                 } catch (IOException e) {
                     exception = e;
                 }
@@ -98,7 +102,9 @@ public abstract class AbstractTestLocalBroker {
         RemoteCreate rc = new RemoteCreate();
         env.executor().execute(rc);
 
-        localSession = env.createSession(localBroker, createLocalServer());
+        localSession = env.createSession(localBroker);
+        remoteServer = localSession.exchange(localServer = createLocalServer());
+
         remoteSession = rc.waitForSession();
     }
 

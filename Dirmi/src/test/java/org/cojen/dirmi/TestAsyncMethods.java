@@ -56,7 +56,7 @@ public class TestAsyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void runCommandNoCallback() throws Exception {
-        RemoteAsync server = (RemoteAsync) localSession.getRemoteServer();
+        RemoteAsync server = (RemoteAsync) remoteServer;
         assertFalse(server instanceof RemoteAsyncServer);
 
         server.runCommand(1);
@@ -70,7 +70,7 @@ public class TestAsyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void runCommandWithCallback() throws Exception {
-        RemoteAsync server = (RemoteAsync) localSession.getRemoteServer();
+        RemoteAsync server = (RemoteAsync) remoteServer;
 
         server.runCommand2(1, new CallbackImpl());
 
@@ -95,7 +95,7 @@ public class TestAsyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void runCommandEventual() throws Exception {
-        RemoteAsync server = (RemoteAsync) localSession.getRemoteServer();
+        RemoteAsync server = (RemoteAsync) remoteServer;
 
         // Execute command that flushes immediately just to ensure callback
         // interface is transported. Otherwise first use might put too much
@@ -181,7 +181,7 @@ public class TestAsyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void runCommandAcknowledged() throws Exception {
-        RemoteAsync server = (RemoteAsync) localSession.getRemoteServer();
+        RemoteAsync server = (RemoteAsync) remoteServer;
 
         // Verify that command was acknowledged by checking that bytes were
         // read by channel.

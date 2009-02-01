@@ -115,7 +115,7 @@ public class Environment implements Closeable {
      * @param remoteAddress required address of remote host
      */
     public Session createSession(SocketAddress remoteAddress) throws IOException {
-        return createSession(remoteAddress, null, null);
+        return createSession(remoteAddress, null);
     }
 
     /**
@@ -124,12 +124,8 @@ public class Environment implements Closeable {
      *
      * @param remoteAddress required address of remote host
      * @param localAddress optional address of local host
-     * @param server optional primary server object to export; must be Remote
-     * or Serializable
      */
-    public Session createSession(SocketAddress remoteAddress,
-                                 SocketAddress localAddress,
-                                 Object server)
+    public Session createSession(SocketAddress remoteAddress, SocketAddress localAddress)
         throws IOException
     {
         Lock lock = closeLock();
@@ -140,7 +136,7 @@ public class Environment implements Closeable {
                 new SocketStreamChannelConnector(mExecutor, remoteAddress, localAddress);
             Broker<StreamChannel> broker =
                 new StreamChannelConnectorBroker(mExecutor, channel, connector);
-            return createSession(broker, server);
+            return createSession(broker);
         } finally {
             lock.unlock();
         }
@@ -152,13 +148,11 @@ public class Environment implements Closeable {
      *
      * @param broker required broker for establishing connections; must always
      * connect to same remote host
-     * @param server optional primary server object to export; must be Remote
-     * or Serializable
      */
-    public Session createSession(Broker<StreamChannel> broker, Object server) throws IOException {
+    public Session createSession(Broker<StreamChannel> broker) throws IOException {
         Lock lock = closeLock();
         try {
-            Session session = new StandardSession(mExecutor, broker, server);
+            Session session = new StandardSession(mExecutor, broker);
             addToClosableSet(session);
             return session;
         } finally {
@@ -171,11 +165,9 @@ public class Environment implements Closeable {
      * acceptAll} to start automatically accepting sessions.
      *
      * @param port port for accepting socket connections
-     * @param server primary server object to export; must be Remote or
-     * Serializable
      */
-    public SessionAcceptor createSessionAcceptor(int port, Object server) throws IOException {
-        return createSessionAcceptor(new InetSocketAddress(port), server);
+    public SessionAcceptor createSessionAcceptor(int port) throws IOException {
+        return createSessionAcceptor(new InetSocketAddress(port));
     }
 
     /**
@@ -184,15 +176,13 @@ public class Environment implements Closeable {
      *
      * @param localAddress address for accepting socket connections; use null to
      * automatically select a local address and ephemeral port
-     * @param server shared server object to export; must be Remote or
-     * Serializable
      */
-    public SessionAcceptor createSessionAcceptor(SocketAddress localAddress, Object server)
+    public SessionAcceptor createSessionAcceptor(SocketAddress localAddress)
         throws IOException
     {
         Lock lock = closeLock();
         try {
-            return new StandardSessionAcceptor(this, createBrokerAcceptor(localAddress), server);
+            return new StandardSessionAcceptor(this, createBrokerAcceptor(localAddress));
         } finally {
             lock.unlock();
         }
@@ -207,7 +197,7 @@ public class Environment implements Closeable {
      * automatically select a local address and ephemeral port
      * @return an acceptor of brokers
      */
-    public Acceptor<Broker<StreamChannel>> createBrokerAcceptor(SocketAddress localAddress)
+    private Acceptor<Broker<StreamChannel>> createBrokerAcceptor(SocketAddress localAddress)
         throws IOException
     {
         Lock lock = closeLock();

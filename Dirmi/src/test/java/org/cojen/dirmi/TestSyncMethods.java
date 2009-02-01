@@ -46,7 +46,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void basicMessagePassing() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         assertFalse(face instanceof RemoteFaceServer);
 
         assertEquals(null, face.getMessage());
@@ -63,7 +63,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void manyParams() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         assertFalse(face instanceof RemoteFaceServer);
 
         List<String> params = new ArrayList<String>();
@@ -81,7 +81,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void fail() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         assertFalse(face instanceof RemoteFaceServer);
 
         face.fail(new int[] {1, 2, 3});
@@ -97,7 +97,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void exceptionTypes() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         assertFalse(face instanceof RemoteFaceServer);
 
         String[] results = face.executeQuery("select stuff");
@@ -141,7 +141,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void remoteFailure() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         remoteSession.close();
 
         try {
@@ -154,7 +154,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void remoteFailure2() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         remoteBroker.close();
 
         try {
@@ -167,7 +167,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void remoteFailure3() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         remoteSession.close();
 
         try {
@@ -181,7 +181,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void remoteFailure4() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         remoteSession.close();
 
         try {
@@ -195,7 +195,7 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     @Test
     public void remoteFailure5() throws Exception {
-        RemoteFace face = (RemoteFace) localSession.getRemoteServer();
+        RemoteFace face = (RemoteFace) remoteServer;
         remoteSession.close();
 
         try {
@@ -220,6 +220,8 @@ public class TestSyncMethods extends AbstractTestLocalBroker {
 
     private void verifyMessage(Exception e) {
         String message = e.getMessage();
-        assertTrue(message.contains("Session closed") || message.contains("Broker is closed"));
+        assertTrue(message.contains("Session closed") ||
+                   message.contains("Broker is closed") ||
+                   message.contains("Closed"));
     }
 }

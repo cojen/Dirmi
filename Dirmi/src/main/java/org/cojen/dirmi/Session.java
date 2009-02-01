@@ -22,39 +22,51 @@ import java.io.IOException;
 import java.io.Serializable;
 
 import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+import java.util.concurrent.TimeUnit;
 
 /**
- * Remote method invocation session.
+ * Remote method invocation session. After a session is established, call an
+ * {@link #exchange exchange} method to send/receive primary remote
+ * objects. Client sessions usually pass null to the exchange method, and
+ * server sessions pass a remote server instance.
  *
  * @author Brian S O'Neill
  * @see Environment
  */
 public interface Session extends Closeable, Flushable {
     /**
-     * Returns the primary {@link Remote} or {@link Serializable} object
-     * exported by remote endpoint.
+     * Exchanges a {@link Remote} or {@link Serializable} object with the
+     * remote session. This method blocks if remote session is not exchanging as
+     * well. Any failure during the exchange forces the session to be closed.
      *
-     * @return primary remote server object, which can be null
+     * @param obj remote or serializable object to exchange; can be null
+     * @return remote or serializable object from remote session; can be null
      */
-    Object getRemoteServer();
+    Object exchange(Object obj) throws RemoteException;
 
     /**
-     * @return remote session address or null if unknown or not applicable
-     */
-    Object getRemoteAddress();
-
-    /**
-     * Returns the primary {@link Remote} or {@link Serializable} object
-     * exported by local endpoint.
+     * Exchanges a {@link Remote} or {@link Serializable} object with the
+     * remote session. This method blocks if remote session is not exchanging as
+     * well. Any failure during the exchange forces the session to be closed.
      *
-     * @return primary local server object, which can be null
+     * @param obj remote or serializable object to exchange; can be null
+     * @param timeout how long to wait before closing session, in units of {@code unit}
+     * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
+     * @return remote or serializable object from remote session; can be null
      */
-    Object getLocalServer();
+    Object exchange(Object obj, long timeout, TimeUnit unit) throws RemoteException;
 
     /**
      * @return local session address or null if unknown or not applicable
      */
     Object getLocalAddress();
+
+    /**
+     * @return remote session address or null if unknown or not applicable
+     */
+    Object getRemoteAddress();
 
     /**
      * Flushes all channels of this session, including channels used for {@link
