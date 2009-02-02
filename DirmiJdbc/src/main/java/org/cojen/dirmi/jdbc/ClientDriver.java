@@ -110,8 +110,14 @@ public class ClientDriver implements Driver {
 
         final int maxTries = 3;
         for (int tryCount = 1; tryCount <= maxTries; tryCount++) {
-            Session session = obtainSession(host, port, tryCount > 1);
-            RemoteConnector connector = (RemoteConnector) session.getRemoteServer();
+            RemoteConnector connector;
+            try {
+                Session session = obtainSession(host, port, tryCount > 1);
+                connector = (RemoteConnector) session.receive();
+            } catch (IOException e) {
+                throw new SQLException
+                    ("Unable to connect to remote host: " + host + ':' + port, e);
+            }
 
             RemoteConnection con;
             try {
@@ -150,7 +156,9 @@ public class ClientDriver implements Driver {
         return false;
     }
 
-    private Session obtainSession(String host, int port, boolean forceNew) throws SQLException {
+    private Session obtainSession(String host, int port, boolean forceNew)
+        throws IOException, SQLException
+    {
         // FIXME: Use lock per key, not lock for entire cache.
 
         String key = host + ':' + port;
@@ -186,13 +194,7 @@ public class ClientDriver implements Driver {
                 }
             }
 
-            try {
-                session = mEnvironment.createSession(host, port);
-            } catch (IOException e) {
-                throw new SQLException
-                    ("Unable to connect to remote host: " + host + ':' + port, e);
-            }
-
+            session = mEnvironment.createSession(host, port);
             mSessions.put(key, session);
         } finally {
             mSessionsLock.writeLock().unlock();
