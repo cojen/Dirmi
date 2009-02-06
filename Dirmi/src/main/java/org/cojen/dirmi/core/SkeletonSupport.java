@@ -21,9 +21,6 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.Future;
 
-import org.cojen.dirmi.util.Identifier;
-import org.cojen.dirmi.util.VersionedIdentifier;
-
 /**
  * Object passed to a Skeleton instance in order for it to decide when channels
  * can be reused.

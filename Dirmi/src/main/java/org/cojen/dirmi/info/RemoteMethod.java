@@ -25,8 +25,7 @@ import java.util.concurrent.TimeUnit;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
-
-import org.cojen.dirmi.util.Identifier;
+import org.cojen.dirmi.Serialized;
 
 /**
  * 
@@ -40,10 +39,11 @@ public interface RemoteMethod extends Serializable {
     String getName();
 
     /**
-     * Returns a unique identifier for this method. The LSB of the identifier's
-     * data is 0 if method is synchronous, 1 if asynchronous.
+     * Returns a unique identifier for this method, within the scope of its
+     * enclosing type. The LSB of the identifier's data is 0 if method is
+     * synchronous, 1 if asynchronous.
      */
-    Identifier getMethodID();
+    int getMethodId();
 
     /**
      * Returns the return type of this method, which is null if void.
@@ -86,6 +86,14 @@ public interface RemoteMethod extends Serializable {
      * @see Batched
      */
     boolean isBatched();
+
+    /**
+     * Returns true if this method is serialized, which implies that it is not
+     * asynchronous or batched.
+     *
+     * @see Serialized
+     */
+    boolean isSerialized();
 
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 

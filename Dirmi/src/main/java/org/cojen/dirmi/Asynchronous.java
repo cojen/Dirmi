@@ -50,18 +50,18 @@ import java.rmi.RemoteException;
  * void launchBuild(Object params, ProgressCallback callback) throws RemoteException;
  * </pre>
  *
- * Asynchronous methods which return void or a {@link Pipe} can only declare
- * throwing {@link RemoteException} or the exception indicated by {@link
- * RemoteFailure}. A client can expect an exception to be thrown by an
- * asynchronous method only if there is a communication failure. Any exception
- * thrown by the server implementation is not passed to the client, but it is
- * instead passed to the thread's uncaught exception handler.
+ * Asynchronous methods can only declare throwing {@link RemoteException} or
+ * the exception indicated by {@link RemoteFailure}. A client can expect an
+ * exception to be thrown by an asynchronous method only if there is a
+ * communication failure. Any exception thrown by the server implementation of
+ * an asynchronous void or {@link Pipe} method is not passed to the
+ * client. Instead, it is passed to the thread's uncaught exception handler.
  *
- * <p>Any exception thrown by an asynchronous method which returns a {@link
- * Completion} or {@link Future} is passed to the caller via the returned
- * object. Upon calling {@link Future#get get}, an {@link ExecutionException}
- * is thrown. A communication failure while sending the request is thrown
- * directly to the caller and not through the {@code Future}.
+ * <p>For asynchronous methods which return a {@link Completion} or {@link
+ * Future}, any server thrown exception is passed to the caller via the
+ * returned object. Upon calling {@link Future#get get}, an {@link
+ * ExecutionException} is thrown. A communication failure while sending the
+ * request is thrown directly to the caller and not through the {@code Future}.
  *
  * @author Brian S O'Neill
  * @see Batched

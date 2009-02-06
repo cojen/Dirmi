@@ -17,14 +17,12 @@
 package org.cojen.dirmi.core;
 
 import java.io.IOException;
+import java.io.ObjectOutput;
 
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 
 import java.rmi.server.Unreferenced;
-
-import org.cojen.dirmi.util.Identifier;
-import org.cojen.dirmi.util.VersionedIdentifier;
 
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client
@@ -41,10 +39,18 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
     R getRemoteServer();
 
     /**
-     * Invoke method in server-side instance. Any exception thrown from the
-     * invoked method is written to the channel, unless method is asynchronous
-     * or batched. Any other exception thrown from this method indicates a
-     * communication failure, and so the channel should be closed.
+     * Invoke all serialized methods of the skeleton managed object and write
+     * the results to the given output stream.
+     *
+     * @throws IOException if thrown from output
+     */
+    void invokeSerialized(ObjectOutput out) throws IOException;
+
+    /**
+     * Invoke a non-serialized method in server-side instance. Any exception
+     * thrown from the invoked method is written to the channel, unless method
+     * is asynchronous or batched. Any other exception thrown from this method
+     * indicates a communication failure, and so the channel should be closed.
      *
      * <p>If this invocation is after a batched call which threw an exception,
      * the batchedException parameter wraps it. If non-null, the input
@@ -54,7 +60,7 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * exception types and handled like any other thrown exception. For
      * synchronous methods, this means the exception is written to the channel.
      *
-     * @param methodID method to invoke
+     * @param methodId method to invoke
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
      * @param batchedException optional exception which was thrown earlier in a batch request
@@ -69,7 +75,7 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * @throws BatchedInvocationException if method is batched and
      * throws an exception
      */
-    boolean invoke(Identifier methodID, InvocationChannel channel,
+    boolean invoke(int methodId, InvocationChannel channel,
                    BatchedInvocationException batchedException)
         throws IOException,
                NoSuchMethodException,

@@ -22,10 +22,12 @@ import java.lang.reflect.UndeclaredThrowableException;
 
 import java.io.DataInput;
 import java.io.IOException;
+import java.io.ObjectOutput;
 
 import java.rmi.Remote;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
+import org.cojen.util.BeanComparator;
 import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
@@ -103,7 +106,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                                                            RemoteInfo remoteInfo)
     {
         synchronized (cCache) {
-            Object key = KeyFactory.createKey(new Object[] {type, remoteInfo});
+            Object key = KeyFactory.createKey(new Object[] {type, remoteInfo.getInfoId()});
             SkeletonFactory<R> factory = (SkeletonFactory<R>) cCache.get(key);
             if (factory == null) {
                 factory = new SkeletonFactoryGenerator<R>(type, remoteInfo).generateFactory();
@@ -150,25 +153,20 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             return EmptySkeletonFactory.THE;
         }
 
-        CodeBuilderUtil.IdentifierSet.setMethodIds(mInfo);
+        Class<? extends Skeleton> skeletonClass = generateSkeleton();
         try {
-            Class<? extends Skeleton> skeletonClass = generateSkeleton();
-            try {
-                SkeletonFactory<R> factory = new Factory<R>
-                    (skeletonClass.getConstructor(SkeletonSupport.class, mType));
-                invokeFactoryRefMethod(skeletonClass, factory);
-                return factory;
-            } catch (IllegalAccessException e) {
-                throw new Error(e);
-            } catch (InvocationTargetException e) {
-                throw new Error(e);
-            } catch (NoSuchMethodException e) {
-                NoSuchMethodError nsme = new NoSuchMethodError();
-                nsme.initCause(e);
-                throw nsme;
-            }
-        } finally {
-            CodeBuilderUtil.IdentifierSet.clearIds();
+            SkeletonFactory<R> factory = new Factory<R>
+                (skeletonClass.getConstructor(SkeletonSupport.class, mType));
+            invokeFactoryRefMethod(skeletonClass, factory);
+            return factory;
+        } catch (IllegalAccessException e) {
+            throw new Error(e);
+        } catch (InvocationTargetException e) {
+            throw new Error(e);
+        } catch (NoSuchMethodException e) {
+            NoSuchMethodError nsme = new NoSuchMethodError();
+            nsme.initCause(e);
+            throw nsme;
         }
     }
 
@@ -190,8 +188,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_FIELD_NAME, remoteType);
         }
 
-        // Add static method to assign identifiers.
-        addInitMethodAndFields(cf, mInfo);
+        // Add reference to factory.
+        addFactoryRefMethod(cf);
 
         // Add constructor
         {
@@ -223,13 +221,41 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnValue(TypeDesc.OBJECT);
         }
 
+        // Add the invokeSerialized method
+        {
+            TypeDesc objectOutType = TypeDesc.forClass(ObjectOutput.class);
+            MethodInfo mi = cf.addMethod
+                (Modifiers.PUBLIC, "invokeSerialized", null, new TypeDesc[] {objectOutType});
+
+            // Gather all serialized methods and sort by method id. They will
+            // be invoked in this order to ensure consistency with remote stub.
+
+            List<RemoteMethod> serialized = new ArrayList<RemoteMethod>();
+
+            for (RemoteMethod method : mInfo.getRemoteMethods()) {
+                if (method.isSerialized()) {
+                    serialized.add(method);
+                }
+            }
+
+            if (serialized.size() > 0) {
+                Collections.sort(serialized,
+                                 BeanComparator.forClass(RemoteMethod.class).orderBy("methodId"));
+            }
+
+            CodeBuilder b = new CodeBuilder(mi);
+            // FIXME
+
+            b.returnVoid();
+        }
+
         // Add the all-important invoke method
         MethodInfo mi = cf.addMethod
             (Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
-             new TypeDesc[] {IDENTIFIER_TYPE, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
+             new TypeDesc[] {TypeDesc.INT, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
         CodeBuilder b = new CodeBuilder(mi);
 
-        LocalVariable methodIDVar = b.getParameter(0);
+        LocalVariable methodIdVar = b.getParameter(0);
         LocalVariable channelVar = b.getParameter(1);
         LocalVariable batchedExceptionVar = b.getParameter(2);
 
@@ -241,29 +267,25 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         Set<? extends RemoteMethod> methods = mInfo.getRemoteMethods();
 
-        // Create a switch statement that operates on method identifier
-        // hashcodes, accounting for possible collisions.
+        // Create a switch statement that operates on method ids.
 
-        Map<Integer, List<RemoteMethod>> hashToMethodMap =
-            new LinkedHashMap<Integer, List<RemoteMethod>>(methods.size());
+        Map<Integer, RemoteMethod> caseMap =
+            new LinkedHashMap<Integer, RemoteMethod>(methods.size());
         for (RemoteMethod method : methods) {
-            Integer key = method.getMethodID().hashCode();
-            List<RemoteMethod> matches = hashToMethodMap.get(key);
-            if (matches == null) {
-                matches = new ArrayList<RemoteMethod>(2);
-                hashToMethodMap.put(key, matches);
+            if (method.isSerialized()) {
+                continue;
             }
-            matches.add(method);
+            caseMap.put(method.getMethodId(), method);
         }
 
-        int caseCount = hashToMethodMap.size();
+        int caseCount = caseMap.size();
         int[] cases = new int[caseCount];
         Label[] switchLabels = new Label[caseCount];
         Label defaultLabel = b.createLabel();
 
         {
             int i = 0;
-            for (Integer key : hashToMethodMap.keySet()) {
+            for (Integer key : caseMap.keySet()) {
                 cases[i] = key;
                 switchLabels[i] = b.createLabel();
                 i++;
@@ -278,8 +300,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.loadThis();
         b.loadField(REMOTE_FIELD_NAME, remoteType);
 
-        b.loadLocal(methodIDVar);
-        b.invokeVirtual(methodIDVar.getType(), "hashCode", TypeDesc.INT, null);
+        b.loadLocal(methodIdVar);
         b.switchBranch(cases, switchLabels, defaultLabel);
 
         // Generate case for each set of matches.
@@ -291,323 +312,296 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         int ordinal = 0;
         int entryIndex = 0;
-        for (Map.Entry<Integer, List<RemoteMethod>> entry : hashToMethodMap.entrySet()) {
+        for (RemoteMethod method : caseMap.values()) {
             switchLabels[entryIndex].setLocation();
 
-            List<RemoteMethod> matches = entry.getValue();
+            TypeDesc returnDesc = getTypeDesc(method.getReturnType());
+            List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
 
-            for (int j=0; j<matches.size(); j++) {
-                RemoteMethod method = matches.get(j);
+            // Channel is always reused except if returning a Pipe.
+            boolean reuseChannel = true;
 
-                // Make sure identifier matches before proceeding.
-                b.loadLocal(methodIDVar);
-                loadMethodID(b, ordinal);
-                b.invokeVirtual(methodIDVar.getType(), "equals",
-                                TypeDesc.BOOLEAN, new TypeDesc[] {TypeDesc.OBJECT});
+            LocalVariable completionVar = null;
+            if (method.isAsynchronous() && returnDesc != null &&
+                (Future.class == returnDesc.toClass() ||
+                 Completion.class == returnDesc.toClass()))
+            {
+                // Read the Future completion object early.
+                completionVar = b.createLocalVariable
+                    (null, TypeDesc.forClass(RemoteCompletion.class));
+                b.loadLocal(invInVar);
+                b.invokeVirtual(invInVar.getType(), "readUnshared", TypeDesc.OBJECT, null);
+                b.checkCast(completionVar.getType());
+                b.storeLocal(completionVar);
+            }
 
-                Label collision = null;
-                if (j + 1 < matches.size()) {
-                    // Branch to next possibly matching method.
-                    collision = b.createLabel();
-                    b.ifZeroComparisonBranch(collision, "==");
-                } else {
-                    // Branch to default label to throw exception.
-                    b.ifZeroComparisonBranch(defaultLabel, "==");
-                }
+            // FIXME: If has completionVar, catch exception from reading
+            // parameters and report to client.
 
-                TypeDesc returnDesc = getTypeDesc(method.getReturnType());
-                List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
+            if (paramTypes.size() != 0) {
+                // Read parameters onto stack.
 
-                // Channel is always reused except if returning a Pipe.
-                boolean reuseChannel = true;
+                boolean lookForPipe = method.isAsynchronous() &&
+                    returnDesc != null && Pipe.class == returnDesc.toClass();
 
-                LocalVariable completionVar = null;
-                if (method.isAsynchronous() && returnDesc != null &&
-                    (Future.class == returnDesc.toClass() ||
-                     Completion.class == returnDesc.toClass()))
-                {
-                    // Read the Future completion object early.
-                    completionVar = b.createLocalVariable
-                        (null, TypeDesc.forClass(RemoteCompletion.class));
-                    b.loadLocal(invInVar);
-                    b.invokeVirtual(invInVar.getType(), "readUnshared", TypeDesc.OBJECT, null);
-                    b.checkCast(completionVar.getType());
-                    b.storeLocal(completionVar);
-                }
-
-                // FIXME: If has completionVar, catch exception from reading
-                // parameters and report to client.
-
-                if (paramTypes.size() != 0) {
-                    // Read parameters onto stack.
-
-                    boolean lookForPipe = method.isAsynchronous() &&
-                        returnDesc != null && Pipe.class == returnDesc.toClass();
-
-                    for (RemoteParameter paramType : paramTypes) {
-                        if (lookForPipe && Pipe.class == paramType.getType()) {
-                            lookForPipe = false;
-                            // Use channel as Pipe.
-                            b.loadLocal(channelVar);
-                            reuseChannel = false;
-                        } else {
-                            readParam(b, paramType, invInVar);
-                        }
-                    }
-                }
-
-                LocalVariable remoteTypeIdVar = null;
-                LocalVariable remoteIdVar = null;
-
-                boolean batchedRemote = method.isBatched() && returnDesc != null &&
-                    Remote.class.isAssignableFrom(returnDesc.toClass());
-
-                if (batchedRemote) {
-                    // Read the type id and object id that was generated by client.
-                    b.loadLocal(invInVar);
-                    b.invokeStatic(IDENTIFIER_TYPE, "read", IDENTIFIER_TYPE,
-                                   new TypeDesc[] {TypeDesc.forClass(DataInput.class)});
-                    remoteTypeIdVar = b.createLocalVariable(null, IDENTIFIER_TYPE);
-                    b.storeLocal(remoteTypeIdVar);
-
-                    b.loadLocal(invInVar);
-                    b.invokeStatic(VERSIONED_IDENTIFIER_TYPE, "readAndUpdateRemoteVersion",
-                                   VERSIONED_IDENTIFIER_TYPE,
-                                   new TypeDesc[] {TypeDesc.forClass(DataInput.class)});
-                    remoteIdVar = b.createLocalVariable(null, VERSIONED_IDENTIFIER_TYPE);
-                    b.storeLocal(remoteIdVar);
-                }
-
-                if (method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED) {
-                    // Acknowledge request by writing null.
-                    b.loadLocal(channelVar);
-                    b.invokeInterface(INV_CHANNEL_TYPE, "getOutputStream", INV_OUT_TYPE, null);
-                    b.dup();
-                    b.loadNull();
-                    b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
-                                    new TypeDesc[] {THROWABLE_TYPE});
-                    b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
-                }
-
-                if (method.isAsynchronous() && reuseChannel && !method.isBatched()) {
-                    // Call finished method before invocation.
-                    genFinished(b, channelVar, false, false);
-                    b.storeLocal(pendingRequestVar);
-                }
-
-                // Generate code which invokes server side method.
-
-                Label tryStart, tryEnd;
-                {
-                    tryStart = b.createLabel().setLocation();
-
-                    // If a batched exception is pending, throw it now instead
-                    // of invoking method.
-                    b.loadLocal(batchedExceptionVar);
-                    Label noPendingException = b.createLabel();
-                    b.ifNullBranch(noPendingException, true);
-
-                    b.loadLocal(batchedExceptionVar);
-                    if (method.isBatched()) {
-                        b.throwObject();
+                for (RemoteParameter paramType : paramTypes) {
+                    if (lookForPipe && Pipe.class == paramType.getType()) {
+                        lookForPipe = false;
+                        // Use channel as Pipe.
+                        b.loadLocal(channelVar);
+                        reuseChannel = false;
                     } else {
-                        // Throw cause as declared type or wrapped in
-                        // UndeclaredThrowableException.
-
-                        Class[] declaredExceptions = declaredExceptionTypes(method);
-                        if (declaredExceptions == null || declaredExceptions.length == 0) {
-                            b.loadNull();
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
-                                            new TypeDesc[] {CLASS_TYPE.toArrayType()});
-                        } else if (declaredExceptions.length == 1) {
-                            b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
-                                            new TypeDesc[] {CLASS_TYPE});
-                        } else if (declaredExceptions.length == 2) {
-                            b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
-                            b.loadConstant(TypeDesc.forClass(declaredExceptions[1]));
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
-                                            new TypeDesc[] {CLASS_TYPE, CLASS_TYPE});
-                        } else {
-                            b.loadConstant(declaredExceptions.length);
-                            b.newObject(CLASS_TYPE.toArrayType());
-                            for (int i=0; i<declaredExceptions.length; i++) {
-                                Class exception = declaredExceptions[i];
-                                b.dup();
-                                b.loadConstant(i);
-                                b.loadConstant(TypeDesc.forClass(exception));
-                                b.storeToArray(CLASS_TYPE);
-                            }
-                     
-                            b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
-                                            new TypeDesc[] {CLASS_TYPE.toArrayType()});
-                        }
-
-                        Label isDeclared = b.createLabel();
-                        b.ifZeroComparisonBranch(isDeclared, "!=");
-                        TypeDesc undecExType =
-                            TypeDesc.forClass(UndeclaredThrowableException.class);
-                        b.newObject(undecExType);
-                        b.dup();
-                        b.loadLocal(batchedExceptionVar);
-                        b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
-                        b.dup();
-                        b.invokeVirtual(THROWABLE_TYPE, "toString", TypeDesc.STRING, null);
-                        b.invokeConstructor(undecExType,
-                                            new TypeDesc[] {THROWABLE_TYPE, TypeDesc.STRING});
-                        b.throwObject();
-
-                        isDeclared.setLocation();
-                        b.loadLocal(batchedExceptionVar);
-                        b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
-                        b.throwObject();
+                        readParam(b, paramType, invInVar);
                     }
-
-                    noPendingException.setLocation();
-
-                    if (methodExists(method)) {
-                        // Invoke the server side method.
-                        TypeDesc[] params = getTypeDescs(paramTypes);
-                        b.invokeInterface(remoteType, method.getName(), returnDesc, params);
-                    } else if (mLocalInfo == null) {
-                        // Cannot invoke method because interface is malformed.
-                        TypeDesc exType = TypeDesc.forClass(MalformedRemoteObjectException.class);
-                        b.newObject(exType);
-                        b.dup();
-                        b.loadConstant(mMalformedInfoMessage);
-                        b.loadConstant(remoteType);
-                        b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, CLASS_TYPE});
-                        b.throwObject();
-                    } else {
-                        // Cannot invoke method because it is unimplemented.
-                        b.newObject(UNIMPLEMENTED_EX_TYPE);
-                        b.dup();
-                        b.loadConstant(method.getSignature());
-                        b.invokeConstructor
-                            (UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
-                        b.throwObject();
-                    }
-
-                    tryEnd = b.createLabel().setLocation();
-                }
-
-                if (batchedRemote) {
-                    // Branch past exception handler if method did not throw one.
-                    Label haveRemote = b.createLabel();
-                    b.branch(haveRemote);
-
-                    TypeDesc rootRemoteType = TypeDesc.forClass(Remote.class);
-
-                    // Due to exception, actual remote object does not
-                    // exist. Create one that throws cause from every method.
-                    b.exceptionHandler(tryStart, tryEnd, Throwable.class.getName());
-                    LocalVariable exVar = b.createLocalVariable(null, THROWABLE_TYPE);
-                    b.storeLocal(exVar);
-                    b.loadThis();
-                    b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
-                    b.loadConstant(returnDesc);
-                    b.loadLocal(exVar);
-                    b.invokeInterface(SKEL_SUPPORT_TYPE, "failedBatchedRemote", rootRemoteType,
-                                      new TypeDesc[] {CLASS_TYPE, THROWABLE_TYPE});
-                    Label linkRemote = b.createLabel();
-                    b.branch(linkRemote);
-
-                    haveRemote.setLocation();
-                    b.loadNull();
-                    b.storeLocal(exVar);
-
-                    linkRemote.setLocation();
-
-                    // Link remote object to id for batched method.
-                    LocalVariable remoteVar = b.createLocalVariable(null, returnDesc);
-                    b.storeLocal(remoteVar);
-
-                    b.loadThis();
-                    b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
-                    b.loadLocal(remoteTypeIdVar);
-                    b.loadLocal(remoteIdVar);
-                    b.loadConstant(returnDesc);
-                    b.loadLocal(remoteVar);
-                    b.invokeInterface(SKEL_SUPPORT_TYPE, "linkBatchedRemote", null,
-                                      new TypeDesc[] {remoteTypeIdVar.getType(),
-                                                      remoteIdVar.getType(),
-                                                      CLASS_TYPE, rootRemoteType});
-
-                    b.loadLocal(exVar);
-                    Label hasException = b.createLabel();
-                    b.ifNullBranch(hasException, false);
-
-                    // Return true so that next batch request is handled in same thread.
-                    b.loadConstant(true);
-                    b.returnValue(TypeDesc.BOOLEAN);
-
-                    // Throw exception, to stop all remaining batch requests.
-                    hasException.setLocation();
-                    b.loadLocal(exVar);
-                    b.invokeStatic(BATCH_INV_EX_TYPE, "make", BATCH_INV_EX_TYPE,
-                                   new TypeDesc[] {THROWABLE_TYPE});
-                    b.throwObject();
-                } else if (method.isBatched()) {
-                    if (completionVar == null) {
-                        batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
-                        genAsyncResponse(b, returnDesc);
-                    } else {
-                        genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
-                    }
-
-                    // Return true so that next batch request is handled in same thread.
-                    b.loadConstant(true);
-                    b.returnValue(TypeDesc.BOOLEAN);
-                } else if (method.isAsynchronous()) {
-                    if (completionVar == null) {
-                        asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
-                        genAsyncResponse(b, returnDesc);
-                    } else {
-                        genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
-                    }
-
-                    b.loadLocal(pendingRequestVar);
-                    b.returnValue(TypeDesc.BOOLEAN);
-                } else { // synchronous method
-                    syncExceptionBounds.add(new Label[] {tryStart, tryEnd});
-
-                    // For synchronous method, write response and flush stream.
-
-                    LocalVariable retVar = null;
-                    if (returnDesc != null) {
-                        retVar = b.createLocalVariable(null, returnDesc);
-                        b.storeLocal(retVar);
-                    }
-
-                    b.loadLocal(channelVar);
-                    b.invokeInterface(INV_CHANNEL_TYPE, "getOutputStream", INV_OUT_TYPE, null);
-                    LocalVariable invOutVar = b.createLocalVariable(null, INV_OUT_TYPE);
-                    b.storeLocal(invOutVar);
-
-                    b.loadLocal(invOutVar);
-                    b.loadNull();
-                    b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
-                                    new TypeDesc[] {THROWABLE_TYPE});
-
-                    boolean doReset;
-                    if (retVar == null) {
-                        doReset = false;
-                    } else {
-                        doReset = writeParam(b, method.getReturnType(), invOutVar, retVar);
-                    }
-
-                    // Call finished method.
-                    genFinished(b, channelVar, doReset, true);
-                    b.returnValue(TypeDesc.BOOLEAN);
-                }
-
-                ordinal++;
-
-                if (collision != null) {
-                    collision.setLocation();
                 }
             }
 
+            LocalVariable remoteTypeIdVar = null;
+            LocalVariable remoteIdVar = null;
+
+            boolean batchedRemote = method.isBatched() && returnDesc != null &&
+                Remote.class.isAssignableFrom(returnDesc.toClass());
+
+            if (batchedRemote) {
+                // Read the type id and object id that was generated by client.
+                b.loadLocal(invInVar);
+                b.invokeStatic(IDENTIFIER_TYPE, "read", IDENTIFIER_TYPE,
+                               new TypeDesc[] {TypeDesc.forClass(DataInput.class)});
+                remoteTypeIdVar = b.createLocalVariable(null, IDENTIFIER_TYPE);
+                b.storeLocal(remoteTypeIdVar);
+
+                b.loadLocal(invInVar);
+                b.invokeStatic(VERSIONED_IDENTIFIER_TYPE, "readAndUpdateRemoteVersion",
+                               VERSIONED_IDENTIFIER_TYPE,
+                               new TypeDesc[] {TypeDesc.forClass(DataInput.class)});
+                remoteIdVar = b.createLocalVariable(null, VERSIONED_IDENTIFIER_TYPE);
+                b.storeLocal(remoteIdVar);
+            }
+
+            if (method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED) {
+                // Acknowledge request by writing null.
+                b.loadLocal(channelVar);
+                b.invokeInterface(INV_CHANNEL_TYPE, "getOutputStream", INV_OUT_TYPE, null);
+                b.dup();
+                b.loadNull();
+                b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
+                                new TypeDesc[] {THROWABLE_TYPE});
+                b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
+            }
+
+            if (method.isAsynchronous() && reuseChannel && !method.isBatched()) {
+                // Call finished method before invocation.
+                genFinished(b, channelVar, false, false);
+                b.storeLocal(pendingRequestVar);
+            }
+
+            // Generate code which invokes server side method.
+
+            Label tryStart, tryEnd;
+            {
+                tryStart = b.createLabel().setLocation();
+
+                // If a batched exception is pending, throw it now instead
+                // of invoking method.
+                b.loadLocal(batchedExceptionVar);
+                Label noPendingException = b.createLabel();
+                b.ifNullBranch(noPendingException, true);
+
+                b.loadLocal(batchedExceptionVar);
+                if (method.isBatched()) {
+                    b.throwObject();
+                } else {
+                    // Throw cause as declared type or wrapped in
+                    // UndeclaredThrowableException.
+
+                    Class[] declaredExceptions = declaredExceptionTypes(method);
+                    if (declaredExceptions == null || declaredExceptions.length == 0) {
+                        b.loadNull();
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
+                                        new TypeDesc[] {CLASS_TYPE.toArrayType()});
+                    } else if (declaredExceptions.length == 1) {
+                        b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
+                                        new TypeDesc[] {CLASS_TYPE});
+                    } else if (declaredExceptions.length == 2) {
+                        b.loadConstant(TypeDesc.forClass(declaredExceptions[0]));
+                        b.loadConstant(TypeDesc.forClass(declaredExceptions[1]));
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
+                                        new TypeDesc[] {CLASS_TYPE, CLASS_TYPE});
+                    } else {
+                        b.loadConstant(declaredExceptions.length);
+                        b.newObject(CLASS_TYPE.toArrayType());
+                        for (int i=0; i<declaredExceptions.length; i++) {
+                            Class exception = declaredExceptions[i];
+                            b.dup();
+                            b.loadConstant(i);
+                            b.loadConstant(TypeDesc.forClass(exception));
+                            b.storeToArray(CLASS_TYPE);
+                        }
+                     
+                        b.invokeVirtual(BATCH_INV_EX_TYPE, "isCauseDeclared", TypeDesc.BOOLEAN,
+                                        new TypeDesc[] {CLASS_TYPE.toArrayType()});
+                    }
+
+                    Label isDeclared = b.createLabel();
+                    b.ifZeroComparisonBranch(isDeclared, "!=");
+                    TypeDesc undecExType =
+                        TypeDesc.forClass(UndeclaredThrowableException.class);
+                    b.newObject(undecExType);
+                    b.dup();
+                    b.loadLocal(batchedExceptionVar);
+                    b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
+                    b.dup();
+                    b.invokeVirtual(THROWABLE_TYPE, "toString", TypeDesc.STRING, null);
+                    b.invokeConstructor(undecExType,
+                                        new TypeDesc[] {THROWABLE_TYPE, TypeDesc.STRING});
+                    b.throwObject();
+
+                    isDeclared.setLocation();
+                    b.loadLocal(batchedExceptionVar);
+                    b.invokeVirtual(BATCH_INV_EX_TYPE, "getCause", THROWABLE_TYPE, null);
+                    b.throwObject();
+                }
+
+                noPendingException.setLocation();
+
+                if (methodExists(method)) {
+                    // Invoke the server side method.
+                    TypeDesc[] params = getTypeDescs(paramTypes);
+                    b.invokeInterface(remoteType, method.getName(), returnDesc, params);
+                } else if (mLocalInfo == null) {
+                    // Cannot invoke method because interface is malformed.
+                    TypeDesc exType = TypeDesc.forClass(MalformedRemoteObjectException.class);
+                    b.newObject(exType);
+                    b.dup();
+                    b.loadConstant(mMalformedInfoMessage);
+                    b.loadConstant(remoteType);
+                    b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, CLASS_TYPE});
+                    b.throwObject();
+                } else {
+                    // Cannot invoke method because it is unimplemented.
+                    b.newObject(UNIMPLEMENTED_EX_TYPE);
+                    b.dup();
+                    b.loadConstant(method.getSignature());
+                    b.invokeConstructor
+                        (UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
+                    b.throwObject();
+                }
+
+                tryEnd = b.createLabel().setLocation();
+            }
+
+            if (batchedRemote) {
+                // Branch past exception handler if method did not throw one.
+                Label haveRemote = b.createLabel();
+                b.branch(haveRemote);
+
+                TypeDesc rootRemoteType = TypeDesc.forClass(Remote.class);
+
+                // Due to exception, actual remote object does not
+                // exist. Create one that throws cause from every method.
+                b.exceptionHandler(tryStart, tryEnd, Throwable.class.getName());
+                LocalVariable exVar = b.createLocalVariable(null, THROWABLE_TYPE);
+                b.storeLocal(exVar);
+                b.loadThis();
+                b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
+                b.loadConstant(returnDesc);
+                b.loadLocal(exVar);
+                b.invokeInterface(SKEL_SUPPORT_TYPE, "failedBatchedRemote", rootRemoteType,
+                                  new TypeDesc[] {CLASS_TYPE, THROWABLE_TYPE});
+                Label linkRemote = b.createLabel();
+                b.branch(linkRemote);
+
+                haveRemote.setLocation();
+                b.loadNull();
+                b.storeLocal(exVar);
+
+                linkRemote.setLocation();
+
+                // Link remote object to id for batched method.
+                LocalVariable remoteVar = b.createLocalVariable(null, returnDesc);
+                b.storeLocal(remoteVar);
+
+                b.loadThis();
+                b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
+                b.loadLocal(remoteTypeIdVar);
+                b.loadLocal(remoteIdVar);
+                b.loadConstant(returnDesc);
+                b.loadLocal(remoteVar);
+                b.invokeInterface(SKEL_SUPPORT_TYPE, "linkBatchedRemote", null,
+                                  new TypeDesc[] {remoteTypeIdVar.getType(),
+                                                  remoteIdVar.getType(),
+                                                  CLASS_TYPE, rootRemoteType});
+
+                b.loadLocal(exVar);
+                Label hasException = b.createLabel();
+                b.ifNullBranch(hasException, false);
+
+                // Return true so that next batch request is handled in same thread.
+                b.loadConstant(true);
+                b.returnValue(TypeDesc.BOOLEAN);
+
+                // Throw exception, to stop all remaining batch requests.
+                hasException.setLocation();
+                b.loadLocal(exVar);
+                b.invokeStatic(BATCH_INV_EX_TYPE, "make", BATCH_INV_EX_TYPE,
+                               new TypeDesc[] {THROWABLE_TYPE});
+                b.throwObject();
+            } else if (method.isBatched()) {
+                if (completionVar == null) {
+                    batchExceptionBounds.add(new Label[] {tryStart, tryEnd});
+                    genAsyncResponse(b, returnDesc);
+                } else {
+                    genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
+                }
+
+                // Return true so that next batch request is handled in same thread.
+                b.loadConstant(true);
+                b.returnValue(TypeDesc.BOOLEAN);
+            } else if (method.isAsynchronous()) {
+                if (completionVar == null) {
+                    asyncExceptionBounds.add(new Label[] {tryStart, tryEnd});
+                    genAsyncResponse(b, returnDesc);
+                } else {
+                    genAsyncResponse(b, returnDesc, completionVar, tryStart, tryEnd);
+                }
+
+                b.loadLocal(pendingRequestVar);
+                b.returnValue(TypeDesc.BOOLEAN);
+            } else { // synchronous method
+                syncExceptionBounds.add(new Label[] {tryStart, tryEnd});
+
+                // For synchronous method, write response and flush stream.
+
+                LocalVariable retVar = null;
+                if (returnDesc != null) {
+                    retVar = b.createLocalVariable(null, returnDesc);
+                    b.storeLocal(retVar);
+                }
+
+                b.loadLocal(channelVar);
+                b.invokeInterface(INV_CHANNEL_TYPE, "getOutputStream", INV_OUT_TYPE, null);
+                LocalVariable invOutVar = b.createLocalVariable(null, INV_OUT_TYPE);
+                b.storeLocal(invOutVar);
+
+                b.loadLocal(invOutVar);
+                b.loadNull();
+                b.invokeVirtual(INV_OUT_TYPE, "writeThrowable", null,
+                                new TypeDesc[] {THROWABLE_TYPE});
+
+                boolean doReset;
+                if (retVar == null) {
+                    doReset = false;
+                } else {
+                    doReset = writeParam(b, method.getReturnType(), invOutVar, retVar);
+                }
+
+                // Call finished method.
+                genFinished(b, channelVar, doReset, true);
+                b.returnValue(TypeDesc.BOOLEAN);
+            }
+
+            ordinal++;
             entryIndex++;
         }
 
@@ -616,9 +610,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.pop(); // pop remote server
         b.newObject(NO_SUCH_METHOD_EX_TYPE);
         b.dup();
-        b.loadLocal(methodIDVar);
+        b.loadLocal(methodIdVar);
         b.invokeStatic(TypeDesc.STRING, "valueOf",
-                       TypeDesc.STRING, new TypeDesc[] {TypeDesc.OBJECT});
+                       TypeDesc.STRING, new TypeDesc[] {TypeDesc.INT});
         b.invokeConstructor(NO_SUCH_METHOD_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
         b.throwObject();
 

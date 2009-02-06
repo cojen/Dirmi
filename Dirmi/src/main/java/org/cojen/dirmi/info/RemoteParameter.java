@@ -24,14 +24,14 @@ import java.io.Serializable;
  * @author Brian S O'Neill
  */
 public interface RemoteParameter<T> extends Serializable {
+    Class<T> getType();
+
     /**
      * Returns true if parameter does not need to be serialized such that it
      * can be back referenced. If parameter is an array, elements of array must
      * be sharable.
      */
     boolean isUnshared();
-
-    Class<T> getType();
 
     /**
      * Returns true if parameter defines the runtime timeout for the method.

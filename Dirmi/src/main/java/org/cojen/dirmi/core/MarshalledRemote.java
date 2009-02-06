@@ -23,8 +23,6 @@ import java.io.ObjectOutput;
 
 import org.cojen.dirmi.info.RemoteInfo;
 
-import org.cojen.dirmi.util.VersionedIdentifier;
-
 /**
  * 
  *

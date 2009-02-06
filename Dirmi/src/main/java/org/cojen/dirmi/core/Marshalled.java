@@ -17,7 +17,8 @@
 package org.cojen.dirmi.core;
 
 /**
- * 
+ * Tag interface for objects which require special serialization handling by
+ * StandardSession.
  *
  * @author Brian S O'Neill
  */

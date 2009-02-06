@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.util;
+package org.cojen.dirmi.core;
 
 import java.io.DataInput;
 import java.io.EOFException;
@@ -26,6 +26,8 @@ import java.util.Map;
 import org.cojen.util.WeakCanonicalSet;
 import org.cojen.util.WeakIdentityMap;
 import org.cojen.util.WeakValuedHashMap;
+
+import org.cojen.dirmi.util.Random;
 
 /**
  * Storage and factory of unique identifiers.
@@ -58,7 +60,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
         I id = mObjectsToIdentifiers.get(obj);
         if (id == null) {
             do {
-                id = newIdentifier(MersenneTwisterFast.localInstance().nextLong());
+                id = newIdentifier(Random.randomLong());
             } while (mIdentifiersToObjects.containsKey(id));
             id = mIdentifiers.put(id);
             mObjectsToIdentifiers.put(obj, id);
@@ -76,7 +78,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
      * @throws IllegalArgumentException if object is null
      * @throws IllegalStateException if data cannot be encoded
      */
-    public synchronized I identify(Object obj, byte andMask, byte orMask) {
+    synchronized I identify(Object obj, byte andMask, byte orMask) {
         if (obj == null) {
             throw new IllegalArgumentException("Object cannot be null");
         }
@@ -87,7 +89,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
             }
         } else {
             do {
-                long v = MersenneTwisterFast.localInstance().nextLong();
+                long v = Random.randomLong();
                 v &= (~0xff) | (andMask & 0xff);
                 v |= (orMask & 0xff);
                 id = newIdentifier(v);

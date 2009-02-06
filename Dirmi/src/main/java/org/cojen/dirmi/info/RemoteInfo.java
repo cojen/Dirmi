@@ -19,8 +19,6 @@ package org.cojen.dirmi.info;
 import java.io.Serializable;
 import java.util.Set;
 
-import org.cojen.dirmi.util.Identifier;
-
 /**
  * 
  *
@@ -36,7 +34,7 @@ public interface RemoteInfo extends Serializable {
     /**
      * Returns a unique identifier for the remote interface.
      */
-    Identifier getInfoID();
+    long getInfoId();
 
     /**
      * Returns the names of all remote interfaces implemented by this
@@ -59,6 +57,4 @@ public interface RemoteInfo extends Serializable {
 
     RemoteMethod getRemoteMethod(String name, RemoteParameter<?>... params)
         throws NoSuchMethodException;
-
-    RemoteMethod getRemoteMethod(Identifier methodID) throws NoSuchMethodException;
 }

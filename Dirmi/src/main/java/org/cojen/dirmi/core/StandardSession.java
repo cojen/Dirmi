@@ -86,10 +86,7 @@ import org.cojen.dirmi.io.Channel;
 import org.cojen.dirmi.io.CloseListener;
 import org.cojen.dirmi.io.StreamChannel;
 
-import org.cojen.dirmi.util.AbstractIdentifier;
 import org.cojen.dirmi.util.ExceptionUtils;
-import org.cojen.dirmi.util.Identifier;
-import org.cojen.dirmi.util.VersionedIdentifier;
 
 /**
  * 
@@ -98,7 +95,7 @@ import org.cojen.dirmi.util.VersionedIdentifier;
  */
 public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
-    static final int PROTOCOL_VERSION = 20081220;
+    static final int PROTOCOL_VERSION = 20090205;
 
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
@@ -590,11 +587,11 @@ public class StandardSession implements Session {
 
         while (true) {
             final VersionedIdentifier objID;
-            final Identifier methodID;
+            final int methodId;
             try {
                 DataInput din = (DataInput) invChannel.getInputStream();
                 objID = VersionedIdentifier.readAndUpdateRemoteVersion(din);
-                methodID = Identifier.read(din);
+                methodId = din.readInt();
             } catch (IOException e) {
                 invChannel.disconnect();
                 return;
@@ -606,7 +603,7 @@ public class StandardSession implements Session {
             if (skeleton == null) {
                 String message = "Cannot find remote object: " + objID;
 
-                boolean synchronous = (methodID.getData() & 0x01) == 0;
+                boolean synchronous = (methodId & 1) == 0;
                 if (synchronous) {
                     // Try to inform caller of error, but no guarantee that
                     // this will work -- input arguments might exceed the size
@@ -636,7 +633,7 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(methodID, invChannel, batchedException)) {
+                        if (skeleton.invoke(methodId, invChannel, batchedException)) {
                             // Handle another request.
                             batchedException = null;
                             continue;

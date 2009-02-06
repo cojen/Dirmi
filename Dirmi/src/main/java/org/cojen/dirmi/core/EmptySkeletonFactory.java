@@ -16,11 +16,10 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.ObjectOutput;
+
 import java.rmi.Remote;
 import java.rmi.server.Unreferenced;
-
-import org.cojen.dirmi.util.Identifier;
-import org.cojen.dirmi.util.VersionedIdentifier;
 
 /**
  * Factory which creates skeletons that support no methods.
@@ -39,11 +38,14 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 return remoteServer;
             }
 
-            public boolean invoke(Identifier methodID,
+            public void invokeSerialized(ObjectOutput out) {
+            }
+
+            public boolean invoke(int methodId,
                                   InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
             {
-                throw new NoSuchMethodException("method id: " + methodID);
+                throw new NoSuchMethodException("method id: " + methodId);
             }
 
             public void unreferenced() {

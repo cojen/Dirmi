@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.util;
+package org.cojen.dirmi.core;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -29,7 +29,7 @@ import java.rmi.NoSuchObjectException;
  *
  * @author Brian S O'Neill
  */
-public abstract class AbstractIdentifier implements Comparable<AbstractIdentifier>, Serializable  {
+abstract class AbstractIdentifier implements Comparable<AbstractIdentifier>, Serializable  {
     private final long mBits;
 
     AbstractIdentifier(long bits) {
@@ -87,7 +87,7 @@ public abstract class AbstractIdentifier implements Comparable<AbstractIdentifie
      */
     public abstract <T> void register(T obj) throws IllegalArgumentException;
 
-    public byte getData() {
+    byte getData() {
         return (byte) mBits;
     }
 

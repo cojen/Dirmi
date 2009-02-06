@@ -83,7 +83,7 @@ public class StubFactoryGenerator<R extends Remote> {
                                                                    RemoteInfo remoteInfo)
         throws IllegalArgumentException
     {
-        Object key = KeyFactory.createKey(new Object[] {type, remoteInfo});
+        Object key = KeyFactory.createKey(new Object[] {type, remoteInfo.getInfoId()});
 
         synchronized (cCache) {
             StubFactory<R> factory = (StubFactory<R>) cCache.get(key);
@@ -109,25 +109,20 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private StubFactory<R> generateFactory() {
-        CodeBuilderUtil.IdentifierSet.setMethodIds(mRemoteInfo);
+        Class<? extends R> stubClass = generateStub();
         try {
-            Class<? extends R> stubClass = generateStub();
-            try {
-                StubFactory<R> factory = new Factory<R>
-                    (stubClass.getConstructor(StubSupport.class));
-                invokeFactoryRefMethod(stubClass, factory);
-                return factory;
-            } catch (IllegalAccessException e) {
-                throw new Error(e);
-            } catch (InvocationTargetException e) {
-                throw new Error(e);
-            } catch (NoSuchMethodException e) {
-                NoSuchMethodError nsme = new NoSuchMethodError();
-                nsme.initCause(e);
-                throw nsme;
-            }
-        } finally {
-            CodeBuilderUtil.IdentifierSet.clearIds();
+            StubFactory<R> factory = new Factory<R>
+                (stubClass.getConstructor(StubSupport.class));
+            invokeFactoryRefMethod(stubClass, factory);
+            return factory;
+        } catch (IllegalAccessException e) {
+            throw new Error(e);
+        } catch (InvocationTargetException e) {
+            throw new Error(e);
+        } catch (NoSuchMethodException e) {
+            NoSuchMethodError nsme = new NoSuchMethodError();
+            nsme.initCause(e);
+            throw nsme;
         }
     }
 
@@ -147,8 +142,8 @@ public class StubFactoryGenerator<R extends Remote> {
             cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         }
 
-        // Add static method to assign identifiers.
-        addInitMethodAndFields(cf, mRemoteInfo);
+        // Add reference to factory.
+        addFactoryRefMethod(cf);
 
         // Add constructor
         {
@@ -172,10 +167,7 @@ public class StubFactoryGenerator<R extends Remote> {
         // Track which exception converting methods need to be created.
         Map<Class, String> exceptionConverters = new HashMap<Class, String>();
 
-        int methodOrdinal = -1;
         for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
-            methodOrdinal++;
-
             RemoteMethod localMethod;
             {
                 RemoteParameter[] params = method.getParameterTypes()
@@ -281,9 +273,9 @@ public class StubFactoryGenerator<R extends Remote> {
             LocalVariable invOutVar = b.createLocalVariable(null, INV_OUT_TYPE);
             b.storeLocal(invOutVar);
 
-            loadMethodID(b, methodOrdinal);
             b.loadLocal(invOutVar);
-            b.invokeVirtual(IDENTIFIER_TYPE, "write", null, new TypeDesc[] {DATA_OUTPUT_TYPE});
+            b.loadConstant(method.getMethodId());
+            b.invokeVirtual(INV_OUT_TYPE, "writeInt", null, new TypeDesc[] {TypeDesc.INT});
 
             if (compVar != null) {
                 // Write the Future first to allow any parameter reading

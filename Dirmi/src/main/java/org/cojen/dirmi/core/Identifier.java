@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.util;
+package org.cojen.dirmi.core;
 
 import java.io.DataInput;
 import java.io.InputStream;
@@ -54,7 +54,7 @@ public class Identifier extends AbstractIdentifier {
      * @throws IllegalArgumentException if object is null
      * @throws IllegalStateException if data cannot be encoded
      */
-    public static Identifier identify(Object obj, byte andMask, byte orMask) {
+    static Identifier identify(Object obj, byte andMask, byte orMask) {
         return cStore.identify(obj, andMask, orMask);
     }
 

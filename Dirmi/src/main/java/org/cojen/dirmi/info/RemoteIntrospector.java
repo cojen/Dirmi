@@ -16,19 +16,31 @@
 
 package org.cojen.dirmi.info;
 
+import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+
+import java.security.MessageDigest;
+import java.security.DigestOutputStream;
+import java.security.NoSuchAlgorithmException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -50,11 +62,10 @@ import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Serialized;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
-
-import org.cojen.dirmi.util.Identifier;
 
 /**
  * Supports examination of Remote types, returning all metadata associated
@@ -161,7 +172,7 @@ public class RemoteIntrospector {
                     ("Remote interface cannot extend java.io.Serializable: " + remote.getName());
             }
 
-            Map<String, RMethod> methodMap = new LinkedHashMap<String, RMethod>();
+            SortedMap<String, RMethod> methodMap = new TreeMap<String, RMethod>();
 
             for (Method m : remote.getMethods()) {
                 if (!m.getDeclaringClass().isInterface()) {
@@ -186,7 +197,7 @@ public class RemoteIntrospector {
                 }
 
                 RMethod existing = methodMap.get(key);
-                RMethod candidate = new RMethod(existing.getMethodID(), m);
+                RMethod candidate = new RMethod(m);
                 
                 if (existing.equals(candidate)) {
                     continue;
@@ -201,7 +212,13 @@ public class RemoteIntrospector {
             }
 
             for (RMethod method : methodMap.values()) {
-                if (method.isAsynchronous()) {
+                if (method.isSerialized()) {
+                    if (method.getParameterTypes().size() > 0) {
+                        throw new IllegalArgumentException
+                            ("Serialized method cannot have any arguments: " +
+                             method.methodDesc());
+                    }
+                } else if (method.isAsynchronous()) {
                     if (method.getReturnType() != null) {
                         Class returnType = method.getReturnType().getType();
                         if (Pipe.class == returnType) {
@@ -242,7 +259,7 @@ public class RemoteIntrospector {
             }
 
             // Gather all implemented interfaces which implement Remote.
-            Set<String> interfaces = new LinkedHashSet<String>();
+            SortedSet<String> interfaces = new TreeSet<String>();
             gatherRemoteInterfaces(interfaces, remote);
 
             info = new RInfo(remote, interfaces, new LinkedHashSet<RMethod>(methodMap.values()));
@@ -281,24 +298,24 @@ public class RemoteIntrospector {
     private static class RInfo implements RemoteInfo {
         private static final long serialVersionUID = 1L;
 
-        private final Identifier mID;
+        // Id is assigned by resolve method.
+        private long mId;
+
         private final String mName;
-        private final Set<String> mInterfaceNames;
+        private final SortedSet<String> mInterfaceNames;
         private final Set<RMethod> mMethods;
 
-        private final transient RemoteParameter<? extends Throwable> mRemoteFailureException;
+        private final transient RParameter<? extends Throwable> mRemoteFailureException;
         private final transient boolean mRemoteFailureExceptionDeclared;
 
         private final transient long mTimeout;
         private final transient TimeUnit mTimeoutUnit;
 
         private transient Map<String, Set<RMethod>> mMethodsByName;
-        private transient Map<Identifier, RemoteMethod> mMethodMap;
 
-        RInfo(Class<? extends Remote> remote, Set<String> interfaces, Set<RMethod> methods) {
-            mID = Identifier.identify(this);
+        RInfo(Class<? extends Remote> remote, SortedSet<String> interfaces, Set<RMethod> methods) {
             mName = remote.getName();
-            mInterfaceNames = Collections.unmodifiableSet(interfaces);
+            mInterfaceNames = Collections.unmodifiableSortedSet(interfaces);
             mMethods = Collections.unmodifiableSet(methods);
 
             {
@@ -337,8 +354,8 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public Identifier getInfoID() {
-            return mID;
+        public long getInfoId() {
+            return mId;
         }
 
         public Set<String> getInterfaceNames() {
@@ -397,24 +414,9 @@ public class RemoteIntrospector {
             throw new NoSuchMethodException(name);
         }
 
-        public RemoteMethod getRemoteMethod(Identifier methodID) throws NoSuchMethodException {
-            if (mMethodMap == null) {
-                Map methodMap = new HashMap();
-                for (RMethod method : mMethods) {
-                    methodMap.put(method.getMethodID(), method);
-                }
-                mMethodMap = methodMap;
-            }
-            RemoteMethod method = (RemoteMethod) mMethodMap.get(methodID);
-            if (method == null) {
-                throw new NoSuchMethodException("methodID: " + methodID);
-            }
-            return method;
-        }
-
         @Override
         public int hashCode() {
-            return mName.hashCode() + mID.hashCode();
+            return mName.hashCode() + (int) (mId >> 32) + (int) mId;
         }
 
         @Override
@@ -424,7 +426,7 @@ public class RemoteIntrospector {
             }
             if (obj instanceof RInfo) {
                 RInfo other = (RInfo) obj;
-                return mName.equals(other.mName) && (mID == other.mID) &&
+                return mName.equals(other.mName) && (mId == other.mId) &&
                     mInterfaceNames.equals(other.mInterfaceNames) &&
                     getRemoteMethods().equals(other.getRemoteMethods());
             }
@@ -435,14 +437,14 @@ public class RemoteIntrospector {
         public String toString() {
             StringBuilder b = new StringBuilder();
             b.append("RemoteInfo {id=");
-            b.append(mID);
+            b.append(mId);
             b.append(", name=");
             b.append(mName);
             b.append('}');
             return b.toString();
         }
 
-        RemoteParameter<? extends Throwable> getRemoteFailureException() {
+        RParameter<? extends Throwable> getRemoteFailureException() {
             return mRemoteFailureException;
         }
 
@@ -463,22 +465,83 @@ public class RemoteIntrospector {
             for (RMethod method : mMethods) {
                 method.resolve(this, validExceptions);
             }
+
+            // Now assign the id by computing a hashcode of all elements.
+
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-1");
+            } catch (NoSuchAlgorithmException e) {
+                throw new AssertionError(e);
+            }
+
+            OutputStream nullOut = new OutputStream() {
+                public void write(int b) {}
+                public void write(byte[] b, int off, int len) {}
+            };
+
+            DataOutput digestOutput = new DataOutputStream
+                (new DigestOutputStream(nullOut, digest));
+
+            try {
+                mixIn(digestOutput);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+
+            byte[] hash = digest.digest();
+
+            long id = 0;
+            for (int i=0; i<hash.length; i++) {
+                id ^= (hash[i] & 0xffL) << ((i & 7) << 3);
+            }
+
+            mId = id;
+
+            // Finally, assign method ids using info id as a base.
+
+            int methodId = ((int) (id >> 32)) + (int) id;
+
+            for (RMethod method : mMethods) {
+                if (method.isAsynchronous()) {
+                    if ((methodId & 1) == 0) {
+                        methodId++;
+                    }
+                } else if ((methodId & 1) != 0) {
+                    methodId++;
+                }
+                method.setId(methodId);
+                methodId++;
+            }
+        }
+
+        void mixIn(DataOutput digest) throws IOException {
+            digest.writeUTF(mName);
+            for (String name : mInterfaceNames) {
+                digest.writeUTF(name);
+            }
+            for (RMethod method : mMethods) {
+                method.mixIn(digest);
+            }
         }
     }
 
     private static class RMethod implements RemoteMethod {
         private static final long serialVersionUID = 1L;
 
-        private final Identifier mID;
+        // Id is assigned after RInfo has been resolved.
+        private int mId;
+
         private final String mName;
-        private RemoteParameter mReturnType;
+        private RParameter mReturnType;
         private List<RParameter<Object>> mParameterTypes;
-        private final Set<RemoteParameter<Throwable>> mExceptionTypes;
+        private final SortedSet<RParameter<Throwable>> mExceptionTypes;
 
         private final CallMode mCallMode;
         private final boolean mBatched;
+        private final boolean mSerialized;
 
-        private RemoteParameter<? extends Throwable> mRemoteFailureException;
+        private RParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
 
         private long mTimeout;
@@ -487,10 +550,6 @@ public class RemoteIntrospector {
         private transient Method mMethod;
 
         RMethod(Method m) {
-            this(null, m);
-        }
-
-        RMethod(Identifier id, Method m) {
             mName = m.getName();
 
             if (m.isAnnotationPresent(Batched.class)) {
@@ -498,7 +557,7 @@ public class RemoteIntrospector {
                 mCallMode = CallMode.EVENTUAL;
                 if (m.isAnnotationPresent(Asynchronous.class)) {
                     throw new IllegalArgumentException
-                        ("Method cannot be annotated as both @Batched and @Asynchronous: " +
+                        ("Method cannot be annotated as both @Asynchronous and @Batched: " +
                          methodDesc(m));
                 }
             } else {
@@ -511,11 +570,18 @@ public class RemoteIntrospector {
                 }
             }
 
-            if (id == null) {
-                id = Identifier.identify(this, (byte) 0xfe, (byte) (mCallMode != null ? 1 : 0));
+            if (mSerialized = m.isAnnotationPresent(Serialized.class)) {
+                if (mBatched) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated as both @Batched and @Serialized: " +
+                         methodDesc(m));
+                }
+                if (mCallMode != null) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated as both @Asynchronous and @Serialized: " +
+                         methodDesc(m));
+                }
             }
-
-            mID = id;
 
             // First pass, treat all params as serialized. Resolve on second pass.
             // This allows remote methods to pass instances of declaring class without
@@ -610,12 +676,11 @@ public class RemoteIntrospector {
             if (exceptionTypes == null || exceptionTypes.length == 0) {
                 mExceptionTypes = null;
             } else {
-                Set<RemoteParameter<Throwable>> set =
-                    new LinkedHashSet<RemoteParameter<Throwable>>();
+                SortedSet<RParameter<Throwable>> set = new TreeSet<RParameter<Throwable>>();
                 for (Class exceptionType : exceptionTypes) {
                     set.add(RParameter.make(exceptionType));
                 }
-                mExceptionTypes = Collections.unmodifiableSet(set);
+                mExceptionTypes = Collections.unmodifiableSortedSet(set);
             }
 
             {
@@ -623,6 +688,10 @@ public class RemoteIntrospector {
                 if (ann == null) {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called.
+                } else if (mSerialized) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated with both @RemoteFailure and @Serialized: " +
+                         methodDesc(m));
                 } else {
                     mRemoteFailureException = RParameter.make(ann.exception());
                     mRemoteFailureExceptionDeclared = ann.declared();
@@ -635,6 +704,10 @@ public class RemoteIntrospector {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called. Store min value to indicate this.
                     mTimeout = Long.MIN_VALUE;
+                } else if (mSerialized) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated with both @Serialized and @Timeout: " +
+                         methodDesc(m));
                 } else {
                     long timeout = ann.value();
                     mTimeout = timeout < 0 ? -1 : timeout;
@@ -646,6 +719,10 @@ public class RemoteIntrospector {
                 if (ann == null) {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called.
+                } else if (mSerialized) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated with both @Serialized and @TimeoutUnit: " +
+                         methodDesc(m));
                 } else {
                     TimeUnit unit = ann.value();
                     mTimeoutUnit = (unit == null) ? TimeUnit.MILLISECONDS : unit;
@@ -656,15 +733,16 @@ public class RemoteIntrospector {
             mMethod = m;
         }
 
-        private RMethod(RMethod existing, Set<RemoteParameter<Throwable>> exceptionTypes) {
-            mID = existing.mID;
+        private RMethod(RMethod existing, SortedSet<RParameter<Throwable>> exceptionTypes) {
+            mId = existing.mId;
             mName = existing.mName;
             mReturnType = existing.mReturnType;
             mParameterTypes = existing.mParameterTypes;
-            mExceptionTypes = Collections.unmodifiableSet(exceptionTypes);
+            mExceptionTypes = Collections.unmodifiableSortedSet(exceptionTypes);
 
             mCallMode = existing.mCallMode;
             mBatched = existing.mBatched;
+            mSerialized = existing.mSerialized;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
@@ -683,8 +761,8 @@ public class RemoteIntrospector {
             return mName;
         }
 
-        public Identifier getMethodID() {
-            return mID;
+        public int getMethodId() {
+            return mId;
         }
 
         public RemoteParameter getReturnType() {
@@ -721,6 +799,10 @@ public class RemoteIntrospector {
             return mBatched;
         }
 
+        public boolean isSerialized() {
+            return mSerialized;
+        }
+
         public RemoteParameter<? extends Throwable> getRemoteFailureException() {
             return mRemoteFailureException;
         }
@@ -739,7 +821,7 @@ public class RemoteIntrospector {
 
         @Override
         public int hashCode() {
-            return mName.hashCode() + mID.hashCode();
+            return mName.hashCode() + mId;
         }
 
         @Override
@@ -749,11 +831,12 @@ public class RemoteIntrospector {
             }
             if (obj instanceof RMethod) {
                 RMethod other = (RMethod) obj;
-                return mName.equals(other.mName) && (mID == other.mID) &&
+                return mName.equals(other.mName) && (mId == other.mId) &&
                     getParameterTypes().equals(other.getParameterTypes()) &&
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
                     (mCallMode == other.mCallMode) &&
                     (mBatched == other.mBatched) &&
+                    (mSerialized == other.mSerialized) &&
                     (mRemoteFailureException == other.getRemoteFailureException()) &&
                     (mRemoteFailureExceptionDeclared == other.isRemoteFailureExceptionDeclared());
             }
@@ -764,7 +847,7 @@ public class RemoteIntrospector {
         public String toString() {
             StringBuilder b = new StringBuilder();
             b.append("RemoteMethod {id=");
-            b.append(mID);
+            b.append(mId);
             b.append(", sig=\"");
             b.append(getSignature(null));
             b.append('"');
@@ -818,7 +901,7 @@ public class RemoteIntrospector {
                 // This indicates a bug in RemoteIntrospector.
                 throw new IllegalArgumentException("name mismatch");
             }
-            if (mID != other.mID) {
+            if (mId != other.mId) {
                 // This indicates a bug in RemoteIntrospector.
                 throw new IllegalArgumentException("id mismatch");
             }
@@ -841,16 +924,15 @@ public class RemoteIntrospector {
                      methodDesc() + " and " + other.methodDesc());
             }
 
-            Set<RemoteParameter<Throwable>> subset =
-                new LinkedHashSet<RemoteParameter<Throwable>>();
+            SortedSet<RParameter<Throwable>> subset = new TreeSet<RParameter<Throwable>>();
 
-            for (RemoteParameter exceptionType : mExceptionTypes) {
+            for (RParameter exceptionType : mExceptionTypes) {
                 if (other.declaresException(exceptionType)) {
                     subset.add(exceptionType);
                 }
             }
 
-            for (RemoteParameter exceptionType : other.mExceptionTypes) {
+            for (RParameter exceptionType : other.mExceptionTypes) {
                 if (this.declaresException(exceptionType)) {
                     subset.add(exceptionType);
                 }
@@ -1012,9 +1094,39 @@ public class RemoteIntrospector {
         String methodDesc() {
             return methodDesc(mMethod);
         }
+
+        void mixIn(DataOutput digest) throws IOException {
+            digest.writeUTF(mName);
+            if (mReturnType != null) {
+                mReturnType.mixIn(digest);
+            }
+            if (mParameterTypes != null) {
+                for (RParameter<?> param : mParameterTypes) {
+                    param.mixIn(digest);
+                }
+            }
+            if (mExceptionTypes != null) {
+                for (RParameter<?> type : mExceptionTypes) {
+                    type.mixIn(digest);
+                }
+            }
+            if (mCallMode != null) {
+                digest.writeUTF(mCallMode.name());
+            }
+            digest.writeBoolean(mBatched);
+            digest.writeBoolean(mSerialized);
+            mRemoteFailureException.mixIn(digest);
+            digest.writeBoolean(mRemoteFailureExceptionDeclared);
+            digest.writeLong(mTimeout);
+            digest.writeUTF(mTimeoutUnit.name());
+        }
+
+        void setId(int id) {
+            mId = id;
+        }
     }
 
-    private static class RParameter<T> implements RemoteParameter<T> {
+    private static class RParameter<T> implements RemoteParameter<T>, Comparable<RParameter> {
         private static final long serialVersionUID = 1L;
 
         private static final int FLAG_UNSHARED = 1;
@@ -1057,12 +1169,12 @@ public class RemoteIntrospector {
             mFlags = flags;
         }
 
-        public boolean isUnshared() {
-            return (mFlags & FLAG_UNSHARED) != 0;
-        }
-
         public Class<T> getType() {
             return mType;
+        }
+
+        public boolean isUnshared() {
+            return (mFlags & FLAG_UNSHARED) != 0;
         }
 
         public boolean isTimeout() {
@@ -1077,9 +1189,7 @@ public class RemoteIntrospector {
             if (this == other) {
                 return true;
             }
-            return 
-                ((getType() == null) ? (other.getType() == null) :
-                 (getType().getName().equals(other.getType().getName())));
+            return getType().getName().equals(other.getType().getName());
         }
 
         @Override
@@ -1094,10 +1204,7 @@ public class RemoteIntrospector {
             }
             if (obj instanceof RParameter) {
                 RParameter other = (RParameter) obj;
-                return
-                    (mFlags == other.mFlags) &&
-                    ((mType == null) ? (other.mType == null) :
-                     (mType.equals(other.mType)));
+                return mFlags == other.mFlags && mType.equals(other.mType);
             }
             return false;
         }
@@ -1107,12 +1214,30 @@ public class RemoteIntrospector {
             return TypeDesc.forClass(mType).getFullName();
         }
 
+        @Override
+        public int compareTo(RParameter other) {
+            int compare = mType.getName().compareTo(other.mType.getName());
+            if (compare == 0) {
+                if (mFlags < other.mFlags) {
+                    compare = -1;
+                } else if (mFlags > other.mFlags) {
+                    compare = 1;
+                }
+            }
+            return compare;
+        }
+
         RParameter toUnshared(boolean unshared) {
             int flags = unshared ? (mFlags | FLAG_UNSHARED) : (mFlags & ~FLAG_UNSHARED);
             if (flags == mFlags) {
                 return this;
             }
             return intern(new RParameter(mType, flags));
+        }
+
+        void mixIn(DataOutput digest) throws IOException {
+            digest.writeUTF(mType.getName());
+            digest.writeInt(mFlags);
         }
 
         private Object readResolve() {

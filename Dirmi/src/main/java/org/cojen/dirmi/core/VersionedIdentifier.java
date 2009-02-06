@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.util;
+package org.cojen.dirmi.core;
 
 import java.io.DataInput;
 import java.io.DataOutput;
