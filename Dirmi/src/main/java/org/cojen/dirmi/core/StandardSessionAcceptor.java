@@ -149,9 +149,11 @@ public class StandardSessionAcceptor implements SessionAcceptor {
         }
 
         public void failed(IOException e) {
+            /*
             if (!disabled) {
                 mBrokerAcceptor.accept(this);
             }
+            */
             uncaught(e);
         }
     }

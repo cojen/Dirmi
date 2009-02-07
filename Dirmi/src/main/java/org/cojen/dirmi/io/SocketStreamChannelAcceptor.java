@@ -37,6 +37,8 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     final ServerSocket mServerSocket;
     final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
 
+    volatile boolean mClosed;
+
     public SocketStreamChannelAcceptor(ScheduledExecutorService executor,
                                        SocketAddress localAddress)
         throws IOException
@@ -74,13 +76,16 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
                     try {
                         socket = mServerSocket.accept();
                     } catch (IOException e) {
-                        AcceptListener<StreamChannel> listener;
-                        if ((listener = pollListener()) != null) {
-                            listener.failed(e);
+                        if (!mClosed) {
+                            AcceptListener<StreamChannel> listener;
+                            if ((listener = pollListener()) != null) {
+                                listener.failed(e);
+                            }
+                            while ((listener = mListenerQueue.poll()) != null) {
+                                listener.failed(e);
+                            }
                         }
-                        while ((listener = mListenerQueue.poll()) != null) {
-                            listener.failed(e);
-                        }
+                        mListenerQueue.clear();
                         return;
                     }
 
@@ -116,6 +121,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     }
 
     public void close() throws IOException {
+        mClosed = true;
         mServerSocket.close();
     }
 
