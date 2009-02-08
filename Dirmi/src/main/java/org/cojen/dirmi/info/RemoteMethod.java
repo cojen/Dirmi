@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
-import org.cojen.dirmi.Serialized;
 
 /**
  * 
@@ -56,7 +55,8 @@ public interface RemoteMethod extends Serializable {
     List<? extends RemoteParameter<?>> getParameterTypes();
 
     /**
-     * Returns the method exception types in an unmodifiable set.
+     * Returns the method exception types in an unmodifiable set. The set
+     * elements are guaranteed to have a consistent ordering.
      */
     Set<? extends RemoteParameter<? extends Throwable>> getExceptionTypes();
 
@@ -86,14 +86,6 @@ public interface RemoteMethod extends Serializable {
      * @see Batched
      */
     boolean isBatched();
-
-    /**
-     * Returns true if this method is serialized, which implies that it is not
-     * asynchronous or batched.
-     *
-     * @see Serialized
-     */
-    boolean isSerialized();
 
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 

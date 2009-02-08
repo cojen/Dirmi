@@ -43,7 +43,6 @@ import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
-import org.cojen.util.BeanComparator;
 import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
@@ -182,7 +181,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
         final TypeDesc remoteType = TypeDesc.forClass(mType);
 
-        // Add fields
+        // Add fields.
         {
             cf.addField(Modifiers.PRIVATE.toFinal(true), SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
             cf.addField(Modifiers.PRIVATE.toFinal(true), REMOTE_FIELD_NAME, remoteType);
@@ -191,7 +190,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         // Add reference to factory.
         addFactoryRefMethod(cf);
 
-        // Add constructor
+        // Add constructor.
         {
             MethodInfo mi = cf.addConstructor
                 (Modifiers.PUBLIC, new TypeDesc[] {SKEL_SUPPORT_TYPE, remoteType});
@@ -211,7 +210,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnVoid();
         }
 
-        // Add remote server access method
+        // Add remote server access method.
         {
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, "getRemoteServer", TypeDesc.forClass(Remote.class), null);
@@ -221,35 +220,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnValue(TypeDesc.OBJECT);
         }
 
-        // Add the invokeSerialized method
-        {
-            TypeDesc objectOutType = TypeDesc.forClass(ObjectOutput.class);
-            MethodInfo mi = cf.addMethod
-                (Modifiers.PUBLIC, "invokeSerialized", null, new TypeDesc[] {objectOutType});
-
-            // Gather all serialized methods and sort by method id. They will
-            // be invoked in this order to ensure consistency with remote stub.
-
-            List<RemoteMethod> serialized = new ArrayList<RemoteMethod>();
-
-            for (RemoteMethod method : mInfo.getRemoteMethods()) {
-                if (method.isSerialized()) {
-                    serialized.add(method);
-                }
-            }
-
-            if (serialized.size() > 0) {
-                Collections.sort(serialized,
-                                 BeanComparator.forClass(RemoteMethod.class).orderBy("methodId"));
-            }
-
-            CodeBuilder b = new CodeBuilder(mi);
-            // FIXME
-
-            b.returnVoid();
-        }
-
-        // Add the all-important invoke method
+        // Add the all-important invoke method.
         MethodInfo mi = cf.addMethod
             (Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
              new TypeDesc[] {TypeDesc.INT, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
@@ -272,9 +243,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         Map<Integer, RemoteMethod> caseMap =
             new LinkedHashMap<Integer, RemoteMethod>(methods.size());
         for (RemoteMethod method : methods) {
-            if (method.isSerialized()) {
-                continue;
-            }
             caseMap.put(method.getMethodId(), method);
         }
 
@@ -284,17 +252,15 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         Label defaultLabel = b.createLabel();
 
         {
-            int i = 0;
+            int caseIndex = 0;
             for (Integer key : caseMap.keySet()) {
-                cases[i] = key;
-                switchLabels[i] = b.createLabel();
-                i++;
+                cases[caseIndex] = key;
+                switchLabels[caseIndex] = b.createLabel();
+                caseIndex++;
             }
         }
 
         LocalVariable pendingRequestVar = b.createLocalVariable(null, TypeDesc.BOOLEAN);
-        b.loadConstant(false);
-        b.storeLocal(pendingRequestVar);
 
         // Each case operates on the remote server first, so put it on the stack early.
         b.loadThis();
@@ -303,17 +269,16 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.loadLocal(methodIdVar);
         b.switchBranch(cases, switchLabels, defaultLabel);
 
-        // Generate case for each set of matches.
+        // Generate case for each method.
 
         // Labels which mark exception boundaries for different method types.
         List<Label[]> syncExceptionBounds = new ArrayList<Label[]>(methods.size());
         List<Label[]> asyncExceptionBounds = new ArrayList<Label[]>(methods.size());
         List<Label[]> batchExceptionBounds = new ArrayList<Label[]>(methods.size());
 
-        int ordinal = 0;
-        int entryIndex = 0;
+        int caseIndex = 0;
         for (RemoteMethod method : caseMap.values()) {
-            switchLabels[entryIndex].setLocation();
+            switchLabels[caseIndex++].setLocation();
 
             TypeDesc returnDesc = getTypeDesc(method.getReturnType());
             List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
@@ -389,9 +354,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
 
-            if (method.isAsynchronous() && reuseChannel && !method.isBatched()) {
-                // Call finished method before invocation.
-                genFinished(b, channelVar, false, false);
+            if (method.isAsynchronous() && !method.isBatched()) {
+                if (reuseChannel) {
+                    // Call finished method before invocation.
+                    genFinished(b, channelVar, false, false);
+                } else {
+                    // No pending request since channel is not reused.
+                    b.loadConstant(false);
+                }
                 b.storeLocal(pendingRequestVar);
             }
 
@@ -465,28 +435,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 noPendingException.setLocation();
 
-                if (methodExists(method)) {
-                    // Invoke the server side method.
-                    TypeDesc[] params = getTypeDescs(paramTypes);
-                    b.invokeInterface(remoteType, method.getName(), returnDesc, params);
-                } else if (mLocalInfo == null) {
-                    // Cannot invoke method because interface is malformed.
-                    TypeDesc exType = TypeDesc.forClass(MalformedRemoteObjectException.class);
-                    b.newObject(exType);
-                    b.dup();
-                    b.loadConstant(mMalformedInfoMessage);
-                    b.loadConstant(remoteType);
-                    b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, CLASS_TYPE});
-                    b.throwObject();
-                } else {
-                    // Cannot invoke method because it is unimplemented.
-                    b.newObject(UNIMPLEMENTED_EX_TYPE);
-                    b.dup();
-                    b.loadConstant(method.getSignature());
-                    b.invokeConstructor
-                        (UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
-                    b.throwObject();
-                }
+                // Try to invoke the server side method.
+                invokeMethod(b, method);
 
                 tryEnd = b.createLabel().setLocation();
             }
@@ -600,9 +550,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 genFinished(b, channelVar, doReset, true);
                 b.returnValue(TypeDesc.BOOLEAN);
             }
-
-            ordinal++;
-            entryIndex++;
         }
 
         // For default case, throw a NoSuchMethodException.
@@ -683,6 +630,40 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         }
                                  
         return ci.defineClass(cf);
+    }
+
+    /**
+     * @return return type of method, possibly null
+     */
+    private TypeDesc invokeMethod(CodeBuilder b, RemoteMethod method) {
+        TypeDesc remoteType = TypeDesc.forClass(mType);
+        if (methodExists(method)) {
+            // Invoke the server side method.
+            TypeDesc returnDesc = getTypeDesc(method.getReturnType());
+            List<? extends RemoteParameter> paramTypes = method.getParameterTypes();
+            TypeDesc[] params = getTypeDescs(paramTypes);
+            b.invokeInterface(remoteType, method.getName(), returnDesc, params);
+            return returnDesc;
+        } else if (mLocalInfo == null) {
+            // Cannot invoke method because interface is malformed.
+            TypeDesc exType = TypeDesc.forClass(MalformedRemoteObjectException.class);
+            b.newObject(exType);
+            b.dup();
+            b.loadConstant(mMalformedInfoMessage);
+            b.loadConstant(remoteType);
+            b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, CLASS_TYPE});
+            b.throwObject();
+            return null;
+        } else {
+            // Cannot invoke method because it is unimplemented.
+            b.newObject(UNIMPLEMENTED_EX_TYPE);
+            b.dup();
+            b.loadConstant(method.getSignature());
+            b.invokeConstructor
+                (UNIMPLEMENTED_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
+            b.throwObject();
+            return null;
+        }
     }
 
     private boolean methodExists(RemoteMethod method) {

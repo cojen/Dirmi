@@ -62,7 +62,6 @@ import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteFailure;
-import org.cojen.dirmi.Serialized;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
@@ -212,13 +211,7 @@ public class RemoteIntrospector {
             }
 
             for (RMethod method : methodMap.values()) {
-                if (method.isSerialized()) {
-                    if (method.getParameterTypes().size() > 0) {
-                        throw new IllegalArgumentException
-                            ("Serialized method cannot have any arguments: " +
-                             method.methodDesc());
-                    }
-                } else if (method.isAsynchronous()) {
+                if (method.isAsynchronous()) {
                     if (method.getReturnType() != null) {
                         Class returnType = method.getReturnType().getType();
                         if (Pipe.class == returnType) {
@@ -539,7 +532,6 @@ public class RemoteIntrospector {
 
         private final CallMode mCallMode;
         private final boolean mBatched;
-        private final boolean mSerialized;
 
         private RParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
@@ -567,19 +559,6 @@ public class RemoteIntrospector {
                     mCallMode = null;
                 } else {
                     mCallMode = ann.value();
-                }
-            }
-
-            if (mSerialized = m.isAnnotationPresent(Serialized.class)) {
-                if (mBatched) {
-                    throw new IllegalArgumentException
-                        ("Method cannot be annotated as both @Batched and @Serialized: " +
-                         methodDesc(m));
-                }
-                if (mCallMode != null) {
-                    throw new IllegalArgumentException
-                        ("Method cannot be annotated as both @Asynchronous and @Serialized: " +
-                         methodDesc(m));
                 }
             }
 
@@ -688,10 +667,6 @@ public class RemoteIntrospector {
                 if (ann == null) {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called.
-                } else if (mSerialized) {
-                    throw new IllegalArgumentException
-                        ("Method cannot be annotated with both @RemoteFailure and @Serialized: " +
-                         methodDesc(m));
                 } else {
                     mRemoteFailureException = RParameter.make(ann.exception());
                     mRemoteFailureExceptionDeclared = ann.declared();
@@ -704,10 +679,6 @@ public class RemoteIntrospector {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called. Store min value to indicate this.
                     mTimeout = Long.MIN_VALUE;
-                } else if (mSerialized) {
-                    throw new IllegalArgumentException
-                        ("Method cannot be annotated with both @Serialized and @Timeout: " +
-                         methodDesc(m));
                 } else {
                     long timeout = ann.value();
                     mTimeout = timeout < 0 ? -1 : timeout;
@@ -719,10 +690,6 @@ public class RemoteIntrospector {
                 if (ann == null) {
                     // Use inherited values from RemoteInfo, filled in when
                     // resolve is called.
-                } else if (mSerialized) {
-                    throw new IllegalArgumentException
-                        ("Method cannot be annotated with both @Serialized and @TimeoutUnit: " +
-                         methodDesc(m));
                 } else {
                     TimeUnit unit = ann.value();
                     mTimeoutUnit = (unit == null) ? TimeUnit.MILLISECONDS : unit;
@@ -742,7 +709,6 @@ public class RemoteIntrospector {
 
             mCallMode = existing.mCallMode;
             mBatched = existing.mBatched;
-            mSerialized = existing.mSerialized;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
@@ -799,10 +765,6 @@ public class RemoteIntrospector {
             return mBatched;
         }
 
-        public boolean isSerialized() {
-            return mSerialized;
-        }
-
         public RemoteParameter<? extends Throwable> getRemoteFailureException() {
             return mRemoteFailureException;
         }
@@ -836,7 +798,6 @@ public class RemoteIntrospector {
                     getExceptionTypes().equals(other.getExceptionTypes()) &&
                     (mCallMode == other.mCallMode) &&
                     (mBatched == other.mBatched) &&
-                    (mSerialized == other.mSerialized) &&
                     (mRemoteFailureException == other.getRemoteFailureException()) &&
                     (mRemoteFailureExceptionDeclared == other.isRemoteFailureExceptionDeclared());
             }
@@ -1114,7 +1075,6 @@ public class RemoteIntrospector {
                 digest.writeUTF(mCallMode.name());
             }
             digest.writeBoolean(mBatched);
-            digest.writeBoolean(mSerialized);
             mRemoteFailureException.mixIn(digest);
             digest.writeBoolean(mRemoteFailureExceptionDeclared);
             digest.writeLong(mTimeout);

@@ -112,7 +112,7 @@ class CodeBuilderUtil {
     /**
      * Generates code to read a parameter from an InvocationInput, cast it, and
      * leave it on the stack. Generated code may throw an IOException,
-     * NoSuchObjectException, or ClassNotFoundException.
+     * NoSuchObjectException, ClassNotFoundException, or ClassCastException.
      *
      * @param param type of parameter to read
      * @param invInVar variable which references an InvocationInput instance
@@ -123,6 +123,49 @@ class CodeBuilderUtil {
     {
         TypeDesc type = getTypeDesc(param);
 
+        if (type.isPrimitive() || !param.isUnshared()) {
+            readValue(b, type, invInVar);
+            return;
+        }
+
+        String methodName;
+        TypeDesc methodType;
+        TypeDesc castType;
+
+        if (TypeDesc.STRING == type) {
+            methodName = "readUnsharedString";
+            methodType = type;
+            castType = null;
+        } else {
+            methodName = "readUnshared";
+            methodType = TypeDesc.OBJECT;
+            castType = type;
+        }
+
+        b.loadLocal(invInVar);
+        if (invInVar.getType().toClass().isInterface()) {
+            b.invokeInterface(invInVar.getType(), methodName, methodType, null);
+        } else {
+            b.invokeVirtual(invInVar.getType(), methodName, methodType, null);
+        }
+
+        if (castType != null && castType != TypeDesc.OBJECT) {
+            b.checkCast(type);
+        }
+    }
+
+    /**
+     * Generates code to read a value from an ObjectInput, cast it, and leave
+     * it on the stack. Generated code may throw an IOException,
+     * NoSuchObjectException, ClassNotFoundException, or ClassCastException.
+     *
+     * @param type type of parameter to read
+     * @param inVar variable which references an ObjectInput instance
+     */
+    static void readValue(CodeBuilder b,
+                          TypeDesc type,
+                          LocalVariable inVar)
+    {
         String methodName;
         TypeDesc methodType;
         TypeDesc castType;
@@ -133,24 +176,18 @@ class CodeBuilderUtil {
                 Character.toUpperCase(methodName.charAt(0)) + methodName.substring(1);
             methodType = type;
             castType = null;
-        } else if (param.isUnshared()) {
-            if (TypeDesc.STRING == type) {
-                methodName = "readUnsharedString";
-                methodType = type;
-                castType = null;
-            } else {
-                methodName = "readUnshared";
-                methodType = TypeDesc.OBJECT;
-                castType = type;
-            }
         } else {
             methodName = "readObject";
             methodType = TypeDesc.OBJECT;
             castType = type;
         }
 
-        b.loadLocal(invInVar);
-        b.invokeVirtual(invInVar.getType(), methodName, methodType, null);
+        b.loadLocal(inVar);
+        if (inVar.getType().toClass().isInterface()) {
+            b.invokeInterface(inVar.getType(), methodName, methodType, null);
+        } else {
+            b.invokeVirtual(inVar.getType(), methodName, methodType, null);
+        }
 
         if (castType != null && castType != TypeDesc.OBJECT) {
             b.checkCast(type);
@@ -173,6 +210,46 @@ class CodeBuilderUtil {
     {
         TypeDesc type = getTypeDesc(param);
 
+        if (type.isPrimitive() || !param.isUnshared()) {
+            return writeValue(b, type, invOutVar, paramVar);
+        }
+
+        String methodName;
+        TypeDesc methodType;
+
+        if (TypeDesc.STRING == type) {
+            methodName = "writeUnsharedString";
+            methodType = type;
+        } else {
+            methodName = "writeUnshared";
+            methodType = TypeDesc.OBJECT;
+        }
+
+        b.loadLocal(invOutVar);
+        b.loadLocal(paramVar);
+        if (invOutVar.getType().toClass().isInterface()) {
+            b.invokeInterface(invOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        } else {
+            b.invokeVirtual(invOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        }
+
+        return false;
+    }
+
+    /**
+     * Generates code to write a value to an ObjectOutput. Generated code may
+     * throw an IOException.
+     *
+     * @param type type of parameter to write
+     * @param outVar variable which references an ObjectOutput instance
+     * @param valueVar variable which references value; pass null if on stack
+     * @return true if value was written as shared
+     */
+    static boolean writeValue(CodeBuilder b,
+                              TypeDesc type,
+                              LocalVariable outVar,
+                              LocalVariable valueVar)
+    {
         boolean shared;
         String methodName;
         TypeDesc methodType;
@@ -190,24 +267,23 @@ class CodeBuilderUtil {
                 methodType = type;
                 break;
             }
-        } else if (param.isUnshared()) {
-            shared = false;
-            if (TypeDesc.STRING == type) {
-                methodName = "writeUnsharedString";
-                methodType = type;
-            } else {
-                methodName = "writeUnshared";
-                methodType = TypeDesc.OBJECT;
-            }
         } else {
             shared = true;
             methodName = "writeObject";
             methodType = TypeDesc.OBJECT;
         }
 
-        b.loadLocal(invOutVar);
-        b.loadLocal(paramVar);
-        b.invokeVirtual(invOutVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        b.loadLocal(outVar);
+        if (valueVar == null) {
+            b.swap();
+        } else {
+            b.loadLocal(valueVar);
+        }
+        if (outVar.getType().toClass().isInterface()) {
+            b.invokeInterface(outVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        } else {
+            b.invokeVirtual(outVar.getType(), methodName, null, new TypeDesc[] {methodType});
+        }
 
         return shared;
     }

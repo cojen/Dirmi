@@ -111,8 +111,7 @@ public class StubFactoryGenerator<R extends Remote> {
     private StubFactory<R> generateFactory() {
         Class<? extends R> stubClass = generateStub();
         try {
-            StubFactory<R> factory = new Factory<R>
-                (stubClass.getConstructor(StubSupport.class));
+            StubFactory<R> factory = new Factory<R>(stubClass.getConstructor(StubSupport.class));
             invokeFactoryRefMethod(stubClass, factory);
             return factory;
         } catch (IllegalAccessException e) {
@@ -137,7 +136,7 @@ public class StubFactoryGenerator<R extends Remote> {
         cf.markSynthetic();
         cf.setTarget("1.5");
 
-        // Add fields
+        // Add common fields.
         {
             cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         }
@@ -145,7 +144,7 @@ public class StubFactoryGenerator<R extends Remote> {
         // Add reference to factory.
         addFactoryRefMethod(cf);
 
-        // Add constructor
+        // Add constructor.
         {
             MethodInfo mi = cf.addConstructor(Modifiers.PUBLIC, new TypeDesc[]{STUB_SUPPORT_TYPE});
             CodeBuilder b = new CodeBuilder(mi);
@@ -480,7 +479,7 @@ public class StubFactoryGenerator<R extends Remote> {
             }
         }
 
-        // Methods unimplemented by server throw UnimplementedMethodException
+        // Methods unimplemented by server throw UnimplementedMethodException.
 
         for (RemoteMethod localMethod : mLocalInfo.getRemoteMethods()) {
             List<? extends RemoteParameter> paramList = localMethod.getParameterTypes();

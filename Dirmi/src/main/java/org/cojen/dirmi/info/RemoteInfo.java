@@ -38,18 +38,21 @@ public interface RemoteInfo extends Serializable {
 
     /**
      * Returns the names of all remote interfaces implemented by this
-     * RemoteInfo, in an unmodifiable set.
+     * RemoteInfo, in an unmodifiable set. The set elements are guaranteed to
+     * have a consistent ordering.
      */
     Set<String> getInterfaceNames();
 
     /**
-     * Returns all remote methods in an unmodifiable set.
+     * Returns all remote methods in an unmodifiable set. The set elements are
+     * guaranteed to have a consistent ordering.
      */
     Set<? extends RemoteMethod> getRemoteMethods();
 
     /**
      * Returns all remote methods by the given name in an unmodifiable set. If
-     * no matches, set is empty.
+     * no matches, set is empty. The set elements are guaranteed to have a
+     * consistent ordering.
      *
      * @param name method name to query
      */

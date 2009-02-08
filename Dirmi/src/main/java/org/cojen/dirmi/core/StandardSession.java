@@ -196,7 +196,7 @@ public class StandardSession implements Session {
         mHeldChannelMap = Collections.synchronizedMap(new HashMap<InvocationChannel, Thread>());
 
         // Accept bootstrap request which replies with server and admin objects.
-        mBroker.accept(new AcceptListener<StreamChannel>() {
+        broker.accept(new AcceptListener<StreamChannel>() {
             public void established(StreamChannel channel) {
                 try {
                     InvocationChan chan = new InvocationChan(channel);
@@ -492,8 +492,10 @@ public class StandardSession implements Session {
     }
 
     boolean addSkeleton(VersionedIdentifier objID, Skeleton skeleton) {
-        // FIXME: Handle rare objID collision. Perhaps just make
-        // VersionedIdentifier be 128 bit instead of 64.
+        // FIXME: Handle rare objID collision caused by mixing of remotely
+        // generated ids and locally generated ids for batch calls. Perhaps if
+        // key is composite of objID and typeID, effective number of bits is
+        // 128, and so collision is practically impossible.
 
         // Use lock as a barrier to prevent race condition with close
         // method. Skeletons should not be added to mSkeletons if they are
@@ -700,6 +702,7 @@ public class StandardSession implements Session {
             }
         }
 
+        // FIXME: The connect may block, ignoring any user-specified timeout.
         return new InvocationChan(mBroker.connect());
     }
 

@@ -39,8 +39,6 @@ public interface StubSupport {
     /**
      * Writes request header to prepared channel. Caller chooses to flush
      * output after arguments are written and then reads channel.
-     *
-     * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
     <T extends Throwable> void invoke(Class<T> remoteFailureException,
                                       InvocationChannel channel) throws T;
@@ -48,8 +46,6 @@ public interface StubSupport {
     /**
      * Writes request header to prepared channel. Caller chooses to flush
      * output after arguments are written and then reads channel.
-     *
-     * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
     <T extends Throwable> void invoke(Class<T> remoteFailureException,
                                       InvocationChannel channel,
@@ -58,8 +54,6 @@ public interface StubSupport {
     /**
      * Writes request header to prepared channel. Caller chooses to flush
      * output after arguments are written and then reads channel.
-     *
-     * @throws java.rmi.NoSuchObjectException if support has been disposed
      */
     <T extends Throwable> void invoke(Class<T> remoteFailureException,
                                       InvocationChannel channel,

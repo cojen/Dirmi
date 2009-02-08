@@ -38,9 +38,6 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 return remoteServer;
             }
 
-            public void invokeSerialized(ObjectOutput out) {
-            }
-
             public boolean invoke(int methodId,
                                   InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException

@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.IOException;
-import java.io.ObjectOutput;
 
 import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
@@ -37,14 +36,6 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * Returns the Remote object managed by this Skeleton.
      */
     R getRemoteServer();
-
-    /**
-     * Invoke all serialized methods of the skeleton managed object and write
-     * the results to the given output stream.
-     *
-     * @throws IOException if thrown from output
-     */
-    void invokeSerialized(ObjectOutput out) throws IOException;
 
     /**
      * Invoke a non-serialized method in server-side instance. Any exception
