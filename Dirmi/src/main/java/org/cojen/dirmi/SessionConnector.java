@@ -14,36 +14,38 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.io;
+package org.cojen.dirmi;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 import java.util.concurrent.TimeUnit;
 
 /**
- * 
+ * Connects to remote endpoints and establishes sessions.
  *
  * @author Brian S O'Neill
+ * @see Environment
  */
-public interface Connector<C extends Closeable> {
+public interface SessionConnector {
     /**
-     * @return remote address of connected channels or null if unknown
+     * Returns a new session, blocking until it has been established.
+     */
+    Session connect() throws IOException;
+
+    /**
+     * Returns a new session, blocking until it has been established.
+     *
+     * @throws RemoteTimeoutException
+     */
+    Session connect(long timeout, TimeUnit unit) throws IOException;
+
+    /**
+     * @return remote address of connected sessions or null if unknown
      */
     Object getRemoteAddress();
 
     /**
-     * @return local address of connected channels or null if unknown
+     * @return local address of connected sessions or null if unknown
      */
     Object getLocalAddress();
-
-    /**
-     * Returns a new channel, possibly blocking until it has been established.
-     */
-    C connect() throws IOException;
-
-    /**
-     * Returns a new channel, possibly blocking until it has been established.
-     */
-    C connect(long timeout, TimeUnit unit) throws IOException;
 }

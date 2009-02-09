@@ -23,6 +23,7 @@ import java.io.OutputStream;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.Lock;
 
@@ -135,6 +136,10 @@ public class PipedBroker extends AbstractStreamBroker implements Broker<StreamCh
             }
             throw e;
         }
+    }
+
+    public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
+        return connect();
     }
 
     private void accept(PipedInputStream pin, PipedOutputStream pout) throws IOException {

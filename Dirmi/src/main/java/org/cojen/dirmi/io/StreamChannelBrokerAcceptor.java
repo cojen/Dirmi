@@ -348,6 +348,10 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         }
 
         public StreamChannel connect() throws IOException {
+            return connect(-1, null);
+        }
+
+        public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
             // Quick check to see if closed.
             closeLock().unlock();
 
@@ -357,6 +361,12 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                     // Use a connection which was interrupted earlier.
                     mConnectionsInterrupted--;
                 } else {
+                    // The timeout cannot be applied to the channel write, but
+                    // this isn't expected to be a problem. The message is
+                    // small and almost certain to fit in the send buffer.
+                    // Also, control channel traffic is light. If the control
+                    // channel is not draining, the ping checks will likely
+                    // fail before it fills up to capacity.
                     out.write(OP_CHANNEL_CONNECT);
                     out.writeInt(mBrokerId);
                     out.flush();
@@ -365,7 +375,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
             StreamChannel channel;
             try {
-                channel = mConnectQueue.take();
+                if (timeout < 0) {
+                    channel = mConnectQueue.take();
+                } else {
+                    channel = mConnectQueue.poll(timeout, unit);
+                }
             } catch (InterruptedException e) {
                 synchronized (out) {
                     mConnectionsInterrupted++;

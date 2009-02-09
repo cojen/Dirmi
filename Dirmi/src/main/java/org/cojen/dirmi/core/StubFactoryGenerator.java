@@ -228,30 +228,21 @@ public class StubFactoryGenerator<R extends Remote> {
             final boolean noTimeout = timeout < 0 && timeoutVar == null;
             final LocalVariable originalTimeoutVar = timeoutVar;
 
-            // Create channel for invoking remote method.
+            // Call invoke to write to a free channel.
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
             b.loadConstant(remoteFailureExType);
-            b.invokeInterface(STUB_SUPPORT_TYPE, "prepare", INV_CHANNEL_TYPE,
-                              new TypeDesc[] {CLASS_TYPE});
-            LocalVariable channelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
-            b.storeLocal(channelVar);
-
-            // Call invoke to write to channel.
-            b.loadThis();
-            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
-            b.loadConstant(remoteFailureExType);
-            b.loadLocal(channelVar);
             if (noTimeout) {
-                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", null,
-                                  new TypeDesc[] {CLASS_TYPE, INV_CHANNEL_TYPE});
+                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", INV_CHANNEL_TYPE,
+                                  new TypeDesc[] {CLASS_TYPE});
             } else {
                 timeoutVar = genLoadTimeoutVars
                     (b, true, timeout, timeoutUnit, timeoutType, timeoutVar, timeoutUnitVar);
-                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", null,
-                                  new TypeDesc[] {CLASS_TYPE, INV_CHANNEL_TYPE,
-                                                  timeoutType, TIME_UNIT_TYPE});
+                b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", INV_CHANNEL_TYPE,
+                                  new TypeDesc[] {CLASS_TYPE, timeoutType, TIME_UNIT_TYPE});
             }
+            LocalVariable channelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
+            b.storeLocal(channelVar);
 
             LocalVariable compVar = null;
             if (method.isAsynchronous() && returnDesc != null &&

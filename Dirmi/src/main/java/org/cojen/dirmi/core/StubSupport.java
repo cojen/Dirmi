@@ -32,32 +32,30 @@ import org.cojen.dirmi.Completion;
  */
 public interface StubSupport {
     /**
-     * Returns an InvocationChannel which has nothing written to it yet.
+     * Writes request header to a free channel. Caller chooses to flush output
+     * after arguments are written and then reads channel.
+     *
+     * @return channel for writing arguments and reading response
      */
-    <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureException) throws T;
+    <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureException) throws T;
 
     /**
-     * Writes request header to prepared channel. Caller chooses to flush
-     * output after arguments are written and then reads channel.
+     * Writes request header to a free channel. Caller chooses to flush output
+     * after arguments are written and then reads channel.
+     *
+     * @return channel for writing arguments and reading response
      */
-    <T extends Throwable> void invoke(Class<T> remoteFailureException,
-                                      InvocationChannel channel) throws T;
+    <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureException,
+                                                   long timeout, TimeUnit unit) throws T;
 
     /**
-     * Writes request header to prepared channel. Caller chooses to flush
-     * output after arguments are written and then reads channel.
+     * Writes request header to free channel. Caller chooses to flush output
+     * after arguments are written and then reads channel.
+     *
+     * @return channel for writing arguments and reading response
      */
-    <T extends Throwable> void invoke(Class<T> remoteFailureException,
-                                      InvocationChannel channel,
-                                      long timeout, TimeUnit unit) throws T;
-
-    /**
-     * Writes request header to prepared channel. Caller chooses to flush
-     * output after arguments are written and then reads channel.
-     */
-    <T extends Throwable> void invoke(Class<T> remoteFailureException,
-                                      InvocationChannel channel,
-                                      double timeout, TimeUnit unit) throws T;
+    <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureException,
+                                                   double timeout, TimeUnit unit) throws T;
 
     /**
      * Used by asynchronous methods which return a Future or Completion.

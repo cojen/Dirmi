@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.SocketTimeoutException;
 
 import java.util.Iterator;
 import java.util.Set;
@@ -29,6 +30,7 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -41,6 +43,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
+import org.cojen.dirmi.RemoteTimeoutException;
 
 import org.cojen.dirmi.util.ExceptionUtils;
 
@@ -102,6 +105,24 @@ public class SocketMessageProcessor implements Closeable {
             }
 
             public MessageChannel connect() throws IOException {
+                return connect(-1, null);
+            }
+
+            public MessageChannel connect(long timeout, TimeUnit unit) throws IOException {
+                int timeoutMillis;
+                if (timeout < 0) {
+                    timeoutMillis = -1;
+                } else {
+                    long longMillis = unit.toMillis(timeout);
+                    if (longMillis < 0 || longMillis > Integer.MAX_VALUE) {
+                        timeoutMillis = -1;
+                    } else {
+                        if ((timeoutMillis = (int) longMillis) == 0) {
+                            timeoutMillis = 1;
+                        }
+                    }
+                }
+
                 final SocketChannel channel = SocketChannel.open();
                 channel.socket().setTcpNoDelay(true);
 
@@ -110,7 +131,17 @@ public class SocketMessageProcessor implements Closeable {
                 }
 
                 channel.configureBlocking(true);
-                channel.socket().connect(remoteAddress);
+
+                if (timeoutMillis < 0) {
+                    channel.socket().connect(remoteAddress);
+                } else {
+                    try {
+                        channel.socket().connect(remoteAddress, timeoutMillis);
+                    } catch (SocketTimeoutException e) {
+                        throw new RemoteTimeoutException(timeout, unit);
+                    }
+                }
+
                 channel.configureBlocking(false);
 
                 return new Chan(channel);
@@ -124,7 +155,9 @@ public class SocketMessageProcessor implements Closeable {
         };
     }
 
-    public Acceptor<MessageChannel> newAcceptor(final SocketAddress localAddress) throws IOException {
+    public Acceptor<MessageChannel> newAcceptor(final SocketAddress localAddress)
+        throws IOException
+    {
         if (localAddress == null) {
             throw new IllegalArgumentException();
         }
@@ -705,6 +738,11 @@ public class SocketMessageProcessor implements Closeable {
                 uncaughtException(e2);
             } finally {
                 MessageReceiver receiver = mReceiver;
+                if (receiver == null) {
+                    receiver = mReceiverQueue.poll();
+                } else {
+                    mReceiver = null;
+                }
                 if (receiver != null) {
                     if (e == null) {
                         receiver.closed();

@@ -17,13 +17,18 @@
 package org.cojen.dirmi;
 
 import java.io.Closeable;
+import java.io.InterruptedIOException;
 import java.io.IOException;
+
+import java.nio.channels.ClosedByInterruptException;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -50,15 +55,15 @@ import org.cojen.dirmi.io.StreamChannelConnectorBroker;
 import org.cojen.dirmi.util.ThreadPool;
 
 /**
- * Sharable environment for creating and accepting remote sessions. All
- * sessions created from an environment share an executor.
+ * Sharable environment for connecting and accepting remote sessions. All
+ * sessions established from the same environment instance share an executor.
  *
  * @author Brian S O'Neill
  */
 public class Environment implements Closeable {
-    private final ScheduledExecutorService mExecutor;
+    final ScheduledExecutorService mExecutor;
 
-    private SocketMessageProcessor mMessageProcessor;
+    SocketMessageProcessor mMessageProcessor;
 
     final WeakIdentityMap<Closeable, Object> mCloseableSet;
 
@@ -100,12 +105,142 @@ public class Environment implements Closeable {
     }
 
     /**
-     * Creates two locally connected sessions, which is useful for testing.
+     * Returns a session connector for a remote endpoint. Call {@link
+     * SessionConnector#connect connect} to immediately establish a session.
+     *
+     * @param host required name of remote endpoint
+     * @param port remote port
+     */
+    public SessionConnector newSessionConnector(String host, int port) {
+        return newSessionConnector(new InetSocketAddress(host, port));
+    }
+
+    /**
+     * Returns a session connector for a remote endpoint. Call {@link
+     * SessionConnector#connect connect} to immediately establish a session.
+     *
+     * @param remoteAddress required address of remote endpoint
+     */
+    public SessionConnector newSessionConnector(SocketAddress remoteAddress) {
+        return newSessionConnector(remoteAddress, null);
+    }
+
+    /**
+     * Returns a session connector for a remote endpoint. Call {@link
+     * SessionConnector#connect connect} to immediately establish a session.
+     *
+     * @param remoteAddress required address of remote endpoint
+     * @param localAddress optional address of local bindpoint
+     */
+    public SessionConnector newSessionConnector(SocketAddress remoteAddress,
+                                                SocketAddress localAddress)
+    {
+        return new SocketConnector(remoteAddress, localAddress);
+    }
+
+    /**
+     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
+     * acceptAll} to start automatically accepting sessions.
+     *
+     * @param port port for accepting socket connections
+     */
+    public SessionAcceptor newSessionAcceptor(int port) throws IOException {
+        return newSessionAcceptor(new InetSocketAddress(port));
+    }
+
+    /**
+     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
+     * acceptAll} to start automatically accepting sessions.
+     *
+     * @param localAddress address for accepting socket connections; use null to
+     * automatically select a local address and ephemeral port
+     */
+    public SessionAcceptor newSessionAcceptor(SocketAddress localAddress) throws IOException {
+        Lock lock = closeLock();
+        try {
+            return new StandardSessionAcceptor(this, newBrokerAcceptor(localAddress));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns an acceptor used for asynchronously accepting brokers. Sessions
+     * can be created from brokers by calling the {@link #newSession(Broker,
+     * Object)} method.
+     *
+     * @param localAddress address for accepting socket connections; use null to
+     * automatically select a local address and ephemeral port
+     * @return an acceptor of brokers
+     */
+    private Acceptor<Broker<StreamChannel>> newBrokerAcceptor(SocketAddress localAddress)
+        throws IOException
+    {
+        Lock lock = closeLock();
+        try {
+            Acceptor<StreamChannel> streamAcceptor =
+                new SocketStreamChannelAcceptor(mExecutor, localAddress);
+            Acceptor<Broker<StreamChannel>> brokerAcceptor =
+                new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
+            addToClosableSet(brokerAcceptor);
+            return brokerAcceptor;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Attempts to connect using given broker, blocking until session is
+     * established. Only one session can be created per broker instance.
+     *
+     * @param broker required broker for establishing connections; must always
+     * connect to same remote endpoint
+     */
+    public Session newSession(Broker<StreamChannel> broker) throws IOException {
+        Lock lock = closeLock();
+        try {
+            Session session = new StandardSession(mExecutor, broker);
+            addToClosableSet(session);
+            return session;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Attempts to connect using given broker, blocking until session is
+     * established. Only one session can be created per broker instance.
+     *
+     * @param broker required broker for establishing connections; must always
+     * connect to same remote endpoint
+     * @throws RemoteTimeoutException
+     */
+    public Session newSession(Broker<StreamChannel> broker, long timeout, TimeUnit unit)
+        throws IOException
+    {
+        if (timeout < 0) {
+            return newSession(broker);
+        }
+
+        InterruptTask task = new InterruptTask();
+        Future<?> future = mExecutor.schedule(task, timeout, unit);
+
+        try {
+            return newSession(broker);
+        } catch (IOException e) {
+            throw handleTimeout(e, timeout, unit);
+        } finally {
+            task.cancel(future);
+        }
+    }
+
+    /**
+     * Returns two locally connected sessions.
      *
      * @return two Session objects connected to each other
      * @throws RejectedExecutionException if thread pool is full
      */
-    public Session[] createLocalSessions() {
+    public Session[] newSessionPair() {
         final PipedBroker broker_0, broker_1;
         broker_0 = new PipedBroker(mExecutor);
         try {
@@ -120,7 +255,7 @@ public class Environment implements Closeable {
 
             public synchronized void run() {
                 try {
-                    mSession = createSession(broker_0);
+                    mSession = newSession(broker_0);
                 } catch (IOException e) {
                     mException = e;
                 }
@@ -147,129 +282,13 @@ public class Environment implements Closeable {
 
         final Session session_0, session_1;
         try {
-            session_0 = createSession(broker_1);
+            session_0 = newSession(broker_1);
             session_1 = create.waitForSession();
         } catch (IOException e) {
             throw new AssertionError(e);
         }
 
         return new Session[] {session_0, session_1};
-    }
-
-    /**
-     * Attempts to connect to remote host, blocking until session is
-     * established.
-     *
-     * @param host required name of remote host
-     * @param port remote port
-     */
-    public Session createSession(String host, int port) throws IOException {
-        return createSession(new InetSocketAddress(host, port));
-    }
-
-    /**
-     * Attempts to connect to remote host, blocking until session is
-     * established.
-     *
-     * @param remoteAddress required address of remote host
-     */
-    public Session createSession(SocketAddress remoteAddress) throws IOException {
-        return createSession(remoteAddress, null);
-    }
-
-    /**
-     * Attempts to connect to remote host, blocking until session is
-     * established.
-     *
-     * @param remoteAddress required address of remote host
-     * @param localAddress optional address of local host
-     */
-    public Session createSession(SocketAddress remoteAddress, SocketAddress localAddress)
-        throws IOException
-    {
-        Lock lock = closeLock();
-        try {
-            SocketMessageProcessor processor = messageProcessor();
-            MessageChannel channel = processor.newConnector(remoteAddress, localAddress).connect();
-            Connector<StreamChannel> connector =
-                new SocketStreamChannelConnector(mExecutor, remoteAddress, localAddress);
-            Broker<StreamChannel> broker =
-                new StreamChannelConnectorBroker(mExecutor, channel, connector);
-            return createSession(broker);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Attempts to connect using given broker, blocking until session is
-     * established. Only one session can be created per broker instance.
-     *
-     * @param broker required broker for establishing connections; must always
-     * connect to same remote host
-     */
-    public Session createSession(Broker<StreamChannel> broker) throws IOException {
-        Lock lock = closeLock();
-        try {
-            Session session = new StandardSession(mExecutor, broker);
-            addToClosableSet(session);
-            return session;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
-     * acceptAll} to start automatically accepting sessions.
-     *
-     * @param port port for accepting socket connections
-     */
-    public SessionAcceptor createSessionAcceptor(int port) throws IOException {
-        return createSessionAcceptor(new InetSocketAddress(port));
-    }
-
-    /**
-     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
-     * acceptAll} to start automatically accepting sessions.
-     *
-     * @param localAddress address for accepting socket connections; use null to
-     * automatically select a local address and ephemeral port
-     */
-    public SessionAcceptor createSessionAcceptor(SocketAddress localAddress)
-        throws IOException
-    {
-        Lock lock = closeLock();
-        try {
-            return new StandardSessionAcceptor(this, createBrokerAcceptor(localAddress));
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Returns an acceptor used for asynchronously accepting brokers. Sessions
-     * can be created from brokers by calling the {@link #createSession(Broker,
-     * Object)} method.
-     *
-     * @param localAddress address for accepting socket connections; use null to
-     * automatically select a local address and ephemeral port
-     * @return an acceptor of brokers
-     */
-    private Acceptor<Broker<StreamChannel>> createBrokerAcceptor(SocketAddress localAddress)
-        throws IOException
-    {
-        Lock lock = closeLock();
-        try {
-            Acceptor<StreamChannel> streamAcceptor =
-                new SocketStreamChannelAcceptor(mExecutor, localAddress);
-            Acceptor<Broker<StreamChannel>> brokerAcceptor =
-                new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
-            addToClosableSet(brokerAcceptor);
-            return brokerAcceptor;
-        } finally {
-            lock.unlock();
-        }
     }
 
     /**
@@ -281,7 +300,7 @@ public class Environment implements Closeable {
 
     /**
      * Closes all existing sessions and then shuts down the thread pool. New
-     * sessions cannot be created.
+     * sessions cannot be established.
      */
     public void close() throws IOException {
         Lock lock = mCloseLock.writeLock();
@@ -350,12 +369,119 @@ public class Environment implements Closeable {
         }
     }
 
-    private synchronized SocketMessageProcessor messageProcessor() throws IOException {
+    synchronized SocketMessageProcessor messageProcessor() throws IOException {
         SocketMessageProcessor processor = mMessageProcessor;
         if (processor == null) {
             mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
             addToClosableSet(processor);
         }
         return processor;
+    }
+
+    static IOException handleTimeout(Exception e, long timeout, TimeUnit unit) {
+        if (e instanceof RemoteTimeoutException) {
+            return (RemoteTimeoutException) e;
+        }
+
+        if (e instanceof InterruptedException ||
+            e instanceof InterruptedIOException ||
+            e instanceof ClosedByInterruptException)
+        {
+            return new RemoteTimeoutException(timeout, unit);
+        }
+
+        Throwable cause = e.getCause();
+
+        while (cause != null && cause instanceof Exception) {
+            IOException newEx = handleTimeout((Exception) cause, timeout, unit);
+            if (newEx instanceof RemoteTimeoutException) {
+                return newEx;
+            }
+            cause = cause.getCause();
+        }
+
+        if (e instanceof IOException) {
+            return (IOException) e;
+        }
+
+        IOException ioe = new IOException(e.toString());
+        ioe.initCause(e);
+        return ioe;
+    }
+
+    private class SocketConnector implements SessionConnector {
+        private final SocketAddress mRemoteAddress;
+        private final SocketAddress mLocalAddress;
+
+        SocketConnector(SocketAddress remoteAddress, SocketAddress localAddress) {
+            if (remoteAddress == null) {
+                throw new IllegalArgumentException("Must provide a remote address");
+            }
+            mRemoteAddress = remoteAddress;
+            mLocalAddress = localAddress;
+        }
+
+        public Session connect() throws IOException {
+            Lock lock = closeLock();
+            try {
+                SocketMessageProcessor processor = messageProcessor();
+                MessageChannel channel =
+                    processor.newConnector(mRemoteAddress, mLocalAddress).connect();
+                Connector<StreamChannel> connector =
+                    new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
+                Broker<StreamChannel> broker =
+                    new StreamChannelConnectorBroker(mExecutor, channel, connector);
+                return newSession(broker);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public Session connect(long timeout, TimeUnit unit) throws IOException {
+            if (timeout < 0) {
+                return connect();
+            }
+
+            InterruptTask task = new InterruptTask();
+            Future<?> future = mExecutor.schedule(task, timeout, unit);
+
+            try {
+                return connect();
+            } catch (IOException e) {
+                throw handleTimeout(e, timeout, unit);
+            } finally {
+                task.cancel(future);
+            }
+        }
+
+        public Object getRemoteAddress() {
+            return mRemoteAddress;
+        }
+
+        public Object getLocalAddress() {
+            return mLocalAddress;
+        }
+    }
+
+    private static class InterruptTask implements Runnable {
+        private final Thread mThread;
+        private boolean mCancel;
+
+        InterruptTask() {
+            mThread = Thread.currentThread();
+        }
+
+        public synchronized void run() {
+            if (!mCancel) {
+                mThread.interrupt();
+            }
+        }
+
+        synchronized void cancel(Future<?> future) {
+            mCancel = true;
+            future.cancel(false);
+            // Clear interrupted status.
+            Thread.interrupted();
+        }
     }
 }

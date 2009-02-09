@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.Lock;
 
@@ -171,6 +172,10 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
     }
 
     public StreamChannel connect() throws IOException {
+        return connect(-1, null);
+    }
+
+    public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
         // Quick check to see if closed.
         closeLock().unlock();
 
@@ -178,7 +183,15 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
         StreamChannel channel = null;
 
         try {
-            channel = mConnector.connect();
+            if (timeout < 0) {
+                channel = mConnector.connect();
+            } else {
+                channel = mConnector.connect(timeout, unit);
+            }
+
+            // The timeout cannot be applied to the channel write, but this
+            // isn't expected to be a problem. The message is small and almost
+            // certain to fit in the send buffer.
             DataOutputStream out = new DataOutputStream(channel.getOutputStream());
             out.write(OP_CHANNEL_CONNECTED_DIRECT);
             out.writeInt(brokerId());

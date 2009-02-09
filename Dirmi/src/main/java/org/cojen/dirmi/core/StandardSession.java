@@ -683,7 +683,10 @@ public class StandardSession implements Session {
         }
     }
 
-    InvocationChannel getChannel() throws IOException {
+    /**
+     * @return null if none available
+     */
+    InvocationChannel getPooledChannel() throws IOException {
         if (mClosing) {
             String message = mCloseMessage;
             if (message != null) {
@@ -702,8 +705,7 @@ public class StandardSession implements Session {
             }
         }
 
-        // FIXME: The connect may block, ignoring any user-specified timeout.
-        return new InvocationChan(mBroker.connect());
+        return null;
     }
 
     void holdLocalChannel(InvocationChannel channel) {
@@ -1156,7 +1158,7 @@ public class StandardSession implements Session {
         public boolean startTimeout(long timeout, TimeUnit unit) throws IOException {
             TimeoutTask task = new TimeoutTask();
             // Needs to be synchronized to prevent race with execution of task
-            // not know its corresponding future. This blocks task execution
+            // not knowing its corresponding future. This blocks task execution
             // until future is set.
             synchronized (task) {
                 try {
@@ -1425,10 +1427,10 @@ public class StandardSession implements Session {
             // Design note: Using a regular Identifier for the type to factory
             // mapping avoids collisions with stub factories which might be
             // registered against the same id. Stub factories are registered
-            // with VersionedIdentifier, which uses a separate the cache. Also,
-            // the distributed garbage collector is not involved with
-            // reclaiming skeleton factories for batch methods, and so the use
-            // of VersionedIdentifier adds no value.
+            // with VersionedIdentifier, which uses a separate cache. Also, the
+            // distributed garbage collector is not involved with reclaiming
+            // skeleton factories for batch methods, and so the use of
+            // VersionedIdentifier adds no value.
 
             SkeletonFactory factory = lookup(mRemoteSkeletonFactories, typeID);
             if (factory == null) {
@@ -1501,69 +1503,57 @@ public class StandardSession implements Session {
             mObjID = VersionedIdentifier.identify(this);
         }
 
-        public <T extends Throwable> InvocationChannel prepare(Class<T> remoteFailureEx)
-            throws T
-        {
+        public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx) throws T {
+            InvocationChannel channel;
             try {
-                return getChannel();
+                channel = getChannel();
             } catch (IOException e) {
                 throw failed(remoteFailureEx, null, e);
             }
-        }
 
-        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
-                                                 InvocationChannel channel)
-            throws T
-        {
             try {
                 mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
+
+            return channel;
         }
 
-        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
-                                                 InvocationChannel channel,
-                                                 long timeout, TimeUnit unit)
+        public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx,
+                                                              long timeout, TimeUnit unit)
             throws T
         {
             if (timeout <= 0) {
                 if (timeout < 0) {
-                    invoke(remoteFailureEx, channel);
-                    return;
+                    return invoke(remoteFailureEx);
                 } else {
                     // Fail immediately if zero timeout.
-                    throw failed(remoteFailureEx, channel,
-                                 new RemoteTimeoutException(timeout, unit));
+                    throw failed(remoteFailureEx, null, new RemoteTimeoutException(timeout, unit));
                 }
             }
 
-            try {
-                channel.startTimeout(timeout, unit);
-            } catch (IOException e) {
-                throw failed(remoteFailureEx, channel, e);
-            }
+            InvocationChannel channel = getChannel(remoteFailureEx, timeout, unit);
 
             try {
                 mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
+
+            return channel;
         }
 
-        public <T extends Throwable> void invoke(Class<T> remoteFailureEx,
-                                                 InvocationChannel channel,
-                                                 double timeout, TimeUnit unit)
+        public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx,
+                                                              double timeout, TimeUnit unit)
             throws T
         {
             if (timeout <= 0) {
                 if (timeout < 0) {
-                    invoke(remoteFailureEx, channel);
-                    return;
+                    return invoke(remoteFailureEx);
                 } else {
                     // Fail immediately if zero timeout.
-                    throw failed(remoteFailureEx, channel,
-                                 new RemoteTimeoutException(timeout, unit));
+                    throw failed(remoteFailureEx, null, new RemoteTimeoutException(timeout, unit));
                 }
             }
 
@@ -1598,17 +1588,16 @@ public class StandardSession implements Session {
 
             long nanoTimeout = (long) (timeout * factor);
 
-            try {
-                channel.startTimeout(nanoTimeout, TimeUnit.NANOSECONDS);
-            } catch (IOException e) {
-                throw failed(remoteFailureEx, channel, e);
-            }
+            InvocationChannel channel = getChannel
+                (remoteFailureEx, nanoTimeout, TimeUnit.NANOSECONDS);
 
             try {
                 mObjID.writeWithNextVersion((DataOutput) channel.getOutputStream());
             } catch (IOException e) {
                 throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
+
+            return channel;
         }
 
         public <V> Completion<V> createCompletion() {
@@ -1751,6 +1740,51 @@ public class StandardSession implements Session {
                 cause = new RemoteTimeoutException(timeout, unit);
             }
             return failed(remoteFailureEx, channel, cause);
+        }
+
+        private InvocationChannel getChannel() throws IOException {
+            InvocationChannel channel = getPooledChannel();
+            if (channel != null) {
+                return channel;
+            }
+            return new InvocationChan(mBroker.connect());
+        }
+
+        private <T extends Throwable> InvocationChannel getChannel(Class<T> remoteFailureEx,
+                                                                   long timeout, TimeUnit unit)
+            throws T
+        {
+            InvocationChannel channel;
+            try {
+                channel = getPooledChannel();
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, null, e);
+            }
+
+            if (channel == null) {
+                try {
+                    if (timeout < 0) {
+                        channel = new InvocationChan(mBroker.connect());
+                    } else {
+                        long startNanos = System.nanoTime();
+                        channel = new InvocationChan(mBroker.connect(timeout, unit));
+                        long elapsedNanos = System.nanoTime() - startNanos;
+                        if ((timeout -= unit.convert(elapsedNanos, TimeUnit.NANOSECONDS)) < 0) {
+                            timeout = 0;
+                        }
+                    }
+                } catch (IOException e) {
+                    throw failed(remoteFailureEx, null, e);
+                }
+            }
+
+            try {
+                channel.startTimeout(timeout, unit);
+            } catch (IOException e) {
+                throw failed(remoteFailureEx, channel, e);
+            }
+
+            return channel;
         }
 
         public int stubHashCode() {

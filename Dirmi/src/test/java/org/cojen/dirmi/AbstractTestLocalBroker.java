@@ -80,7 +80,7 @@ public abstract class AbstractTestLocalBroker {
 
             public synchronized void run() {
                 try {
-                    session = env.createSession(remoteBroker);
+                    session = env.newSession(remoteBroker);
                 } catch (IOException e) {
                     exception = e;
                 }
@@ -101,7 +101,7 @@ public abstract class AbstractTestLocalBroker {
         RemoteCreate rc = new RemoteCreate();
         env.executor().execute(rc);
 
-        localSession = env.createSession(localBroker);
+        localSession = env.newSession(localBroker);
         remoteSession = rc.waitForSession();
 
         localSession.send(createLocalServer());

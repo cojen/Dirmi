@@ -104,7 +104,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
 
         public void established(Broker<StreamChannel> broker) {
             try {
-                mListener.established(mEnv.createSession(broker));
+                mListener.established(mEnv.newSession(broker));
             } catch (IOException e) {
                 try {
                     broker.close();
@@ -137,7 +137,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
                 mBrokerAcceptor.accept(this);
             }
             try {
-                mEnv.createSession(broker).send(mShared);
+                mEnv.newSession(broker).send(mShared);
             } catch (IOException e) {
                 try {
                     broker.close();

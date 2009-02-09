@@ -194,7 +194,7 @@ public class ClientDriver implements Driver {
                 }
             }
 
-            session = mEnvironment.createSession(host, port);
+            session = mEnvironment.newSessionConnector(host, port).connect();
             mSessions.put(key, session);
         } finally {
             mSessionsLock.writeLock().unlock();

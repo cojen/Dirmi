@@ -20,8 +20,12 @@ import java.io.IOException;
 
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.SocketTimeoutException;
 
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import org.cojen.dirmi.RemoteTimeoutException;
 
 /**
  * 
@@ -56,16 +60,41 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
     }
 
     public StreamChannel connect() throws IOException {
+        return connect(-1, null);
+    }
+
+    public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
         StreamChannel channel = mPool.dequeue();
         if (channel != null) {
             return channel;
+        }
+
+        if (timeout == 0) {
+            throw new RemoteTimeoutException(timeout, unit);
         }
 
         Socket socket = createSocket();
         if (mLocalAddress != null) {
             socket.bind(mLocalAddress);
         }
-        socket.connect(mRemoteAddress);
+
+        if (timeout < 0) {
+            socket.connect(mRemoteAddress);
+        } else {
+            long millis = unit.toMillis(timeout);
+            if (millis <= 0) {
+                throw new RemoteTimeoutException(timeout, unit);
+            } else if (millis > Integer.MAX_VALUE) {
+                socket.connect(mRemoteAddress);
+            } else {
+                try {
+                    socket.connect(mRemoteAddress, (int) millis);
+                } catch (SocketTimeoutException e) {
+                    throw new RemoteTimeoutException(timeout, unit);
+                }
+            }
+        }
+
         socket.setTcpNoDelay(true);
 
         channel = new SocketStreamChannel(socket);

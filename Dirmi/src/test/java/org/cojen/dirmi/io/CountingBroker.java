@@ -25,6 +25,8 @@ import java.io.OutputStream;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Broker which counts all bytes sent and received by all channels.
  *
@@ -42,6 +44,10 @@ public class CountingBroker implements Broker<StreamChannel> {
 
     public StreamChannel connect() throws IOException {
         return new CountingChannel(mBroker.connect(), mRead, mWritten);
+    }
+
+    public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
+        return new CountingChannel(mBroker.connect(timeout, unit), mRead, mWritten);
     }
 
     public void accept(final AcceptListener<StreamChannel> listener) {
