@@ -491,9 +491,14 @@ public class RemoteIntrospector {
 
             mId = id;
 
-            // Finally, assign method ids using info id as a base.
+            // Finally, assign method ids using a portion of the secure hash as
+            // a base. Even if a collision exists in the 64-bit identifier,
+            // method ids might not collide.
 
-            int methodId = ((int) (id >> 32)) + (int) id;
+            int methodId = 0;
+            for (int i=0; i<4; i++) {
+                methodId ^= (hash[i] & 0xff) << ((i & 3) << 3);
+            }
 
             for (RMethod method : mMethods) {
                 if (method.isAsynchronous()) {
