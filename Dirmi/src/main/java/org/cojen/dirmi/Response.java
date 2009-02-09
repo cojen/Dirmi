@@ -26,6 +26,27 @@ import java.util.concurrent.TimeUnit;
  * Generates responses for {@link Asynchronous} or {@link Batched} methods
  * which return a {@link Completion} or {@link Future}.
  *
+ * <pre>
+ * public interface MyService extends Remote {
+ *     &#64;Asynchronous
+ *     Completion&lt;Results&gt; performAnalysis(Object params) throws RemoteException;
+ *
+ *     ...
+ * }
+ *
+ * public class MyServiceImpl implements MyService {
+ *     public Completion&lt;Results&gt; performAnalysis(Object params) {
+ *         try {
+ *             Results results;
+ *             ...
+ *             <b>return Response.complete(results);</b>
+ *         } catch (Exception e) {
+ *             <b>return Response.exception(e);</b>
+ *         }
+ *     }
+ * }
+ * </pre>
+ *
  * @author Brian S O'Neill
  */
 public class Response {
