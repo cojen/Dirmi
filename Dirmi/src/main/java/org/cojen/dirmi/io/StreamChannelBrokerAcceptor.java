@@ -24,7 +24,6 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.util.Collections;
 import java.util.Set;
 import java.util.HashSet;
 
@@ -68,7 +67,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         mBrokerMap = new IntHashMap<TheBroker>();
         mBrokerListenerQueue = new LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>>();
         mExecutor = executor;
-        mAcceptedChannels = Collections.synchronizedSet(new HashSet<StreamChannel>());
+        mAcceptedChannels = new HashSet<StreamChannel>();
         mCloseLock = new ReentrantReadWriteLock(true);
 
         acceptor.accept(new AcceptListener<StreamChannel>() {
@@ -82,7 +81,9 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                 try {
                     Lock lock = closeLock();
                     try {
-                        mAcceptedChannels.add(channel);
+                        synchronized (mAcceptedChannels) {
+                            mAcceptedChannels.add(channel);
+                        }
                     } finally {
                         lock.unlock();
                     }
@@ -183,7 +184,9 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                         }
                     }
                 } finally {
-                    mAcceptedChannels.remove(channel);
+                    synchronized (mAcceptedChannels) {
+                        mAcceptedChannels.remove(channel);
+                    }
                 }
             }
 
@@ -266,10 +269,12 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                 mBrokerMap.clear();
             }
 
-            for (StreamChannel channel : mAcceptedChannels) {
-                channel.disconnect();
+            synchronized (mAcceptedChannels) {
+                for (StreamChannel channel : mAcceptedChannels) {
+                    channel.disconnect();
+                }
+                mAcceptedChannels.clear();
             }
-            mAcceptedChannels.clear();
 
             if (exception != null) {
                 throw exception;
