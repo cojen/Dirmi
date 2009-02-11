@@ -24,6 +24,10 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.util.Collections;
+import java.util.Set;
+import java.util.HashSet;
+
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -51,6 +55,9 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
     final ScheduledExecutorService mExecutor;
 
+    // Set of channels which haven't yet been assigned to a broker yet.
+    final Set<StreamChannel> mAcceptedChannels;
+
     private final ReadWriteLock mCloseLock;
     private boolean mClosed;
 
@@ -61,6 +68,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         mBrokerMap = new IntHashMap<TheBroker>();
         mBrokerListenerQueue = new LinkedBlockingQueue<AcceptListener<Broker<StreamChannel>>>();
         mExecutor = executor;
+        mAcceptedChannels = Collections.synchronizedSet(new HashSet<StreamChannel>());
         mCloseLock = new ReentrantReadWriteLock(true);
 
         acceptor.accept(new AcceptListener<StreamChannel>() {
@@ -72,6 +80,13 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                 TheBroker broker;
 
                 try {
+                    Lock lock = closeLock();
+                    try {
+                        mAcceptedChannels.add(channel);
+                    } finally {
+                        lock.unlock();
+                    }
+
                     DataInputStream in = new DataInputStream(channel.getInputStream());
                     op = in.readByte();
 
@@ -94,7 +109,7 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                             throw e;
                         }
 
-                        Lock lock = closeLock();
+                        lock = closeLock();
                         try {
                             AcceptListener<Broker<StreamChannel>> listener = pollListener();
                             if (listener != null) {
@@ -167,6 +182,8 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                             listener.failed(e);
                         }
                     }
+                } finally {
+                    mAcceptedChannels.remove(channel);
                 }
             }
 
@@ -248,6 +265,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                 }
                 mBrokerMap.clear();
             }
+
+            for (StreamChannel channel : mAcceptedChannels) {
+                channel.disconnect();
+            }
+            mAcceptedChannels.clear();
 
             if (exception != null) {
                 throw exception;
