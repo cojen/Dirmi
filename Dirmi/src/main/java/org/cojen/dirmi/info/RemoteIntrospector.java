@@ -547,6 +547,11 @@ public class RemoteIntrospector {
         private transient Method mMethod;
 
         RMethod(Method m) {
+            if (!Modifier.isPublic(m.getModifiers())) {
+                throw new IllegalArgumentException
+                    ("Remote method must be public: " + methodDesc(m));
+            }
+
             mName = m.getName();
 
             if (m.isAnnotationPresent(Batched.class)) {
@@ -575,6 +580,10 @@ public class RemoteIntrospector {
             if (returnType == null) {
                 mReturnType = null;
             } else {
+                if (!Modifier.isPublic(returnType.getModifiers())) {
+                    throw new IllegalArgumentException
+                        ("Remote method return type must be public: " + methodDesc(m));
+                }
                 mReturnType = RParameter.make(returnType, mCallMode != null);
             }
 
@@ -593,6 +602,12 @@ public class RemoteIntrospector {
 
                 for (int i=0; i<paramsTypes.length; i++) {
                     Class paramType = paramsTypes[i];
+
+                    if (!Modifier.isPublic(paramType.getModifiers())) {
+                        throw new IllegalArgumentException
+                            ("Remote method parameter types must be public: " + methodDesc(m));
+                    }
+
                     Annotation[] paramAnns = paramsAnns[i];
 
                     if (paramAnns != null) {
@@ -662,6 +677,11 @@ public class RemoteIntrospector {
             } else {
                 SortedSet<RParameter<Throwable>> set = new TreeSet<RParameter<Throwable>>();
                 for (Class exceptionType : exceptionTypes) {
+                    if (!Modifier.isPublic(exceptionType.getModifiers())) {
+                        throw new IllegalArgumentException
+                            ("Remote method declared exception types must be public: " +
+                             methodDesc(m, exceptionType));
+                    }
                     set.add(RParameter.make(exceptionType));
                 }
                 mExceptionTypes = Collections.unmodifiableSortedSet(set);
@@ -981,6 +1001,11 @@ public class RemoteIntrospector {
             Class<? extends Throwable> failExClass = mRemoteFailureException.getType();
 
             if (!failExClass.isAssignableFrom(RemoteException.class)) {
+                if (!Modifier.isPublic(failExClass.getModifiers())) {
+                    throw new IllegalArgumentException
+                        ("Remote failure exception must be public: " + failExClass.getName());
+                }
+
                 // Check for valid constructor.
                 validCheck: {
                     if (validExceptions.contains(failExClass)) {
