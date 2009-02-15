@@ -27,7 +27,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.io.OutputStream;
-import java.io.Serializable;
 import java.io.WriteAbortedException;
 
 import java.lang.ref.PhantomReference;
@@ -1351,7 +1350,18 @@ public class StandardSession implements Session {
 
         @Override
         protected Object replaceObject(Object obj) throws IOException {
-            if (obj instanceof Remote && !(obj instanceof Serializable)) {
+            if (obj instanceof Remote) {
+                // Note: If the object is also Serializable, still treat it as
+                // Remote. This behavior is different from Java RMI, which
+                // requires that an object must be explicitly exported as
+                // Remote. As such, an object which is both Remote or
+                // Serializable can assume different roles. Dirmi does not
+                // allow this. From a security perspective, this is safer. If a
+                // server received a Serializable object when it expected a
+                // Remote object, it might allow client side code to run in the
+                // server. Granted, this assumes that remote class loading is
+                // enabled and client Dirmi code hasn't been tampered with.
+
                 Remote remote = (Remote) obj;
                 VersionedIdentifier objID = VersionedIdentifier.identify(remote);
 
