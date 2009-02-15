@@ -27,6 +27,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.io.WriteAbortedException;
 
 import java.lang.ref.PhantomReference;
@@ -1350,18 +1351,38 @@ public class StandardSession implements Session {
 
         @Override
         protected Object replaceObject(Object obj) throws IOException {
-            if (obj instanceof Remote) {
-                // Note: If the object is also Serializable, still treat it as
-                // Remote. This behavior is different from Java RMI, which
-                // requires that an object must be explicitly exported as
-                // Remote. As such, an object which is both Remote or
-                // Serializable can assume different roles. Dirmi does not
-                // allow this. From a security perspective, this is safer. If a
-                // server received a Serializable object when it expected a
-                // Remote object, it might allow client side code to run in the
-                // server. Granted, this assumes that remote class loading is
-                // enabled and client Dirmi code hasn't been tampered with.
+            /*
+              Replace objects which are Remote but not Serializable. In Java
+              RMI, the user has a choice since objects must be explicitly
+              exported as Remote. Since Dirmi automatically exports Remote
+              objects as they are seen, it has to choose for itself. The
+              options are:
 
+              1. Require explicit Remote object export. This is the same
+                 behavior as Java RMI. While it does give the user more
+                 control, it makes the framework more difficult to use. As a
+                 result, this option is rejected outright.
+
+              2. Favor Remote interface. From a security perspective, this
+                 appears to be safer. If a server received a Serializable
+                 object when it expected a Remote object, it might allow client
+                 side code to run in the server. Granted, this assumes that
+                 remote class loading is enabled and client Dirmi code hasn't
+                 been tampered with.
+
+              3. Favor Serializable interface. If a Remote interface defines a
+                 method whose result never changes per invocation, then it
+                 makes little sense to remotely invoke it. The actual
+                 implementation may instead choose to be Serializable. Methods
+                 which still need to be remotely invoked delegate to a Remote
+                 object which was transported with the Serializable wrapper.
+
+              Because the second option provides no real security and the third
+              option offers an actual performance benefit, the third option is
+              chosen. If an object is Serializable, it cannot be Remote.
+            */
+
+            if (obj instanceof Remote && !(obj instanceof Serializable)) {
                 Remote remote = (Remote) obj;
                 VersionedIdentifier objID = VersionedIdentifier.identify(remote);
 
