@@ -43,7 +43,6 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
 
     private boolean mOpened;
     private int mBrokerId;
-    private IOException mOpenException;
 
     public StreamChannelConnectorBroker(ScheduledExecutorService executor,
                                         MessageChannel controlChannel,
@@ -137,7 +136,6 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
                 if (e == null) {
                     e = new IOException("Closed");
                 }
-                openFailed(e);
                 String message = "Broker is closed";
                 if (e.getMessage() != null) {
                     message = message + ": " + e.getMessage();
@@ -155,12 +153,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
         controlChannel.receive(first);
 
         // Block until broker id has been received.
-        try {
-            brokerId();
-        } catch (IOException e) {
-            ExceptionUtils.addLocalTrace(e);
-            throw e;
-        }
+        brokerId();
     }
 
     public Object getLocalAddress() {
@@ -228,7 +221,9 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
     }
 
     @Override
-    void preClose() {
+    synchronized void preClose() {
+        // Notify any thread blocked waiting for broker id.
+        notifyAll();
     }
 
     @Override
@@ -249,21 +244,12 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
         }
     }
 
-    synchronized void openFailed(IOException e) {
-        if (!mOpened) {
-            mOpenException = e;
-            mOpened = true;
-            notifyAll();
-        }
-    }
-
     synchronized int brokerId() throws IOException {
         try {
             while (!mOpened) {
+                // Quick check to see if closed.
+                closeLock().unlock();
                 wait();
-            }
-            if (mOpenException != null) {
-                throw mOpenException;
             }
             return mBrokerId;
         } catch (InterruptedException e) {

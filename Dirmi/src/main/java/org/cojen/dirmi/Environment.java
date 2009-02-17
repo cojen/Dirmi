@@ -197,14 +197,21 @@ public class Environment implements Closeable {
      * connect to same remote endpoint
      */
     public Session newSession(Broker<StreamChannel> broker) throws IOException {
+        // Creating session can block, so do it without holding close lock.
+
+        addToClosableSet(broker);
+        Session session = new StandardSession(mExecutor, broker);
+
         Lock lock = closeLock();
         try {
-            Session session = new StandardSession(mExecutor, broker);
+            // Let session manage close of broker.
             addToClosableSet(session);
-            return session;
+            removeFromCloseableSet(broker);
         } finally {
             lock.unlock();
         }
+
+        return session;
     }
 
     /**
@@ -369,13 +376,34 @@ public class Environment implements Closeable {
         }
     }
 
-    synchronized SocketMessageProcessor messageProcessor() throws IOException {
-        SocketMessageProcessor processor = mMessageProcessor;
-        if (processor == null) {
-            mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
-            addToClosableSet(processor);
+    void removeFromCloseableSet(Closeable c) {
+        synchronized (mCloseableSet) {
+            mCloseableSet.remove(c);
         }
-        return processor;
+    }
+
+    SocketMessageProcessor messageProcessor() throws IOException {
+        Lock lock = closeLock();
+        try {
+            SocketMessageProcessor processor = mMessageProcessor;
+            if (processor != null) {
+                return processor;
+            }
+        } finally {
+            lock.unlock();
+        }
+
+        (lock = mCloseLock.writeLock()).lock();
+        try {
+            SocketMessageProcessor processor = mMessageProcessor;
+            if (processor == null) {
+                mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
+                addToClosableSet(processor);
+            }
+            return processor;
+        } finally {
+            lock.unlock();
+        }
     }
 
     static IOException handleTimeout(Exception e, long timeout, TimeUnit unit) {
@@ -422,19 +450,28 @@ public class Environment implements Closeable {
         }
 
         public Session connect() throws IOException {
+            // Creating broker can block, so do it without holding close lock.
+
+            SocketMessageProcessor processor = messageProcessor();
+            MessageChannel channel =
+                processor.newConnector(mRemoteAddress, mLocalAddress).connect();
+            addToClosableSet(channel);
+            Connector<StreamChannel> connector =
+                new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
+
+            Broker<StreamChannel> broker =
+                new StreamChannelConnectorBroker(mExecutor, channel, connector);
+
             Lock lock = closeLock();
             try {
-                SocketMessageProcessor processor = messageProcessor();
-                MessageChannel channel =
-                    processor.newConnector(mRemoteAddress, mLocalAddress).connect();
-                Connector<StreamChannel> connector =
-                    new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
-                Broker<StreamChannel> broker =
-                    new StreamChannelConnectorBroker(mExecutor, channel, connector);
-                return newSession(broker);
+                // Let broker manage close of control channel.
+                addToClosableSet(broker);
+                removeFromCloseableSet(channel);
             } finally {
                 lock.unlock();
             }
+
+            return newSession(broker);
         }
 
         public Session connect(long timeout, TimeUnit unit) throws IOException {

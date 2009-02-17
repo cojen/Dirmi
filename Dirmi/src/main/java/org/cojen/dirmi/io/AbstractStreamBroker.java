@@ -389,6 +389,10 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
      */
     abstract void channelClosed(int channelId) throws IOException;
 
+    /**
+     * Called immediately after broker state is set to closed, but immediately
+     * before any actual close activity begins.
+     */
     abstract void preClose() throws IOException;
 
     abstract void closeControlChannel() throws IOException;
