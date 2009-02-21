@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
@@ -222,6 +223,16 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
 
     @Override
     synchronized void preClose() {
+        if (mConnector instanceof Closeable) {
+            // Make sure any pooled connections are closed and recycling is
+            // disabled.
+            try {
+                ((Closeable) mConnector).close();
+            } catch (IOException e) {
+                // Ignore.
+            }
+        }
+
         // Notify any thread blocked waiting for broker id.
         notifyAll();
     }

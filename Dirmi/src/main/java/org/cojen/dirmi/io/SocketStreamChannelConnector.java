@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.net.Socket;
@@ -32,7 +33,7 @@ import org.cojen.dirmi.RemoteTimeoutException;
  *
  * @author Brian S O'Neill
  */
-public class SocketStreamChannelConnector implements Connector<StreamChannel> {
+public class SocketStreamChannelConnector implements Connector<StreamChannel>, Closeable {
     private final ScheduledExecutorService mExecutor;
     private final StreamChannelPool mPool;
     private final SocketAddress mRemoteAddress;
@@ -100,6 +101,10 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel> {
         channel = new SocketStreamChannel(socket);
 
         return new PacketStreamChannel(mExecutor, mPool, channel);
+    }
+
+    public void close() {
+        mPool.close();
     }
 
     @Override

@@ -367,7 +367,7 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                             } catch (IOException e) {
                                 // Ignore.
                             } finally {
-                            channel.disconnect();
+                                channel.disconnect();
                             }
                         }
                     }

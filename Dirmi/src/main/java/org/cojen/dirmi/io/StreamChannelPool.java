@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.util.LinkedList;
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-class StreamChannelPool implements Recycler<StreamChannel> {
+class StreamChannelPool implements Recycler<StreamChannel>, Closeable {
     private static final int POLL_RATE_MILLIS = 5000;
     private static final int MAX_IDLE_MILLIS = 60 * 1000;
 
@@ -39,12 +40,19 @@ class StreamChannelPool implements Recycler<StreamChannel> {
 
     private ScheduledFuture<?> mCloseTask;
 
+    private boolean mClosed;
+
     StreamChannelPool(ScheduledExecutorService executor) {
         mExecutor = executor;
         mPool = new LinkedList<Entry>();
     }
 
     public synchronized void recycled(StreamChannel channel) {
+        if (mClosed) {
+            channel.disconnect();
+            return;
+        }
+
         mPool.add(new Entry(channel));
 
         if (mCloseTask == null) {
@@ -59,6 +67,18 @@ class StreamChannelPool implements Recycler<StreamChannel> {
             } catch (RejectedExecutionException e) {
                 channel.disconnect();
             }
+        }
+    }
+
+    public void close() {
+        LinkedList<Entry> pool;
+        synchronized (this) {
+            mClosed = true;
+            pool = new LinkedList<Entry>(mPool);
+            mPool.clear();
+        }
+        for (Entry entry : pool) {
+            entry.mChannel.disconnect();
         }
     }
 
