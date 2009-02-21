@@ -149,12 +149,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
             }
         };
 
-        ControlReceiver first = new ControlReceiver();
-
-        controlChannel.receive(first);
-
-        // Block until broker id has been received.
-        brokerId();
+        controlChannel.receive(new ControlReceiver());
     }
 
     public Object getLocalAddress() {
@@ -222,7 +217,7 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
     }
 
     @Override
-    synchronized void preClose() {
+    void preClose() {
         if (mConnector instanceof Closeable) {
             // Make sure any pooled connections are closed and recycling is
             // disabled.
@@ -233,8 +228,10 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
             }
         }
 
-        // Notify any thread blocked waiting for broker id.
-        notifyAll();
+        synchronized (this) {
+            // Notify any thread blocked waiting for broker id.
+            notifyAll();
+        }
     }
 
     @Override
