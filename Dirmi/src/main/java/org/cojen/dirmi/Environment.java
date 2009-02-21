@@ -25,14 +25,15 @@ import java.nio.channels.ClosedByInterruptException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.cojen.util.WeakIdentityMap;
 
@@ -61,14 +62,11 @@ import org.cojen.dirmi.util.ThreadPool;
  * @author Brian S O'Neill
  */
 public class Environment implements Closeable {
-    final ScheduledExecutorService mExecutor;
+    private final ScheduledExecutorService mExecutor;
+    private final WeakIdentityMap<Closeable, Object> mCloseableSet;
+    private final AtomicBoolean mClosed;
 
-    SocketMessageProcessor mMessageProcessor;
-
-    final WeakIdentityMap<Closeable, Object> mCloseableSet;
-
-    private final ReadWriteLock mCloseLock;
-    private boolean mClosed;
+    private SocketMessageProcessor mMessageProcessor;
 
     /**
      * Construct environment which uses up to 1000 threads.
@@ -101,7 +99,7 @@ public class Environment implements Closeable {
         }
         mExecutor = executor;
         mCloseableSet = new WeakIdentityMap<Closeable, Object>();
-        mCloseLock = new ReentrantReadWriteLock(true);
+        mClosed = new AtomicBoolean(false);
     }
 
     /**
@@ -156,12 +154,7 @@ public class Environment implements Closeable {
      * automatically select a local address and ephemeral port
      */
     public SessionAcceptor newSessionAcceptor(SocketAddress localAddress) throws IOException {
-        Lock lock = closeLock();
-        try {
-            return new StandardSessionAcceptor(this, newBrokerAcceptor(localAddress));
-        } finally {
-            lock.unlock();
-        }
+        return new StandardSessionAcceptor(this, newBrokerAcceptor(localAddress));
     }
 
     /**
@@ -176,17 +169,13 @@ public class Environment implements Closeable {
     private Acceptor<Broker<StreamChannel>> newBrokerAcceptor(SocketAddress localAddress)
         throws IOException
     {
-        Lock lock = closeLock();
-        try {
-            Acceptor<StreamChannel> streamAcceptor =
-                new SocketStreamChannelAcceptor(mExecutor, localAddress);
-            Acceptor<Broker<StreamChannel>> brokerAcceptor =
-                new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
-            addToClosableSet(brokerAcceptor);
-            return brokerAcceptor;
-        } finally {
-            lock.unlock();
-        }
+        checkClosed();
+        Acceptor<StreamChannel> streamAcceptor =
+            new SocketStreamChannelAcceptor(mExecutor, localAddress);
+        Acceptor<Broker<StreamChannel>> brokerAcceptor =
+            new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
+        addToClosableSet(brokerAcceptor);
+        return brokerAcceptor;
     }
 
     /**
@@ -197,20 +186,9 @@ public class Environment implements Closeable {
      * connect to same remote endpoint
      */
     public Session newSession(Broker<StreamChannel> broker) throws IOException {
-        // Creating session can block, so do it without holding close lock.
-
-        addToClosableSet(broker);
+        checkClosed();
         Session session = new StandardSession(mExecutor, broker);
-
-        Lock lock = closeLock();
-        try {
-            // Let session manage close of broker.
-            addToClosableSet(session);
-            removeFromCloseableSet(broker);
-        } finally {
-            lock.unlock();
-        }
-
+        addToClosableSet(session);
         return session;
     }
 
@@ -310,99 +288,71 @@ public class Environment implements Closeable {
      * sessions cannot be established.
      */
     public void close() throws IOException {
-        Lock lock = mCloseLock.writeLock();
-        lock.lock();
-        try {
-            if (mClosed) {
-                return;
-            }
+        boolean wasClosed = mClosed.getAndSet(true);
 
-            IOException exception = null;
+        IOException exception = null;
 
-            synchronized (mCloseableSet) {
-                for (Closeable c : mCloseableSet.keySet()) {
-                    try {
-                        c.close();
-                    } catch (IOException e) {
-                        if (exception == null) {
-                            exception = e;
-                        }
-                    }
+        // Copy to avoid holding lock during close.
+        List<Closeable> closable;
+        synchronized (mCloseableSet) {
+            closable = new ArrayList<Closeable>(mCloseableSet.keySet());
+            mCloseableSet.clear();
+        }
+
+        for (Closeable c : closable) {
+            try {
+                c.close();
+            } catch (IOException e) {
+                if (exception == null) {
+                    exception = e;
                 }
-
-                mCloseableSet.clear();
             }
+        }
 
+        if (!wasClosed) {
             mExecutor.shutdownNow();
+        }
 
-            mClosed = true;
-
-            if (exception != null) {
-                throw exception;
-            }
-        } finally {
-            lock.unlock();
+        if (exception != null) {
+            throw exception;
         }
     }
 
-    boolean isClosed() {
-        Lock lock = mCloseLock.readLock();
-        lock.lock();
-        try {
-            return mClosed;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    Lock closeLock() throws IOException {
-        Lock lock = mCloseLock.readLock();
-        lock.lock();
-        if (mClosed) {
-            lock.unlock();
+    void checkClosed() throws IOException {
+        if (mClosed.get()) {
             throw new IOException("Environment is closed");
         }
-        return lock;
     }
 
     void addToClosableSet(Closeable c) throws IOException {
-        Lock lock = closeLock();
         try {
             synchronized (mCloseableSet) {
+                checkClosed();
                 mCloseableSet.put(c, "");
             }
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    void removeFromCloseableSet(Closeable c) {
-        synchronized (mCloseableSet) {
-            mCloseableSet.remove(c);
+        } catch (IOException e) {
+            try {
+                c.close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
         }
     }
 
     SocketMessageProcessor messageProcessor() throws IOException {
-        Lock lock = closeLock();
-        try {
-            SocketMessageProcessor processor = mMessageProcessor;
-            if (processor != null) {
-                return processor;
-            }
-        } finally {
-            lock.unlock();
-        }
-
-        (lock = mCloseLock.writeLock()).lock();
-        try {
+        synchronized (mCloseableSet) {
+            checkClosed();
             SocketMessageProcessor processor = mMessageProcessor;
             if (processor == null) {
-                mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
+                try {
+                    mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
+                } catch (RejectedExecutionException e) {
+                    throw new IOException(e.toString(), e);
+                }
                 addToClosableSet(processor);
             }
             return processor;
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -450,27 +400,15 @@ public class Environment implements Closeable {
         }
 
         public Session connect() throws IOException {
-            // Creating broker can block, so do it without holding close lock.
-
+            checkClosed();
             SocketMessageProcessor processor = messageProcessor();
             MessageChannel channel =
                 processor.newConnector(mRemoteAddress, mLocalAddress).connect();
-            addToClosableSet(channel);
             Connector<StreamChannel> connector =
                 new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
-
             Broker<StreamChannel> broker =
                 new StreamChannelConnectorBroker(mExecutor, channel, connector);
-
-            Lock lock = closeLock();
-            try {
-                // Let broker manage close of control channel.
-                addToClosableSet(broker);
-                removeFromCloseableSet(channel);
-            } finally {
-                lock.unlock();
-            }
-
+            addToClosableSet(broker);
             return newSession(broker);
         }
 
