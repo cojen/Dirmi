@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.util;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.LinkedList;
@@ -119,6 +120,10 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     }
 
     public void execute(Runnable command) throws RejectedExecutionException {
+        execute(command, false);
+    }
+
+    private void execute(Runnable command, boolean force) throws RejectedExecutionException {
         if (command == null) {
             throw new NullPointerException("Command is null");
         }
@@ -128,7 +133,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         while (true) {
             find: {
                 synchronized (mPool) {
-                    if (mShutdown) {
+                    if (!force && mShutdown) {
                         throw new RejectedExecutionException("Thread pool is shutdown");
                     }
                     if (mPool.size() > 0) {
@@ -208,14 +213,19 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             mPool.notifyAll();
         }
         synchronized (mScheduledTasks) {
-            mScheduledTasks.clear();
             mScheduledTasks.notifyAll();
         }
     }
 
     public List<Runnable> shutdownNow() {
         shutdown();
-        return Collections.emptyList();
+        List<Runnable> remaining;
+        synchronized (mScheduledTasks) {
+            remaining = new ArrayList<Runnable>(mScheduledTasks);
+            mScheduledTasks.clear();
+            mScheduledTasks.notifyAll();
+        }
+        return remaining;
     }
 
     public boolean isShutdown() {
@@ -335,7 +345,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             if (mScheduledTasks.size() > 0 && mTaskRunner == runner) {
                 runner = new TaskRunner();
                 try {
-                    execute(runner);
+                    execute(runner, true);
                     mTaskRunner = runner;
                 } catch (RejectedExecutionException e) {
                 }
@@ -344,15 +354,13 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     }
 
     boolean canExit(TaskRunner runner) {
-        if (!isShutdown()) {
-            synchronized (mScheduledTasks) {
-                if (mTaskRunner == runner) {
-                    mTaskRunner = null;
-                }
-                if (mTaskRunner == null && mScheduledTasks.size() != 0) {
-                    mTaskRunner = runner;
-                    return false;
-                }
+        synchronized (mScheduledTasks) {
+            if (mTaskRunner == runner) {
+                mTaskRunner = null;
+            }
+            if (mTaskRunner == null && mScheduledTasks.size() != 0) {
+                mTaskRunner = runner;
+                return false;
             }
         }
         return true;
