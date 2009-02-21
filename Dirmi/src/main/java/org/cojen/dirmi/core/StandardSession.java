@@ -94,6 +94,9 @@ import org.cojen.dirmi.util.ExceptionUtils;
  * @author Brian S O'Neill
  */
 public class StandardSession implements Session {
+    static final Object QUEUE_NULL = new Object();
+    static final Object QUEUE_CLOSED = new Object();
+
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 20090205;
 
@@ -338,7 +341,14 @@ public class StandardSession implements Session {
             } else if ((obj = mReceiveQueue.poll(timeout, unit)) == null) {
                 throw new RemoteTimeoutException(timeout, unit);
             }
-            return obj == mReceiveQueue ? null : obj;
+            if (obj == QUEUE_NULL) {
+                return null;
+            } else if (obj == QUEUE_CLOSED) {
+                mReceiveQueue.offer(obj);
+                throw new RemoteException("Session closed");
+            } else {
+                return obj;
+            }
         } catch (RemoteTimeoutException e) {
             throw e;
         } catch (RemoteException e) {
@@ -452,6 +462,9 @@ public class StandardSession implements Session {
             }
 
             mBroker.close();
+
+            // Wake up any thread blocked on receive.
+            mReceiveQueue.offer(QUEUE_CLOSED);
         } finally {
             clearCollections();
             mCloseMessage = message;
@@ -850,8 +863,7 @@ public class StandardSession implements Session {
     private class AdminImpl implements Hidden.Admin {
         public void enqueue(Object obj) throws InterruptedException {
             if (obj == null) {
-                // Use the queue itself to indicate null.
-                obj = mReceiveQueue;
+                obj = QUEUE_NULL;
             }
             mReceiveQueue.put(obj);
         }
@@ -860,8 +872,7 @@ public class StandardSession implements Session {
             throws InterruptedException
         {
             if (obj == null) {
-                // Use the queue itself to indicate null.
-                obj = mReceiveQueue;
+                obj = QUEUE_NULL;
             }
             return mReceiveQueue.offer(obj, timeout, unit);
         }
