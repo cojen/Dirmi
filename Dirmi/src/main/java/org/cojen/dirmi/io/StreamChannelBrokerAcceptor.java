@@ -24,8 +24,9 @@ import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.util.Set;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -254,7 +255,10 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
             }
 
             synchronized (mBrokerMap) {
-                for (Broker broker : mBrokerMap.values()) {
+                Iterator<TheBroker> it = mBrokerMap.values().iterator();
+                while (it.hasNext()) {
+                    Broker broker = it.next();
+                    it.remove();
                     if (broker == null) {
                         continue;
                     }
@@ -266,14 +270,15 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
                         }
                     }
                 }
-                mBrokerMap.clear();
             }
 
             synchronized (mAcceptedChannels) {
-                for (StreamChannel channel : mAcceptedChannels) {
+                Iterator<StreamChannel> it = mAcceptedChannels.iterator();
+                while (it.hasNext()) {
+                    StreamChannel channel = it.next();
+                    it.remove();
                     channel.disconnect();
                 }
-                mAcceptedChannels.clear();
             }
 
             if (exception != null) {
