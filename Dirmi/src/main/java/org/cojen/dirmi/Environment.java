@@ -154,7 +154,7 @@ public class Environment implements Closeable {
      * automatically select a local address and ephemeral port
      */
     public SessionAcceptor newSessionAcceptor(SocketAddress localAddress) throws IOException {
-        return new StandardSessionAcceptor(this, newBrokerAcceptor(localAddress));
+        return StandardSessionAcceptor.create(this, newBrokerAcceptor(localAddress));
     }
 
     /**
@@ -188,7 +188,7 @@ public class Environment implements Closeable {
     public Session newSession(Broker<StreamChannel> broker) throws IOException {
         checkClosed();
         try {
-            Session session = new StandardSession(mExecutor, broker);
+            Session session = StandardSession.create(mExecutor, broker);
             addToClosableSet(session);
             return session;
         } catch (IOException e) {

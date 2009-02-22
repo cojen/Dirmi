@@ -61,6 +61,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.cojen.util.WeakValuedHashMap;
@@ -102,6 +103,9 @@ public class StandardSession implements Session {
 
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
+
+    private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
 
     final Broker<StreamChannel> mBroker;
     final ScheduledExecutorService mExecutor;
@@ -161,14 +165,25 @@ public class StandardSession implements Session {
     final ScheduledFuture<?> mBackgroundTask;
 
     final Object mCloseLock;
-    volatile boolean mClosing;
+    private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
+    volatile int mCloseState;
     String mCloseMessage;
 
     /**
      * @param executor shared executor for remote methods
      * @param broker channel broker must always connect to same remote server
      */
-    public StandardSession(ScheduledExecutorService executor, Broker<StreamChannel> broker)
+    public static Session create(ScheduledExecutorService executor, Broker<StreamChannel> broker)
+        throws IOException
+    {
+        return new SessionRef(new StandardSession(executor, broker));
+    }
+
+    /**
+     * @param executor shared executor for remote methods
+     * @param broker channel broker must always connect to same remote server
+     */
+    private StandardSession(ScheduledExecutorService executor, Broker<StreamChannel> broker)
         throws IOException
     {
         if (broker == null) {
@@ -423,12 +438,12 @@ public class StandardSession implements Session {
         // Use lock as a barrier to prevent race condition with adding entries
         // to mSkeletons.
         synchronized (mCloseLock) {
-            if (mClosing) {
+            if (isClosing()) {
                 return;
             }
             // Null during close.
             mCloseMessage = null;
-            mClosing = true;
+            setCloseState(STATE_CLOSING);
         }
 
         try {
@@ -469,7 +484,30 @@ public class StandardSession implements Session {
             clearCollections();
             mCloseMessage = message;
             // Volatile barrier.
-            mClosing = true;
+            setCloseState(STATE_CLOSING);
+        }
+    }
+
+    boolean isClosing() {
+        return (mCloseState & STATE_CLOSING) != 0;
+    }
+
+    void setCloseState(int mask) {
+        while (true) {
+            int state = mCloseState;
+            if (closeStateUpdater.compareAndSet(this, state, state | mask)) {
+                break;
+            }
+        }
+    }
+
+    // Called by SessionRef.
+    void sessionUnreferenced() {
+        setCloseState(STATE_UNREF);
+        try {
+            mRemoteAdmin.sessionUnreferenced();
+        } catch (RemoteException e) {
+            // Ignore.
         }
     }
 
@@ -515,7 +553,7 @@ public class StandardSession implements Session {
         // going to be immediately unreferenced. Otherwise, there is a
         // possibility that the unreferenced method is not called.
         synchronized (mCloseLock) {
-            if (!mClosing) {
+            if (!isClosing()) {
                 mSkeletons.putIfAbsent(objID, skeleton);
                 return true;
             }
@@ -575,7 +613,7 @@ public class StandardSession implements Session {
             try {
                 mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
             } catch (RemoteException e) {
-                if (!mClosing) {
+                if (!isClosing()) {
                     uncaughtException(e);
                 }
             }
@@ -686,7 +724,7 @@ public class StandardSession implements Session {
                 // input arguments and piled up asynchronous calls.
                 invChannel.close();
             } catch (IOException e) {
-                if (!mClosing) {
+                if (!isClosing()) {
                     uncaughtException(e);
                 }
                 invChannel.disconnect();
@@ -700,7 +738,7 @@ public class StandardSession implements Session {
      * @return null if none available
      */
     InvocationChannel getPooledChannel() throws IOException {
-        if (mClosing) {
+        if (isClosing()) {
             String message = mCloseMessage;
             if (message != null) {
                 throw new IOException(message);
@@ -846,6 +884,12 @@ public class StandardSession implements Session {
                 throws RemoteException;
 
             /**
+             * Notification from client when session is not referenced any more.
+             */
+            @Asynchronous
+            void sessionUnreferenced() throws RemoteException;
+
+            /**
              * Notification from client when explicitly closed.
              */
             @Asynchronous
@@ -956,6 +1000,10 @@ public class StandardSession implements Session {
             }
         }
 
+        public void sessionUnreferenced() {
+            setCloseState(STATE_PEER_UNREF);
+        }
+
         public void closedExplicitly() {
             peerClosed(null);
         }
@@ -1041,6 +1089,19 @@ public class StandardSession implements Session {
                     pooledChannel.disconnect();
                 }
             }
+
+            if (mStubRefs.size() <= 1 && mSkeletons.size() <= 1 &&
+                (mCloseState & (STATE_UNREF | STATE_PEER_UNREF)) != 0)
+            {
+                // Session is completely unreferenced, so close it. The reason
+                // why one stub and skeleton exists is because they are the admin
+                // objects. The admin objects never get released automatically.
+                try {
+                    StandardSession.this.close();
+                } catch (IOException e) {
+                    // Ignore.
+                }
+            }
         }
     }
 
@@ -1058,7 +1119,7 @@ public class StandardSession implements Session {
         }
 
         public void failed(IOException e) {
-            if (!mClosing) {
+            if (!isClosing()) {
                 // This is just noise.
                 //uncaughtException(new IOException("Failure accepting request", e));
                 try {

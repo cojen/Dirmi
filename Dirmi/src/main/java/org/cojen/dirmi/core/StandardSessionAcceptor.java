@@ -43,8 +43,18 @@ public class StandardSessionAcceptor implements SessionAcceptor {
      * @param environment shared environment for creating sessions
      * @param brokerAcceptor accepted brokers must always connect to same remote server
      */
-    public StandardSessionAcceptor(Environment environment,
-                                   Acceptor<Broker<StreamChannel>> brokerAcceptor)
+    public static SessionAcceptor create(Environment environment,
+                                         Acceptor<Broker<StreamChannel>> brokerAcceptor)
+    {
+        return new StandardSessionAcceptor(environment, brokerAcceptor);
+    }
+
+    /**
+     * @param environment shared environment for creating sessions
+     * @param brokerAcceptor accepted brokers must always connect to same remote server
+     */
+    private StandardSessionAcceptor(Environment environment,
+                                    Acceptor<Broker<StreamChannel>> brokerAcceptor)
     {
         mEnv = environment;
         mBrokerAcceptor = brokerAcceptor;
