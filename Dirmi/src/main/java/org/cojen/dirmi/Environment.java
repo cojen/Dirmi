@@ -187,9 +187,18 @@ public class Environment implements Closeable {
      */
     public Session newSession(Broker<StreamChannel> broker) throws IOException {
         checkClosed();
-        Session session = new StandardSession(mExecutor, broker);
-        addToClosableSet(session);
-        return session;
+        try {
+            Session session = new StandardSession(mExecutor, broker);
+            addToClosableSet(session);
+            return session;
+        } catch (IOException e) {
+            try {
+                broker.close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
+        }
     }
 
     /**
@@ -404,12 +413,21 @@ public class Environment implements Closeable {
             SocketMessageProcessor processor = messageProcessor();
             MessageChannel channel =
                 processor.newConnector(mRemoteAddress, mLocalAddress).connect();
-            Connector<StreamChannel> connector =
-                new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
-            Broker<StreamChannel> broker =
-                new StreamChannelConnectorBroker(mExecutor, channel, connector);
-            addToClosableSet(broker);
-            return newSession(broker);
+            try {
+                Connector<StreamChannel> connector =
+                    new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
+                Broker<StreamChannel> broker =
+                    new StreamChannelConnectorBroker(mExecutor, channel, connector);
+                addToClosableSet(broker);
+                return newSession(broker);
+            } catch (IOException e) {
+                try {
+                    channel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
+                throw e;
+            }
         }
 
         public Session connect(long timeout, TimeUnit unit) throws IOException {

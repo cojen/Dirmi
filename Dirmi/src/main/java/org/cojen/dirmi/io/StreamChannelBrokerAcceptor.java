@@ -443,7 +443,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
         void preClose() {
             closed(this);
 
-            mConnectQueue.add(new ClosedStream());
+            try {
+                mConnectQueue.add(new ClosedStream());
+            } catch (NullPointerException e) {
+                // mConnectQueue might not have been assigned.
+            }
 
             try {
                 mPingTask.cancel(true);
@@ -454,7 +458,11 @@ public class StreamChannelBrokerAcceptor implements Acceptor<Broker<StreamChanne
 
         @Override
         void closeControlChannel() throws IOException {
-            mControlChannel.disconnect();
+            try {
+                mControlChannel.disconnect();
+            } catch (NullPointerException e) {
+                // mControlChannel might not have been assigned.
+            }
         }
 
         @Override

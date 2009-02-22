@@ -124,27 +124,36 @@ public class SocketMessageProcessor implements Closeable {
                 }
 
                 final SocketChannel channel = SocketChannel.open();
-                channel.socket().setTcpNoDelay(true);
+                try {
+                    channel.socket().setTcpNoDelay(true);
 
-                if (localAddress != null) {
-                    channel.socket().bind(localAddress);
-                }
-
-                channel.configureBlocking(true);
-
-                if (timeoutMillis < 0) {
-                    channel.socket().connect(remoteAddress);
-                } else {
-                    try {
-                        channel.socket().connect(remoteAddress, timeoutMillis);
-                    } catch (SocketTimeoutException e) {
-                        throw new RemoteTimeoutException(timeout, unit);
+                    if (localAddress != null) {
+                        channel.socket().bind(localAddress);
                     }
+
+                    channel.configureBlocking(true);
+
+                    if (timeoutMillis < 0) {
+                        channel.socket().connect(remoteAddress);
+                    } else {
+                        try {
+                            channel.socket().connect(remoteAddress, timeoutMillis);
+                        } catch (SocketTimeoutException e) {
+                            throw new RemoteTimeoutException(timeout, unit);
+                        }
+                    }
+
+                    channel.configureBlocking(false);
+
+                    return new Chan(channel);
+                } catch (IOException e) {
+                    try {
+                        channel.close();
+                    } catch (IOException e2) {
+                        // Ignore.
+                    }
+                    throw e;
                 }
-
-                channel.configureBlocking(false);
-
-                return new Chan(channel);
             }
 
             @Override

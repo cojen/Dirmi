@@ -32,7 +32,7 @@ class SocketStreamChannel extends AbstractChannel implements StreamChannel {
     private final Socket mSocket;
     private volatile boolean mClosed;
 
-    SocketStreamChannel(Socket socket) throws IOException {
+    SocketStreamChannel(Socket socket) {
         mSocket = socket;
     }
 

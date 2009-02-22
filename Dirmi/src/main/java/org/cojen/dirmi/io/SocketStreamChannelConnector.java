@@ -75,32 +75,41 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
         }
 
         Socket socket = createSocket();
-        if (mLocalAddress != null) {
-            socket.bind(mLocalAddress);
-        }
+        try {
+            if (mLocalAddress != null) {
+                socket.bind(mLocalAddress);
+            }
 
-        if (timeout < 0) {
-            socket.connect(mRemoteAddress);
-        } else {
-            long millis = unit.toMillis(timeout);
-            if (millis <= 0) {
-                throw new RemoteTimeoutException(timeout, unit);
-            } else if (millis > Integer.MAX_VALUE) {
+            if (timeout < 0) {
                 socket.connect(mRemoteAddress);
             } else {
-                try {
-                    socket.connect(mRemoteAddress, (int) millis);
-                } catch (SocketTimeoutException e) {
+                long millis = unit.toMillis(timeout);
+                if (millis <= 0) {
                     throw new RemoteTimeoutException(timeout, unit);
+                } else if (millis > Integer.MAX_VALUE) {
+                    socket.connect(mRemoteAddress);
+                } else {
+                    try {
+                        socket.connect(mRemoteAddress, (int) millis);
+                    } catch (SocketTimeoutException e) {
+                        throw new RemoteTimeoutException(timeout, unit);
+                    }
                 }
             }
+
+            socket.setTcpNoDelay(true);
+
+            channel = new SocketStreamChannel(socket);
+
+            return new PacketStreamChannel(mExecutor, mPool, channel);
+        } catch (IOException e) {
+            try {
+                socket.close();
+            } catch (IOException e2) {
+                // Ignore.
+            }
+            throw e;
         }
-
-        socket.setTcpNoDelay(true);
-
-        channel = new SocketStreamChannel(socket);
-
-        return new PacketStreamChannel(mExecutor, mPool, channel);
     }
 
     public void close() {

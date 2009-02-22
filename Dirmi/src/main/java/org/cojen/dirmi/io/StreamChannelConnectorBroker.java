@@ -207,12 +207,17 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
             // except connector implementation is likely recycling
             // connections: PacketStreamChannel.
             StreamChannel channel = mConnector.connect();
-            DataOutputStream out = new DataOutputStream(channel.getOutputStream());
-            out.write(OP_CHANNEL_CLOSE);
-            out.writeInt(brokerId());
-            out.writeInt(channelId);
-            out.flush();
-            channel.close();
+            try {
+                DataOutputStream out = new DataOutputStream(channel.getOutputStream());
+                out.write(OP_CHANNEL_CLOSE);
+                out.writeInt(brokerId());
+                out.writeInt(channelId);
+                out.flush();
+                channel.close();
+            } catch (IOException e) {
+                channel.disconnect();
+                throw e;
+            }
         }
     }
 
@@ -236,7 +241,11 @@ public class StreamChannelConnectorBroker extends AbstractStreamBroker
 
     @Override
     void closeControlChannel() throws IOException {
-        mControlChannel.close();
+        try {
+            mControlChannel.close();
+        } catch (NullPointerException e) {
+            // mControlChannel might not have been assigned.
+        }
     }
 
     @Override
