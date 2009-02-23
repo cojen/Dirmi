@@ -60,7 +60,7 @@ public interface Session extends Closeable, Flushable {
      * session to be closed.
      *
      * @param obj remote or serializable object to send; can be null
-     * @param timeout how long to wait before closing session, in units of {@code unit}
+     * @param timeout how long to wait before timing out, in units of {@code unit}
      * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
      * @throws RemoteTimeoutException if timeout elapses
      */
@@ -80,7 +80,7 @@ public interface Session extends Closeable, Flushable {
      * remote session. Any non-timeout failure during the receive forces the
      * session to be closed.
      *
-     * @param timeout how long to wait before closing session, in units of {@code unit}
+     * @param timeout how long to wait before timing out, in units of {@code unit}
      * @param unit a {@code TimeUnit} determining how to interpret the {@code timeout} parameter 
      * @return remote or serializable object from remote session; can be null
      * @throws RemoteTimeoutException if timeout elapses
