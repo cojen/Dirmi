@@ -18,10 +18,11 @@ package org.cojen.dirmi.core;
 
 import java.io.IOException;
 
-import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 
 import java.rmi.server.Unreferenced;
+
+import org.cojen.dirmi.NoSuchObjectException;
 
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client

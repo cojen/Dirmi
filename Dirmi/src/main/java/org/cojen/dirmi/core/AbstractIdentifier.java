@@ -22,7 +22,7 @@ import java.io.ObjectStreamException;
 import java.io.OutputStream;
 import java.io.Serializable;
 
-import java.rmi.NoSuchObjectException;
+import org.cojen.dirmi.NoSuchObjectException;
 
 /**
  * Abstract object which uniquely identifies another object.

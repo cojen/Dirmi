@@ -39,7 +39,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
-import java.rmi.NoSuchObjectException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
@@ -71,6 +70,7 @@ import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
+import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.ReconstructedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Response;
@@ -1794,9 +1794,9 @@ public class StandardSession implements Session {
                     message = cause.toString();
                 }
                 if (cause instanceof java.net.ConnectException) {
-                    ex = new java.rmi.ConnectException(message, (Exception) cause);
+                    ex = new org.cojen.dirmi.ConnectException(message, (Exception) cause);
                 } else if (cause instanceof java.net.UnknownHostException) {
-                    ex = new java.rmi.UnknownHostException(message, (Exception) cause);
+                    ex = new org.cojen.dirmi.UnknownHostException(message, (Exception) cause);
                 } else {
                     ex = new RemoteException(message, cause);
                 }
