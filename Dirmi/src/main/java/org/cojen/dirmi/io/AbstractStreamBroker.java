@@ -357,23 +357,24 @@ abstract class AbstractStreamBroker implements Broker<StreamChannel> {
                 exception = e;
             }
 
+            List<ChannelReference> refs;
             synchronized (mChannelMap) {
-                for (ChannelReference ref : mChannelMap.values()) {
-                    if (ref != null) {
-                        StreamChannel channel = ref.get();
-                        if (channel != null) {
-                            try {
-                                channel.getOutputStream().flush();
-                            } catch (IOException e) {
-                                // Ignore.
-                            } finally {
-                                channel.disconnect();
-                            }
+                // Copy to prevent concurrent modification.
+                refs = new ArrayList<ChannelReference>(mChannelMap.values());
+                mChannelMap.clear();
+            }
+
+            for (ChannelReference ref : refs) {
+                if (ref != null) {
+                    StreamChannel channel = ref.get();
+                    if (channel != null) {
+                        try {
+                            channel.close();
+                        } catch (IOException e) {
+                            // Ignore.
                         }
                     }
                 }
-
-                mChannelMap.clear();
             }
 
             if (exception != null) {

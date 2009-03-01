@@ -95,9 +95,6 @@ import org.cojen.dirmi.util.ExceptionUtils;
  * @author Brian S O'Neill
  */
 public class StandardSession implements Session {
-    static final Object QUEUE_NULL = new Object();
-    static final Object QUEUE_CLOSED = new Object();
-
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 20090205;
 
@@ -110,7 +107,7 @@ public class StandardSession implements Session {
     final Broker<StreamChannel> mBroker;
     final ScheduledExecutorService mExecutor;
 
-    final BlockingQueue<Object> mReceiveQueue = new ArrayBlockingQueue<Object>(1);
+    final BlockingQueue<Object> mSendQueue = new ArrayBlockingQueue<Object>(1);
 
     // Queue for reclaimed phantom references.
     final ReferenceQueue<Object> mReferenceQueue;
@@ -316,11 +313,22 @@ public class StandardSession implements Session {
         if (timeout >= 0 && unit == null) {
             throw new NullPointerException("TimeUnit is null");
         }
+        if (isClosing()) {
+            throw new RemoteException("Session closed");
+        }
+        if (obj == null) {
+            obj = new Null();
+        }
         try {
             if (timeout < 0) {
-                mRemoteAdmin.enqueue(obj);
-            } else if (!mRemoteAdmin.enqueue(obj, timeout, unit)) {
+                mSendQueue.put(obj);
+            } else if (!mSendQueue.offer(obj, timeout, unit)) {
                 throw new RemoteTimeoutException(timeout, unit);
+            }
+            if (isClosing()) {
+                // Unblock any other threads blocked on send.
+                while (mSendQueue.poll() != null);
+                throw new RemoteException("Session closed");
             }
         } catch (RemoteException e) {
             try {
@@ -350,18 +358,11 @@ public class StandardSession implements Session {
         try {
             Object obj;
             if (timeout < 0) {
-                obj = mReceiveQueue.take();
-            } else if ((obj = mReceiveQueue.poll(timeout, unit)) == null) {
+                obj = mRemoteAdmin.dequeue();
+            } else if ((obj = mRemoteAdmin.dequeue(timeout, unit)) == null) {
                 throw new RemoteTimeoutException(timeout, unit);
             }
-            if (obj == QUEUE_NULL) {
-                return null;
-            } else if (obj == QUEUE_CLOSED) {
-                mReceiveQueue.offer(obj);
-                throw new RemoteException("Session closed");
-            } else {
-                return obj;
-            }
+            return obj instanceof Null ? null : obj;
         } catch (RemoteException e) {
             try {
                 closeOnFailure("Closed: " + e, e);
@@ -473,14 +474,14 @@ public class StandardSession implements Session {
             }
 
             mBroker.close();
-
-            // Wake up any thread blocked on receive.
-            mReceiveQueue.offer(QUEUE_CLOSED);
         } finally {
             clearCollections();
             mCloseMessage = message;
             // Volatile barrier.
             setCloseState(STATE_CLOSING);
+
+            // Unblock up any threads blocked on send.
+            while (mSendQueue.poll() != null);
         }
     }
 
@@ -818,6 +819,8 @@ public class StandardSession implements Session {
         return remote;
     }
 
+    private static final class Null implements Serializable {}
+
     private static abstract class Ref<T> extends PhantomReference<T> {
         public Ref(T referent, ReferenceQueue queue) {
             super(referent, queue);
@@ -858,9 +861,9 @@ public class StandardSession implements Session {
     private static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
-            void enqueue(Object obj) throws RemoteException, InterruptedException;
+            Object dequeue() throws RemoteException, InterruptedException;
 
-            boolean enqueue(Object obj, @TimeoutParam long timeout, @TimeoutParam TimeUnit unit)
+            Object dequeue(@TimeoutParam long timeout, @TimeoutParam TimeUnit unit)
                 throws RemoteException, InterruptedException;
 
             /**
@@ -901,20 +904,12 @@ public class StandardSession implements Session {
     }
 
     private class AdminImpl implements Hidden.Admin {
-        public void enqueue(Object obj) throws InterruptedException {
-            if (obj == null) {
-                obj = QUEUE_NULL;
-            }
-            mReceiveQueue.put(obj);
+        public Object dequeue() throws InterruptedException {
+            return mSendQueue.take();
         }
 
-        public boolean enqueue(Object obj, long timeout, TimeUnit unit)
-            throws InterruptedException
-        {
-            if (obj == null) {
-                obj = QUEUE_NULL;
-            }
-            return mReceiveQueue.offer(obj, timeout, unit);
+        public Object dequeue(long timeout, TimeUnit unit) throws InterruptedException {
+            return mSendQueue.poll(timeout, unit);
         }
 
         public RemoteInfo getRemoteInfo(VersionedIdentifier typeID) throws NoSuchClassException {
