@@ -28,9 +28,17 @@ public class ReconstructedException extends Exception {
 
     private final Throwable mReconstructCause;
 
-    public ReconstructedException(Throwable reconstructed, Throwable cause) {
+    public ReconstructedException(Throwable reconstructed, Throwable reconstructCause) {
         super(reconstructed);
-        mReconstructCause = cause;
+        mReconstructCause = reconstructCause;
+    }
+
+    /**
+     * Returns the Throwable which was reconstructed.
+     */
+    @Override
+    public Throwable getCause() {
+        return super.getCause();
     }
 
     /**
