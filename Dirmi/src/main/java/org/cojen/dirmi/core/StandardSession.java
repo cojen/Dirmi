@@ -63,10 +63,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.cojen.classfile.TypeDesc;
+
 import org.cojen.util.WeakValuedHashMap;
 import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.Asynchronous;
+import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
@@ -100,6 +103,10 @@ public class StandardSession implements Session {
 
     private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
     private static final int DISPOSE_BATCH = 1000;
+
+    private static final AtomicReferenceFieldUpdater<StandardSession, ClassResolver>
+        classResolverUpdater = AtomicReferenceFieldUpdater.newUpdater
+        (StandardSession.class, ClassResolver.class, "mClassResolver");
 
     private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
         AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
@@ -160,6 +167,8 @@ public class StandardSession implements Session {
     final Map<InvocationChannel, Thread> mHeldChannelMap;
 
     final ScheduledFuture<?> mBackgroundTask;
+
+    volatile ClassResolver mClassResolver;
 
     final Object mCloseLock;
     private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
@@ -377,6 +386,23 @@ public class StandardSession implements Session {
                 // Ignore.
             }
             throw new RemoteException(e.toString(), e);
+        }
+    }
+
+    public void setClassResolver(ClassResolver resolver) {
+        if (resolver == null) {
+            resolver = ClassLoaderResolver.DEFAULT;
+        }
+        if (!classResolverUpdater.compareAndSet(this, null, resolver)) {
+            throw new IllegalStateException("ClassResolver is already set");
+        }
+    }
+
+    public void setClassLoader(ClassLoader loader) {
+        if (loader == null) {
+            setClassResolver(null);
+        } else {
+            setClassResolver(new ClassLoaderResolver(loader));
         }
     }
 
@@ -863,8 +889,8 @@ public class StandardSession implements Session {
         public static interface Admin extends Remote {
             Object dequeue() throws RemoteException, InterruptedException;
 
-            Object dequeue(@TimeoutParam long timeout, @TimeoutParam TimeUnit unit)
-                throws RemoteException, InterruptedException;
+            Object dequeue(@TimeoutParam long timeout, @TimeoutParam TimeUnit unit
+                ) throws RemoteException, InterruptedException;
 
             /**
              * Returns RemoteInfo object from server.
@@ -1315,8 +1341,10 @@ public class StandardSession implements Session {
         }
     }
 
-    // FIXME: Override writeClassDescriptor/readClassDescriptor to write
-    // Identifiers for classes. This reduces the stream serialization overhead.
+    // TODO: Override writeClassDescriptor/readClassDescriptor to write
+    // Identifiers for classes. This reduces the stream serialization
+    // overhead. The protocol version will change when this is implemented, but
+    // the old version should still be supported for backwards compatibility.
 
     private class ResolvingObjectInputStream extends ObjectInputStream {
         ResolvingObjectInputStream(InputStream in) throws IOException {
@@ -1333,9 +1361,37 @@ public class StandardSession implements Session {
         protected Class<?> resolveClass(ObjectStreamClass desc)
             throws IOException, ClassNotFoundException
         {
-            // FIXME: Need configurable ClassLoader.
-            // FIXME: Try to load class from server.
-            return super.resolveClass(desc);
+            String name = desc.getName();
+            if (name.length() == 0) {
+                // This should not happen... let super class deal with it.
+                return super.resolveClass(desc);
+            }
+
+            // Primitive and array types require special attention.
+
+            TypeDesc type;
+            if (name.charAt(0) == '[') {
+                type = TypeDesc.forDescriptor(name);
+            } else {
+                type = TypeDesc.forClass(name);
+            }
+
+            if (type.isPrimitive()) {
+                return type.toClass();
+            } else if (type.isArray()) {
+                TypeDesc root = type.getRootComponentType();
+                if (root.isPrimitive()) {
+                    return type.toClass();
+                }
+                int dims = type.getDimensions();
+                type = TypeDesc.forClass(resolveClass(root.getRootName()));
+                while (--dims >= 0) {
+                    type = type.toArrayType();
+                }
+                return type.toClass();
+            } else {
+                return resolveClass(name);
+            }
         }
 
         @Override
@@ -1372,10 +1428,10 @@ public class StandardSession implements Session {
 
                         Class type;
                         try {
-                            // FIXME: Call configurable ClassLoader.
-                            type = Class.forName(info.getName());
+                            type = resolveClass(info.getName());
                         } catch (ClassNotFoundException e) {
-                            // Class not found, but client can access methods via reflection.
+                            // Interface not found, but client can access
+                            // methods via reflection.
                             type = Remote.class;
                         }
 
@@ -1398,6 +1454,15 @@ public class StandardSession implements Session {
             }
 
             return obj;
+        }
+
+        private Class<?> resolveClass(String name) throws IOException, ClassNotFoundException {
+            Class<?> clazz;
+            ClassResolver resolver = mClassResolver;
+            if (resolver == null || (clazz = resolver.resolveClass(name)) == null) {
+                clazz = ClassLoaderResolver.DEFAULT.resolveClass(name);
+            }
+            return clazz;
         }
     }
 

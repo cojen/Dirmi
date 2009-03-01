@@ -31,6 +31,12 @@ import java.util.concurrent.TimeUnit;
  * provided by the {@link #send send} and {@link #receive receive} methods,
  * which behave like a blocking queue with a capacity of one.
  *
+ * <p>The send/receive methods follow the pull model rather than the push
+ * model. Calling {@code send} locally enqueues an object, but {@code receive}
+ * makes a remote call. This behavior allows a {@link #setClassResolver
+ * ClassResolver} to be installed prior to its first use, avoiding race
+ * conditions.
+ *
  * @author Brian S O'Neill
  * @see Environment
  */
@@ -86,6 +92,28 @@ public interface Session extends Closeable, Flushable {
      * @throws RemoteTimeoutException if timeout elapses
      */
     Object receive(long timeout, TimeUnit unit) throws RemoteException;
+
+    /**
+     * Can be called at most once to control how deserialized classes and
+     * remote interfaces are resolved. If the implemention chooses to remotely
+     * download classes, it is strongly recommended that a security manager be
+     * installed. Resolver implementation may choose to enforce this
+     * restriction.
+     *
+     * @param resolver resolves deserialized classes and interfaces; pass null
+     * to always use default resolver
+     * @throws IllegalStateException if resolver cannot be changed
+     */
+    void setClassResolver(ClassResolver resolver);
+
+    /**
+     * Convenience method to use a ClassLoader for resolving classes.
+     *
+     * @param loader resolves deserialized classes and interfaces; pass null
+     * to always use default resolver
+     * @throws IllegalStateException if resolver cannot be changed
+     */
+    void setClassLoader(ClassLoader loader);
 
     /**
      * Flushes all channels of this session, including channels used for {@link

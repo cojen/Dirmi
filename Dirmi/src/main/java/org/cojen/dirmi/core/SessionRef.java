@@ -22,6 +22,7 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
 
+import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.Session;
 
 /**
@@ -59,6 +60,14 @@ class SessionRef implements Session {
 
     public Object receive(long timeout, TimeUnit unit) throws RemoteException {
         return mSession.receive(timeout, unit);
+    }
+
+    public void setClassResolver(ClassResolver resolver) {
+        mSession.setClassResolver(resolver);
+    }
+
+    public void setClassLoader(ClassLoader loader) {
+        mSession.setClassLoader(loader);
     }
 
     public void flush() throws IOException {
