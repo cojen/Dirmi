@@ -43,6 +43,11 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+
 import org.cojen.dirmi.RemoteTimeoutException;
 
 import org.cojen.dirmi.util.ExceptionUtils;
@@ -59,6 +64,8 @@ public class SocketMessageProcessor implements Closeable {
     final ReentrantLock mReadLock;
     final Selector mReadSelector;
 
+    final AccessControlContext mContext;
+
     int mReadTaskCount;
 
     public SocketMessageProcessor(Executor executor) throws IOException {
@@ -73,6 +80,8 @@ public class SocketMessageProcessor implements Closeable {
         // waiting on a queue is not necessary.
         mReadLock = new ReentrantLock(false);
         mReadSelector = Selector.open();
+
+        mContext = AccessController.getContext();
 
         mReadLock.lock();
         try {
@@ -108,7 +117,32 @@ public class SocketMessageProcessor implements Closeable {
                 return connect(-1, null);
             }
 
-            public MessageChannel connect(long timeout, TimeUnit unit) throws IOException {
+            public MessageChannel connect(final long timeout, final TimeUnit unit)
+                throws IOException
+            {
+                final SocketChannel channel;
+                try {
+                    channel = AccessController.doPrivileged
+                        (new PrivilegedExceptionAction<SocketChannel>()
+                    {
+                        public SocketChannel run() throws IOException {
+                            return connectSocket(timeout, unit);
+                        }
+                    }, mContext);
+                } catch (PrivilegedActionException e) {
+                    throw (IOException) e.getCause();
+                }
+
+                return new Chan(channel);
+            }
+
+            @Override
+            public String toString() {
+                return "MessageConnector {remoteAddress=" + remoteAddress +
+                    ", localAddress=" + localAddress + '}';
+            }
+
+            private SocketChannel connectSocket(long timeout, TimeUnit unit) throws IOException {
                 int timeoutMillis;
                 if (timeout < 0) {
                     timeoutMillis = -1;
@@ -142,24 +176,24 @@ public class SocketMessageProcessor implements Closeable {
                             throw new RemoteTimeoutException(timeout, unit);
                         }
                     }
-
+                
                     channel.configureBlocking(false);
-
-                    return new Chan(channel);
+                    return channel;
+                } catch (SecurityException e) {
+                    disconnect(channel);
+                    throw e;
                 } catch (IOException e) {
-                    try {
-                        channel.close();
-                    } catch (IOException e2) {
-                        // Ignore.
-                    }
+                    disconnect(channel);
                     throw e;
                 }
             }
 
-            @Override
-            public String toString() {
-                return "MessageConnector {remoteAddress=" + remoteAddress +
-                    ", localAddress=" + localAddress + '}';
+            void disconnect(SocketChannel channel) {
+                try {
+                    channel.close();
+                } catch (IOException e2) {
+                    // Ignore.
+                }
             }
         };
     }
@@ -192,12 +226,23 @@ public class SocketMessageProcessor implements Closeable {
 
             public SocketChannel selected(SelectionKey key) throws IOException {
                 key.cancel();
-                SocketChannel channel = serverChannel.accept();
-                if (channel != null) {
-                    channel.socket().setTcpNoDelay(true);
-                    channel.configureBlocking(false);
+
+                try {
+                    return AccessController.doPrivileged
+                        (new PrivilegedExceptionAction<SocketChannel>()
+                    {
+                        public SocketChannel run() throws IOException {
+                            SocketChannel channel = serverChannel.accept();
+                            if (channel != null) {
+                                channel.socket().setTcpNoDelay(true);
+                                channel.configureBlocking(false);
+                            }
+                            return channel;
+                        }
+                    }, mContext);
+                } catch (PrivilegedActionException e) {
+                    throw (IOException) e.getCause();
                 }
-                return channel;
             }
 
             public void selectedException(IOException e) {

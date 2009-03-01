@@ -27,6 +27,11 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+
 /**
  * 
  *
@@ -36,6 +41,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
     final SocketAddress mLocalAddress;
     final ServerSocket mServerSocket;
     final LinkedBlockingQueue<AcceptListener<StreamChannel>> mListenerQueue;
+    final AccessControlContext mContext;
 
     volatile boolean mClosed;
 
@@ -61,6 +67,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
         mServerSocket.bind(localAddress);
         mLocalAddress = mServerSocket.getLocalSocketAddress();
         mListenerQueue = new LinkedBlockingQueue<AcceptListener<StreamChannel>>();
+        mContext = AccessController.getContext();
 
         final Recycler<StreamChannel> recycler = new Recycler<StreamChannel>() {
             public void recycled(StreamChannel channel) {
@@ -74,7 +81,7 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
                 do {
                     Socket socket;
                     try {
-                        socket = mServerSocket.accept();
+                        socket = acceptSocket();
                     } catch (IOException e) {
                         if (!mClosed) {
                             AcceptListener<StreamChannel> listener;
@@ -132,6 +139,18 @@ public class SocketStreamChannelAcceptor implements Acceptor<StreamChannel> {
 
     public final SocketAddress getLocalAddress() {
         return mLocalAddress;
+    }
+
+    Socket acceptSocket() throws IOException {
+        try {
+            return AccessController.doPrivileged(new PrivilegedExceptionAction<Socket>() {
+                public Socket run() throws IOException {
+                    return mServerSocket.accept();
+                }
+            }, mContext);
+        } catch (PrivilegedActionException e) {
+            throw (IOException) e.getCause();
+        }
     }
 
     void accepted(StreamChannel channel) {

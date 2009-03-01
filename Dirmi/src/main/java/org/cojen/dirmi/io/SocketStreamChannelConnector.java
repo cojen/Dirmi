@@ -26,6 +26,11 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+
 import org.cojen.dirmi.RemoteTimeoutException;
 
 /**
@@ -38,6 +43,7 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
     private final StreamChannelPool mPool;
     private final SocketAddress mRemoteAddress;
     private final SocketAddress mLocalAddress;
+    private final AccessControlContext mContext;
 
     public SocketStreamChannelConnector(ScheduledExecutorService executor,
                                         SocketAddress remoteAddress)
@@ -58,13 +64,14 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
         mPool = new StreamChannelPool(executor);
         mRemoteAddress = remoteAddress;
         mLocalAddress = localAddress;
+        mContext = AccessController.getContext();
     }
 
     public StreamChannel connect() throws IOException {
         return connect(-1, null);
     }
 
-    public StreamChannel connect(long timeout, TimeUnit unit) throws IOException {
+    public StreamChannel connect(final long timeout, final TimeUnit unit) throws IOException {
         StreamChannel channel = mPool.dequeue();
         if (channel != null) {
             return channel;
@@ -74,7 +81,22 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
             throw new RemoteTimeoutException(timeout, unit);
         }
 
-        Socket socket = createSocket();
+        Socket socket;
+        try {
+            socket = AccessController.doPrivileged(new PrivilegedExceptionAction<Socket>() {
+                public Socket run() throws IOException {
+                    return connectSocket(timeout, unit);
+                }
+            }, mContext);
+        } catch (PrivilegedActionException e) {
+            throw (IOException) e.getCause();
+        }
+
+        return new PacketStreamChannel(mExecutor, mPool, new SocketStreamChannel(socket));
+    }
+
+    Socket connectSocket(long timeout, TimeUnit unit) throws IOException {
+        Socket socket = new Socket();
         try {
             if (mLocalAddress != null) {
                 socket.bind(mLocalAddress);
@@ -98,16 +120,12 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
             }
 
             socket.setTcpNoDelay(true);
-
-            channel = new SocketStreamChannel(socket);
-
-            return new PacketStreamChannel(mExecutor, mPool, channel);
+            return socket;
+        } catch (SecurityException e) {
+            disconnect(socket);
+            throw e;
         } catch (IOException e) {
-            try {
-                socket.close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            disconnect(socket);
             throw e;
         }
     }
@@ -130,7 +148,11 @@ public class SocketStreamChannelConnector implements Connector<StreamChannel>, C
         return mLocalAddress;
     }
 
-    protected Socket createSocket() throws IOException {
-        return new Socket();
+    private static void disconnect(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException e2) {
+            // Ignore.
+        }
     }
 }
