@@ -56,7 +56,7 @@ public interface Session extends Closeable, Flushable {
 
     /**
      * Sends a {@link Remote} or {@link Serializable} object to be received by
-     * the remote session. Any non-timeout failure during the send forces the
+     * the remote session. Any failure or timeout during the send forces the
      * session to be closed.
      *
      * @param obj remote or serializable object to send; can be null
@@ -77,7 +77,7 @@ public interface Session extends Closeable, Flushable {
 
     /**
      * Receives a {@link Remote} or {@link Serializable} object sent by the
-     * remote session. Any non-timeout failure during the receive forces the
+     * remote session. Any failure or timeout during the receive forces the
      * session to be closed.
      *
      * @param timeout how long to wait before timing out, in units of {@code unit}
@@ -93,4 +93,9 @@ public interface Session extends Closeable, Flushable {
      * methods.
      */
     void flush() throws IOException;
+
+    /**
+     * Closes the session.
+     */
+    void close() throws IOException;
 }

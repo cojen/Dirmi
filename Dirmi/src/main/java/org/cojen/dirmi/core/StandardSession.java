@@ -322,8 +322,6 @@ public class StandardSession implements Session {
             } else if (!mRemoteAdmin.enqueue(obj, timeout, unit)) {
                 throw new RemoteTimeoutException(timeout, unit);
             }
-        } catch (RemoteTimeoutException e) {
-            throw e;
         } catch (RemoteException e) {
             try {
                 closeOnFailure("Closed: " + e, e);
@@ -364,8 +362,6 @@ public class StandardSession implements Session {
             } else {
                 return obj;
             }
-        } catch (RemoteTimeoutException e) {
-            throw e;
         } catch (RemoteException e) {
             try {
                 closeOnFailure("Closed: " + e, e);
