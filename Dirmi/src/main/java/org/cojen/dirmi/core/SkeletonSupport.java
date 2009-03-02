@@ -38,14 +38,14 @@ public interface SkeletonSupport {
      * Used by batched methods which return a Remote object. This method
      * creates a skeleton for the given remote object and registers it.
      *
-     * @param skeletonType enclosing class which invoked remote method
+     * @param skeleton skeleton which was invoked
      * @param skeletonMethodName name skeleton method invoked
      * @param typeID type ID assigned by client
      * @param remoteID object ID assigned by client
      * @param type type of remote object
      * @param remote remote object returned by server method
      */
-    <R extends Remote> void linkBatchedRemote(Class<? extends Remote> skeletonType,
+    <R extends Remote> void linkBatchedRemote(Skeleton skeleton,
                                               String skeletonMethodName,
                                               Identifier typeID, VersionedIdentifier remoteID,
                                               Class<R> type, R remote)

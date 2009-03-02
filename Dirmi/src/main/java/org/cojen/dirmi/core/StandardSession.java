@@ -1578,7 +1578,7 @@ public class StandardSession implements Session {
             }
         }
 
-        public <R extends Remote> void linkBatchedRemote(Class<? extends Remote> skeletonType,
+        public <R extends Remote> void linkBatchedRemote(Skeleton skeleton,
                                                          String skeletonMethodName,
                                                          Identifier typeID,
                                                          VersionedIdentifier remoteID,
@@ -1608,8 +1608,8 @@ public class StandardSession implements Session {
             if (remote == null) {
                 remote = failedBatchedRemote
                     (type, new NullPointerException
-                     ("Batched method \"" + skeletonType.getName() + '.' +
-                      skeletonMethodName + "\" returned null"));
+                     ("Batched method \"" + skeleton.getRemoteServer().getClass().getName() +
+                      '.' + skeletonMethodName + "\" returned null"));
             }
 
             addSkeleton(remoteID, factory.createSkeleton(mSkeletonSupport, remote));

@@ -474,7 +474,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 b.loadThis();
                 b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
-                b.loadConstant(remoteType);
+                b.loadThis();
                 b.loadConstant(method.getName());
                 b.loadLocal(remoteTypeIdVar);
                 b.loadLocal(remoteIdVar);
@@ -482,7 +482,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b.loadLocal(remoteVar);
                 b.invokeInterface(SKEL_SUPPORT_TYPE, "linkBatchedRemote", null,
                                   new TypeDesc[] {
-                                      CLASS_TYPE, TypeDesc.STRING,
+                                      TypeDesc.forClass(Skeleton.class), TypeDesc.STRING,
                                       remoteTypeIdVar.getType(),
                                       remoteIdVar.getType(),
                                       CLASS_TYPE, rootRemoteType
