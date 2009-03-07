@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.io.ObjectOutput;
 
 /**
+ * Interface describing the low-level output operations used by remote method
+ * invocation.
  *
  * @author Brian S O'Neill
  * @see InvocationInput

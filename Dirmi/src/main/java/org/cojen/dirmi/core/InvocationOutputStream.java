@@ -27,7 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 
+ * Standard implementation of {@link InvocationOutput}.
  *
  * @author Brian S O'Neill
  * @see InvocationInputStream

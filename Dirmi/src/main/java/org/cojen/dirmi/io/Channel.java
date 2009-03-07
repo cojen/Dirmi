@@ -19,7 +19,7 @@ package org.cojen.dirmi.io;
 import java.io.Closeable;
 
 /**
- * 
+ * Basic interface representing a channel connection to a remote endpoint.
  *
  * @author Brian S O'Neill
  */

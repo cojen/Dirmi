@@ -53,7 +53,7 @@ import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.util.ExceptionUtils;
 
 /**
- * 
+ * Implements {@link MessageChannel} connectors and acceptors using TCP/IP.
  *
  * @author Brian S O'Neill
  */

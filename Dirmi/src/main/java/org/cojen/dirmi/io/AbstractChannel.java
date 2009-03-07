@@ -21,7 +21,7 @@ import java.io.Closeable;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
- * 
+ * Implements a few common {@link Channel} methods.
  *
  * @author Brian S O'Neill
  */

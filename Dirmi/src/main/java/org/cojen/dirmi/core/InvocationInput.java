@@ -25,6 +25,8 @@ import java.rmi.RemoteException;
 import org.cojen.dirmi.ReconstructedException;
 
 /**
+ * Interface describing the low-level input operations used by remote method
+ * invocation.
  *
  * @author Brian S O'Neill
  * @see InvocationOutput

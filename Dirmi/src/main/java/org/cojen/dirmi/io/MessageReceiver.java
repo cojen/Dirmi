@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * 
+ * Used with {@link MessageChannel} for asynchronously receiving messages.
  *
  * @author Brian S O'Neill
  */

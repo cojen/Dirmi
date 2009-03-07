@@ -20,7 +20,8 @@ import java.io.Serializable;
 import java.util.Set;
 
 /**
- * 
+ * Information for a {@code Remote} type as produced by {@link
+ * RemoteIntrospector}.
  *
  * @author Brian S O'Neill
  */

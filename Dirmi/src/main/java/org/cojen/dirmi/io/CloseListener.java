@@ -20,7 +20,7 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * 
+ * Is notified when a {@link Channel} is closed.
  *
  * @author Brian S O'Neill
  */

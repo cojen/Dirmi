@@ -20,7 +20,8 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * 
+ * Asynchronously accepts channels from a remote endpoint. All channels are
+ * linked to the same remote endpoint.
  *
  * @author Brian S O'Neill
  */

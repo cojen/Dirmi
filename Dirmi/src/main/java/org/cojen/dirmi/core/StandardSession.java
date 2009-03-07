@@ -93,7 +93,7 @@ import org.cojen.dirmi.io.StreamChannel;
 import org.cojen.dirmi.util.ExceptionUtils;
 
 /**
- * 
+ * Standard implementation of a remote method invocation {@link Session}.
  *
  * @author Brian S O'Neill
  */

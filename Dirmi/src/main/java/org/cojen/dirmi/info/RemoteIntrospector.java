@@ -67,9 +67,9 @@ import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
 
 /**
- * Supports examination of Remote types, returning all metadata associated
- * with it. As part of the examination, all annotations are gathered up. All
- * examined data is cached, so repeat examinations are fast, unless the
+ * Supports examination of {@code Remote} types, returning all metadata
+ * associated with it. As part of the examination, all annotations are gathered
+ * up. All examined data is cached, so repeat examinations are fast, unless the
  * examination failed.
  *
  * @author Brian S O'Neill

@@ -20,7 +20,9 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * 
+ * Supports direct channel connection to a remote endpoint and also
+ * asynchronously accepts channels from the same endpoint. Whether connected or
+ * accepted, all channels are linked to the same remote endpoint.
  *
  * @author Brian S O'Neill
  */

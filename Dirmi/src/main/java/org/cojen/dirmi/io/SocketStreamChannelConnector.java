@@ -34,7 +34,9 @@ import java.security.PrivilegedExceptionAction;
 import org.cojen.dirmi.RemoteTimeoutException;
 
 /**
- * 
+ * Implements a {@link StreamChannel} connector using TCP/IP. Remote endpoint
+ * must be using {@link SocketStreamChannelAcceptor} for protocol
+ * compatibility.
  *
  * @author Brian S O'Neill
  */

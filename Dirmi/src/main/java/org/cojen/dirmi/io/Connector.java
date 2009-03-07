@@ -22,7 +22,8 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 
+ * Supports direct channel connection to a remote endpoint. All channels are
+ * linked to the same remote endpoint.
  *
  * @author Brian S O'Neill
  */

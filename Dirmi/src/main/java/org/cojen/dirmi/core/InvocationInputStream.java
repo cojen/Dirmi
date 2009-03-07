@@ -36,7 +36,7 @@ import java.rmi.RemoteException;
 import org.cojen.dirmi.ReconstructedException;
 
 /**
- * 
+ * Standard implementation of {@link InvocationInput}.
  *
  * @author Brian S O'Neill
  * @see InvocationOutputStream

@@ -22,7 +22,8 @@ import java.rmi.RemoteException;
 import org.cojen.dirmi.Asynchronous;
 
 /**
- * 
+ * Interface used internally by asynchronous remote methods to signal when
+ * finished.
  *
  * @author Brian S O'Neill
  */

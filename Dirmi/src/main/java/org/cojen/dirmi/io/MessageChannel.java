@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * 
+ * Basic interface for a message passing channel.
  *
  * @author Brian S O'Neill
  */

@@ -29,7 +29,8 @@ import org.cojen.dirmi.io.Broker;
 import org.cojen.dirmi.io.StreamChannel;
 
 /**
- * 
+ * Standard implementation of a remote method invocation {@link
+ * SessionAcceptor}.
  *
  * @author Brian S O'Neill
  */

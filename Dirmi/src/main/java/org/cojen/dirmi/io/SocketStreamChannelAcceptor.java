@@ -33,7 +33,9 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
 /**
- * 
+ * Implements a {@link StreamChannel} acceptor using TCP/IP. Remote endpoint
+ * Remote endpoint must be using {@link SocketStreamChannelConnector} for
+ * protocol compatibility.
  *
  * @author Brian S O'Neill
  */

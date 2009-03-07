@@ -19,7 +19,7 @@ package org.cojen.dirmi.info;
 import java.io.Serializable;
 
 /**
- * 
+ * Describes a remote method parameter.
  *
  * @author Brian S O'Neill
  */

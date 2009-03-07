@@ -27,7 +27,7 @@ import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
 
 /**
- * 
+ * Describes a remote method, as provided by {@link RemoteInfo}.
  *
  * @author Brian S O'Neill
  */
