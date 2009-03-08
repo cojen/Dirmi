@@ -77,17 +77,28 @@ public class Environment implements Closeable {
 
     /**
      * Construct environment with the given maximum number of threads.
+     *
+     * @param maxThreads maximum number of threads in pool
      */
     public Environment(int maxThreads) {
-        this(new ThreadPool(maxThreads, false, "dirmi"));
+        this(maxThreads, null, null);
     }
 
     /**
-     * Construct environment with the given maximum number of threads and
-     * uncaught exception handler.
+     * Construct environment with the given maximum number of threads, thread
+     * name prefix, and uncaught exception handler.
+     *
+     * @param maxThreads maximum number of threads in pool
+     * @param threadNamePrefix prefix given to thread name; pass null for default
+     * @param handler handler for uncaught exceptions; pass null for default
      */
-    public Environment(int maxThreads, Thread.UncaughtExceptionHandler handler) {
-        this(new ThreadPool(maxThreads, false, "dirmi", handler));
+    public Environment(int maxThreads, String threadNamePrefix,
+                       Thread.UncaughtExceptionHandler handler)
+    {
+        this(new ThreadPool(maxThreads,
+                            false,
+                            threadNamePrefix == null ? "dirmi" : threadNamePrefix,
+                            handler));
     }
 
     /**
