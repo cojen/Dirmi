@@ -132,7 +132,7 @@ public class PipedOutputStream extends OutputStream {
             if (mPin != null) {
                 PipedInputStream pin = mPin;
                 mPin = null;
-                pin.close();
+                pin.outputClosed();
                 mReadCondition.signalAll();
                 mWriteCondition.signalAll();
             }

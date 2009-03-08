@@ -32,10 +32,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * @see PipedOutputStream
  */
 public class PipedInputStream extends InputStream {
+    private static final int NOT_CONNECTED = 0, CONNECTED = 1, HALF_CLOSED = 2, CLOSED = 3;
+
     private final Lock mLock;
 
     private PipedOutputStream mPout;
-    private boolean mEverConnected;
+    private int mConnectState;
 
     public PipedInputStream() {
         mLock = new ReentrantLock();
@@ -51,7 +53,9 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.read();
         } catch (NullPointerException e) {
-            checkConnected();
+            if (!checkConnected()) {
+                return -1;
+            }
             throw e;
         } finally {
             mLock.unlock();
@@ -67,7 +71,9 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.read(bytes, offset, length);
         } catch (NullPointerException e) {
-            checkConnected();
+            if (!checkConnected()) {
+                return -1;
+            }
             throw e;
         } finally {
             mLock.unlock();
@@ -79,7 +85,9 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.skip(n);
         } catch (NullPointerException e) {
-            checkConnected();
+            if (!checkConnected()) {
+                return 0;
+            }
             throw e;
         } finally {
             mLock.unlock();
@@ -91,7 +99,9 @@ public class PipedInputStream extends InputStream {
         try {
             return mPout.available();
         } catch (NullPointerException e) {
-            checkConnected();
+            if (!checkConnected()) {
+                return 0;
+            }
             throw e;
         } finally {
             mLock.unlock();
@@ -106,6 +116,7 @@ public class PipedInputStream extends InputStream {
                 mPout = null;
                 pout.close();
             }
+            mConnectState = CLOSED;
         } finally {
             mLock.unlock();
         }
@@ -114,7 +125,7 @@ public class PipedInputStream extends InputStream {
     public boolean isConnected() {
         mLock.lock();
         try {
-            return mPout != null;
+            return mConnectState == CONNECTED;
         } finally {
             mLock.unlock();
         }
@@ -136,6 +147,18 @@ public class PipedInputStream extends InputStream {
         }
     }
 
+    void outputClosed() throws IOException {
+        mLock.lock();
+        try {
+            mPout = null;
+            if (mConnectState != CLOSED) {
+                mConnectState = HALF_CLOSED;
+            }
+        } finally {
+            mLock.unlock();
+        }
+    }
+
     String superToString() {
         return super.toString();
     }
@@ -143,27 +166,34 @@ public class PipedInputStream extends InputStream {
     Lock setOutput(PipedOutputStream pout) throws IOException {
         mLock.lock();
         try {
-            if (mPout != null) {
+            switch (mConnectState) {
+            case NOT_CONNECTED:
+                mPout = pout;
+                mConnectState = CONNECTED;
+                return mLock;
+            case CONNECTED:
                 throw new IOException("Already connected");
-            }
-            if (mEverConnected) {
+            default:
                 throw new IOException("Closed");
             }
-            mPout = pout;
-            mEverConnected = true;
         } finally {
             mLock.unlock();
         }
-        return mLock;
     }
 
     // Caller must hold mLock.
-    private void checkConnected() throws IOException {
+    private boolean checkConnected() throws IOException {
         if (mPout == null) {
-            if (mEverConnected) {
+            switch (mConnectState) {
+            case NOT_CONNECTED:
+                throw new IOException("Not connected");
+            case HALF_CLOSED:
+                // Half closed.
+                return false;
+            default:
                 throw new IOException("Closed");
             }
-            throw new IOException("Not connected");
         }
+        return true;
     }
 }
