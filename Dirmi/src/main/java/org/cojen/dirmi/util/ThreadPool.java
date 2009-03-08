@@ -34,6 +34,10 @@ import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+
 /**
  * Custom thread pool implementation which is slightly more efficient than the
  * default JDK1.6 thread pool and also provides scheduling services. More
@@ -52,6 +56,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     private static final AtomicLong cPoolNumber = new AtomicLong(1);
     static final AtomicLong cTaskNumber = new AtomicLong(1);
 
+    private final AccessControlContext mContext;
     private final ThreadGroup mGroup;
     private final AtomicLong mThreadNumber = new AtomicLong(1);
     private final String mNamePrefix;
@@ -103,6 +108,8 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             throw new IllegalArgumentException
                 ("Maximum number of threads must be greater than zero: " + max);
         }
+
+        mContext = AccessController.getContext();
 
         SecurityManager s = System.getSecurityManager();
         mGroup = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
@@ -368,7 +375,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     private PooledThread newPooledThread(Runnable command) {
         PooledThread thread = new PooledThread
-            (mGroup, mNamePrefix + mThreadNumber.getAndIncrement(), command);
+            (mGroup, mNamePrefix + mThreadNumber.getAndIncrement(), mContext, command);
 
         if (thread.isDaemon() != mDaemon) {
             thread.setDaemon(mDaemon);
@@ -384,11 +391,16 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     }
 
     private class PooledThread extends Thread {
+        private final AccessControlContext mContext;
+
         private Runnable mCommand;
         private boolean mExiting;
 
-        public PooledThread(ThreadGroup group, String name, Runnable command) {
+        public PooledThread(ThreadGroup group, String name,
+                            AccessControlContext context, Runnable command)
+        {
             super(group, null, name);
+            mContext = context;
             mCommand = command;
         }
 
@@ -432,6 +444,15 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
 
         public void run() {
+            AccessController.doPrivileged(new PrivilegedAction<Object>() {
+                public Object run() {
+                    run0();
+                    return null;
+                }
+            }, mContext);
+        }
+
+        void run0() {
             try {
                 while (!isShutdown()) {
                     if (Thread.interrupted()) {
