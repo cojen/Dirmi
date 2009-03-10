@@ -37,8 +37,6 @@ import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.TypeDesc;
 
-import org.cojen.util.ClassInjector;
-
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.UnimplementedMethodException;
 

@@ -35,15 +35,14 @@ import java.util.Set;
 
 import java.util.concurrent.Future;
 
-import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
 import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
-import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
@@ -83,11 +82,14 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     public static <R extends Remote> SkeletonFactory<R> getSkeletonFactory(Class<R> type)
         throws IllegalArgumentException
     {
+        RemoteInfo localInfo = RemoteIntrospector.examine(type);
+        Object key = KeyFactory.createKey(new Object[] {type, localInfo.getInfoId()});
+
         synchronized (cCache) {
-            SkeletonFactory<R> factory = (SkeletonFactory<R>) cCache.get(type);
+            SkeletonFactory<R> factory = (SkeletonFactory<R>) cCache.get(key);
             if (factory == null) {
-                factory = new SkeletonFactoryGenerator<R>(type).generateFactory();
-                cCache.put(type, factory);
+                factory = new SkeletonFactoryGenerator<R>(localInfo, type).generateFactory();
+                cCache.put(key, factory);
             }
             return factory;
         }
@@ -104,8 +106,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     public static <R extends Remote> SkeletonFactory<R> getSkeletonFactory(Class<R> type,
                                                                            RemoteInfo remoteInfo)
     {
+        Object key = KeyFactory.createKey(new Object[] {type, remoteInfo.getInfoId()});
+
         synchronized (cCache) {
-            Object key = KeyFactory.createKey(new Object[] {type, remoteInfo.getInfoId()});
             SkeletonFactory<R> factory = (SkeletonFactory<R>) cCache.get(key);
             if (factory == null) {
                 factory = new SkeletonFactoryGenerator<R>(type, remoteInfo).generateFactory();
@@ -122,9 +125,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     // Is set only if mLocalInfo is null.
     private final String mMalformedInfoMessage;
 
-    private SkeletonFactoryGenerator(Class<R> type) throws IllegalArgumentException {
+    private SkeletonFactoryGenerator(RemoteInfo localInfo, Class<R> type) {
         mType = type;
-        mInfo = mLocalInfo = RemoteIntrospector.examine(type);
+        mInfo = mLocalInfo = localInfo;
         mMalformedInfoMessage = null;
     }
 
@@ -170,10 +173,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends Skeleton> generateSkeleton() {
-        ClassInjector ci = ClassInjector.create
-            (cleanClassName(mType.getName()) + "$Skeleton", mType.getClassLoader());
-
-        ClassFile cf = new ClassFile(ci.getClassName());
+        RuntimeClassFile cf = new RuntimeClassFile
+            (cleanClassName(mType.getName()) + "$Skeleton", null, mType.getClassLoader());
         cf.addInterface(Skeleton.class);
         cf.setSourceFile(SkeletonFactoryGenerator.class.getName());
         cf.markSynthetic();
@@ -634,7 +635,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnVoid();
         }
                                  
-        return ci.defineClass(cf);
+        return cf.defineClass();
     }
 
     /**

@@ -32,15 +32,14 @@ import java.util.Map;
 
 import java.util.concurrent.Future;
 
-import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
 import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
-import org.cojen.util.ClassInjector;
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
 
@@ -125,11 +124,8 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends R> generateStub() {
-        ClassInjector ci = ClassInjector.create
-            (cleanClassName(mRemoteInfo.getName()) + "$Stub",
-             mType.getClassLoader());
-
-        ClassFile cf = new ClassFile(ci.getClassName());
+        RuntimeClassFile cf = new RuntimeClassFile
+            (cleanClassName(mRemoteInfo.getName()) + "$Stub", null, mType.getClassLoader());
         cf.addInterface(mType);
         cf.setSourceFile(StubFactoryGenerator.class.getName());
         cf.markSynthetic();
@@ -591,7 +587,7 @@ public class StubFactoryGenerator<R extends Remote> {
             b.returnValue(exType);
         }
 
-        return ci.defineClass(cf);
+        return cf.defineClass();
     }
 
     /**
