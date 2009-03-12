@@ -677,19 +677,25 @@ public class StandardSession implements Session {
             Skeleton skeleton = mSkeletons.get(objID);
 
             if (skeleton == null) {
-                String message = "Cannot find remote object: " + objID;
+                Throwable t = new NoSuchObjectException("Cannot find remote object: " + objID);
 
                 boolean synchronous = (methodId & 1) == 0;
                 if (synchronous) {
                     // Try to inform caller of error, but no guarantee that
                     // this will work -- input arguments might exceed the size
                     // of the send/receive buffers.
-                    Throwable t = new NoSuchObjectException(message);
                     try {
+                        invChannel.startTimeout(15, TimeUnit.SECONDS);
                         invChannel.getOutputStream().writeThrowable(t);
                         invChannel.flush();
                     } catch (IOException e) {
-                        // Ignore.
+                        if (!isClosing()) {
+                            uncaughtException(t);
+                        }
+                    }
+                } else {
+                    if (!isClosing()) {
+                        uncaughtException(t);
                     }
                 }
 
