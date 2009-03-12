@@ -22,6 +22,8 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
 
+import java.security.PermissionCollection;
+
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.Session;
 
@@ -68,6 +70,10 @@ class SessionRef implements Session {
 
     public void setClassLoader(ClassLoader loader) {
         mSession.setClassLoader(loader);
+    }
+
+    public void setPermissions(PermissionCollection permissions) {
+        mSession.setPermissions(permissions);
     }
 
     public void flush() throws IOException {

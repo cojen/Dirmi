@@ -31,6 +31,12 @@ import java.util.List;
 import java.util.Map;
 
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
@@ -42,8 +48,6 @@ import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.KeyFactory;
 import org.cojen.util.SoftValuedHashMap;
-
-import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
@@ -97,6 +101,8 @@ public class StubFactoryGenerator<R extends Remote> {
     private final RemoteInfo mLocalInfo;
     private final RemoteInfo mRemoteInfo;
 
+    private final AtomicReference<Object> mFactoryRef = new AtomicReference<Object>();
+
     private StubFactoryGenerator(Class<R> type, RemoteInfo remoteInfo) {
         mType = type;
         mLocalInfo = RemoteIntrospector.examine(type);
@@ -107,20 +113,21 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private StubFactory<R> generateFactory() {
-        Class<? extends R> stubClass = generateStub();
-        try {
-            StubFactory<R> factory = new Factory<R>(stubClass.getConstructor(StubSupport.class));
-            invokeFactoryRefMethod(stubClass, factory);
-            return factory;
-        } catch (IllegalAccessException e) {
-            throw new Error(e);
-        } catch (InvocationTargetException e) {
-            throw new Error(e);
-        } catch (NoSuchMethodException e) {
-            NoSuchMethodError nsme = new NoSuchMethodError();
-            nsme.initCause(e);
-            throw nsme;
-        }
+        return AccessController.doPrivileged(new PrivilegedAction<StubFactory<R>>() {
+            public StubFactory<R> run() {
+                Class<? extends R> stubClass = generateStub();
+                try {
+                    StubFactory<R> factory = new Factory<R>
+                        (stubClass.getConstructor(StubSupport.class));
+                    mFactoryRef.set(factory);
+                    return factory;
+                } catch (NoSuchMethodException e) {
+                    NoSuchMethodError nsme = new NoSuchMethodError();
+                    nsme.initCause(e);
+                    throw nsme;
+                }
+            }
+        });
     }
 
     private Class<? extends R> generateStub() {
@@ -137,7 +144,7 @@ public class StubFactoryGenerator<R extends Remote> {
         }
 
         // Add reference to factory.
-        addFactoryRefMethod(cf);
+        addStaticFactoryRef(cf, mFactoryRef);
 
         // Add constructor.
         {

@@ -22,6 +22,8 @@ import java.rmi.Remote;
 
 import java.rmi.server.Unreferenced;
 
+import java.security.ProtectionDomain;
+
 import org.cojen.dirmi.NoSuchObjectException;
 
 /**
@@ -75,4 +77,10 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
                ClassNotFoundException,
                AsynchronousInvocationException,
                BatchedInvocationException;
+
+    /**
+     * Returns a reference to this Skeleton which has the given
+     * ProtectionDomain.
+     */
+    Skeleton withProtectionDomain(ProtectionDomain domain);
 }

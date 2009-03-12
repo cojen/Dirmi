@@ -50,11 +50,6 @@ import org.cojen.dirmi.info.RemoteParameter;
  * @author Brian S O'Neill
  */
 class CodeBuilderUtil {
-    static final String FACTORY_FIELD = "factory";
-
-    // Method name ends with '$' so as not to conflict with user method.
-    static final String FACTORY_REF_METHOD_NAME = "factoryRef$";
-
     static final TypeDesc IDENTIFIER_TYPE;
     static final TypeDesc VERSIONED_IDENTIFIER_TYPE;
     static final TypeDesc STUB_SUPPORT_TYPE;
@@ -302,29 +297,71 @@ class CodeBuilderUtil {
         return paramDescs;
     }
 
-    static void addFactoryRefMethod(ClassFile cf) {
-        cf.addField(Modifiers.PRIVATE.toStatic(true).toVolatile(true),
-                    FACTORY_FIELD, TypeDesc.OBJECT);
-
-        MethodInfo mi = cf.addMethod
-            (Modifiers.PUBLIC.toStatic(true), FACTORY_REF_METHOD_NAME,
-             null, new TypeDesc[] {TypeDesc.OBJECT});
-
-        CodeBuilder b = new CodeBuilder(mi);
-
-        b.loadLocal(b.getParameter(0));
-        b.storeStaticField(FACTORY_FIELD, TypeDesc.OBJECT);
-
-        b.returnVoid();
+    /**
+     * @param factoryRef Strong reference is kept to this object. As long as
+     * stub or skeleton instances exist, the referenced factory will not get
+     * reclaimed.
+     */
+    static void addStaticFactoryRef(ClassFile cf, Object factoryRef) {
+        addStaticFieldsInitializer(cf, new TypeDesc[] {TypeDesc.OBJECT}, factoryRef);
     }
 
     /**
-     * @param factory Strong reference is kept to this object. As long as stub
-     * or skeleton instances exist, the factory will not get reclaimed.
+     * Creates static final fields of the given types, and adds a static
+     * initalizer which sets the field values. The values are transferred via a
+     * thread-local variable, and so the thread that calls this method must
+     * define the class.
+     *
+     * @return the names of the generated fields
      */
-    static void invokeFactoryRefMethod(Class clazz, Object factory)
-        throws NoSuchMethodException, IllegalAccessException, InvocationTargetException
-    {
-        clazz.getMethod(FACTORY_REF_METHOD_NAME, Object.class).invoke(null, factory);
+    static String[] addStaticFieldsInitializer(ClassFile cf, TypeDesc[] types, Object... values) {
+        String[] names = new String[types.length];
+
+        if (types.length == 0) {
+            return names;
+        }
+
+        for (int i=0; i<types.length; i++) {
+            String name = "field$" + i;
+            names[i] = name;
+            cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true), name, types[i]);
+        }
+
+        CodeBuilder b = new CodeBuilder(cf.addInitializer());
+        TypeDesc localType = TypeDesc.forClass(ThreadLocal.class);
+
+        b.loadStaticField(CodeBuilderUtil.Local.class.getName(), "value", localType);
+        b.invokeVirtual(localType, "get", TypeDesc.OBJECT, null);
+
+        if (types.length == 1) {
+            Local.value.set(values[0]);
+            TypeDesc type = types[0];
+            if (type != TypeDesc.OBJECT) {
+                b.checkCast(type);
+            }
+            b.storeStaticField(names[0], type);
+        } else {
+            Local.value.set(values);
+            b.checkCast(TypeDesc.OBJECT.toArrayType());
+            for (int i=0; i<types.length; i++) {
+                b.dup();
+                b.loadConstant(i);
+                b.loadFromArray(TypeDesc.OBJECT);
+                TypeDesc type = types[i];
+                if (type != TypeDesc.OBJECT) {
+                    b.checkCast(type);
+                }
+                b.storeStaticField(names[i], type);
+            }
+        }
+
+        b.returnVoid();
+
+        return names;
+    }
+
+    // Put ThreadLocal in a public class to be accessible by generated code.
+    public static class Local {
+        public static final ThreadLocal<Object> value = new ThreadLocal<Object>();
     }
 }

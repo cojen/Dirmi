@@ -35,6 +35,12 @@ import java.util.Set;
 
 import java.util.concurrent.Future;
 
+import java.util.concurrent.atomic.AtomicReference;
+
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
+
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
@@ -125,6 +131,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     // Is set only if mLocalInfo is null.
     private final String mMalformedInfoMessage;
 
+    private final AtomicReference<Object> mFactoryRef = new AtomicReference<Object>();
+
     private SkeletonFactoryGenerator(RemoteInfo localInfo, Class<R> type) {
         mType = type;
         mInfo = mLocalInfo = localInfo;
@@ -155,21 +163,21 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             return EmptySkeletonFactory.THE;
         }
 
-        Class<? extends Skeleton> skeletonClass = generateSkeleton();
-        try {
-            SkeletonFactory<R> factory = new Factory<R>
-                (skeletonClass.getConstructor(SkeletonSupport.class, mType));
-            invokeFactoryRefMethod(skeletonClass, factory);
-            return factory;
-        } catch (IllegalAccessException e) {
-            throw new Error(e);
-        } catch (InvocationTargetException e) {
-            throw new Error(e);
-        } catch (NoSuchMethodException e) {
-            NoSuchMethodError nsme = new NoSuchMethodError();
-            nsme.initCause(e);
-            throw nsme;
-        }
+        return AccessController.doPrivileged(new PrivilegedAction<SkeletonFactory<R>>() {
+            public SkeletonFactory<R> run() {
+                Class<? extends Skeleton> skeletonClass = generateSkeleton();
+                try {
+                    SkeletonFactory<R> factory = new Factory<R>
+                        (skeletonClass.getConstructor(SkeletonSupport.class, mType));
+                    mFactoryRef.set(factory);
+                    return factory;
+                } catch (NoSuchMethodException e) {
+                    NoSuchMethodError nsme = new NoSuchMethodError();
+                    nsme.initCause(e);
+                    throw nsme;
+                }
+            }
+        });
     }
 
     private Class<? extends Skeleton> generateSkeleton() {
@@ -189,7 +197,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         }
 
         // Add reference to factory.
-        addFactoryRefMethod(cf);
+        addStaticFactoryRef(cf, mFactoryRef);
 
         // Add constructor.
         {
@@ -618,6 +626,24 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.returnValue(TypeDesc.BOOLEAN);
         }
 
+        // Add withProtectionDomain method.
+        {
+            TypeDesc pdType = TypeDesc.forClass(ProtectionDomain.class);
+            TypeDesc skelType = TypeDesc.forClass(Skeleton.class);
+
+            mi = cf.addMethod(Modifiers.PUBLIC, "withProtectionDomain",
+                              skelType, new TypeDesc[] {pdType});
+            b = new CodeBuilder(mi);
+            b.loadThis();
+            b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
+            b.loadThis();
+            b.loadNull();
+            b.loadLocal(b.getParameter(0));
+            b.invokeInterface(SKEL_SUPPORT_TYPE, "withProtectionDomain",
+                              skelType, new TypeDesc[] {skelType, pdType, pdType});
+            b.returnValue(skelType);
+        }
+
         // Add the Unreferenced.unreferenced method.
         {
             mi = cf.addMethod(Modifiers.PUBLIC, "unreferenced", null, null);
@@ -634,7 +660,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             notUnref.setLocation();
             b.returnVoid();
         }
-                                 
+
         return cf.defineClass();
     }
 

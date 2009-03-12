@@ -63,6 +63,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import java.security.CodeSource;
+import java.security.PermissionCollection;
+import java.security.ProtectionDomain;
+
+import java.security.cert.Certificate;
+
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.WeakValuedHashMap;
@@ -174,6 +180,8 @@ public class StandardSession implements Session {
     private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
     volatile int mCloseState;
     String mCloseMessage;
+
+    volatile ProtectionDomain mDomain;
 
     /**
      * @param executor shared executor for remote methods
@@ -403,6 +411,39 @@ public class StandardSession implements Session {
             setClassResolver(null);
         } else {
             setClassResolver(new ClassLoaderResolver(loader));
+        }
+    }
+
+    public void setPermissions(PermissionCollection permissions) {
+        if (System.getSecurityManager() == null) {
+            throw new SecurityException("No SecurityManager is installed");
+        }
+
+        ProtectionDomain newDomain;
+        if (permissions == null) {
+            newDomain = null;
+        } else {
+            newDomain = new ProtectionDomain
+                (new CodeSource(null, (Certificate[]) null), permissions);
+        }
+
+        synchronized (mCloseLock) {
+            if (isClosing() || SkeletonProtector.equalDomains(mDomain, newDomain)) {
+                return;
+            }
+            // Immediately start using new domain for new Skeletons.
+            mDomain = newDomain;
+        }
+
+        // Make sure all Skeletons are updated to use the new domain. This
+        // could be performed with lock still held to prevent updating
+        // Skeletons which need no update, but I prefer to not hold the lock
+        // for too long.
+        for (Map.Entry<VersionedIdentifier, Skeleton> entry : mSkeletons.entrySet()) {
+            Skeleton oldSkeleton = entry.getValue();
+            Skeleton newSkeleton = oldSkeleton.withProtectionDomain(newDomain);
+            // Ensure that we don't resurrect a Skeleton which just got removed.
+            mSkeletons.replace(entry.getKey(), oldSkeleton, newSkeleton);
         }
     }
 
@@ -1553,7 +1594,8 @@ public class StandardSession implements Session {
                         }
                     }
 
-                    Skeleton skeleton = factory.createSkeleton(mSkeletonSupport, remote);
+                    Skeleton skeleton = factory.createSkeleton(mSkeletonSupport, remote)
+                        .withProtectionDomain(mDomain);
 
                     if (!addSkeleton(objID, skeleton)) {
                         throw new RemoteException("Remote session is closing");
@@ -1618,7 +1660,9 @@ public class StandardSession implements Session {
                       '.' + skeletonMethodName + "\" returned null"));
             }
 
-            addSkeleton(remoteID, factory.createSkeleton(mSkeletonSupport, remote));
+            addSkeleton(remoteID,
+                        factory.createSkeleton(mSkeletonSupport, remote)
+                        .withProtectionDomain(mDomain));
         }
 
         public <R extends Remote> R failedBatchedRemote(Class<R> type, final Throwable cause) {
@@ -1662,6 +1706,14 @@ public class StandardSession implements Session {
                     return true;
                 }
             }
+        }
+
+        public <R extends Remote> Skeleton<R> withProtectionDomain(Skeleton<R> currentSkeleton,
+                                                                   ProtectionDomain currentDomain,
+                                                                   ProtectionDomain newDomain)
+        {
+            return SkeletonProtector.withProtectionDomain
+                (currentSkeleton, currentDomain, newDomain);
         }
     }
 
