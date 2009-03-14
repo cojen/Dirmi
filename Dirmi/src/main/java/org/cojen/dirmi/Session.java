@@ -120,7 +120,7 @@ public interface Session extends Closeable, Flushable {
     /**
      * @throws SecurityException if no security manager is installed
      */
-    void setPermissions(PermissionCollection permissions);
+    //void setPermissions(PermissionCollection permissions);
 
     /**
      * Flushes all channels of this session, including channels used for {@link

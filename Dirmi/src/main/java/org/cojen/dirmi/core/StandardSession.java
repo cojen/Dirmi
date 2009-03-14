@@ -181,7 +181,7 @@ public class StandardSession implements Session {
     volatile int mCloseState;
     String mCloseMessage;
 
-    volatile ProtectionDomain mDomain;
+    //volatile ProtectionDomain mDomain;
 
     /**
      * @param executor shared executor for remote methods
@@ -414,6 +414,7 @@ public class StandardSession implements Session {
         }
     }
 
+    /*
     public void setPermissions(PermissionCollection permissions) {
         if (System.getSecurityManager() == null) {
             throw new SecurityException("No SecurityManager is installed");
@@ -446,6 +447,7 @@ public class StandardSession implements Session {
             mSkeletons.replace(entry.getKey(), oldSkeleton, newSkeleton);
         }
     }
+    */
 
     public void flush() throws IOException {
         IOException exception = null;
@@ -1595,7 +1597,7 @@ public class StandardSession implements Session {
                     }
 
                     Skeleton skeleton = factory.createSkeleton(mSkeletonSupport, remote)
-                        .withProtectionDomain(mDomain);
+                        /*.withProtectionDomain(mDomain)*/;
 
                     if (!addSkeleton(objID, skeleton)) {
                         throw new RemoteException("Remote session is closing");
@@ -1662,7 +1664,7 @@ public class StandardSession implements Session {
 
             addSkeleton(remoteID,
                         factory.createSkeleton(mSkeletonSupport, remote)
-                        .withProtectionDomain(mDomain));
+                        /*.withProtectionDomain(mDomain)*/);
         }
 
         public <R extends Remote> R failedBatchedRemote(Class<R> type, final Throwable cause) {
