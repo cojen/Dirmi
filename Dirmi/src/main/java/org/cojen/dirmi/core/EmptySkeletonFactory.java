@@ -21,8 +21,6 @@ import java.io.ObjectOutput;
 import java.rmi.Remote;
 import java.rmi.server.Unreferenced;
 
-import java.security.ProtectionDomain;
-
 /**
  * Factory which creates skeletons that support no methods.
  *
@@ -34,14 +32,7 @@ class EmptySkeletonFactory implements SkeletonFactory {
     private EmptySkeletonFactory() {
     }
 
-    public Skeleton createSkeleton(SkeletonSupport support, Remote remoteServer) {
-        return createSkeleton(support, remoteServer, null);
-    }
-
-    public Skeleton createSkeleton(SkeletonSupport support,
-                                   final Remote remoteServer,
-                                   final ProtectionDomain domain)
-    {
+    public Skeleton createSkeleton(SkeletonSupport support, final Remote remoteServer) {
         return new Skeleton() {
             public Remote getRemoteServer() {
                 return remoteServer;
@@ -52,13 +43,6 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 throws NoSuchMethodException
             {
                 throw new NoSuchMethodException("method id: " + methodId);
-            }
-
-            public Skeleton withProtectionDomain(ProtectionDomain newDomain) {
-                if (SkeletonProtector.equalDomains(domain, newDomain)) {
-                    return this;
-                }
-                return createSkeleton(null, remoteServer, newDomain);
             }
 
             public void unreferenced() {

@@ -39,7 +39,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.security.ProtectionDomain;
 
 import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.Label;
@@ -624,24 +623,6 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             // Call finished method.
             genFinished(b, channelVar, true, true);
             b.returnValue(TypeDesc.BOOLEAN);
-        }
-
-        // Add withProtectionDomain method.
-        {
-            TypeDesc pdType = TypeDesc.forClass(ProtectionDomain.class);
-            TypeDesc skelType = TypeDesc.forClass(Skeleton.class);
-
-            mi = cf.addMethod(Modifiers.PUBLIC, "withProtectionDomain",
-                              skelType, new TypeDesc[] {pdType});
-            b = new CodeBuilder(mi);
-            b.loadThis();
-            b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
-            b.loadThis();
-            b.loadNull();
-            b.loadLocal(b.getParameter(0));
-            b.invokeInterface(SKEL_SUPPORT_TYPE, "withProtectionDomain",
-                              skelType, new TypeDesc[] {skelType, pdType, pdType});
-            b.returnValue(skelType);
         }
 
         // Add the Unreferenced.unreferenced method.

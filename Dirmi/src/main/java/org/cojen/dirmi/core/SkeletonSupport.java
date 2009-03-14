@@ -21,8 +21,6 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.Future;
 
-import java.security.ProtectionDomain;
-
 /**
  * Object passed to a Skeleton instance in order for it to decide when channels
  * can be reused.
@@ -72,16 +70,4 @@ public interface SkeletonSupport {
      * @return true if caller should read another request from channel
      */
     boolean finished(InvocationChannel channel, boolean reset, boolean synchronous);
-
-    /**
-     * Returns a new Skeleton with a ProtectionDomain, or the current Skeleton
-     * if the new domain matches.
-     *
-     * @param skeleton skeleton which is calling this method
-     * @param domain skeleton's domain
-     * @param newDomain ProtectionDomain to apply
-     */
-    <R extends Remote> Skeleton<R> withProtectionDomain(Skeleton<R> skeleton,
-                                                        ProtectionDomain domain,
-                                                        ProtectionDomain newDomain);
 }

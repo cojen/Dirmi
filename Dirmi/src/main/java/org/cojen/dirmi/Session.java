@@ -26,8 +26,6 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
 
-import java.security.PermissionCollection;
-
 /**
  * Remote method invocation session. Basic communication between sessions is
  * provided by the {@link #send send} and {@link #receive receive} methods,
@@ -116,11 +114,6 @@ public interface Session extends Closeable, Flushable {
      * @throws IllegalStateException if resolver cannot be changed
      */
     void setClassLoader(ClassLoader loader);
-
-    /**
-     * @throws SecurityException if no security manager is installed
-     */
-    //void setPermissions(PermissionCollection permissions);
 
     /**
      * Flushes all channels of this session, including channels used for {@link
