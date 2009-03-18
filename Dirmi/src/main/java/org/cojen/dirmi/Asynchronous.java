@@ -29,11 +29,11 @@ import java.rmi.RemoteException;
  * method to finish. An asynchronous method will likely block if the transport
  * layer is backed up.
  *
- * <p>An asynchronous method must declare returning void, {@link Pipe}, {@link
- * Completion} or {@link Future}. An asynchronous task represented by a {@code
- * Completion} or {@code Future} cannot be cancelled, at least not directly.
- * Implementations of asynchronous future methods should return a factory
- * generated {@link Response response}.
+ * <p>An asynchronous method must declare returning {@code void}, {@link Pipe},
+ * {@link Completion} or {@link Future}. An asynchronous task represented by a
+ * {@code Completion} or {@code Future} cannot be cancelled, at least not
+ * directly.  Implementations of asynchronous future methods should return a
+ * factory generated {@link Response response}.
  *
  * <pre>
  * <b>&#64;Asynchronous</b>
@@ -54,7 +54,7 @@ import java.rmi.RemoteException;
  * the exception indicated by {@link RemoteFailure}. A client can expect an
  * exception to be thrown by an asynchronous method only if there is a
  * communication failure. Any exception thrown by the server implementation of
- * an asynchronous void or {@link Pipe} method is not passed to the
+ * an asynchronous {@code void} or {@link Pipe} method is not passed to the
  * client. Instead, it is passed to the thread's uncaught exception handler.
  *
  * <p>For asynchronous methods which return a {@link Completion} or {@link
