@@ -263,6 +263,7 @@ class PacketStreamChannel extends AbstractChannel implements StreamChannel {
          */
         void doClose(final StreamChannel channel) {
             final int remaining;
+            // FIXME: Blocks if read method is blocked while calling remaining().
             synchronized (this) {
                 remaining = mRemaining;
                 mRemaining = INPUT_CLOSED;
