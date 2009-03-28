@@ -85,6 +85,7 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
             complete = mComplete;
         } else {
             long timeoutMillis = unit.toMillis(timeout);
+            // FIXME: use nanoTime
             long endMillis = System.currentTimeMillis();
             do {
                 wait(timeoutMillis);

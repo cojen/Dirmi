@@ -32,8 +32,8 @@ import java.util.concurrent.TimeUnit;
  * @author Brian S O'Neill
  */
 class StreamChannelPool implements Recycler<StreamChannel>, Closeable {
-    private static final int POLL_RATE_MILLIS = 5000;
-    private static final int MAX_IDLE_MILLIS = 60 * 1000;
+    private static final long POLL_RATE_NANOS = 5L * 1000 * 1000 * 1000;
+    private static final long MAX_IDLE_NANOS = 60L * 1000 * 1000 * 1000;
 
     private final ScheduledExecutorService mExecutor;
     private final LinkedList<Entry> mPool;
@@ -63,7 +63,7 @@ class StreamChannelPool implements Recycler<StreamChannel>, Closeable {
             };
             try {
                 mCloseTask = mExecutor.scheduleWithFixedDelay
-                    (task, MAX_IDLE_MILLIS, POLL_RATE_MILLIS, TimeUnit.MILLISECONDS);
+                    (task, MAX_IDLE_NANOS, POLL_RATE_NANOS, TimeUnit.NANOSECONDS);
             } catch (RejectedExecutionException e) {
                 channel.disconnect();
             }
@@ -103,8 +103,8 @@ class StreamChannelPool implements Recycler<StreamChannel>, Closeable {
                     mCloseTask = null;
                     break;
                 }
-                long age = System.currentTimeMillis() - entry.mTimestamp;
-                if (age < MAX_IDLE_MILLIS) {
+                long age = System.nanoTime() - entry.mTimestamp;
+                if (age < MAX_IDLE_NANOS) {
                     return;
                 }
                 mPool.remove();
@@ -123,7 +123,7 @@ class StreamChannelPool implements Recycler<StreamChannel>, Closeable {
         
         Entry(StreamChannel channel) {
             mChannel = channel;
-            mTimestamp = System.currentTimeMillis();
+            mTimestamp = System.nanoTime();
         }
     }
 }

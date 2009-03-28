@@ -101,7 +101,7 @@ public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 20090205;
 
-    private static final int DEFAULT_CHANNEL_IDLE_MILLIS = 60000;
+    private static final long DEFAULT_CHANNEL_IDLE_NANOS = 60L * 1000 * 1000 * 1000;
     private static final int DISPOSE_BATCH = 1000;
 
     private static final AtomicReferenceFieldUpdater<StandardSession, ClassResolver>
@@ -167,6 +167,9 @@ public class StandardSession implements Session {
     final Map<InvocationChannel, Thread> mHeldChannelMap;
 
     final ScheduledFuture<?> mBackgroundTask;
+    // Clock is updated by background task to reduce system call overhead.
+    // This clock is only as precise as the background task rate.
+    volatile long mClockNanos;
 
     volatile ClassResolver mClassResolver;
 
@@ -295,9 +298,9 @@ public class StandardSession implements Session {
 
         try {
             // Start background task.
-            long delay = 5000; // FIXME: configurable?
+            long delay = 5;
             mBackgroundTask = executor.scheduleWithFixedDelay
-                (new BackgroundTask(), delay, delay, TimeUnit.MILLISECONDS);
+                (new BackgroundTask(), delay, delay, TimeUnit.SECONDS);
         } catch (RejectedExecutionException e) {
             String message = "Unable to start background task";
             try {
@@ -1040,6 +1043,7 @@ public class StandardSession implements Session {
 
     private class BackgroundTask implements Runnable {
         BackgroundTask() {
+            mClockNanos = System.nanoTime();
         }
 
         public void run() {
@@ -1091,8 +1095,10 @@ public class StandardSession implements Session {
                     if (pooledChannel == null) {
                         break;
                     }
-                    long age = System.currentTimeMillis() - pooledChannel.getIdleTimestamp();
-                    if (age < DEFAULT_CHANNEL_IDLE_MILLIS) {
+                    long clockNanos = System.nanoTime();
+                    mClockNanos = clockNanos;
+                    long age = clockNanos - pooledChannel.getIdleTimestamp();
+                    if (age < DEFAULT_CHANNEL_IDLE_NANOS) {
                         break;
                     }
                     mChannelPool.remove();
@@ -1317,7 +1323,7 @@ public class StandardSession implements Session {
          */
         final void recycle() {
             try {
-                mTimestamp = System.currentTimeMillis();
+                mTimestamp = mClockNanos;
                 synchronized (mChannelPool) {
                     mChannelPool.add(this);
                 }
