@@ -85,12 +85,12 @@ public class Environment implements Closeable {
     private final ScheduledExecutorService mExecutor;
     private final IOExecutor mIOExecutor;
 
-    private final SocketFactory mSocketFactory;
-    private final ServerSocketFactory mServerSocketFactory;
-
     private final WeakIdentityMap<Closeable, Object> mCloseableSet;
     private final AtomicBoolean mClosed;
     private final boolean mRecyclableSockets = RECYCLABLE_SOCKETS;
+
+    private final SocketFactory mSocketFactory;
+    private final ServerSocketFactory mServerSocketFactory;
 
     /**
      * Construct environment which uses up to 1000 threads.
@@ -131,11 +131,13 @@ public class Environment implements Closeable {
      * @see ThreadPool
      */
     public Environment(ScheduledExecutorService executor) {
-        this(executor, null, null, null);
+        this(executor, null, null, null, null, null);
     }
 
     private Environment(ScheduledExecutorService executor,
                         IOExecutor ioExecutor,
+                        WeakIdentityMap<Closeable, Object> closeable,
+                        AtomicBoolean closed,
                         SocketFactory sf,
                         ServerSocketFactory ssf)
     {
@@ -144,30 +146,30 @@ public class Environment implements Closeable {
         }
         mExecutor = executor;
         mIOExecutor = ioExecutor == null ? new IOExecutor(executor) : ioExecutor;
+        mCloseableSet = closeable == null ? new WeakIdentityMap<Closeable, Object>() : closeable;
+        mClosed = closed == null ? new AtomicBoolean(false) : closed;
         mSocketFactory = sf == null ? SocketFactory.getDefault() : sf;
         mServerSocketFactory = ssf == null ? ServerSocketFactory.getDefault() : ssf;
-        mCloseableSet = new WeakIdentityMap<Closeable, Object>();
-        mClosed = new AtomicBoolean(false);
     }
 
     /**
-     * Returns a new environment instance which connects using the given client
-     * socket factory. The new environment shares the same threads and server
-     * socket factory as this one. Closing one environment will not close the
-     * other.
+     * Returns an environment instance which connects using the given client
+     * socket factory. The returned environment is linked to this one, and
+     * closing either environment closes both.
      */
     public Environment withClientSocketFactory(SocketFactory sf) {
-        return new Environment(mExecutor, mIOExecutor, sf, mServerSocketFactory);
+        return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
+                               sf, mServerSocketFactory);
     }
 
     /**
-     * Returns a new environment instance which accepts using the given server
-     * socket factory. The new environment shares the same threads and client
-     * socket factory as this one. Closing one environment will not close the
-     * other.
+     * Returns an environment instance which accepts using the given server
+     * socket factory. The returned environment is linked to this one, and
+     * closing either environment closes both.
      */
     public Environment withServerSocketFactory(ServerSocketFactory ssf) {
-        return new Environment(mExecutor, mIOExecutor, mSocketFactory, ssf);
+        return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
+                               mSocketFactory, ssf);
     }
 
     /**
