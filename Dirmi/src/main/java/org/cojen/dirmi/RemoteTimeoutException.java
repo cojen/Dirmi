@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package org.cojen.dirmi;
 import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
+
+import org.cojen.dirmi.util.Timer;
 
 /**
  * Thrown when a remote method has not responded in time.
@@ -86,5 +88,22 @@ public class RemoteTimeoutException extends RemoteException {
 
     public RemoteTimeoutException(double timeout, TimeUnit unit) {
         super(createMessage(timeout, unit));
+    }
+
+    public RemoteTimeoutException(Timer timer) {
+        this(timer.duration(), timer.unit());
+    }
+
+    /**
+     * Checks remaining duration and throws a RemoteTimeoutException if none left.
+     *
+     * @return remaining duration if more than zero
+     */
+    public static long checkRemaining(Timer timer) throws RemoteTimeoutException {
+        long remaining = timer.remaining();
+        if (remaining <= 0) {
+            throw new RemoteTimeoutException(timer);
+        }
+        return remaining;
     }
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,11 +27,12 @@ import java.rmi.Remote;
 
 /**
  * Identify a method as being batched and asynchronous, which does not imply
- * non-blocking. Requests are sent to the remote endpoint, but the channel
- * is not immediately flushed. The current thread holds the same channel for
+ * non-blocking. Requests are sent to the remote endpoint, but the channel is
+ * not immediately flushed. The current thread holds the same channel for
  * making additional requests until an immediate or synchronous request is
- * sent. If the current thread exits before releasing the channel, the batched
- * request is eventually sent.
+ * sent. All requests received by the remote endpoint are executed in one
+ * thread, in the correct order. If the sender thread exits before releasing
+ * the channel, the batched requests are eventually sent.
  *
  * <p>A batched method must declare returning {@code void}, a {@link Remote}
  * object, {@link Completion} or {@link Future}. Returning a {@code Remote}
@@ -70,4 +71,9 @@ import java.rmi.Remote;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Batched {
+    /**
+     * Control the calling mode of the batched method. By default, the request
+     * is eventually sent to the remote endpoint.
+     */
+    CallMode value() default CallMode.EVENTUAL;
 }

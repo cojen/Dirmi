@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import java.util.concurrent.TimeUnit;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
+import org.cojen.dirmi.Disposer;
+import org.cojen.dirmi.Ordered;
 
 /**
  * Describes a remote method, as provided by {@link RemoteInfo}.
@@ -81,11 +83,21 @@ public interface RemoteMethod extends Serializable {
 
     /**
      * Returns true if this method is batched, which implies that it is
-     * asynchronous with the eventual call mode.
+     * asynchronous.
      *
      * @see Batched
      */
     boolean isBatched();
+
+    /**
+     * @see Ordered
+     */
+    boolean isOrdered();
+
+    /**
+     * @see Disposer
+     */
+    boolean isDisposer();
 
     RemoteParameter<? extends Throwable> getRemoteFailureException();
 

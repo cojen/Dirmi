@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@ import org.cojen.dirmi.info.RemoteInfo;
  */
 public interface SkeletonFactory<R extends Remote> {
     /**
+     * @param objId remote object id
      * @param support for reusing channels
      * @param remoteServer server implementation of Remote object
      */
-    Skeleton<R> createSkeleton(SkeletonSupport support, R remoteServer);
+    Skeleton<R> createSkeleton(VersionedIdentifier objId, SkeletonSupport support, R remoteServer);
 }

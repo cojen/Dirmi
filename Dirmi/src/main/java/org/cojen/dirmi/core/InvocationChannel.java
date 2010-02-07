@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,15 +20,15 @@ import java.io.IOException;
 
 import org.cojen.dirmi.Pipe;
 
-import org.cojen.dirmi.io.StreamChannel;
+import org.cojen.dirmi.io.Channel;
 
 /**
  * Basic interface for a bidirectional method invocation I/O channel.
  *
  * @author Brian S O'Neill
  */
-public interface InvocationChannel extends StreamChannel, Pipe {
-    InvocationInputStream getInputStream() throws IOException;
+public interface InvocationChannel extends Channel, Pipe {
+    InvocationInputStream getInputStream();
 
-    InvocationOutputStream getOutputStream() throws IOException;
+    InvocationOutputStream getOutputStream();
 }

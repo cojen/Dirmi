@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import java.io.OutputStream;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A pipe is a bidirectional stream which can be passed via an {@link
+ * A pipe is a bidirectional stream which can be established via an {@link
  * Asynchronous asynchronous} remote method. Pipes can remain open as long as
  * the session is open, and all pipes are closed when the session is
  * closed. Here's an example remote method declaration which uses a pipe:
@@ -63,8 +63,8 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  *
  * Pipes are an extension of the remote method invocation itself, which is why
- * only one pipe can be passed per call. Any arguments which were passed along
- * with the pipe are written to the same underlying object stream. For
+ * only one pipe can be established per call. Any arguments which were passed
+ * along with the pipe are written to the same underlying object stream. For
  * long-lived pipes, be sure to call {@link #reset reset} occasionally to allow
  * any previously written objects to be freed.
  *
@@ -103,18 +103,18 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Brian S O'Neill
  */
-public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput {
+public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput, Link {
     /**
      * Returns the pipe's InputStream which also implements ObjectInput.
      * Closing the stream is equivalent to closing the pipe.
      */
-    InputStream getInputStream() throws IOException;
+    InputStream getInputStream();
 
     /**
      * Returns the pipe's OutputStream which also implements ObjectOutput.
      * Closing the stream is equivalent to closing the pipe.
      */
-    OutputStream getOutputStream() throws IOException;
+    OutputStream getOutputStream();
 
     /**
      * Reads a Throwable which was written via writeThrowable, which may be null.

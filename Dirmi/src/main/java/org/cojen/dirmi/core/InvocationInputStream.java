@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +42,12 @@ import org.cojen.dirmi.ReconstructedException;
  * @see InvocationOutputStream
  */
 public class InvocationInputStream extends InputStream implements InvocationInput {
+    private static final String STUB_GENERATOR_NAME;
+
+    static {
+        STUB_GENERATOR_NAME = StubFactoryGenerator.class.getName();
+    }
+
     private final InvocationChannel mChannel;
     private final ObjectInputStream mIn;
 
@@ -272,20 +278,92 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             t = (Throwable) in.readObject();
             reconstructCause = null;
         } catch (IOException e) {
-            if ((t = tryReconstruct(chain)) == null) {
+            if ((t = tryReconstruct(e, chain)) == null) {
                 throw e;
             }
             reconstructCause = e;
         } catch (ClassNotFoundException e) {
-            if ((t = tryReconstruct(chain)) == null) {
+            if ((t = tryReconstruct(e, chain)) == null) {
                 throw new RemoteException(e.getMessage(), e);
             }
             reconstructCause = e;
         }
 
-        // Now stitch local stack trace after remote trace.
+        // Stitch local stack trace after each remote trace.
+        {
+            StackTraceElement[] localTrace = localTrace(serverLocalAddress, serverRemoteAddress);
 
-        StackTraceElement[] remoteTrace = t.getStackTrace();
+            StackTraceElement[] rootRemoteTrace = t.getStackTrace();
+            int skeletonOffset = -1;
+            {
+                for (int i=0; i<rootRemoteTrace.length; i++) {
+                    if (InvocationOutputStream.SKELETON_GENERATOR_NAME
+                        .equals(rootRemoteTrace[i].getFileName()))
+                    {
+                        skeletonOffset = i;
+                        break;
+                    }
+                }
+            }
+
+            t.setStackTrace(stitchTrace(rootRemoteTrace, localTrace));
+
+            Throwable cause = t;
+            outer: while ((cause = cause.getCause()) != null) {
+                // Stitch local trace only if matches through to skeleton offset.
+                StackTraceElement[] causeTrace = cause.getStackTrace();
+                for (int i = rootRemoteTrace.length, j = causeTrace.length;
+                     --i >= skeletonOffset && --j >= 0 ;)
+                {
+                    if (!rootRemoteTrace[i].equals(causeTrace[j])) {
+                        continue outer;
+                    }
+                }
+
+                cause.setStackTrace(stitchTrace(causeTrace, localTrace));
+            }
+        }
+
+        if (reconstructCause == null) {
+            return t;
+        }
+
+        if (t instanceof ReconstructedException) {
+            throw (ReconstructedException) t;
+        }
+
+        throw new ReconstructedException(reconstructCause, t);
+    }
+
+    private StackTraceElement[] stitchTrace(StackTraceElement[] remoteTrace,
+                                            StackTraceElement[] localTrace)
+    {
+        int remoteTraceLength = remoteTrace.length;
+
+        if (remoteTraceLength > 1 &&
+            InvocationOutputStream.SKELETON_GENERATOR_NAME
+            .equals(remoteTrace[remoteTraceLength - 1].getFileName()))
+        {
+            // Prune off skeleton method, which was used as marker for
+            // determining if traces should be stitched.
+            remoteTraceLength--;
+        }
+
+        StackTraceElement[] combined = new StackTraceElement
+            [remoteTraceLength + localTrace.length];
+        System.arraycopy(remoteTrace, 0, combined, 0, remoteTraceLength);
+        System.arraycopy(localTrace, 0, combined, remoteTraceLength, localTrace.length);
+        return combined;
+    }
+
+    private StackTraceElement[] localTrace(String serverLocalAddress, String serverRemoteAddress) {
+        List<StackTraceElement> trace = new ArrayList<StackTraceElement>();
+
+        // Add some fake traces which clearly indicate that a method was
+        // invoked remotely. Also include any addresses.
+        String message = "--- remote method invocation ---";
+        addAddress(trace, message, "address", serverLocalAddress, remoteAddress(mChannel));
+        addAddress(trace, message, "address", serverRemoteAddress, localAddress(mChannel));
 
         StackTraceElement[] localTrace;
         try {
@@ -295,45 +373,24 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             localTrace = e.getStackTrace();
         }
 
-        int localTraceLength = localTrace.length;
-        int localTraceOffest = 0;
-        if (localTraceLength >= 2) {
-            // Exclude most recent method [0] from local trace, as it provides
-            // little extra context.
-            localTraceLength--;
-            localTraceOffest++;
+        // Ignore everything before the stub class.
+        int i;
+        for (i=0; i<localTrace.length; i++) {
+            if (STUB_GENERATOR_NAME.equals(localTrace[i].getFileName())) {
+                break;
+            }
         }
 
-        // Add some fake traces in the middle which clearly indicate that a
-        // method was invoked remotely. Also include any addresses.
-        StackTraceElement[] mid;
-        {
-            List<StackTraceElement> elements = new ArrayList<StackTraceElement>(4);
-
-            String message = "--- remote method invocation ---";
-            addAddress(elements, message, "address",
-                       serverLocalAddress, remoteAddress(mChannel));
-            addAddress(elements, message, "address",
-                       serverRemoteAddress, localAddress(mChannel));
-
-            mid = elements.toArray(new StackTraceElement[elements.size()]);
-        }
-        
-        if (localTraceLength >= 1) {
-            StackTraceElement[] combined;
-            combined = new StackTraceElement[remoteTrace.length + mid.length + localTraceLength];
-            System.arraycopy(remoteTrace, 0, combined, 0, remoteTrace.length);
-            System.arraycopy(mid, 0, combined, remoteTrace.length, mid.length);
-            System.arraycopy(localTrace, localTraceOffest,
-                             combined, remoteTrace.length + mid.length, localTraceLength);
-            t.setStackTrace(combined);
+        if (i >= localTrace.length) {
+            // Couldn't find pattern for some reason, so keep everything.
+            i = 0;
         }
 
-        if (reconstructCause == null) {
-            return t;
+        for (; i<localTrace.length; i++) {
+            trace.add(localTrace[i]);
         }
 
-        throw new ReconstructedException(t, reconstructCause);
+        return trace.toArray(new StackTraceElement[trace.size()]);
     }
 
     private static void addAddress(List<StackTraceElement> list, String message, String addrType,
@@ -349,7 +406,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         }
     }
 
-    private Throwable tryReconstruct(List<ThrowableInfo> chain) {
+    private Throwable tryReconstruct(Throwable reconstructCause, List<ThrowableInfo> chain) {
         if (chain == null || chain.size() == 0) {
             return null;
         }
@@ -359,7 +416,7 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         Throwable cause = null;
         for (ThrowableInfo info : chain) {
             if (info != null) {
-                cause = tryReconstruct(cause, info.mClassName, info.mMessage);
+                cause = tryReconstruct(reconstructCause, info.mClassName, info.mMessage, cause);
                 cause.setStackTrace(info.mStackTrace);
             }
         }
@@ -367,54 +424,133 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         return cause;
     }
 
-    private Throwable tryReconstruct(Throwable cause, String className, String message) {
+    private Throwable tryReconstruct(Throwable reconstructCause,
+                                     String className, String message, Throwable cause)
+    {
         try {
             // FIXME: use session's class loader
             Class exClass = Class.forName(className);
 
-            // Find appropriate constructor.
-            Constructor exCtor = null;
-
-            for (Constructor ctor : exClass.getConstructors()) {
-                Class[] paramTypes = ctor.getParameterTypes();
-                if (paramTypes.length < 1) {
-                    continue;
-                }
-                if (!paramTypes[0].isAssignableFrom(String.class)) {
-                    continue;
-                }
-                if (cause == null) {
-                    if (paramTypes.length == 1) {
-                        exCtor = ctor;
-                        break;
-                    }
+            int[] preferences;
+            if (cause == null) {
+                if (message == null) {
+                    preferences = new int[] {
+                        CTOR_NO_ARG,
+                        CTOR_MESSAGE,
+                        CTOR_CAUSE,
+                        CTOR_MESSAGE_AND_CAUSE,
+                        CTOR_CAUSE_AND_MESSAGE,
+                    };
                 } else {
-                    if (paramTypes.length == 2 &&
-                        paramTypes[1].isAssignableFrom(cause.getClass()))
-                    {
-                        exCtor = ctor;
-                        break;
-                    }
+                    preferences = new int[] {
+                        CTOR_MESSAGE,
+                        CTOR_MESSAGE_AND_CAUSE,
+                        CTOR_CAUSE_AND_MESSAGE,
+                    };
                 }
+            } else if (message == null) {
+                preferences = new int[] {
+                    CTOR_CAUSE,
+                    CTOR_CAUSE_AND_MESSAGE,
+                    CTOR_MESSAGE_AND_CAUSE,
+                    CTOR_NO_ARG,
+                    CTOR_MESSAGE,
+                };
+            } else {
+                preferences = new int[] {
+                    CTOR_MESSAGE_AND_CAUSE,
+                    CTOR_CAUSE_AND_MESSAGE,
+                    CTOR_MESSAGE,
+                };
             }
 
-            if (exCtor != null && Throwable.class.isAssignableFrom(exClass)) {
-                if (cause == null) {
-                    return (Throwable) exCtor.newInstance(message);
-                } else {
-                    return (Throwable) exCtor.newInstance(message, cause);
-                }
+            Throwable t = tryReconstruct(exClass, message, cause, preferences);
+
+            if (t != null) {
+                return t;
             }
         } catch (Exception e) {
             // Ignore.
         }
 
-        message = "(cannot reconstruct correct exception class " + className + "): " + message;
-        if (cause == null) {
-            return new RemoteException(message);
-        } else {
-            return new RemoteException(message, cause);
+        return new ReconstructedException(reconstructCause, className, message, cause);
+    }
+
+    private static final int
+        CTOR_NO_ARG = 1,
+        CTOR_MESSAGE = 2,
+        CTOR_CAUSE = 3,
+        CTOR_MESSAGE_AND_CAUSE = 4,
+        CTOR_CAUSE_AND_MESSAGE = 5;
+
+    private Throwable tryReconstruct(Class exClass, String message, Throwable cause,
+                                     int... preferences)
+        throws Exception
+    {
+        Throwable t = null;
+
+        for (int pref : preferences) {
+            for (Constructor ctor : exClass.getConstructors()) {
+                Class[] paramTypes = ctor.getParameterTypes();
+
+                switch (pref) {
+                case CTOR_NO_ARG:
+                    if (paramTypes.length == 0) {
+                        t = (Throwable) ctor.newInstance();
+                        break;
+                    }
+                    break;
+
+                case CTOR_MESSAGE:
+                    if (paramTypes.length == 1 &&
+                        paramTypes[0] == String.class)
+                    {
+                        t = (Throwable) ctor.newInstance(message);
+                        break;
+                    }
+                    break;
+
+                case CTOR_CAUSE:
+                    if (paramTypes.length == 1 &&
+                        isAssignableThrowable(paramTypes[0], cause))
+                    {
+                        return (Throwable) ctor.newInstance(cause);
+                    }
+                    break;
+
+                case CTOR_MESSAGE_AND_CAUSE:
+                    if (paramTypes.length == 2 &&
+                        paramTypes[0] == String.class &&
+                        isAssignableThrowable(paramTypes[1], cause))
+                    {
+                        return (Throwable) ctor.newInstance(message, cause);
+                    }
+                    break;
+ 
+                case CTOR_CAUSE_AND_MESSAGE:
+                    if (paramTypes.length == 2 &&
+                        isAssignableThrowable(paramTypes[0], cause) &&
+                        paramTypes[1] == String.class)
+                    {
+                        return (Throwable) ctor.newInstance(cause, message);
+                    }
+                    break;
+                }
+            }
         }
+
+        if (t != null && cause != null) {
+            try {
+                t.initCause(cause);
+            } catch (IllegalStateException e) {
+            }
+        }
+
+        return t;
+    }
+
+    private boolean isAssignableThrowable(Class type, Throwable cause) {
+        return cause == null && Throwable.class.isAssignableFrom(type) || type.isInstance(cause);
     }
 
     @Override

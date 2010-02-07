@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,29 +31,29 @@ import org.cojen.dirmi.info.RemoteInfo;
 class MarshalledRemote implements Marshalled, Externalizable {
     private static final long serialVersionUID = 1;
 
-    VersionedIdentifier mObjID;
-    VersionedIdentifier mTypeID;
+    VersionedIdentifier mObjId;
+    VersionedIdentifier mTypeId;
     RemoteInfo mInfo;
 
     // Need public constructor for Externalizable.
     public MarshalledRemote() {
     }
 
-    MarshalledRemote(VersionedIdentifier objID, VersionedIdentifier typeID, RemoteInfo info) {
-        mObjID = objID;
-        mTypeID = typeID;
+    MarshalledRemote(VersionedIdentifier objId, VersionedIdentifier typeId, RemoteInfo info) {
+        mObjId = objId;
+        mTypeId = typeId;
         mInfo = info;
     }
 
     public void writeExternal(ObjectOutput out) throws IOException {
-        mObjID.writeWithNextVersion(out);
-        mTypeID.writeWithNextVersion(out);
+        mObjId.writeWithNextVersion(out);
+        mTypeId.writeWithNextVersion(out);
         out.writeObject(mInfo);
     }
 
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        mObjID = VersionedIdentifier.readAndUpdateRemoteVersion(in);
-        mTypeID = VersionedIdentifier.readAndUpdateRemoteVersion(in);
+        mObjId = VersionedIdentifier.readAndUpdateRemoteVersion(in);
+        mTypeId = VersionedIdentifier.readAndUpdateRemoteVersion(in);
         mInfo = (RemoteInfo) in.readObject();
     }
 }

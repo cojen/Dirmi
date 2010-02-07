@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import java.io.OutputStream;
 import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,6 +34,23 @@ import java.util.List;
  * @see InvocationInputStream
  */
 public class InvocationOutputStream extends OutputStream implements InvocationOutput {
+    static final String SKELETON_GENERATOR_NAME;
+
+    private static final boolean cPruneStackTraces;
+
+    static {
+        SKELETON_GENERATOR_NAME = SkeletonFactoryGenerator.class.getName();
+
+        boolean prune;
+        try {
+            String prop = System.getProperty("org.cojen.dirmi.pruneServerStackTraces");
+            prune = prop == null || prop.equalsIgnoreCase("true");
+        } catch (SecurityException e) {
+            prune = true;
+        }
+        cPruneStackTraces = prune;
+    }
+
     static final byte FALSE = 0;
     static final byte TRUE = 1;
     static final byte NULL = 2;
@@ -213,7 +231,12 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
             Throwable sub = chain.get(i);
             out.writeObject(sub.getClass().getName());
             out.writeObject(sub.getMessage());
-            out.writeObject(sub.getStackTrace());
+            StackTraceElement[] trace = sub.getStackTrace();
+            if (cPruneStackTraces) {
+                trace = prune(trace);
+                sub.setStackTrace(trace);
+            }
+            out.writeObject(trace);
         }
 
         // Ensure caller gets something before we try to serialize the whole Throwable.
@@ -223,12 +246,29 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         out.writeObject(t);
     }
 
-    private void collectChain(List<Throwable> chain, Throwable t) {
+    private static void collectChain(List<Throwable> chain, Throwable t) {
         Throwable cause = t.getCause();
         if (cause != null) {
             collectChain(chain, cause);
         }
         chain.add(t);
+    }
+
+    private static StackTraceElement[] prune(StackTraceElement[] trace) {
+        // Prune everything after the skeleton class.
+
+        int i;
+        for (i=0; i<trace.length; i++) {
+            if (SKELETON_GENERATOR_NAME.equals(trace[i].getFileName())) {
+                break;
+            }
+        }
+
+        if (i > 0 && i < trace.length) {
+            return Arrays.copyOfRange(trace, 0, i + 1);
+        }
+
+        return trace;
     }
 
     public void reset() throws IOException {

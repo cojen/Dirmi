@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ abstract class AbstractIdentifier implements Comparable<AbstractIdentifier>, Ser
      *
      * @return identified object, never null
      * @throws NoSuchObjectException if object doesn't exist locally.
-     */
+     * /
     public Object retrieve() throws NoSuchObjectException {
         Object obj = tryRetrieve();
         if (obj == null) {
@@ -67,6 +67,7 @@ abstract class AbstractIdentifier implements Comparable<AbstractIdentifier>, Ser
         }
         return obj;
     }
+    */
 
     /**
      * Returns the identified object, if it exists locally.
@@ -118,7 +119,7 @@ abstract class AbstractIdentifier implements Comparable<AbstractIdentifier>, Ser
     }
 
     /**
-     * Lexigraphically compares two identifiers.
+     * Lexicographically compares two identifiers.
      */
     public int compareTo(AbstractIdentifier id) {
         if (this != id) {

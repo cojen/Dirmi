@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,6 +40,6 @@ public class RemoteConnectorServer implements RemoteConnector {
         if (ds == null) {
             throw new SQLException("Unknown database mnemonic: " + db);
         }
-        return new RemoteConnectionServer(ds.getConnection());
+        return RemoteConnectionServer.from(ds.getConnection());
     }
 }

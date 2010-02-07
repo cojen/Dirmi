@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -60,6 +60,8 @@ import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Disposer;
+import org.cojen.dirmi.Ordered;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Timeout;
@@ -174,7 +176,7 @@ public class RemoteIntrospector {
             SortedMap<String, RMethod> methodMap = new TreeMap<String, RMethod>();
 
             for (Method m : remote.getMethods()) {
-                if (!m.getDeclaringClass().isInterface()) {
+                if (!m.getDeclaringClass().isInterface() || isObjectMethod(m)) {
                     continue;
                 }
 
@@ -282,6 +284,14 @@ public class RemoteIntrospector {
         }
         if (clazz.isInterface() && Remote.class.isAssignableFrom(clazz)) {
             interfaces.add(clazz.getName());
+        }
+    }
+
+    private static boolean isObjectMethod(Method m) {
+        try {
+            return Object.class.getMethod(m.getName(), m.getParameterTypes()) != null;
+        } catch (NoSuchMethodException e) {
+            return false;
         }
     }
 
@@ -537,6 +547,8 @@ public class RemoteIntrospector {
 
         private final CallMode mCallMode;
         private final boolean mBatched;
+        private final boolean mOrdered;
+        private final boolean mDisposer;
 
         private RParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
@@ -556,7 +568,7 @@ public class RemoteIntrospector {
 
             if (m.isAnnotationPresent(Batched.class)) {
                 mBatched = true;
-                mCallMode = CallMode.EVENTUAL;
+                mCallMode = m.getAnnotation(Batched.class).value();
                 if (m.isAnnotationPresent(Asynchronous.class)) {
                     throw new IllegalArgumentException
                         ("Method cannot be annotated as both @Asynchronous and @Batched: " +
@@ -571,6 +583,9 @@ public class RemoteIntrospector {
                     mCallMode = ann.value();
                 }
             }
+
+            mOrdered = m.isAnnotationPresent(Ordered.class);
+            mDisposer = m.isAnnotationPresent(Disposer.class);
 
             // First pass, treat all params as serialized. Resolve on second pass.
             // This allows remote methods to pass instances of declaring class without
@@ -734,18 +749,13 @@ public class RemoteIntrospector {
 
             mCallMode = existing.mCallMode;
             mBatched = existing.mBatched;
+            mOrdered = existing.mOrdered;
+            mDisposer = existing.mDisposer;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
 
             mMethod = existing.mMethod;
-        }
-
-        private static <E> List<E> unfixList(List<E> list) {
-            if (list == null) {
-                list = Collections.emptyList();
-            }
-            return list;
         }
 
         public String getName() {
@@ -788,6 +798,14 @@ public class RemoteIntrospector {
 
         public boolean isBatched() {
             return mBatched;
+        }
+
+        public boolean isOrdered() {
+            return mOrdered;
+        }
+
+        public boolean isDisposer() {
+            return mDisposer;
         }
 
         public RemoteParameter<? extends Throwable> getRemoteFailureException() {
@@ -896,17 +914,22 @@ public class RemoteIntrospector {
                 throw new IllegalArgumentException("parameter types mismatch");
             }
 
-            if (mCallMode != other.mCallMode) {
+            if (mCallMode != other.mCallMode || mBatched != other.mBatched) {
                 // This is user error.
-                throw new IllegalArgumentException
-                    ("Inherited methods conflict in use of @Asynchronous annotation: " +
-                     methodDesc() + " and " + other.methodDesc());
-            }
 
-            if (mBatched != other.mBatched) {
-                // This is user error.
+                String conflictType;
+                if (!mBatched && !other.mBatched) {
+                    conflictType = "@Asynchronous";
+                } else if ((mBatched && (other.mBatched || other.mCallMode == null)) ||
+                           (other.mBatched) && (mBatched || mCallMode == null))
+                {
+                    conflictType = "@Batched";
+                } else {
+                    conflictType = "@Asynchronous/@Batched";
+                }
+
                 throw new IllegalArgumentException
-                    ("Inherited methods conflict in use of @Batched annotation: " +
+                    ("Inherited methods conflict in use of " + conflictType + " annotation: " +
                      methodDesc() + " and " + other.methodDesc());
             }
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,7 +29,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Remote method invocation session. Basic communication between sessions is
  * provided by the {@link #send send} and {@link #receive receive} methods,
- * which behave like a blocking queue with a capacity of one.
+ * which behave like a blocking queue with a capacity of one. Object transport
+ * via this interface is intended for handshaking and authentication. After an
+ * initial exchange, remote objects should be used for most communication
+ * between endpoints.
  *
  * <p>The send/receive methods follow the pull model rather than the push
  * model. Calling {@code send} locally enqueues an object, but {@code receive}
@@ -40,15 +43,17 @@ import java.util.concurrent.TimeUnit;
  * @author Brian S O'Neill
  * @see Environment
  */
-public interface Session extends Closeable, Flushable {
+public interface Session extends Closeable, Flushable, Link {
     /**
      * @return local session address or null if unknown or not applicable
      */
+    @Override
     Object getLocalAddress();
 
     /**
      * @return remote session address or null if unknown or not applicable
      */
+    @Override
     Object getRemoteAddress();
 
     /**
@@ -120,10 +125,12 @@ public interface Session extends Closeable, Flushable {
      * Batched batch} calls and {@link CallMode#EVENTUAL eventual} asynchronous
      * methods.
      */
+    @Override
     void flush() throws IOException;
 
     /**
      * Closes the session.
      */
+    @Override
     void close() throws IOException;
 }

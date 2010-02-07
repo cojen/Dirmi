@@ -151,7 +151,8 @@ import java.security.SecureRandom;
 
 // Changes made:
 // - reformatted the code a bit
-// - removed functions not needed by Dirmi
+// - removed some methods
+// - less inlining
 // - added static utilities
 //
 // -- Brian S O'Neill
@@ -202,13 +203,6 @@ class MersenneTwisterFast {
     private int mag01[];
     
     /**
-     * Constructor using the default seed.
-     */
-    public MersenneTwisterFast() {
-        this(System.currentTimeMillis());
-    }
-    
-    /**
      * Constructor using a given seed.  Though you pass this seed in
      * as a long, it's best to make sure it's actually an integer.
      */
@@ -240,14 +234,11 @@ class MersenneTwisterFast {
 
         mt[0]= (int)(seed & 0xffffffff);
         for (mti=1; mti<N; mti++) {
-            mt[mti] = 
-                (1812433253 * (mt[mti-1] ^ (mt[mti-1] >>> 30)) + mti); 
+            mt[mti] = (1812433253 * (mt[mti-1] ^ (mt[mti-1] >>> 30)) + mti); 
             /* See Knuth TAOCP Vol2. 3rd Ed. P.106 for multiplier. */
             /* In the previous versions, MSBs of the seed affect   */
             /* only MSBs of the array mt[].                        */
             /* 2002/01/09 modified by Makoto Matsumoto             */
-            mt[mti] &= 0xffffffff;
-            /* for >32 bit machines */
         }
     }
 
@@ -267,7 +258,6 @@ class MersenneTwisterFast {
         k = (N>array.length ? N : array.length);
         for (; k!=0; k--) {
             mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >>> 30)) * 1664525)) + array[j] + j; /* non linear */
-            mt[i] &= 0xffffffff; /* for WORDSIZE > 32 machines */
             i++;
             j++;
             if (i>=N) { mt[0] = mt[N-1]; i=1; }
@@ -275,7 +265,6 @@ class MersenneTwisterFast {
         }
         for (k=N-1; k!=0; k--) {
             mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >>> 30)) * 1566083941)) - i; /* non linear */
-            mt[i] &= 0xffffffff; /* for WORDSIZE > 32 machines */
             i++;
             if (i>=N) {
                 mt[0] = mt[N-1]; i=1; 
@@ -315,60 +304,67 @@ class MersenneTwisterFast {
         return y;
     }
 
+    /** Returns an integer drawn uniformly from 0 to n-1.  Suffice it to say,
+        n must be > 0, or an IllegalArgumentException is raised. */
+    public final int nextInt(final int n) {
+        if (n <= 0) {
+            throw new IllegalArgumentException("n must be > 0");
+        }
+        
+        if ((n & -n) == n) { // i.e., n is a power of 2
+            return (int)((n * (long) (nextInt() >>> 1) ) >> 31);
+        }
+        
+        int bits, val;
+        do {
+            bits = (nextInt() >>> 1);
+            val = bits % n;
+        } while (bits - val + n - 1 < 0);
+
+        return val;
+    }
+
+    public final void nextBytes(byte[] bytes) {
+        for (int i = 0; i < bytes.length; ) {
+            for (int rnd = nextInt(), n = Math.min(bytes.length - i, 4); n-- > 0; rnd >>= 8) {
+                bytes[i++] = (byte) rnd;
+            }
+        }
+    }
+
     public final long nextLong() {
-        int y;
-        int z;
+        return (((long) nextInt()) << 32) + (long) nextInt();
+    }
 
-        if (mti >= N) {   // generate N words at one time
-            int kk;
-            final int[] mt = this.mt; // locals are slightly faster 
-            final int[] mag01 = this.mag01; // locals are slightly faster 
-            
-            for (kk = 0; kk < N - M; kk++) {
-                y = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
-                mt[kk] = mt[kk+M] ^ (y >>> 1) ^ mag01[y & 0x1];
-            }
-            for (; kk < N-1; kk++) {
-                y = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
-                mt[kk] = mt[kk+(M-N)] ^ (y >>> 1) ^ mag01[y & 0x1];
-            }
-            y = (mt[N-1] & UPPER_MASK) | (mt[0] & LOWER_MASK);
-            mt[N-1] = mt[M-1] ^ (y >>> 1) ^ mag01[y & 0x1];
-
-            mti = 0;
-        }
-  
-        y = mt[mti++];
-        y ^= y >>> 11;                          // TEMPERING_SHIFT_U(y)
-        y ^= (y << 7) & TEMPERING_MASK_B;       // TEMPERING_SHIFT_S(y)
-        y ^= (y << 15) & TEMPERING_MASK_C;      // TEMPERING_SHIFT_T(y)
-        y ^= (y >>> 18);                        // TEMPERING_SHIFT_L(y)
-
-        if (mti >= N) {   // generate N words at one time
-            int kk;
-            final int[] mt = this.mt; // locals are slightly faster 
-            final int[] mag01 = this.mag01; // locals are slightly faster 
-            
-            for (kk = 0; kk < N - M; kk++) {
-                z = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
-                mt[kk] = mt[kk+M] ^ (z >>> 1) ^ mag01[z & 0x1];
-            }
-            for (; kk < N-1; kk++) {
-                z = (mt[kk] & UPPER_MASK) | (mt[kk+1] & LOWER_MASK);
-                mt[kk] = mt[kk+(M-N)] ^ (z >>> 1) ^ mag01[z & 0x1];
-            }
-            z = (mt[N-1] & UPPER_MASK) | (mt[0] & LOWER_MASK);
-            mt[N-1] = mt[M-1] ^ (z >>> 1) ^ mag01[z & 0x1];
-            
-            mti = 0;
+    /** Returns a long drawn uniformly from 0 to n-1.  Suffice it to say,
+        n must be > 0, or an IllegalArgumentException is raised. */
+    public final long nextLong(final long n) {
+        if (n <= 0) {
+            throw new IllegalArgumentException("n must be > 0");
         }
         
-        z = mt[mti++];
-        z ^= z >>> 11;                          // TEMPERING_SHIFT_U(z)
-        z ^= (z << 7) & TEMPERING_MASK_B;       // TEMPERING_SHIFT_S(z)
-        z ^= (z << 15) & TEMPERING_MASK_C;      // TEMPERING_SHIFT_T(z)
-        z ^= (z >>> 18);                        // TEMPERING_SHIFT_L(z)
-        
-        return (((long)y) << 32) + (long)z;
+        long bits, val;
+        do {
+            bits = (((((long) nextInt()) << 32) + (long) nextInt()) >>> 1);
+            val = bits % n;
+        } while (bits - val + n - 1 < 0);
+
+        return val;
+    }
+
+    /** Returns a random double in the half-open range from [0.0,1.0).  Thus 0.0 is a valid
+        result but 1.0 is not. */
+    public final double nextDouble() {
+        /* derived from nextDouble documentation in jdk 1.2 docs, see top */
+        return ((((long) (nextInt() >>> 6)) << 27) + (nextInt() >>> 5)) / (double) (1L << 53);
+    }
+
+    /** Returns a random float in the half-open range from [0.0f,1.0f).  Thus 0.0f is a valid
+        result but 1.0f is not. */
+    public final float nextFloat() {
+        return (nextInt() >>> 8) / ((float) (1 << 24));
+    }
+    public final boolean nextBoolean() {
+        return (nextInt() >>> 31) != 0;
     }
 }

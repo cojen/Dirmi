@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package org.cojen.dirmi;
 import java.rmi.RemoteException;
 
 /**
- * Thrown when a remote object cannot be transfered because it has a malformed
+ * Thrown when a remote object cannot be transferred because it has a malformed
  * specification.
  *
  * @author Brian S O'Neill

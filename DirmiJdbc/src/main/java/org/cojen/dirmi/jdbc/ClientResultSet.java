@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -131,15 +131,15 @@ public class ClientResultSet implements ResultSet {
                 return false;
             }
             return true;
+        } catch (ReconstructedException e) {
+            silentClose();
+            throw new SQLException(e.getCause());
         } catch (IOException e) {
             silentClose();
             throw new SQLException(e);
         } catch (ClassNotFoundException e) {
             silentClose();
             throw new SQLException(e);
-        } catch (ReconstructedException e) {
-            silentClose();
-            throw new SQLException(e.getCause());
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.rmi.RemoteException;
 
-import java.rmi.server.Unreferenced;
-
 import java.util.Queue;
 
 import java.util.concurrent.ExecutionException;
@@ -27,6 +25,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Unreferenced;
 
 /**
  * 
@@ -41,6 +40,7 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
     RemoteCompletionServer() {
     }
 
+    @Override
     public synchronized void register(Queue<? super Completion<V>> completionQueue) {
         if (completionQueue == null) {
             throw new IllegalArgumentException("Completion queue is null");
@@ -54,18 +54,22 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         }
     }
 
+    @Override
     public boolean cancel(boolean mayInterrupt) {
         return false;
     }
 
+    @Override
     public boolean isCancelled() {
         return false;
     }
 
+    @Override
     public synchronized boolean isDone() {
         return mComplete != null;
     }
 
+    @Override
     public synchronized V get() throws InterruptedException, ExecutionException {
         Throwable complete;
         while ((complete = mComplete) == null) {
@@ -77,24 +81,29 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         throw new ExecutionException(complete);
     }
     
+    @Override
     public synchronized V get(final long timeout, final TimeUnit unit)
         throws InterruptedException, ExecutionException, TimeoutException
     {
-        Throwable complete;
-        if (timeout <= 0) {
-            complete = mComplete;
-        } else {
-            long timeoutMillis = unit.toMillis(timeout);
-            // FIXME: use nanoTime
-            long endMillis = System.currentTimeMillis();
-            do {
+        long timeoutMillis = unit.toMillis(timeout);
+
+        Throwable complete = mComplete;
+
+        if (complete == null && timeoutMillis > 0) {
+            long endNanos = System.nanoTime() + unit.toNanos(timeout);
+            while (true) {
                 wait(timeoutMillis);
                 if ((complete = mComplete) != null) {
                     break;
                 }
-                timeoutMillis = endMillis - System.currentTimeMillis();
-            } while (timeoutMillis > 0);
+                long timeoutNanos = endNanos - System.nanoTime();
+                if (timeoutNanos < 1000000) {
+                    break;
+                }
+                timeoutMillis = timeoutNanos / 1000000;
+            }
         }
+
         if (complete == null) {
             throw new TimeoutException("" + timeout + ' ' + unit);
         }
@@ -104,6 +113,7 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         throw new ExecutionException(complete);
     }
 
+    @Override
     public synchronized void complete(V value) {
         if (mComplete == null) {
             mValue = value;
@@ -112,6 +122,7 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         }
     }
 
+    @Override
     public synchronized void exception(Throwable cause) {
         if (mComplete == null) {
             if (cause == null) {
@@ -122,6 +133,7 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         }
     }
 
+    @Override
     public synchronized void unreferenced() {
         if (mComplete == null) {
             mComplete = new RemoteException("Session closed");

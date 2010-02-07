@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import java.io.OutputStream;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import org.cojen.dirmi.ClosedException;
 
 /**
  * Unbuffered replacement for {@link java.io.PipedOutputStream}. This piped
@@ -76,6 +78,7 @@ public class PipedOutputStream extends OutputStream {
             mLength = 1;
 
             mReadCondition.signal();
+            mPin.notifyReady();
 
             waitForWriteCompletion();
         } finally {
@@ -106,6 +109,7 @@ public class PipedOutputStream extends OutputStream {
             mLength = length;
 
             mReadCondition.signal();
+            mPin.notifyReady();
 
             waitForWriteCompletion();
         } finally {
@@ -126,7 +130,26 @@ public class PipedOutputStream extends OutputStream {
         }
     }
 
-    public void close() throws IOException {
+    public boolean isReady() throws IOException {
+        mLock.lock();
+        try {
+            checkConnected();
+            return mData == null;
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    public boolean isClosed() {
+        mLock.lock();
+        try {
+            return mPin == null && mEverConnected;
+        } finally {
+            mLock.unlock();
+        }
+    }
+
+    public void close() {
         mLock.lock();
         try {
             if (mPin != null) {
@@ -135,16 +158,8 @@ public class PipedOutputStream extends OutputStream {
                 pin.outputClosed();
                 mReadCondition.signalAll();
                 mWriteCondition.signalAll();
+                pin.notifyClosed();
             }
-        } finally {
-            mLock.unlock();
-        }
-    }
-
-    public boolean isConnected() {
-        mLock.lock();
-        try {
-            return mPin != null;
         } finally {
             mLock.unlock();
         }
@@ -254,7 +269,7 @@ public class PipedOutputStream extends OutputStream {
     }
 
     // Caller must hold mLock.
-    int available() throws IOException {
+    int inputAvailable() throws IOException {
         return (mData == null) ? 0 : mLength;
     }
 
@@ -265,7 +280,7 @@ public class PipedOutputStream extends OutputStream {
                 throw new IOException("Already connected");
             }
             if (mEverConnected) {
-                throw new IOException("Closed");
+                throw new ClosedException();
             }
             mPin = pin;
             mEverConnected = true;
@@ -279,7 +294,7 @@ public class PipedOutputStream extends OutputStream {
     private void checkConnected() throws IOException {
         if (mPin == null) {
             if (mEverConnected) {
-                throw new IOException("Closed");
+                throw new ClosedException();
             }
             throw new IOException("Not connected");
         }

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -89,16 +89,26 @@ public interface StubSupport {
     void batchedAndCancelTimeout(InvocationChannel channel);
 
     /**
-     * Called after channel usage is finished and can be reused for sending
-     * new requests. This method should not throw any exception.
+     * Called if channel is to be used for returning a Pipe. This method
+     * should not throw any exception.
      */
-    void finished(InvocationChannel channel);
+    void release(InvocationChannel channel);
 
     /**
      * Called after channel usage is finished and can be reused for sending
      * new requests. This method should not throw any exception.
+     *
+     * @param reset pass true if object output should be reset
      */
-    void finishedAndCancelTimeout(InvocationChannel channel);
+    void finished(InvocationChannel channel, boolean reset);
+
+    /**
+     * Called after channel usage is finished and can be reused for sending
+     * new requests. This method should not throw any exception.
+     *
+     * @param reset pass true if object output should be reset
+     */
+    void finishedAndCancelTimeout(InvocationChannel channel, boolean reset);
 
     /**
      * Called if invocation failed due to a problem with the channel, and it
@@ -128,6 +138,12 @@ public interface StubSupport {
                                                    InvocationChannel channel,
                                                    Throwable cause,
                                                    double timeout, TimeUnit unit);
+
+    /**
+     * Returns a StubSupport instance which throws NoSuchObjectException for
+     * all of the above methods.
+     */
+    StubSupport dispose();
 
     /**
      * Returns a hashCode implementation for the Stub.

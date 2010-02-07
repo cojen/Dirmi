@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,9 +20,8 @@ import java.io.IOException;
 
 import java.rmi.Remote;
 
-import java.rmi.server.Unreferenced;
-
 import org.cojen.dirmi.NoSuchObjectException;
+import org.cojen.dirmi.Unreferenced;
 
 /**
  * A Skeleton instance wraps a server-side Remote object, unmarshalls client
@@ -39,10 +38,10 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
     R getRemoteServer();
 
     /**
-     * Invoke a non-serialized method in server-side instance. Any exception
-     * thrown from the invoked method is written to the channel, unless method
-     * is asynchronous or batched. Any other exception thrown from this method
-     * indicates a communication failure, and so the channel should be closed.
+     * Invoke a remote method on the server. Any exception thrown from the
+     * invoked method is written to the channel, unless method is asynchronous
+     * or batched. Any other exception thrown from this method indicates a
+     * communication failure, and so the channel should be closed.
      *
      * <p>If this invocation is after a batched call which threw an exception,
      * the batchedException parameter wraps it. If non-null, the input
@@ -62,8 +61,6 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
      * @throws ClassNotFoundException if unmarshalling an object parameter
      * refers to an unknown class
-     * @throws AsynchronousInvocationException if method is asynchronous and
-     * throws an exception
      * @throws BatchedInvocationException if method is batched and
      * throws an exception
      */
@@ -73,6 +70,5 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
                NoSuchMethodException,
                NoSuchObjectException,
                ClassNotFoundException,
-               AsynchronousInvocationException,
                BatchedInvocationException;
 }

@@ -1,0 +1,99 @@
+#
+# Configuration file for rmi benchmarks
+#
+
+# Warmup (null calls)
+# Arguments: <# calls>
+0.0 "Warmup" dirmi.bench.rmi.NullCalls 50000
+
+# Time null calls
+# Arguments: <# calls>
+1.0 "Null calls" dirmi.bench.rmi.NullCalls 10000
+
+# Time boolean calls
+# Arguments: <# calls>
+1.0 "Boolean calls" dirmi.bench.rmi.BooleanCalls 10000
+
+# Time byte calls
+# Arguments: <# calls>
+1.0 "Byte calls" dirmi.bench.rmi.ByteCalls 10000
+
+# Time char calls
+# Arguments: <# calls>
+1.0 "Char calls" dirmi.bench.rmi.CharCalls 10000
+
+# Time short calls
+# Arguments: <# calls>
+1.0 "Short calls" dirmi.bench.rmi.ShortCalls 10000
+
+# Time int calls
+# Arguments: <# calls>
+1.0 "Int calls" dirmi.bench.rmi.IntCalls 10000
+
+# Time long calls
+# Arguments: <# calls>
+1.0 "Long calls" dirmi.bench.rmi.LongCalls 10000
+
+# Time float calls
+# Arguments: <# calls>
+1.0 "Float calls" dirmi.bench.rmi.FloatCalls 10000
+
+# Time double calls
+# Arguments: <# calls>
+1.0 "Double calls" dirmi.bench.rmi.DoubleCalls 10000
+
+# Time boolean array calls
+# Arguments: <array size> <# calls>
+1.0 "Boolean array calls" dirmi.bench.rmi.BooleanArrayCalls 100 10000
+
+# Time byte array calls
+# Arguments: <array size> <# calls>
+1.0 "Byte array calls" dirmi.bench.rmi.ByteArrayCalls 100 10000
+
+# Time char array calls
+# Arguments: <array size> <# calls>
+1.0 "Char array calls" dirmi.bench.rmi.CharArrayCalls 100 10000
+
+# Time short array calls
+# Arguments: <array size> <# calls>
+1.0 "Short array calls" dirmi.bench.rmi.ShortArrayCalls 100 10000
+
+# Time int array calls
+# Arguments: <array size> <# calls>
+1.0 "Int array calls" dirmi.bench.rmi.IntArrayCalls 100 10000
+
+# Time long array calls
+# Arguments: <array size> <# calls>
+1.0 "Long array calls" dirmi.bench.rmi.LongArrayCalls 100 10000
+
+# Time float array calls
+# Arguments: <array size> <# calls>
+1.0 "Float array calls" dirmi.bench.rmi.FloatArrayCalls 100 10000
+
+# Time double array calls
+# Arguments: <array size> <# calls>
+1.0 "Double array calls" dirmi.bench.rmi.DoubleArrayCalls 100 10000
+
+# Time small-object tree calls
+# Arguments: <tree depth> <# calls>
+1.0 "Small object tree calls" dirmi.bench.rmi.SmallObjTreeCalls 4 10000
+
+# Time object tree calls
+# Arguments: <tree depth> <# calls>
+1.0 "Object tree calls" dirmi.bench.rmi.ObjTreeCalls 4 10000
+
+# Time object array calls
+# Arguments: <array size> <# calls>
+1.0 "Object array calls" dirmi.bench.rmi.ObjArrayCalls 100 10000
+
+# Time remote object array calls
+# Arguments: <array size> <# calls>
+1.0 "Remote object array calls" dirmi.bench.rmi.RemoteObjArrayCalls 100 10000
+
+# Time proxy object array calls
+# Arguments: <array size> <# calls>
+1.0 "Proxy array calls" dirmi.bench.rmi.ProxyArrayCalls 100 10000
+
+# Time exception calls
+# Arguments: <# calls>
+1.0 "Exception calls" dirmi.bench.rmi.ExceptionCalls 10000

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,13 +26,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReference;
 
 import java.security.AccessController;
@@ -67,6 +67,8 @@ import static org.cojen.dirmi.core.CodeBuilderUtil.*;
  */
 public class StubFactoryGenerator<R extends Remote> {
     private static final String STUB_SUPPORT_NAME = "support";
+    private static final String SEQUENCE_NAME = "sequence";
+    private static final String SEQUENCE_UPDATER_NAME = "sequenceUpdater";
 
     private static final Map<Object, StubFactory<?>> cCache;
 
@@ -77,7 +79,7 @@ public class StubFactoryGenerator<R extends Remote> {
     /**
      * Returns a new or cached StubFactory.
      *
-     * @param type
+     * @param type main remote type
      * @param remoteInfo remote type as supported by remote server
      * @throws IllegalArgumentException if type is null or malformed
      */
@@ -90,7 +92,8 @@ public class StubFactoryGenerator<R extends Remote> {
         synchronized (cCache) {
             StubFactory<R> factory = (StubFactory<R>) cCache.get(key);
             if (factory == null) {
-                factory = new StubFactoryGenerator<R>(type, remoteInfo).generateFactory();
+                factory = new StubFactoryGenerator<R>(type, remoteInfo)
+                    .generateFactory();
                 cCache.put(key, factory);
             }
             return factory;
@@ -131,20 +134,15 @@ public class StubFactoryGenerator<R extends Remote> {
     }
 
     private Class<? extends R> generateStub() {
-        RuntimeClassFile cf = new RuntimeClassFile
-            (cleanClassName(mRemoteInfo.getName()) + "$Stub", null, mType.getClassLoader());
+        RuntimeClassFile cf =
+            createRuntimeClassFile(mRemoteInfo.getName() + "$Stub", mType.getClassLoader());
         cf.addInterface(mType);
         cf.setSourceFile(StubFactoryGenerator.class.getName());
         cf.markSynthetic();
         cf.setTarget("1.5");
 
-        // Add common fields.
-        {
-            cf.addField(Modifiers.PRIVATE.toFinal(true), STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
-        }
-
         // Add reference to factory.
-        addStaticFactoryRef(cf, mFactoryRef);
+        CodeBuilder staticInitBuilder = addStaticFactoryRefUnfinished(cf, mFactoryRef);
 
         // Add constructor.
         {
@@ -165,10 +163,12 @@ public class StubFactoryGenerator<R extends Remote> {
         // by local interface. This allows the server to upgrade before the
         // client, making new methods available via reflection.
 
-        // Track which exception converting methods need to be created.
-        Map<Class, String> exceptionConverters = new HashMap<Class, String>();
+        boolean generatedSequenceFields = false;
+        boolean hasDisposer = false;
 
         for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
+            hasDisposer |= method.isDisposer();
+
             RemoteMethod localMethod;
             {
                 RemoteParameter[] params = method.getParameterTypes()
@@ -230,9 +230,20 @@ public class StubFactoryGenerator<R extends Remote> {
             final boolean noTimeout = timeout < 0 && timeoutVar == null;
             final LocalVariable originalTimeoutVar = timeoutVar;
 
-            // Call invoke to write to a free channel.
+            final LocalVariable supportVar = b.createLocalVariable(null, STUB_SUPPORT_TYPE);
             b.loadThis();
             b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            b.storeLocal(supportVar);
+
+            if (method.isDisposer()) {
+                b.loadThis();
+                b.loadLocal(supportVar);
+                b.invokeInterface(STUB_SUPPORT_TYPE, "dispose", STUB_SUPPORT_TYPE, null);
+                b.storeField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            }
+
+            // Call invoke to write to a free channel.
+            b.loadLocal(supportVar);
             b.loadConstant(remoteFailureExType);
             if (noTimeout) {
                 b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", INV_CHANNEL_TYPE,
@@ -243,7 +254,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.invokeInterface(STUB_SUPPORT_TYPE, "invoke", INV_CHANNEL_TYPE,
                                   new TypeDesc[] {CLASS_TYPE, timeoutType, TIME_UNIT_TYPE});
             }
-            LocalVariable channelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
+            final LocalVariable channelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
             b.storeLocal(channelVar);
 
             LocalVariable compVar = null;
@@ -251,8 +262,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 (Future.class == returnDesc.toClass() || Completion.class == returnDesc.toClass()))
             {
                 compVar = b.createLocalVariable(null, TypeDesc.forClass(Completion.class));
-                b.loadThis();
-                b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+                b.loadLocal(supportVar);
                 b.invokeInterface(STUB_SUPPORT_TYPE, "createCompletion", compVar.getType(), null);
                 b.storeLocal(compVar);
             }
@@ -268,6 +278,36 @@ public class StubFactoryGenerator<R extends Remote> {
             b.loadLocal(invOutVar);
             b.loadConstant(method.getMethodId());
             b.invokeVirtual(INV_OUT_TYPE, "writeInt", null, new TypeDesc[] {TypeDesc.INT});
+
+            if (method.isOrdered()) {
+                TypeDesc updaterType = TypeDesc.forClass(AtomicIntegerFieldUpdater.class);
+
+                if (!generatedSequenceFields) {
+                    generatedSequenceFields = true;
+
+                    cf.addField(Modifiers.PRIVATE.toVolatile(true), SEQUENCE_NAME, TypeDesc.INT);
+                    cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
+                                SEQUENCE_UPDATER_NAME, updaterType);
+
+                    staticInitBuilder.loadConstant(cf.getType());
+                    staticInitBuilder.loadConstant(SEQUENCE_NAME);
+
+                    staticInitBuilder.invokeStatic
+                        (updaterType, "newUpdater", updaterType,
+                         new TypeDesc[] {CLASS_TYPE, TypeDesc.STRING});
+
+                    staticInitBuilder.storeStaticField(SEQUENCE_UPDATER_NAME, updaterType);
+                }
+
+                // Pass next sequence value.
+                b.loadLocal(invOutVar);
+                b.loadStaticField(SEQUENCE_UPDATER_NAME, updaterType);
+                b.loadThis();
+                b.invokeVirtual(updaterType, "incrementAndGet", TypeDesc.INT,
+                                new TypeDesc[] {TypeDesc.OBJECT});
+                b.invokeVirtual(invOutVar.getType(), "writeInt", null,
+                                new TypeDesc[] {TypeDesc.INT});
+            }
 
             if (compVar != null) {
                 // Write the Future first to allow any parameter reading
@@ -310,20 +350,28 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
 
-            if (anySharedParam && !returnPipe) {
-                // Reset the stream to allow request params to be freed. Do so
-                // after flushing to prevent deadlock if the send buffer has no
-                // space. Reader might not be in a state to read, and there is
-                // no way to explicitly read the reset operation. In order for
-                // this to work, channel buffer needs at least two bytes to
-                // hold the TC_ENDBLOCKDATA and TC_RESET opcodes.
+            if (anySharedParam && !returnPipe &&
+                (!method.isAsynchronous() || method.isBatched()))
+            {
+                // Reset the stream to allow request params to be freed.
+                // Do so after flushing to prevent deadlock if the send
+                // buffer has no space.  Reader might not be in a state to
+                // read, and there is no way to explicitly read the reset
+                // operation. In order for this to work, channel buffer
+                // needs at least two bytes to hold the TC_ENDBLOCKDATA and
+                // TC_RESET opcodes.
+
+                // Non-batched asynchronous methods reset the stream via the
+                // finished methods. If the reset fails, no exception is
+                // thrown, but the channel is disconnected.
+
+                // Stream is not reset if returning a Pipe. Let user control
+                // when reset should be sent, if at all. This also prevents
+                // problems when remote endpoint closes Pipe before reset is
+                // called.
+
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(INV_OUT_TYPE, "reset", null, null);
-
-                // Note: Stream is not reset if returning a Pipe. Let user
-                // control when reset should be sent, if at all. This also
-                // prevents problems when remote endpoint closes Pipe before
-                // reset is called.
             }
 
             final Label invokeEnd;
@@ -342,14 +390,19 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 if (returnPipe) {
                     // Return channel; as a Pipe.
+                    b.loadLocal(supportVar);
+                    b.loadLocal(channelVar);
+                    b.invokeInterface(STUB_SUPPORT_TYPE, "release", null,
+                                      new TypeDesc[] {channelVar.getType()});
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
                 } else if (compVar != null) {
                     // Finished with channel.
                     if (method.isBatched()) {
-                        genBatched(b, channelVar, noTimeout);
+                        genBatched(b, supportVar, channelVar, noTimeout);
                     } else {
-                        genFinished(b, channelVar, noTimeout);
+                        // Also reset channel if any shared parameters.
+                        genFinished(b, supportVar, channelVar, noTimeout, anySharedParam);
                     }
 
                     b.loadLocal(compVar);
@@ -358,8 +411,7 @@ public class StubFactoryGenerator<R extends Remote> {
                            Remote.class.isAssignableFrom(returnDesc.toClass()))
                 {
                     // Return a remote object from a batched method.
-                    b.loadThis();
-                    b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+                    b.loadLocal(supportVar);
                     b.loadConstant(remoteFailureExType);
                     b.loadLocal(channelVar);
                     b.loadConstant(returnDesc);
@@ -369,15 +421,16 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.checkCast(returnDesc);
 
                     // Finished with channel.
-                    genBatched(b, channelVar, noTimeout);
+                    genBatched(b, supportVar, channelVar, noTimeout);
 
                     b.returnValue(returnDesc);
                 } else {
                     // Finished with channel.
                     if (method.isBatched()) {
-                        genBatched(b, channelVar, noTimeout);
+                        genBatched(b, supportVar, channelVar, noTimeout);
                     } else {
-                        genFinished(b, channelVar, noTimeout);
+                        // Also reset channel if any shared parameters.
+                        genFinished(b, supportVar, channelVar, noTimeout, anySharedParam);
                     }
 
                     if (returnDesc == null) {
@@ -429,20 +482,20 @@ public class StubFactoryGenerator<R extends Remote> {
 
                 if (returnDesc == null) {
                     invokeEnd = b.createLabel().setLocation();
-                    // Finished with channel.
-                    genFinished(b, channelVar, noTimeout);
+                    // Finished with channel, but don't reset again.
+                    genFinished(b, supportVar, channelVar, noTimeout, false);
                     b.returnVoid();
                 } else {
                     readParam(b, method.getReturnType(), invInVar);
                     invokeEnd = b.createLabel().setLocation();
-                    // Finished with channel.
-                    genFinished(b, channelVar, noTimeout);
+                    // Finished with channel, but don't reset again.
+                    genFinished(b, supportVar, channelVar, noTimeout, false);
                     b.returnValue(returnDesc);
                 }
 
                 abnormalResponse.setLocation();
-                // Finished with channel.
-                genFinished(b, channelVar, noTimeout);
+                // Finished with channel, but don't reset again
+                genFinished(b, supportVar, channelVar, noTimeout, false);
                 b.loadLocal(throwableVar);
                 b.throwObject();
             }
@@ -453,8 +506,7 @@ public class StubFactoryGenerator<R extends Remote> {
                 LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
                 b.storeLocal(throwableVar);
 
-                b.loadThis();
-                b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+                b.loadLocal(supportVar);
                 b.loadConstant(remoteFailureExType);
                 b.loadLocal(channelVar);
                 b.loadLocal(throwableVar);
@@ -470,6 +522,17 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
                 b.throwObject();
             }
+        }
+
+        // Add StubSupport field.
+        {
+            Modifiers mods = Modifiers.PRIVATE;
+            if (hasDisposer) {
+                mods = mods.toVolatile(true);
+            } else {
+                mods = mods.toFinal(true);
+            }
+            cf.addField(mods, STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
         }
 
         // Methods unimplemented by server throw UnimplementedMethodException.
@@ -577,22 +640,7 @@ public class StubFactoryGenerator<R extends Remote> {
             b.returnValue(TypeDesc.STRING);
         }
 
-        // Define remaining static exception converting methods.
-        for (Map.Entry<Class, String> entry : exceptionConverters.entrySet()) {
-            MethodInfo mi = cf.addMethod(Modifiers.PRIVATE.toStatic(true), entry.getValue(),
-                                         THROWABLE_TYPE, new TypeDesc[] {THROWABLE_TYPE});
-            CodeBuilder b = new CodeBuilder(mi);
-
-            TypeDesc exType = TypeDesc.forClass(entry.getKey());
-
-            b.newObject(exType);
-            b.dup();
-            b.loadLocal(b.getParameter(0));
-            b.invokeVirtual(THROWABLE_TYPE, "getMessage", TypeDesc.STRING, null);
-            b.loadLocal(b.getParameter(0));
-            b.invokeConstructor(exType, new TypeDesc[] {TypeDesc.STRING, THROWABLE_TYPE});
-            b.returnValue(exType);
-        }
+        staticInitBuilder.returnVoid();
 
         return cf.defineClass();
     }
@@ -720,22 +768,27 @@ public class StubFactoryGenerator<R extends Remote> {
         }
     }
 
-    private void genBatched(CodeBuilder b, LocalVariable channelVar, boolean noTimeout) {
-        b.loadThis();
-        b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+    private void genBatched(CodeBuilder b,
+                            LocalVariable supportVar, LocalVariable channelVar,
+                            boolean noTimeout)
+    {
+        b.loadLocal(supportVar);
         b.loadLocal(channelVar);
         String methodName = noTimeout ? "batched" : "batchedAndCancelTimeout";
         b.invokeInterface(STUB_SUPPORT_TYPE, methodName, null,
                           new TypeDesc[] {channelVar.getType()});
     }
 
-    private void genFinished(CodeBuilder b, LocalVariable channelVar, boolean noTimeout) {
-        b.loadThis();
-        b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+    private void genFinished(CodeBuilder b,
+                             LocalVariable supportVar, LocalVariable channelVar,
+                             boolean noTimeout, boolean reset)
+    {
+        b.loadLocal(supportVar);
         b.loadLocal(channelVar);
+        b.loadConstant(reset);
         String methodName = noTimeout ? "finished" : "finishedAndCancelTimeout";
         b.invokeInterface(STUB_SUPPORT_TYPE, methodName, null,
-                          new TypeDesc[] {channelVar.getType()});
+                          new TypeDesc[] {channelVar.getType(), TypeDesc.BOOLEAN});
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {

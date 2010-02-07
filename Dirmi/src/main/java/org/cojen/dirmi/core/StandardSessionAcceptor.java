@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009 Brian S O'Neill
+ *  Copyright 2009-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@ package org.cojen.dirmi.core;
 import java.io.IOException;
 
 import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAcceptor;
 import org.cojen.dirmi.SessionListener;
 
-import org.cojen.dirmi.io.Acceptor;
-import org.cojen.dirmi.io.AcceptListener;
-import org.cojen.dirmi.io.Broker;
-import org.cojen.dirmi.io.StreamChannel;
+import org.cojen.dirmi.io.ChannelBroker;
+import org.cojen.dirmi.io.ChannelBrokerAcceptor;
 
 /**
  * Standard implementation of a remote method invocation {@link
@@ -36,7 +35,7 @@ import org.cojen.dirmi.io.StreamChannel;
  */
 public class StandardSessionAcceptor implements SessionAcceptor {
     final Environment mEnv;
-    final Acceptor<Broker<StreamChannel>> mBrokerAcceptor;
+    final ChannelBrokerAcceptor mBrokerAcceptor;
 
     private Auto mAuto;
 
@@ -45,7 +44,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
      * @param brokerAcceptor accepted brokers must always connect to same remote server
      */
     public static SessionAcceptor create(Environment environment,
-                                         Acceptor<Broker<StreamChannel>> brokerAcceptor)
+                                         ChannelBrokerAcceptor brokerAcceptor)
     {
         return new StandardSessionAcceptor(environment, brokerAcceptor);
     }
@@ -55,7 +54,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
      * @param brokerAcceptor accepted brokers must always connect to same remote server
      */
     private StandardSessionAcceptor(Environment environment,
-                                    Acceptor<Broker<StreamChannel>> brokerAcceptor)
+                                    ChannelBrokerAcceptor brokerAcceptor)
     {
         mEnv = environment;
         mBrokerAcceptor = brokerAcceptor;
@@ -106,66 +105,120 @@ public class StandardSessionAcceptor implements SessionAcceptor {
         t.yield();
     }
 
-    private class Manual implements AcceptListener<Broker<StreamChannel>> {
+    private class Manual implements ChannelBrokerAcceptor.Listener {
         private final SessionListener mListener;
 
         Manual(SessionListener listener) {
             mListener = listener;
         }
 
-        public void established(Broker<StreamChannel> broker) {
+        public void accepted(ChannelBroker broker) {
+            Session session;
             try {
-                mListener.established(mEnv.newSession(broker));
-            } catch (IOException e) {
+                session = mEnv.newSession(broker);
+            } catch (IOException cause) {
+                broker.close();
                 try {
-                    broker.close();
+                    mListener.establishFailed(cause);
+                } catch (Throwable e) {
+                    uncaught(e);
+                }
+                return;
+            }
+
+            try {
+                mListener.established(session);
+            } catch (Throwable e) {
+                try {
+                    session.close();
                 } catch (IOException e2) {
                     // Ignore.
                 }
-                failed(e);
+                uncaught(e);
             }
         }
 
-        public void failed(IOException e) {
+        public void rejected(RejectedException cause) {
             try {
-                mListener.failed(e);
-            } catch (IOException e2) {
-                uncaught(e2);
+                if (cause.isShutdown()) {
+                    mListener.acceptFailed(cause);
+                } else {
+                    mListener.establishFailed(cause);
+                }
+            } catch (Throwable e) {
+                uncaught(e);
+            }
+        }
+
+        public void failed(IOException cause) {
+            try {
+                mListener.establishFailed(cause);
+            } catch (Throwable e) {
+                uncaught(e);
+            }
+        }
+
+        public void closed(IOException cause) {
+            try {
+                mListener.acceptFailed(cause);
+            } catch (Throwable e) {
+                uncaught(e);
             }
         }
     }
 
-    private class Auto implements AcceptListener<Broker<StreamChannel>> {
+    private class Auto implements ChannelBrokerAcceptor.Listener {
         private final Object mShared;
         volatile boolean disabled;
+        private volatile boolean mAnyAccepted;
 
         Auto(Object shared) {
             mShared = shared;
         }
 
-        public void established(Broker<StreamChannel> broker) {
+        public void accepted(ChannelBroker broker) {
+            mAnyAccepted = true;
+
             if (!disabled) {
                 mBrokerAcceptor.accept(this);
             }
+
+            Session session;
             try {
-                mEnv.newSession(broker).send(mShared);
+                session = mEnv.newSession(broker);
+            } catch (IOException cause) {
+                broker.close();
+                return;
+            }
+
+            try {
+                session.send(mShared);
             } catch (IOException e) {
                 try {
-                    broker.close();
+                    session.close();
                 } catch (IOException e2) {
                     // Ignore.
                 }
-                failed(e);
             }
         }
 
-        public void failed(IOException e) {
-            /*
+        public void rejected(RejectedException cause) {
+            if (!disabled && !cause.isShutdown()) {
+                mBrokerAcceptor.accept(this);
+            }
+        }
+
+        public void failed(IOException cause) {
             if (!disabled) {
                 mBrokerAcceptor.accept(this);
             }
-            */
-            uncaught(e);
+        }
+
+        public void closed(IOException cause) {
+            if (!mAnyAccepted) {
+                // Report initialization problem with acceptor.
+                uncaught(cause);
+            }
         }
     }
 }

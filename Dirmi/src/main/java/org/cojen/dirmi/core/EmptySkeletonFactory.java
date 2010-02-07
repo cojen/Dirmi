@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.cojen.dirmi.core;
 import java.io.ObjectOutput;
 
 import java.rmi.Remote;
-import java.rmi.server.Unreferenced;
 
 /**
  * Factory which creates skeletons that support no methods.
@@ -32,7 +31,10 @@ class EmptySkeletonFactory implements SkeletonFactory {
     private EmptySkeletonFactory() {
     }
 
-    public Skeleton createSkeleton(SkeletonSupport support, final Remote remoteServer) {
+    public Skeleton createSkeleton(VersionedIdentifier objId,
+                                   SkeletonSupport support,
+                                   final Remote remoteServer)
+    {
         return new Skeleton() {
             public Remote getRemoteServer() {
                 return remoteServer;
@@ -46,8 +48,8 @@ class EmptySkeletonFactory implements SkeletonFactory {
             }
 
             public void unreferenced() {
-                if (remoteServer instanceof Unreferenced) {
-                    ((Unreferenced) remoteServer).unreferenced();
+                if (remoteServer instanceof java.rmi.server.Unreferenced) {
+                    ((java.rmi.server.Unreferenced) remoteServer).unreferenced();
                 }
             }
         };

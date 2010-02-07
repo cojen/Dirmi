@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009 Brian S O'Neill
+ *  Copyright 2009-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,25 +16,58 @@
 
 package org.cojen.dirmi;
 
+import java.rmi.RemoteException;
+
 /**
- * Thrown by {@link Pipe#readThrowable} if the Throwable was not serializable
- * or depends on classes that are not found. The pipe that throws this
- * exception cannot be used any more and must be closed.
+ * Thrown by a remote method or {@link Pipe#readThrowable} if the Throwable was
+ * not serializable or depends on classes that are not found. If a pipe was
+ * used, it cannot be used any more and must be closed.
  *
  * @author Brian S O'Neill
  */
-public class ReconstructedException extends Exception {
+public class ReconstructedException extends RemoteException {
     private static final long serialVersionUID = 1;
+
+    private static String makeMessage(Throwable reconstructed, Throwable reconstructCause) {
+        StringBuilder b = new StringBuilder("Reconstructed exception of type ")
+            .append(reconstructed.getClass().getName());
+
+        if (reconstructed.getMessage() != null) {
+            b.append(" with message \"").append(reconstructed.getMessage()).append('"');
+        }
+
+        return b.append("; ").append(reconstructCause).toString();
+    }
+
+    private static String makeMessage(String reconstructedClassName, String message,
+                                      Throwable reconstructCause)
+    {
+        StringBuilder b = new StringBuilder("Unable to reconstruct exception of type ")
+            .append(reconstructedClassName);
+
+        if (message != null) {
+            b.append(" with message \"").append(message).append('"');
+        }
+
+        return b.append("; ").append(reconstructCause).toString();
+    }
 
     private final Throwable mReconstructCause;
 
-    public ReconstructedException(Throwable reconstructed, Throwable reconstructCause) {
-        super(reconstructed);
+    public ReconstructedException(Throwable reconstructCause, Throwable reconstructed) {
+        super(makeMessage(reconstructed, reconstructCause), reconstructed);
+        mReconstructCause = reconstructCause;
+    }
+
+    public ReconstructedException(Throwable reconstructCause,
+                                  String reconstructedClassName, String message, Throwable cause)
+    {
+        super(makeMessage(reconstructedClassName, message, reconstructCause), cause);
         mReconstructCause = reconstructCause;
     }
 
     /**
-     * Returns the Throwable which was reconstructed.
+     * Returns the Throwable which was reconstructed, or null if not possible.
      */
     @Override
     public Throwable getCause() {

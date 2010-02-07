@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009 Brian S O'Neill
+ *  Copyright 2009-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import java.io.Serializable;
 
 import java.rmi.Remote;
 
-import org.cojen.dirmi.io.AcceptListener;
-
 /**
  * Accepts sessions from remote endpoints.
  *
@@ -35,9 +33,8 @@ public interface SessionAcceptor extends Closeable {
      * Returns immediately and starts automatically accepting all sessions
      * asynchronously, sending a shared object. No attempt is made to receive
      * objects sent by remote client sessions. Exceptions thrown during session
-     * establishment are passed to the thread's uncaught exception handler. The
-     * {@link #accept(SessionListener) accept} method may be called at any time
-     * to switch to manual session acceptance.
+     * establishment are discarded. The {@link #accept(SessionListener) accept}
+     * method may be called at any time to switch to manual session acceptance.
      *
      * @param shared shared remote or serializable object to send to accepted
      * sessions
@@ -45,12 +42,12 @@ public interface SessionAcceptor extends Closeable {
     void acceptAll(Object shared);
 
     /**
-     * Returns immediately and calls established method on listener
-     * asynchronously. Only one session is accepted per invocation of this
-     * method. If no listener is accepting incoming sessions, then the session
-     * is closed after a timeout elapses. The {@link #acceptAll acceptAll}
-     * method may be called at any time to switch to automatic session
-     * acceptance.
+     * Returns immediately and calls listener asynchronously, but no more than
+     * once. The accept method must be called again (possibly with the same
+     * listener instance) in order to accept more sessions. If no listener is
+     * accepting incoming sessions, then the session is closed after a timeout
+     * elapses. The {@link #acceptAll acceptAll} method may be called at any
+     * time to switch to automatic session acceptance.
      */
     void accept(SessionListener listener);
 

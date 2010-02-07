@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2009 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ public class ClientDriver implements Driver {
             RemoteConnection con;
             try {
                 con = connector.getConnection(db);
-                return new ClientConnection(con);
+                return ClientConnection.from(con);
             } catch (RemoteException e) {
                 if (tryCount >= maxTries) {
                     throw new SQLException("Unable to connect", e);

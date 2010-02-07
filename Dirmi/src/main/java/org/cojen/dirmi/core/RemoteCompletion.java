@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import org.cojen.dirmi.Asynchronous;
+import org.cojen.dirmi.Disposer;
 
 /**
  * Interface used internally by asynchronous remote methods to signal when
@@ -29,8 +30,10 @@ import org.cojen.dirmi.Asynchronous;
  */
 public interface RemoteCompletion<V> extends Remote {
     @Asynchronous
+    @Disposer
     void complete(V value) throws RemoteException;
 
     @Asynchronous
+    @Disposer
     void exception(Throwable cause) throws RemoteException;
 }

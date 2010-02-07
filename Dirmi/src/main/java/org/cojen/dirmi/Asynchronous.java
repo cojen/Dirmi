@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -65,6 +65,8 @@ import java.rmi.RemoteException;
  *
  * @author Brian S O'Neill
  * @see Batched
+ * @see Ordered
+ * @see org.cojen.dirmi.util.ThrottledExecutor
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

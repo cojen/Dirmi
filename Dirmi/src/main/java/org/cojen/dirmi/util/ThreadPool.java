@@ -1,5 +1,5 @@
 /*
- *  Copyright 2007 Brian S O'Neill
+ *  Copyright 2007-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -47,14 +47,10 @@ import java.security.PrivilegedAction;
  * @author Brian S O'Neill
  */
 public class ThreadPool extends AbstractExecutorService implements ScheduledExecutorService {
-    static final Runnable SHUTDOWN = new Runnable() {
-        public void run() {
-            throw new ThreadDeath();
-        }
-    };
-
     private static final AtomicLong cPoolNumber = new AtomicLong(1);
     static final AtomicLong cTaskNumber = new AtomicLong(1);
+
+    private static final String SHUTDOWN_MESSAGE = "Thread pool is shutdown";
 
     private final AccessControlContext mContext;
     private final ThreadGroup mGroup;
@@ -64,7 +60,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     private final Thread.UncaughtExceptionHandler mHandler;
 
     private final int mMax;
-    private final long mIdleTimeout = 60000;
+    private final long mIdleTimeout = 10000;
 
     // Pool is accessed like a stack.
     private final LinkedList<PooledThread> mPool;
@@ -141,9 +137,9 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             find: {
                 synchronized (mPool) {
                     if (!force && mShutdown) {
-                        throw new RejectedExecutionException("Thread pool is shutdown");
+                        throw new RejectedExecutionException(SHUTDOWN_MESSAGE);
                     }
-                    if (mPool.size() > 0) {
+                    if (!mPool.isEmpty()) {
                         thread = mPool.removeLast();
                         break find;
                     }
@@ -166,8 +162,16 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                 return;
             }
 
-            if (thread.setCommand(command)) {
-                return;
+            try {
+                if (thread.setCommand(command)) {
+                    return;
+                }
+            } catch (IllegalStateException e) {
+                if (isShutdown()) {
+                    // Cannot set command because thread is forced to run Shutdown.
+                    throw new RejectedExecutionException(SHUTDOWN_MESSAGE);
+                }
+                throw e;
             }
             
             // Couldn't set the command because the pooled thread is exiting.
@@ -214,8 +218,9 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     public void shutdown() {
         synchronized (mPool) {
             mShutdown = true;
+            Runnable shutdown = new Shutdown();
             for (PooledThread thread : mPool) {
-                thread.setCommand(SHUTDOWN);
+                thread.setCommand(shutdown);
             }
             mPool.notifyAll();
         }
@@ -261,18 +266,25 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                 return false;
             }
 
-            long start = System.currentTimeMillis();
-            long millis = unit.toMillis(time);
+            long start = System.nanoTime();
+            long nanos = unit.toNanos(time);
 
             do {
-                mPool.wait(millis);
-                if ((millis -= System.currentTimeMillis() - start) <= 0) {
+                mPool.wait(roundNanosToMillis(nanos));
+                if ((nanos -= System.nanoTime() - start) <= 0) {
                     return isTerminated();
                 }
             } while (!isTerminated());
         }
 
         return true;
+    }
+
+    private static long roundNanosToMillis(long nanos) {
+        if (nanos <= (Long.MAX_VALUE - 999999)) {
+            nanos += 999999;
+        }
+        return nanos / 1000000;
     }
 
     void threadAvailable(PooledThread thread) {
@@ -290,9 +302,12 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
+    /**
+     * @throws RejectedExecutionException only if shutdown
+     */
     void scheduleTask(Task<?> task) {
         if (isShutdown()) {
-            throw new RejectedExecutionException("Thread pool is shutdown");
+            throw new RejectedExecutionException(SHUTDOWN_MESSAGE);
         }
         synchronized (mScheduledTasks) {
             if (!mScheduledTasks.add(task)) {
@@ -300,8 +315,13 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             }
             if (mScheduledTasks.first() == task) {
                 if (mTaskRunner == null) {
-                    mTaskRunner = new TaskRunner();
-                    execute(mTaskRunner);
+                    TaskRunner runner = new TaskRunner();
+                    try {
+                        execute(runner, true);
+                        mTaskRunner = runner;
+                    } catch (RejectedExecutionException e) {
+                        // Task is scheduled as soon as a thread becomes available.
+                    }
                 } else {
                     mScheduledTasks.notify();
                 }
@@ -309,37 +329,42 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
+    TaskRunner needsTaskRunner() {
+        synchronized (mScheduledTasks) {
+            if (mTaskRunner == null && !mScheduledTasks.isEmpty()) {
+                return mTaskRunner = new TaskRunner();
+            }
+        }
+        return null;
+    }
+
     void removeTask(Task<?> task) {
         synchronized (mScheduledTasks) {
             mScheduledTasks.remove(task);
-            if (mScheduledTasks.size() == 0) {
+            if (mScheduledTasks.isEmpty()) {
                 mScheduledTasks.notifyAll();
             }
         }
     }
 
     // Returns null if no more tasks
-    Task<?> acquireTask(boolean canWait) {
+    Task<?> acquireTask(boolean canWait) throws InterruptedException {
         synchronized (mScheduledTasks) {
             while (true) {
-                if (mScheduledTasks.size() == 0) {
+                if (mScheduledTasks.isEmpty()) {
                     return null;
                 }
                 Task<?> task = mScheduledTasks.first();
-                long now = System.currentTimeMillis();
-                long at = task.getAtMillis();
-                if (at <= now) {
+                long delay = task.getAtNanos() - System.nanoTime();
+                if (delay <= 0) {
                     mScheduledTasks.remove(task);
-                    if (mScheduledTasks.size() == 0) {
+                    if (mScheduledTasks.isEmpty()) {
                         mScheduledTasks.notifyAll();
                     }
                     return task;
                 }
                 if (canWait) {
-                    try {
-                        mScheduledTasks.wait(at - now);
-                    } catch (InterruptedException e) {
-                    }
+                    mScheduledTasks.wait(roundNanosToMillis(delay));
                 } else {
                     return null;
                 }
@@ -347,17 +372,19 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
-    void tryReplace(TaskRunner runner) {
+    boolean tryReplace(TaskRunner runner) {
         synchronized (mScheduledTasks) {
-            if (mScheduledTasks.size() > 0 && mTaskRunner == runner) {
+            if (mTaskRunner == runner) {
                 runner = new TaskRunner();
                 try {
                     execute(runner, true);
                     mTaskRunner = runner;
                 } catch (RejectedExecutionException e) {
+                    return false;
                 }
             }
         }
+        return true;
     }
 
     boolean canExit(TaskRunner runner) {
@@ -365,7 +392,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             if (mTaskRunner == runner) {
                 mTaskRunner = null;
             }
-            if (mTaskRunner == null && mScheduledTasks.size() != 0) {
+            if (mTaskRunner == null && !mScheduledTasks.isEmpty()) {
                 mTaskRunner = runner;
                 return false;
             }
@@ -417,20 +444,17 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             }
         }
 
-        private synchronized Runnable waitForCommand() {
+        private synchronized Runnable waitForCommand() throws InterruptedException {
             Runnable command;
             
             if ((command = mCommand) == null) {
                 long idle = mIdleTimeout;
                 
                 if (idle != 0) {
-                    try {
-                        if (idle < 0) {
-                            wait(0);
-                        } else {
-                            wait(idle);
-                        }
-                    } catch (InterruptedException e) {
+                    if (idle < 0) {
+                        wait(0);
+                    } else {
+                        wait(idle);
                     }
                 }
                     
@@ -461,16 +485,25 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
                     Runnable command;
 
-                    if ((command = waitForCommand()) == null) {
-                        break;
+                    try {
+                        if ((command = waitForCommand()) == null) {
+                            break;
+                        }
+                    } catch (InterruptedException e) {
+                        e = null;
+                        continue;
                     }
 
-                    try {
-                        command.run();
-                    } catch (Throwable e) {
-                        getUncaughtExceptionHandler().uncaughtException(this, e);
-                        e = null;
-                    }
+                    do {
+                        try {
+                            command.run();
+                        } catch (Throwable e) {
+                            if (!(command instanceof Shutdown)) {
+                                getUncaughtExceptionHandler().uncaughtException(this, e);
+                            }
+                            e = null;
+                        }
+                    } while ((command = needsTaskRunner()) != null);
 
                     // Allow the garbage collector to reclaim command from
                     // stack while we wait for another command.
@@ -486,39 +519,40 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     private class Task<V> extends FutureTask<V> implements ScheduledFuture<V> {
         private final long mNum;
-        private final long mPeriodMillis;
+        private final long mPeriodNanos;
 
-        private volatile long mAtMillis;
+        private volatile long mAtNanos;
 
         /**
-         * @param period Period in milliseconds for repeating tasks. A positive
-         * value indicates fixed-rate execution. A negative value indicates
-         * fixed-delay execution. A value of 0 indicates a non-repeating task.
+         * @param period Period for repeating tasks. A positive value indicates
+         * fixed-rate execution. A negative value indicates fixed-delay
+         * execution. A value of 0 indicates a non-repeating task.
          */
         Task(Callable<V> callable, long initialDelay, long period, TimeUnit unit) {
             super(callable);
 
-            long periodMillis;
+            long periodNanos;
             if (period == 0) {
-                periodMillis = 0;
-            } else if ((periodMillis = unit.toMillis(period)) == 0) {
+                periodNanos = 0;
+            } else if ((periodNanos = unit.toNanos(period)) == 0) {
                 // Account for any rounding error.
-                periodMillis = period < 0 ? -1 : 1;
+                periodNanos = period < 0 ? -1 : 1;
             }
-            mPeriodMillis = periodMillis;
+            mPeriodNanos = periodNanos;
 
             mNum = cTaskNumber.getAndIncrement();
 
-            mAtMillis = System.currentTimeMillis();
+            long atNanos = System.nanoTime();
             if (initialDelay > 0) {
-                mAtMillis += unit.toMillis(initialDelay);
+                atNanos += unit.toNanos(initialDelay);
             }
+            mAtNanos = atNanos;
 
             scheduleTask(this);
         }
 
         public long getDelay(TimeUnit unit) {
-            return unit.convert(mAtMillis - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+            return unit.convert(mAtNanos - System.nanoTime(), TimeUnit.NANOSECONDS);
         }
 
         public int compareTo(Delayed delayed) {
@@ -527,7 +561,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             }
             if (delayed instanceof Task) {
                 Task<?> other = (Task<?>) delayed;
-                long diff = mAtMillis - other.mAtMillis;
+                long diff = mAtNanos - other.mAtNanos;
                 if (diff < 0) {
                     return -1;
                 } else if (diff > 0) {
@@ -544,29 +578,37 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
         @Override
         public void run() {
-            long periodMillis = mPeriodMillis;
-            if (periodMillis == 0) {
+            removeTask(this);
+            long periodNanos = mPeriodNanos;
+            if (periodNanos == 0) {
                 super.run();
             } else if (super.runAndReset()) {
-                if (periodMillis > 0) {
-                    mAtMillis += periodMillis;
+                if (periodNanos > 0) {
+                    mAtNanos += periodNanos;
                 } else {
-                    mAtMillis = System.currentTimeMillis() - periodMillis;
+                    mAtNanos = System.nanoTime() - periodNanos;
                 }
                 try {
                     scheduleTask(this);
                 } catch (RejectedExecutionException e) {
+                    // Shutdown.
                 }
             }
         }
 
-        @Override
-        protected void done() {
-            removeTask(this);
+        long getAtNanos() {
+            return mAtNanos;
         }
 
-        long getAtMillis() {
-            return mAtMillis;
+        @Override
+        public String toString() {
+            StringBuilder b = new StringBuilder()
+                .append("ScheduledFuture {delayNanos=")
+                .append(String.valueOf(getDelay(TimeUnit.NANOSECONDS)));
+            if (mPeriodNanos != 0) {
+                b.append(", periodNanos=").append(String.valueOf(mPeriodNanos));
+            }
+            return b.append('}').toString();
         }
     }
 
@@ -575,31 +617,64 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
 
         public void run() {
-            do {
+            while (true) {
+                Task<?> task;
+
                 try {
-                    Task<?> task = acquireTask(true);
+                    task = acquireTask(true);
+
                     if (task != null) {
                         // Try to replace this runner, to allow task to block.
-                        tryReplace(this);
+                        boolean replaced = tryReplace(this);
 
-                        task.run();
-
-                        // Run any more tasks which need to be run immediately, to
-                        // avoid having to switch context.
-                        while ((task = acquireTask(false)) != null) {
+                        try {
                             task.run();
-                        }
 
-                        // Allow the garbage collector to reclaim task from stack
-                        // if runner cannot exit.
-                        task = null;
+                            if (replaced) {
+                                // Run any more tasks which need to be run
+                                // immediately, to avoid having to switch context.
+                                while (true) {
+                                    try {
+                                        if ((task = acquireTask(false)) == null) {
+                                            break;
+                                        }
+                                    } catch (InterruptedException e) {
+                                        break;
+                                    }
+
+                                    // Be sure to clear the interrupted state.
+                                    Thread.interrupted();
+
+                                    task.run();
+                                }
+                            }
+                        } catch (Throwable e) {
+                            Thread t = Thread.currentThread();
+                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                            e = null;
+                        }
                     }
-                } catch (Throwable e) {
-                    Thread t = Thread.currentThread();
-                    t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                } catch (InterruptedException e) {
+                    // Fall through.
                     e = null;
                 }
-            } while (!canExit(this));
+
+                if (canExit(this)) {
+                    break;
+                }
+
+                // Be sure to clear the interrupted state before running next task.
+                Thread.interrupted();
+
+                // Allow the garbage collector to reclaim task from stack.
+                task = null;
+            }
+        }
+    }
+
+    private static class Shutdown implements Runnable {
+        public void run() {
+            throw new ThreadDeath();
         }
     }
 }

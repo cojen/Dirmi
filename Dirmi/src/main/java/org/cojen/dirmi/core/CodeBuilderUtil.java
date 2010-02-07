@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006 Brian S O'Neill
+ *  Copyright 2006-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import java.io.DataOutput;
 
 import java.rmi.Remote;
 
-import java.rmi.server.Unreferenced;
-
 import java.util.Collection;
 
 import java.util.concurrent.Future;
@@ -35,6 +33,7 @@ import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
 import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.dirmi.Pipe;
@@ -59,7 +58,6 @@ class CodeBuilderUtil {
     static final TypeDesc INV_OUT_TYPE;
     static final TypeDesc NO_SUCH_METHOD_EX_TYPE;
     static final TypeDesc UNIMPLEMENTED_EX_TYPE;
-    static final TypeDesc ASYNC_INV_EX_TYPE;
     static final TypeDesc BATCH_INV_EX_TYPE;
     static final TypeDesc THROWABLE_TYPE;
     static final TypeDesc CLASS_TYPE;
@@ -79,7 +77,6 @@ class CodeBuilderUtil {
         INV_OUT_TYPE = TypeDesc.forClass(InvocationOutputStream.class);
         NO_SUCH_METHOD_EX_TYPE = TypeDesc.forClass(NoSuchMethodException.class);
         UNIMPLEMENTED_EX_TYPE = TypeDesc.forClass(UnimplementedMethodException.class);
-        ASYNC_INV_EX_TYPE = TypeDesc.forClass(AsynchronousInvocationException.class);
         BATCH_INV_EX_TYPE = TypeDesc.forClass(BatchedInvocationException.class);
         THROWABLE_TYPE = TypeDesc.forClass(Throwable.class);
         CLASS_TYPE = TypeDesc.forClass(Class.class);
@@ -87,19 +84,40 @@ class CodeBuilderUtil {
         TIME_UNIT_TYPE = TypeDesc.forClass(TimeUnit.class);
         PIPE_TYPE = TypeDesc.forClass(Pipe.class);
         DATA_OUTPUT_TYPE = TypeDesc.forClass(DataOutput.class);
-        UNREFERENCED_TYPE = TypeDesc.forClass(Unreferenced.class);
+        UNREFERENCED_TYPE = TypeDesc.forClass(java.rmi.server.Unreferenced.class);
     }
 
     static boolean equalTypes(RemoteParameter a, RemoteParameter b) {
         return a == null ? b == null : (a.equalTypes(b));
     }
 
-    static String cleanClassName(String name) {
+    static RuntimeClassFile createRuntimeClassFile(String name, ClassLoader loader) {
         if (name.startsWith("java.")) {
             // Rename to avoid SecurityException.
             name = "java$" + name.substring(4);
         }
-        return name;
+
+        /*
+        // Use a middle loader to support unloading of generated classes.
+
+        // TODO: more than one class?
+        class MiddleLoader extends ClassLoader {
+            MiddleLoader() {
+            }
+
+            MiddleLoader(ClassLoader parent) {
+                super(parent);
+            }
+        };
+
+        if (loader == null) {
+            loader = new MiddleLoader();
+        } else {
+            loader = new MiddleLoader(loader);
+        }
+        */
+
+        return new RuntimeClassFile(name, null, loader);
     }
 
     /**
@@ -303,7 +321,21 @@ class CodeBuilderUtil {
      * reclaimed.
      */
     static void addStaticFactoryRef(ClassFile cf, Object factoryRef) {
-        addStaticFieldsInitializer(cf, new TypeDesc[] {TypeDesc.OBJECT}, factoryRef);
+        CodeBuilder b = addStaticFactoryRefUnfinished(cf, factoryRef);
+        if (b != null) {
+            b.returnVoid();
+        }
+    }
+
+    /**
+     * @param factoryRef Strong reference is kept to this object. As long as
+     * stub or skeleton instances exist, the referenced factory will not get
+     * reclaimed.
+     *
+     * @return unfinished CodeBuilder for static initializer
+     */
+    static CodeBuilder addStaticFactoryRefUnfinished(ClassFile cf, Object factoryRef) {
+        return addStaticFieldsInitializer(cf, new TypeDesc[] {TypeDesc.OBJECT}, factoryRef);
     }
 
     /**
@@ -311,14 +343,14 @@ class CodeBuilderUtil {
      * initalizer which sets the field values. The values are transferred via a
      * thread-local variable, and so the thread that calls this method must
      * define the class.
-     *
-     * @return the names of the generated fields
      */
-    static String[] addStaticFieldsInitializer(ClassFile cf, TypeDesc[] types, Object... values) {
+    private static CodeBuilder addStaticFieldsInitializer(ClassFile cf, TypeDesc[] types,
+                                                          Object... values)
+    {
         String[] names = new String[types.length];
 
         if (types.length == 0) {
-            return names;
+            return null;
         }
 
         for (int i=0; i<types.length; i++) {
@@ -355,9 +387,7 @@ class CodeBuilderUtil {
             }
         }
 
-        b.returnVoid();
-
-        return names;
+        return b;
     }
 
     // Put ThreadLocal in a public class to be accessible by generated code.

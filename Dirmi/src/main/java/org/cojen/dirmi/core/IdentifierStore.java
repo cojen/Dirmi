@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -78,6 +78,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
      * @throws IllegalArgumentException if object is null
      * @throws IllegalStateException if data cannot be encoded
      */
+    /*
     synchronized I identify(Object obj, byte andMask, byte orMask) {
         if (obj == null) {
             throw new IllegalArgumentException("Object cannot be null");
@@ -100,6 +101,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
         }
         return id;
     }
+    */
 
     /**
      * Returns a deserialized identifier, which may or may not have an object

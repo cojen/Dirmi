@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008 Brian S O'Neill
+ *  Copyright 2008-2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,37 +23,42 @@ import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
 
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.SocketAddress;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.net.ServerSocketFactory;
+import javax.net.SocketFactory;
 
 import org.cojen.util.WeakIdentityMap;
 
 import org.cojen.dirmi.core.StandardSession;
 import org.cojen.dirmi.core.StandardSessionAcceptor;
 
-import org.cojen.dirmi.io.Acceptor;
-import org.cojen.dirmi.io.AcceptListener;
-import org.cojen.dirmi.io.Broker;
-import org.cojen.dirmi.io.Connector;
-import org.cojen.dirmi.io.MessageChannel;
-import org.cojen.dirmi.io.PipedBroker;
-import org.cojen.dirmi.io.SocketMessageProcessor;
-import org.cojen.dirmi.io.SocketStreamChannelAcceptor;
-import org.cojen.dirmi.io.SocketStreamChannelConnector;
-import org.cojen.dirmi.io.StreamChannel;
-import org.cojen.dirmi.io.StreamChannelBrokerAcceptor;
-import org.cojen.dirmi.io.StreamChannelConnectorBroker;
+import org.cojen.dirmi.io.BasicChannelBrokerAcceptor;
+import org.cojen.dirmi.io.BasicChannelBrokerConnector;
+import org.cojen.dirmi.io.BufferedSocketChannelAcceptor;
+import org.cojen.dirmi.io.BufferedSocketChannelConnector;
+import org.cojen.dirmi.io.ChannelAcceptor;
+import org.cojen.dirmi.io.ChannelBroker;
+import org.cojen.dirmi.io.ChannelBrokerAcceptor;
+import org.cojen.dirmi.io.ChannelBrokerConnector;
+import org.cojen.dirmi.io.ChannelConnector;
+import org.cojen.dirmi.io.IOExecutor;
+import org.cojen.dirmi.io.PipedChannelBroker;
+import org.cojen.dirmi.io.RecyclableSocketChannelAcceptor;
+import org.cojen.dirmi.io.RecyclableSocketChannelConnector;
 
 import org.cojen.dirmi.util.ThreadPool;
+import org.cojen.dirmi.util.Timer;
 
 /**
  * Sharable environment for connecting and accepting remote sessions. All
@@ -62,11 +67,30 @@ import org.cojen.dirmi.util.ThreadPool;
  * @author Brian S O'Neill
  */
 public class Environment implements Closeable {
+    private static final boolean RECYCLABLE_SOCKETS;
+
+    static {
+        boolean recyclableSockets = true;
+        try {
+            String prop = System.getProperty("org.cojen.dirmi.Environment.recyclableSockets");
+            if (prop != null && prop.equalsIgnoreCase("false")) {
+                recyclableSockets = false;
+            }
+        } catch (SecurityException e) {
+        }
+
+        RECYCLABLE_SOCKETS = recyclableSockets;
+    }
+
     private final ScheduledExecutorService mExecutor;
+    private final IOExecutor mIOExecutor;
+
+    private final SocketFactory mSocketFactory;
+    private final ServerSocketFactory mServerSocketFactory;
+
     private final WeakIdentityMap<Closeable, Object> mCloseableSet;
     private final AtomicBoolean mClosed;
-
-    private SocketMessageProcessor mMessageProcessor;
+    private final boolean mRecyclableSockets = RECYCLABLE_SOCKETS;
 
     /**
      * Construct environment which uses up to 1000 threads.
@@ -103,14 +127,47 @@ public class Environment implements Closeable {
 
     /**
      * Construct environment with a custom executor.
+     *
+     * @see ThreadPool
      */
     public Environment(ScheduledExecutorService executor) {
+        this(executor, null, null, null);
+    }
+
+    private Environment(ScheduledExecutorService executor,
+                        IOExecutor ioExecutor,
+                        SocketFactory sf,
+                        ServerSocketFactory ssf)
+    {
         if (executor == null) {
             throw new IllegalArgumentException("Must provide an executor");
         }
         mExecutor = executor;
+        mIOExecutor = ioExecutor == null ? new IOExecutor(executor) : ioExecutor;
+        mSocketFactory = sf == null ? SocketFactory.getDefault() : sf;
+        mServerSocketFactory = ssf == null ? ServerSocketFactory.getDefault() : ssf;
         mCloseableSet = new WeakIdentityMap<Closeable, Object>();
         mClosed = new AtomicBoolean(false);
+    }
+
+    /**
+     * Returns a new environment instance which connects using the given client
+     * socket factory. The new environment shares the same threads and server
+     * socket factory as this one. Closing one environment will not close the
+     * other.
+     */
+    public Environment withClientSocketFactory(SocketFactory sf) {
+        return new Environment(mExecutor, mIOExecutor, sf, mServerSocketFactory);
+    }
+
+    /**
+     * Returns a new environment instance which accepts using the given server
+     * socket factory. The new environment shares the same threads and client
+     * socket factory as this one. Closing one environment will not close the
+     * other.
+     */
+    public Environment withServerSocketFactory(ServerSocketFactory ssf) {
+        return new Environment(mExecutor, mIOExecutor, mSocketFactory, ssf);
     }
 
     /**
@@ -177,14 +234,13 @@ public class Environment implements Closeable {
      * automatically select a local address and ephemeral port
      * @return an acceptor of brokers
      */
-    private Acceptor<Broker<StreamChannel>> newBrokerAcceptor(SocketAddress localAddress)
+    private ChannelBrokerAcceptor newBrokerAcceptor(SocketAddress localAddress)
         throws IOException
     {
         checkClosed();
-        Acceptor<StreamChannel> streamAcceptor =
-            new SocketStreamChannelAcceptor(mExecutor, localAddress);
-        Acceptor<Broker<StreamChannel>> brokerAcceptor =
-            new StreamChannelBrokerAcceptor(mExecutor, streamAcceptor);
+        ChannelAcceptor channelAcceptor = newChannelAcceptor(localAddress);
+        ChannelBrokerAcceptor brokerAcceptor =
+            new BasicChannelBrokerAcceptor(mIOExecutor, channelAcceptor);
         addToClosableSet(brokerAcceptor);
         return brokerAcceptor;
     }
@@ -196,18 +252,14 @@ public class Environment implements Closeable {
      * @param broker required broker for establishing connections; must always
      * connect to same remote endpoint
      */
-    public Session newSession(Broker<StreamChannel> broker) throws IOException {
+    public Session newSession(ChannelBroker broker) throws IOException {
         checkClosed();
         try {
-            Session session = StandardSession.create(mExecutor, broker);
+            Session session = StandardSession.create(mIOExecutor, broker);
             addToClosableSet(session);
             return session;
         } catch (IOException e) {
-            try {
-                broker.close();
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            broker.close();
             throw e;
         }
     }
@@ -220,22 +272,29 @@ public class Environment implements Closeable {
      * connect to same remote endpoint
      * @throws RemoteTimeoutException
      */
-    public Session newSession(Broker<StreamChannel> broker, long timeout, TimeUnit unit)
+    public Session newSession(ChannelBroker broker, long timeout, TimeUnit unit)
         throws IOException
     {
-        if (timeout < 0) {
-            return newSession(broker);
-        }
+        return timeout < 0 ? newSession(broker) : newSession(broker, new Timer(timeout, unit));
+    }
 
-        InterruptTask task = new InterruptTask();
-        Future<?> future = mExecutor.schedule(task, timeout, unit);
-
+    /**
+     * Attempts to connect using given broker, blocking until session is
+     * established. Only one session can be created per broker instance.
+     *
+     * @param broker required broker for establishing connections; must always
+     * connect to same remote endpoint
+     * @throws RemoteTimeoutException
+     */
+    Session newSession(ChannelBroker broker, Timer timer) throws IOException {
+        checkClosed();
         try {
-            return newSession(broker);
+            Session session = StandardSession.create(mIOExecutor, broker, timer);
+            addToClosableSet(session);
+            return session;
         } catch (IOException e) {
-            throw handleTimeout(e, timeout, unit);
-        } finally {
-            task.cancel(future);
+            broker.close();
+            throw e;
         }
     }
 
@@ -243,16 +302,10 @@ public class Environment implements Closeable {
      * Returns two locally connected sessions.
      *
      * @return two Session objects connected to each other
-     * @throws RejectedExecutionException if thread pool is full
+     * @throws RejectedException if thread pool is full or shutdown
      */
-    public Session[] newSessionPair() {
-        final PipedBroker broker_0, broker_1;
-        broker_0 = new PipedBroker(mExecutor);
-        try {
-            broker_1 = new PipedBroker(mExecutor, broker_0);
-        } catch (IOException e) {
-            throw new AssertionError(e);
-        }
+    public Session[] newSessionPair() throws RejectedException {
+        final ChannelBroker[] brokers = PipedChannelBroker.newPair(mIOExecutor);
 
         class Create implements Runnable {
             private IOException mException;
@@ -260,7 +313,7 @@ public class Environment implements Closeable {
 
             public synchronized void run() {
                 try {
-                    mSession = newSession(broker_0);
+                    mSession = newSession(brokers[0]);
                 } catch (IOException e) {
                     mException = e;
                 }
@@ -283,11 +336,11 @@ public class Environment implements Closeable {
         }
 
         Create create = new Create();
-        mExecutor.execute(create);
+        mIOExecutor.execute(create);
 
         final Session session_0, session_1;
         try {
-            session_0 = newSession(broker_1);
+            session_0 = newSession(brokers[1]);
             session_1 = create.waitForSession();
         } catch (IOException e) {
             throw new AssertionError(e);
@@ -319,12 +372,17 @@ public class Environment implements Closeable {
             mCloseableSet.clear();
         }
 
-        for (Closeable c : closable) {
-            try {
-                c.close();
-            } catch (IOException e) {
-                if (exception == null) {
-                    exception = e;
+        for (int i=0; i<2; i++) {
+            for (Closeable c : closable) {
+                // Close sessions before brokers to avoid blocking.
+                if ((i == 0) == (c instanceof Session)) {
+                    try {
+                        c.close();
+                    } catch (IOException e) {
+                        if (exception == null) {
+                            exception = e;
+                        }
+                    }
                 }
             }
         }
@@ -360,83 +418,45 @@ public class Environment implements Closeable {
         }
     }
 
-    SocketMessageProcessor messageProcessor() throws IOException {
-        synchronized (mCloseableSet) {
-            checkClosed();
-            SocketMessageProcessor processor = mMessageProcessor;
-            if (processor == null) {
-                try {
-                    mMessageProcessor = processor = new SocketMessageProcessor(mExecutor);
-                } catch (RejectedExecutionException e) {
-                    throw new IOException(e.toString(), e);
-                }
-                addToClosableSet(processor);
-            }
-            return processor;
+    ChannelAcceptor newChannelAcceptor(SocketAddress localAddress) throws IOException {
+        ServerSocket ss = mServerSocketFactory.createServerSocket();
+        if (mRecyclableSockets) {
+            return new RecyclableSocketChannelAcceptor(mIOExecutor, localAddress, ss);
+        } else {
+            return new BufferedSocketChannelAcceptor(mIOExecutor, localAddress, ss);
         }
     }
 
-    static IOException handleTimeout(Exception e, long timeout, TimeUnit unit) {
-        if (e instanceof RemoteTimeoutException) {
-            return (RemoteTimeoutException) e;
+    ChannelConnector newChannelConnector(SocketAddress remoteAddress, SocketAddress localAddress) {
+        if (mRecyclableSockets) {
+            return new RecyclableSocketChannelConnector
+                (mIOExecutor, remoteAddress, localAddress, mSocketFactory);
+        } else {
+            return new BufferedSocketChannelConnector
+                (mIOExecutor, remoteAddress, localAddress, mSocketFactory);
         }
-
-        if (e instanceof InterruptedException ||
-            e instanceof InterruptedIOException ||
-            e instanceof ClosedByInterruptException)
-        {
-            return new RemoteTimeoutException(timeout, unit);
-        }
-
-        Throwable cause = e.getCause();
-
-        while (cause != null && cause instanceof Exception) {
-            IOException newEx = handleTimeout((Exception) cause, timeout, unit);
-            if (newEx instanceof RemoteTimeoutException) {
-                return newEx;
-            }
-            cause = cause.getCause();
-        }
-
-        if (e instanceof IOException) {
-            return (IOException) e;
-        }
-
-        IOException ioe = new IOException(e.toString());
-        ioe.initCause(e);
-        return ioe;
     }
 
     private class SocketConnector implements SessionConnector {
-        private final SocketAddress mRemoteAddress;
-        private final SocketAddress mLocalAddress;
+        private final ChannelConnector mChannelConnector;
+        private final ChannelBrokerConnector mBrokerConnector;
 
         SocketConnector(SocketAddress remoteAddress, SocketAddress localAddress) {
             if (remoteAddress == null) {
                 throw new IllegalArgumentException("Must provide a remote address");
             }
-            mRemoteAddress = remoteAddress;
-            mLocalAddress = localAddress;
+            mChannelConnector = newChannelConnector(remoteAddress, localAddress);
+            mBrokerConnector = new BasicChannelBrokerConnector(mIOExecutor, mChannelConnector);
         }
 
         public Session connect() throws IOException {
             checkClosed();
-            SocketMessageProcessor processor = messageProcessor();
-            MessageChannel channel =
-                processor.newConnector(mRemoteAddress, mLocalAddress).connect();
+            ChannelBroker broker = mBrokerConnector.connect();
+            addToClosableSet(broker);
             try {
-                Connector<StreamChannel> connector =
-                    new SocketStreamChannelConnector(mExecutor, mRemoteAddress, mLocalAddress);
-                Broker<StreamChannel> broker =
-                    new StreamChannelConnectorBroker(mExecutor, channel, connector);
-                addToClosableSet(broker);
                 return newSession(broker);
             } catch (IOException e) {
-                try {
-                    channel.close();
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                broker.close();
                 throw e;
             }
         }
@@ -445,47 +465,24 @@ public class Environment implements Closeable {
             if (timeout < 0) {
                 return connect();
             }
-
-            InterruptTask task = new InterruptTask();
-            Future<?> future = mExecutor.schedule(task, timeout, unit);
-
+            checkClosed();
+            Timer timer = new Timer(timeout, unit);
+            ChannelBroker broker = mBrokerConnector.connect(timer);
+            addToClosableSet(broker);
             try {
-                return connect();
+                return newSession(broker, timer);
             } catch (IOException e) {
-                throw handleTimeout(e, timeout, unit);
-            } finally {
-                task.cancel(future);
+                broker.close();
+                throw e;
             }
         }
 
         public Object getRemoteAddress() {
-            return mRemoteAddress;
+            return mChannelConnector.getRemoteAddress();
         }
 
         public Object getLocalAddress() {
-            return mLocalAddress;
-        }
-    }
-
-    private static class InterruptTask implements Runnable {
-        private final Thread mThread;
-        private boolean mCancel;
-
-        InterruptTask() {
-            mThread = Thread.currentThread();
-        }
-
-        public synchronized void run() {
-            if (!mCancel) {
-                mThread.interrupt();
-            }
-        }
-
-        synchronized void cancel(Future<?> future) {
-            mCancel = true;
-            future.cancel(false);
-            // Clear interrupted status.
-            Thread.interrupted();
+            return mChannelConnector.getLocalAddress();
         }
     }
 }
