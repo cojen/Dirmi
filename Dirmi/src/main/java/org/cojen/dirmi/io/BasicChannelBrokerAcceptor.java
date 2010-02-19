@@ -164,12 +164,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
     private ChannelBroker accepted(Channel channel) throws IOException {
         try {
-            ChannelTimeout timeout = new ChannelTimeout(mExecutor, channel, 15, TimeUnit.SECONDS);
-            try {
-                return accepted0(channel);
-            } finally {
-                timeout.cancel();
-            }
+            return accepted0(channel);
         } catch (IOException e) {
             channel.disconnect();
             throw e;
@@ -177,38 +172,45 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
     }
 
     private ChannelBroker accepted0(Channel channel) throws IOException {
-        InputStream in = channel.getInputStream();
-        int op = in.read();
+        ChannelTimeout timeout = new ChannelTimeout(mExecutor, channel, 15, TimeUnit.SECONDS);
+        int op;
+        long id;
+        try {
+            InputStream in = channel.getInputStream();
+            op = in.read();
 
-        if (op == OPEN_REQUEST) {
-            long id;
-            Broker broker;
-            do {
-                id = mRandom.nextLong();
-                broker = new Broker(id, channel);
-            } while (mAccepted.putIfAbsent(id, broker) != null);
+            if (op == OPEN_REQUEST) {
+                Broker broker;
+                do {
+                    id = mRandom.nextLong();
+                    broker = new Broker(id, channel);
+                } while (mAccepted.putIfAbsent(id, broker) != null);
 
-            try {
-                DataOutputStream dout = new DataOutputStream(channel.getOutputStream());
-                dout.writeLong(id);
-                dout.flush();
-                return broker;
-            } catch (IOException e) {
-                mAccepted.remove(id);
-                throw e;
+                try {
+                    DataOutputStream dout = new DataOutputStream(channel.getOutputStream());
+                    dout.writeLong(id);
+                    dout.flush();
+                    return broker;
+                } catch (IOException e) {
+                    mAccepted.remove(id);
+                    throw e;
+                }
             }
+
+            if (op != ACCEPT_REQUEST && op != CONNECT_RESPONSE) {
+                channel.disconnect();
+                if (op < 0) {
+                    throw new ClosedException("Accepted channel is closed");
+                } else {
+                    throw new IOException("Invalid operation from accepted channel: " + op);
+                }
+            }
+
+            id = new DataInputStream(in).readLong();
+        } finally {
+            timeout.cancel();
         }
 
-        if (op != ACCEPT_REQUEST && op != CONNECT_RESPONSE) {
-            channel.disconnect();
-            if (op < 0) {
-                throw new ClosedException("Accepted channel is closed");
-            } else {
-                throw new IOException("Invalid operation from accepted channel: " + op);
-            }
-        }
-
-        long id = new DataInputStream(in).readLong();
         Broker broker = mAccepted.get(id);
 
         if (broker == null) {
