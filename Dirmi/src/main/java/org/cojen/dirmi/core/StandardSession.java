@@ -1215,9 +1215,10 @@ public class StandardSession implements Session {
                 return;
             }
 
+            int attempts = 0;
             int currentRemoteVersion;
             while ((currentRemoteVersion = id.remoteVersion()) != remoteVersion) {
-                if (currentRemoteVersion > remoteVersion) {
+                if (currentRemoteVersion - remoteVersion > 0) {
                     // Disposed message was for an older stub instance. It is
                     // no longer applicable.
                     return;
@@ -1230,13 +1231,21 @@ public class StandardSession implements Session {
                 // after sending a request, and so it can be garbage collected
                 // before the request is received.
 
-                // FIXME: After a few waits, give up and dispose anyhow.
-                // Although this should not happen, garbage collector is
-                // allowed to continue just in case it does.
+                if (isClosing()) {
+                    break;
+                }
+
+                if (++attempts > 100) {
+                    // At least 10 seconds has elapsed, and version has not
+                    // caught up. This could be caused by a failed remote call.
+                    // Dispose anyhow and let garbage collector resume.
+                    break;
+                }
 
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
+                    break;
                 }
             }
 
