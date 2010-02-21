@@ -65,6 +65,9 @@ class RecyclableSocketChannel extends SocketChannel {
         if (mRecycler != null) {
             throw new IllegalStateException();
         }
+        if (recycler == null) {
+            throw new IllegalArgumentException();
+        }
         mRecycler = recycler;
         return new LocalControl();
     }
@@ -91,20 +94,6 @@ class RecyclableSocketChannel extends SocketChannel {
 
     @Override
     public void close() throws IOException {
-        close(false);
-    }
-
-    @Override
-    public void disconnect() {
-        // Disconnect can be just like close and flush pending data.
-        try {
-            close(true);
-        } catch (IOException e) {
-            // Ignore.
-        }
-    }
-
-    void close(boolean disconnect) throws IOException {
         RecycleControl remoteControl;
         boolean canDispose;
         check: {
@@ -117,11 +106,7 @@ class RecyclableSocketChannel extends SocketChannel {
                 }
             }
             // Cannot recycle.
-            if (disconnect) {
-                super.disconnect();
-            } else {
-                super.close();
-            }
+            super.close();
             return;
         }
 
@@ -131,21 +116,10 @@ class RecyclableSocketChannel extends SocketChannel {
 
         try {
             // Instruct remote endpoint to stop writing.
-            if (disconnect) {
-                // Disconnect needs to force close before remote endpoint
-                // decides to. Closing input gets the drain going, but endpoint
-                // reads might get an exception instead of EOF.
-                if (canDispose) {
-                    remoteControl.disconnectAndDispose();
-                } else {
-                    remoteControl.disconnect();
-                }
+            if (canDispose) {
+                remoteControl.outputCloseAndDispose();
             } else {
-                if (canDispose) {
-                    remoteControl.outputCloseAndDispose();
-                } else {
-                    remoteControl.outputClose();
-                }
+                remoteControl.outputClose();
             }
 
             // Start draining and unblock remote endpoint's writing.
@@ -346,15 +320,6 @@ class RecyclableSocketChannel extends SocketChannel {
 
         @Ordered
         @Asynchronous
-        void disconnect() throws RemoteException;
-
-        @Ordered
-        @Asynchronous
-        @Disposer
-        void disconnectAndDispose() throws RemoteException;
-
-        @Ordered
-        @Asynchronous
         void recycleReady() throws RemoteException;
 
         @Ordered
@@ -376,20 +341,6 @@ class RecyclableSocketChannel extends SocketChannel {
         @Override
         public void outputCloseAndDispose() {
             outputClose();
-        }
-
-        @Override
-        public void disconnect() {
-            try {
-                RecyclableSocketChannel.this.close(true);
-            } catch (IOException e) {
-                // Ignore.
-            }
-        }
-
-        @Override
-        public void disconnectAndDispose() {
-            disconnect();
         }
 
         @Override
