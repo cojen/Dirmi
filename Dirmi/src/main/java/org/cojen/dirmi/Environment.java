@@ -210,7 +210,8 @@ public class Environment implements Closeable {
      * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
      * acceptAll} to start automatically accepting sessions.
      *
-     * @param port port for accepting socket connections
+     * @param port port for accepting socket connections; pass zero to choose
+     * any available port
      */
     public SessionAcceptor newSessionAcceptor(int port) throws IOException {
         return newSessionAcceptor(new InetSocketAddress(port));
@@ -221,7 +222,7 @@ public class Environment implements Closeable {
      * acceptAll} to start automatically accepting sessions.
      *
      * @param localAddress address for accepting socket connections; use null to
-     * automatically select a local address and ephemeral port
+     * automatically select a local address and any available port
      */
     public SessionAcceptor newSessionAcceptor(SocketAddress localAddress) throws IOException {
         return StandardSessionAcceptor.create(this, newBrokerAcceptor(localAddress));
@@ -233,7 +234,7 @@ public class Environment implements Closeable {
      * Object)} method.
      *
      * @param localAddress address for accepting socket connections; use null to
-     * automatically select a local address and ephemeral port
+     * automatically select a local address and any available port
      * @return an acceptor of brokers
      */
     private ChannelBrokerAcceptor newBrokerAcceptor(SocketAddress localAddress)
