@@ -105,7 +105,7 @@ public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
     static final int PROTOCOL_VERSION = 20091011;
 
-    private static final long DEFAULT_CHANNEL_IDLE_NANOS = 60L * 1000 * 1000 * 1000;
+    private static final int DEFAULT_CHANNEL_IDLE_SECONDS = 60;
     private static final int DISPOSE_BATCH = 1000;
     private static final int TIMEOUT_SECONDS = 15;
 
@@ -171,10 +171,11 @@ public class StandardSession implements Session {
     // Map of channels which are held by threads for batch calls.
     final Map<InvocationChannel, Thread> mHeldChannelMap;
 
-    final ScheduledFuture<?> mBackgroundTask;
     // Clock is updated by background task to reduce system call overhead.
     // This clock is only as precise as the background task rate.
-    volatile long mClockNanos;
+    volatile int mClockSeconds;
+    final ScheduledFuture<?> mClockTask;
+    final ScheduledFuture<?> mBackgroundTask;
 
     final RemoteTypeResolver mTypeResolver;
 
@@ -392,8 +393,17 @@ public class StandardSession implements Session {
             channel.disconnect();
         }
 
+        updateClock();
+
         try {
-            // Start background task.
+            // Start background tasks.
+            mClockTask = executor.scheduleWithFixedDelay
+                (new Runnable() {
+                    public void run() {
+                        updateClock();
+                    }
+                 }, 1, 1, TimeUnit.SECONDS);
+
             long delay = 5;
             mBackgroundTask = executor.scheduleWithFixedDelay
                 (new BackgroundTask(), delay, delay, TimeUnit.SECONDS);
@@ -589,9 +599,15 @@ public class StandardSession implements Session {
         }
 
         try {
-            ScheduledFuture<?> task = mBackgroundTask;
-            if (task != null) {
-                task.cancel(false);
+            {
+                ScheduledFuture<?> task = mClockTask;
+                if (task != null) {
+                    task.cancel(false);
+                }
+                task = mBackgroundTask;
+                if (task != null) {
+                    task.cancel(false);
+                }
             }
 
             // Close broker now in case any discarded channels attempt to
@@ -1077,6 +1093,10 @@ public class StandardSession implements Session {
         }
     }
 
+    void updateClock() {
+        mClockSeconds = (int) (System.nanoTime() / (1L * 1000 * 1000 * 1000));
+    }
+
     private static abstract class Ref<T> extends PhantomReference<T> {
         public Ref(T referent, ReferenceQueue queue) {
             super(referent, queue);
@@ -1193,13 +1213,15 @@ public class StandardSession implements Session {
         public void disposed(VersionedIdentifier[] ids, int[] remoteVersions, int[] localVersions)
         {
             if (ids != null) {
+                int waits = 0;
                 for (int i=0; i<ids.length; i++) {
-                    dispose(ids[i], remoteVersions[i], localVersions[i]);
+                    waits = dispose(ids[i], remoteVersions[i], localVersions[i], waits);
                 }
             }
         }
 
-        private void dispose(VersionedIdentifier id, int remoteVersion, int localVersion) {
+        private int dispose(VersionedIdentifier id, int remoteVersion, int localVersion, int waits)
+        {
             if (id.localVersion() != localVersion) {
                 // If local version does not match, then stub for remote object
                 // was disposed at the same time that remote object was
@@ -1212,16 +1234,15 @@ public class StandardSession implements Session {
                 // the race condition. A lock must be held on skeleton maps
                 // while this check is made.
 
-                return;
+                return waits;
             }
 
-            int attempts = 0;
             int currentRemoteVersion;
             while ((currentRemoteVersion = id.remoteVersion()) != remoteVersion) {
                 if (currentRemoteVersion - remoteVersion > 0) {
                     // Disposed message was for an older stub instance. It is
                     // no longer applicable.
-                    return;
+                    return waits;
                 }
 
                 // Disposed message arrived too soon. Wait a bit and let
@@ -1235,15 +1256,20 @@ public class StandardSession implements Session {
                     break;
                 }
 
-                if (++attempts > 100) {
+                if (waits > 100) {
                     // At least 10 seconds has elapsed, and version has not
                     // caught up. This could be caused by a failed remote call.
                     // Dispose anyhow and let garbage collector resume.
+
+                    // FIXME: Cause might also be a remote object stuck in a
+                    // Pipe. When it's eventually read, it won't resolve to a
+                    // local object. Disposal retry needs to be scheduled.
                     break;
                 }
 
                 try {
                     Thread.sleep(100);
+                    waits++;
                 } catch (InterruptedException e) {
                     break;
                 }
@@ -1255,6 +1281,8 @@ public class StandardSession implements Session {
             if (skeleton != null) {
                 unreferenced(skeleton);
             }
+
+            return waits;
         }
 
         public void linkDescriptorCache(Remote link) {
@@ -1280,10 +1308,6 @@ public class StandardSession implements Session {
         // Use this to avoid logging exceptions if failed to send disposed
         // stubs during shutdown of remote session.
         private int mFailedToDisposeCount;
-
-        BackgroundTask() {
-            mClockNanos = System.nanoTime();
-        }
 
         public void run() {
             // Send batch of disposed ids to peer.
@@ -1339,10 +1363,8 @@ public class StandardSession implements Session {
                     if (pooledChannel == null) {
                         break;
                     }
-                    long clockNanos = System.nanoTime();
-                    mClockNanos = clockNanos;
-                    long age = clockNanos - pooledChannel.getIdleTimestamp();
-                    if (age < DEFAULT_CHANNEL_IDLE_NANOS) {
+                    int age = mClockSeconds - pooledChannel.getIdleTimestamp();
+                    if (age < DEFAULT_CHANNEL_IDLE_SECONDS) {
                         break;
                     }
                     mChannelPool.remove();
@@ -1409,7 +1431,7 @@ public class StandardSession implements Session {
     private final class InvocationChan extends AbstractInvocationChannel {
         private final Channel mChannel;
 
-        private volatile long mTimestamp;
+        private volatile int mTimestamp;
 
         volatile Future<?> mTimeoutTask;
 
@@ -1591,7 +1613,7 @@ public class StandardSession implements Session {
                     discard();
                 } else {
                     getOutputStream().reset();
-                    mTimestamp = mClockNanos;
+                    mTimestamp = mClockSeconds;
                     synchronized (mChannelPool) {
                         mChannelPool.add(this);
                     }
@@ -1619,7 +1641,7 @@ public class StandardSession implements Session {
             }
         }
 
-        long getIdleTimestamp() {
+        int getIdleTimestamp() {
             return mTimestamp;
         }
 
