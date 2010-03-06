@@ -140,7 +140,7 @@ abstract class SocketChannelConnector implements ChannelConnector {
         }
     }
 
-    private Socket connectSocket(long timeout, TimeUnit unit) throws IOException {
+    Socket connectSocket(long timeout, TimeUnit unit) throws IOException {
         Socket socket = mFactory.createSocket();
         try {
             if (mLocalAddress != null) {

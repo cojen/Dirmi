@@ -78,6 +78,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
                 try {
                     broker = BasicChannelBrokerAcceptor.this.accepted(channel);
                 } catch (IOException e) {
+                    channel.disconnect();
                     mAcceptListenerQueue.dequeue().failed(e);
                     return;
                 }
@@ -162,16 +163,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
     }
 
-    private ChannelBroker accepted(Channel channel) throws IOException {
-        try {
-            return accepted0(channel);
-        } catch (IOException e) {
-            channel.disconnect();
-            throw e;
-        }
-    }
-
-    private ChannelBroker accepted0(Channel channel) throws IOException {
+    ChannelBroker accepted(Channel channel) throws IOException {
         ChannelTimeout timeout = new ChannelTimeout(mExecutor, channel, 15, TimeUnit.SECONDS);
         int op;
         long id;
