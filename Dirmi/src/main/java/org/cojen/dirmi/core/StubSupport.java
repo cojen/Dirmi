@@ -60,9 +60,11 @@ public interface StubSupport {
     /**
      * Used by asynchronous methods which return a Future or Completion.
      *
+     * @param stub pass stub instance to prevent remote object from being
+     * identified as unreferenced
      * @return completion which also implements RemoteCompletion
      */
-    <V> Completion<V> createCompletion();
+    <V> Completion<V> createCompletion(Object stub);
 
     /**
      * Used by batched methods which return a Remote object. This method writes

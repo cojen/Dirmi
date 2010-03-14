@@ -48,8 +48,8 @@ abstract class AbstractStubSupport implements StubSupport {
     }
 
     @Override
-    public <V> Completion<V> createCompletion() {
-        return new RemoteCompletionServer<V>();
+    public <V> Completion<V> createCompletion(Object stub) {
+        return new RemoteCompletionServer<V>(stub);
     }
 
     @Override

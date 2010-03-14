@@ -33,11 +33,15 @@ import org.cojen.dirmi.Unreferenced;
  * @author Brian S O'Neill
  */
 class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, Unreferenced {
+    // Reference to prevent stub from being garbage collected prematurely.
+    private volatile Object mStub;
+
     private V mValue;
     private Throwable mComplete;
     private Queue<? super Completion<V>> mQueue;
 
-    RemoteCompletionServer() {
+    RemoteCompletionServer(Object stub) {
+        mStub = stub;
     }
 
     @Override
@@ -147,6 +151,8 @@ class RemoteCompletionServer<V> implements Completion<V>, RemoteCompletion<V>, U
         if (mQueue != null) {
             mQueue.add(this);
         }
+        // Don't need this reference anymore.
+        mStub = null;
     }
 
     private static class Complete extends Throwable {

@@ -482,7 +482,7 @@ public class StandardSession implements Session {
             throw new NullPointerException("TimeUnit is null");
         }
         try {
-            RemoteCompletionServer callback = new RemoteCompletionServer();
+            RemoteCompletionServer callback = new RemoteCompletionServer(null);
             Object obj = mRemoteAdmin.sessionDequeue(callback);
 
             if (obj == null) {

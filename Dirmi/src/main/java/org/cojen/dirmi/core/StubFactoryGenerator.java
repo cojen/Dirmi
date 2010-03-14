@@ -263,7 +263,9 @@ public class StubFactoryGenerator<R extends Remote> {
             {
                 compVar = b.createLocalVariable(null, TypeDesc.forClass(Completion.class));
                 b.loadLocal(supportVar);
-                b.invokeInterface(STUB_SUPPORT_TYPE, "createCompletion", compVar.getType(), null);
+                b.loadThis();
+                b.invokeInterface(STUB_SUPPORT_TYPE, "createCompletion", compVar.getType(),
+                                  new TypeDesc[] {TypeDesc.OBJECT});
                 b.storeLocal(compVar);
             }
 
