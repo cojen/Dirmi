@@ -23,6 +23,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.rmi.Remote;
+
 import java.util.concurrent.atomic.AtomicLong;
 
 import java.util.concurrent.TimeUnit;
@@ -193,11 +195,11 @@ public class CountingBroker implements ChannelBroker {
             mChannel.disconnect();
         }
 
-        public Object installRecycler(Recycler recycler) {
+        public Remote installRecycler(Recycler recycler) {
             return mChannel.installRecycler(recycler);
         }
 
-        public void setRecycleControl(Object control) {
+        public void setRecycleControl(Remote control) {
             mChannel.setRecycleControl(control);
         }
     }

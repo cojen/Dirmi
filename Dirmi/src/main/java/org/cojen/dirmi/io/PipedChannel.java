@@ -20,6 +20,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.rmi.Remote;
+
 import java.util.Map;
 
 /**
@@ -143,12 +145,12 @@ class PipedChannel implements Channel {
     }
 
     @Override
-    public Object installRecycler(Recycler recycler) {
+    public Remote installRecycler(Recycler recycler) {
         return null;
     }
 
     @Override
-    public void setRecycleControl(Object control) {
+    public void setRecycleControl(Remote control) {
     }
 
     private class Input extends InputStream {

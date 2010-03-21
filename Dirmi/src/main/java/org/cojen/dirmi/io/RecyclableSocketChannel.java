@@ -22,6 +22,8 @@ import java.io.OutputStream;
 
 import java.net.Socket;
 
+import java.rmi.Remote;
+
 import java.util.Map;
 
 import java.rmi.Remote;
@@ -61,7 +63,7 @@ class RecyclableSocketChannel extends SocketChannel {
     }
 
     @Override
-    public synchronized Object installRecycler(Recycler recycler) {
+    public synchronized Remote installRecycler(Recycler recycler) {
         if (mRecycler != null) {
             throw new IllegalStateException();
         }
@@ -73,7 +75,7 @@ class RecyclableSocketChannel extends SocketChannel {
     }
 
     @Override
-    public void setRecycleControl(Object control) {
+    public void setRecycleControl(Remote control) {
         if (control == this || !(control instanceof RecycleControl)) {
             throw new IllegalArgumentException();
         }

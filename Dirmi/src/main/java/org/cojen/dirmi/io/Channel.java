@@ -22,6 +22,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.rmi.Remote;
+
 import org.cojen.dirmi.Link;
 import org.cojen.dirmi.RejectedException;
 
@@ -113,7 +115,7 @@ public interface Channel extends Flushable, Closeable, Link {
      *
      * @throws IllegalStateException if a recycler is already installed
      */
-    Object installRecycler(Recycler recycler);
+    Remote installRecycler(Recycler recycler);
 
     /**
      * Set the recycling control object from the remote channel
@@ -122,7 +124,7 @@ public interface Channel extends Flushable, Closeable, Link {
      * @throws IllegalArgumentException if channel uses control feature and
      * instance is same as local control or is unsupported
      */
-    void setRecycleControl(Object control);
+    void setRecycleControl(Remote control);
 
     public static interface Listener {
         /**

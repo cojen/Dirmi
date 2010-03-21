@@ -104,7 +104,7 @@ import org.cojen.dirmi.util.Timer;
  */
 public class StandardSession implements Session {
     static final int MAGIC_NUMBER = 0x7696b623;
-    static final int PROTOCOL_VERSION = 20091011;
+    static final int PROTOCOL_VERSION = 20100321;
 
     private static final int DEFAULT_CHANNEL_IDLE_SECONDS = 60;
     private static final int DISPOSE_BATCH = 1000;
@@ -929,7 +929,7 @@ public class StandardSession implements Session {
     InvocationChan toInvocationChannel(Channel channel, final boolean accepted)
         throws IOException
     {
-        Object control = channel.installRecycler(new Channel.Recycler() {
+        Remote control = channel.installRecycler(new Channel.Recycler() {
             public void recycled(final Channel channel) {
                 try {
                     mExecutor.execute(new Runnable() {
@@ -957,21 +957,54 @@ public class StandardSession implements Session {
 
         InvocationChan invChannel = new InvocationChan(channel);
 
-        if (control != null) {
-            // Assume that send buffer is large enough to contain
-            // object. Otherwise, a separate thread is required to avoid
-            // deadlock with remote endpoint.
-            invChannel.writeObject(control);
-            invChannel.flush();
+        if (control == null) {
+            return invChannel;
+        }
 
-            try {
-                Object remoteControl = invChannel.readObject();
-                channel.setRecycleControl(remoteControl);
-            } catch (ClassNotFoundException e) {
-                IOException io = new IOException();
-                io.initCause(e);
-                throw io;
+        // Send remote control object without the help of replaceObject. Remote
+        // types on both endpoints are assumed to be the same. This avoids race
+        // conditions when sending remote type info, which might cause the
+        // receiver to make remote call. In doing so, this can cause a stack
+        // overflow or exhaustion of threads.
+
+        Class controlType = RemoteIntrospector.getRemoteType(control);
+        VersionedIdentifier controlTypeId = VersionedIdentifier.identify(controlType);
+        {
+            VersionedIdentifier controlId = VersionedIdentifier.identify(control);
+            SkeletonFactory factory = mSkeletonFactories.get(controlTypeId);
+            if (factory == null) {
+                factory = SkeletonFactoryGenerator.getSkeletonFactory(controlType);
+                SkeletonFactory existing = mSkeletonFactories.putIfAbsent(controlTypeId, factory);
+                if (existing != null) {
+                    factory = existing;
+                }
             }
+            Skeleton skeleton = factory.createSkeleton(controlId, mSkeletonSupport, control);
+            addSkeleton(controlId, skeleton);
+            controlId.writeWithNextVersion(invChannel);
+            invChannel.flush();
+        }
+
+        // Receive remote control object and link to stub without using resolveObject.
+        {
+            VersionedIdentifier controlId =
+                VersionedIdentifier.readAndUpdateRemoteVersion(invChannel);
+            StubFactory factory = lookup(mStubFactories, controlTypeId);
+            if (factory == null) {
+                RemoteInfo info = RemoteIntrospector.examine(controlType);
+                factory = StubFactoryGenerator.getStubFactory(controlType, info);
+                StubFactory existing = register(mStubFactories, controlTypeId, factory);
+                if (existing == factory) {
+                    mStubFactoryRefs.put
+                        (controlTypeId, 
+                         new StubFactoryRef(factory, mReferenceQueue, controlTypeId));
+                } else {
+                    factory = existing;
+                }
+            }
+            Remote remoteControl = createAndRegisterStub
+                (controlId, factory, new StubSupportImpl(controlId));
+            channel.setRecycleControl(remoteControl);
         }
 
         return invChannel;
@@ -1527,11 +1560,11 @@ public class StandardSession implements Session {
             return mChannel.getRemoteAddress();
         }
 
-        public Object installRecycler(Recycler recycler) {
+        public Remote installRecycler(Recycler recycler) {
             return null;
         }
 
-        public void setRecycleControl(Object control) {
+        public void setRecycleControl(Remote control) {
         }
 
         public Throwable readThrowable() throws IOException, ReconstructedException {

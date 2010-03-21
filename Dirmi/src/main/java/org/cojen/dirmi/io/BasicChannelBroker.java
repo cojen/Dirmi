@@ -22,6 +22,8 @@ import java.io.OutputStream;
 
 import java.lang.ref.WeakReference;
 
+import java.rmi.Remote;
+
 import java.util.Map;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -317,12 +319,12 @@ abstract class BasicChannelBroker implements ChannelBroker {
         }
 
         @Override
-        public Object installRecycler(Recycler recycler) {
+        public Remote installRecycler(Recycler recycler) {
             return mChannel.installRecycler(recycler);
         }
 
         @Override
-        public void setRecycleControl(Object control) {
+        public void setRecycleControl(Remote control) {
             mChannel.setRecycleControl(control);
         }
 

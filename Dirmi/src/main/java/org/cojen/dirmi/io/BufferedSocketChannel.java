@@ -20,6 +20,8 @@ import java.io.IOException;
 
 import java.net.Socket;
 
+import java.rmi.Remote;
+
 import java.util.Map;
 
 /**
@@ -35,12 +37,12 @@ class BufferedSocketChannel extends SocketChannel {
     }
 
     @Override
-    public Object installRecycler(Recycler recycler) {
+    public Remote installRecycler(Recycler recycler) {
         return null;
     }
 
     @Override
-    public void setRecycleControl(Object control) {
+    public void setRecycleControl(Remote control) {
     }
 
     @Override
