@@ -30,6 +30,9 @@ public interface RemoteBatched extends Remote {
     @Batched
     void startTask(String op) throws RemoteException;
 
+    @Unbatched
+    void unbatchedTask(String op) throws RemoteException;
+
     @Batched
     RemoteBatched chain(String name) throws RemoteException;
 

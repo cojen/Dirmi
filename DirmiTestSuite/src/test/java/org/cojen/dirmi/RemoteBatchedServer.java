@@ -58,6 +58,10 @@ public class RemoteBatchedServer implements RemoteBatched {
         }
     }
 
+    public void unbatchedTask(String op) {
+        startTask(op);
+    }
+
     public RemoteBatched chain(String name) {
         return new RemoteBatchedServer(name, mListeners);
     }

@@ -84,6 +84,7 @@ import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.Timeout;
+import org.cojen.dirmi.Unbatched;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
@@ -1008,8 +1009,8 @@ public class StandardSession implements Session {
 
     void releaseLocalChannel() {
         InvocationChannel channel = mLocalChannel.get();
-        mLocalChannel.remove();
         if (channel != null) {
+            mLocalChannel.remove();
             mHeldChannelMap.remove(channel);
         }
     }
@@ -1143,13 +1144,17 @@ public class StandardSession implements Session {
             Object sessionDequeue(RemoteCompletion<Object> callback) throws RemoteException;
 
             /**
-             * Returns RemoteInfo object from server.
+             * Returns RemoteInfo object from server. Method is unbatched to
+             * ensure that it doesn't disrupt a batch in the current thread.
              */
+            @Unbatched
             RemoteInfo getRemoteInfo(VersionedIdentifier typeId) throws RemoteException;
 
             /**
-             * Returns RemoteInfo object from server.
+             * Returns RemoteInfo object from server. Method is unbatched to
+             * ensure that it doesn't disrupt a batch in the current thread.
              */
+            @Unbatched
             RemoteInfo getRemoteInfo(Identifier typeId) throws RemoteException;
 
             /**
@@ -2040,6 +2045,25 @@ public class StandardSession implements Session {
         // Used by batched methods that return a remote object.
         private StubSupportImpl() {
             super();
+        }
+
+        @Override
+        public InvocationChannel unbatch() {
+            InvocationChannel channel = mLocalChannel.get();
+            if (channel != null) {
+                mLocalChannel.set(null);
+            }
+            return channel;
+        }
+
+        @Override
+        public void rebatch(InvocationChannel channel) {
+            if (channel != null) {
+                if (mLocalChannel.get() != null) {
+                    throw new IllegalStateException();
+                }
+                mLocalChannel.set(channel);
+            }
         }
 
         @Override

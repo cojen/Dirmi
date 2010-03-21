@@ -242,6 +242,14 @@ public class StubFactoryGenerator<R extends Remote> {
                 b.storeField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
             }
 
+            LocalVariable batchedChannelVar = null;
+            if (method.isUnbatched()) {
+                b.loadLocal(supportVar);
+                b.invokeInterface(STUB_SUPPORT_TYPE, "unbatch", INV_CHANNEL_TYPE, null);
+                batchedChannelVar = b.createLocalVariable(null, INV_CHANNEL_TYPE);
+                b.storeLocal(batchedChannelVar);
+            }
+
             // Call invoke to write to a free channel.
             b.loadLocal(supportVar);
             b.loadConstant(remoteFailureExType);
@@ -396,6 +404,7 @@ public class StubFactoryGenerator<R extends Remote> {
                     b.loadLocal(channelVar);
                     b.invokeInterface(STUB_SUPPORT_TYPE, "release", null,
                                       new TypeDesc[] {channelVar.getType()});
+                    genRebatch(b, supportVar, batchedChannelVar);
                     b.loadLocal(channelVar);
                     b.returnValue(returnDesc);
                 } else if (compVar != null) {
@@ -404,7 +413,8 @@ public class StubFactoryGenerator<R extends Remote> {
                         genBatched(b, supportVar, channelVar, noTimeout);
                     } else {
                         // Also reset channel if any shared parameters.
-                        genFinished(b, supportVar, channelVar, noTimeout, anySharedParam);
+                        genFinished(b, supportVar, channelVar, batchedChannelVar,
+                                    noTimeout, anySharedParam);
                     }
 
                     b.loadLocal(compVar);
@@ -432,7 +442,8 @@ public class StubFactoryGenerator<R extends Remote> {
                         genBatched(b, supportVar, channelVar, noTimeout);
                     } else {
                         // Also reset channel if any shared parameters.
-                        genFinished(b, supportVar, channelVar, noTimeout, anySharedParam);
+                        genFinished(b, supportVar, channelVar, batchedChannelVar,
+                                    noTimeout, anySharedParam);
                     }
 
                     if (returnDesc == null) {
@@ -485,19 +496,19 @@ public class StubFactoryGenerator<R extends Remote> {
                 if (returnDesc == null) {
                     invokeEnd = b.createLabel().setLocation();
                     // Finished with channel, but don't reset again.
-                    genFinished(b, supportVar, channelVar, noTimeout, false);
+                    genFinished(b, supportVar, channelVar, batchedChannelVar, noTimeout, false);
                     b.returnVoid();
                 } else {
                     readParam(b, method.getReturnType(), invInVar);
                     invokeEnd = b.createLabel().setLocation();
                     // Finished with channel, but don't reset again.
-                    genFinished(b, supportVar, channelVar, noTimeout, false);
+                    genFinished(b, supportVar, channelVar, batchedChannelVar, noTimeout, false);
                     b.returnValue(returnDesc);
                 }
 
                 abnormalResponse.setLocation();
                 // Finished with channel, but don't reset again
-                genFinished(b, supportVar, channelVar, noTimeout, false);
+                genFinished(b, supportVar, channelVar, batchedChannelVar, noTimeout, false);
                 b.loadLocal(throwableVar);
                 b.throwObject();
             }
@@ -522,6 +533,7 @@ public class StubFactoryGenerator<R extends Remote> {
                                       new TypeDesc[]{CLASS_TYPE, INV_CHANNEL_TYPE,THROWABLE_TYPE,
                                                      timeoutType, TIME_UNIT_TYPE});
                 }
+                genRebatch(b, supportVar, batchedChannelVar);
                 b.throwObject();
             }
         }
@@ -783,6 +795,7 @@ public class StubFactoryGenerator<R extends Remote> {
 
     private void genFinished(CodeBuilder b,
                              LocalVariable supportVar, LocalVariable channelVar,
+                             LocalVariable batchedChannelVar,
                              boolean noTimeout, boolean reset)
     {
         b.loadLocal(supportVar);
@@ -791,6 +804,18 @@ public class StubFactoryGenerator<R extends Remote> {
         String methodName = noTimeout ? "finished" : "finishedAndCancelTimeout";
         b.invokeInterface(STUB_SUPPORT_TYPE, methodName, null,
                           new TypeDesc[] {channelVar.getType(), TypeDesc.BOOLEAN});
+        genRebatch(b, supportVar, batchedChannelVar);
+    }
+
+    private void genRebatch(CodeBuilder b,
+                            LocalVariable supportVar, LocalVariable batchedChannelVar)
+    {
+        if (batchedChannelVar != null) {
+            b.loadLocal(supportVar);
+            b.loadLocal(batchedChannelVar);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "rebatch", null,
+                              new TypeDesc[] {INV_CHANNEL_TYPE});
+        }
     }
 
     private static class Factory<R extends Remote> implements StubFactory<R> {

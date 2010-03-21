@@ -27,6 +27,7 @@ import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Ordered;
+import org.cojen.dirmi.Unbatched;
 
 /**
  * Describes a remote method, as provided by {@link RemoteInfo}.
@@ -88,6 +89,13 @@ public interface RemoteMethod extends Serializable {
      * @see Batched
      */
     boolean isBatched();
+
+    /**
+     * Returns true if this method should never be included in a batch.
+     *
+     * @see Unbatched
+     */
+    boolean isUnbatched();
 
     /**
      * @see Ordered

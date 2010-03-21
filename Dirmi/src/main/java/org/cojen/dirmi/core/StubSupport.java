@@ -32,6 +32,21 @@ import org.cojen.dirmi.Completion;
  */
 public interface StubSupport {
     /**
+     * Called by unbatched methods to temporarily release a thread-local channel.
+     *
+     * @return null if no batch is in progress
+     */
+    InvocationChannel unbatch();
+
+    /**
+     * Called by unbatched methods to re-instate a thread-local channel.
+     *
+     * @param channel channel returned by unbatch; can be null
+     * @throws IllegalStateException if a thread-local channel already exists
+     */
+    void rebatch(InvocationChannel channel);
+
+    /**
      * Writes request header to a free channel. Caller chooses to flush output
      * after arguments are written and then reads channel.
      *

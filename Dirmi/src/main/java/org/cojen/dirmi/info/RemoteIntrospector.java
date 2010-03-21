@@ -67,6 +67,7 @@ import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
+import org.cojen.dirmi.Unbatched;
 
 /**
  * Supports examination of {@code Remote} types, returning all metadata
@@ -547,6 +548,7 @@ public class RemoteIntrospector {
 
         private final CallMode mCallMode;
         private final boolean mBatched;
+        private final boolean mUnbatched;
         private final boolean mOrdered;
         private final boolean mDisposer;
 
@@ -582,6 +584,17 @@ public class RemoteIntrospector {
                 } else {
                     mCallMode = ann.value();
                 }
+            }
+
+            if (m.isAnnotationPresent(Unbatched.class)) {
+                if (mBatched) {
+                    throw new IllegalArgumentException
+                        ("Method cannot be annotated as both @Batched and @Unbatched: " +
+                         methodDesc(m));
+                }
+                mUnbatched = true;
+            } else {
+                mUnbatched = false;
             }
 
             mOrdered = m.isAnnotationPresent(Ordered.class);
@@ -749,6 +762,7 @@ public class RemoteIntrospector {
 
             mCallMode = existing.mCallMode;
             mBatched = existing.mBatched;
+            mUnbatched = existing.mUnbatched;
             mOrdered = existing.mOrdered;
             mDisposer = existing.mDisposer;
 
@@ -798,6 +812,10 @@ public class RemoteIntrospector {
 
         public boolean isBatched() {
             return mBatched;
+        }
+
+        public boolean isUnbatched() {
+            return mUnbatched;
         }
 
         public boolean isOrdered() {

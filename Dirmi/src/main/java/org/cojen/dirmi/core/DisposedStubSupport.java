@@ -35,6 +35,15 @@ class DisposedStubSupport extends AbstractStubSupport {
     }
 
     @Override
+    public InvocationChannel unbatch() {
+        return null;
+    }
+
+    @Override
+    public void rebatch(InvocationChannel channel) {
+    }
+
+    @Override
     public <T extends Throwable> InvocationChannel invoke(Class<T> remoteFailureEx)
         throws T
     {

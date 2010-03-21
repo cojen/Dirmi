@@ -185,6 +185,28 @@ public class TestBatchedMethods extends AbstractTestSuite {
     }
 
     @Test
+    public void testUnbatched() throws Exception {
+        final RemoteBatched server = (RemoteBatched) sessionStrategy.remoteServer;
+
+        Listener listener = new Listener();
+        server.register(listener);
+
+        server.startTask("one");
+        assertNull(listener.dequeue(1000));
+
+        server.unbatchedTask("two");
+
+        // Confirms that task one was not flushed.
+        assertEquals("root", listener.dequeue(1000));
+        assertEquals("two", listener.dequeue(1000));
+        assertNull(listener.dequeue(1000));
+
+        server.syncNop();
+        assertEquals("root", listener.dequeue(1000));
+        assertEquals("one", listener.dequeue(1000));
+    }
+
+    @Test
     public void testCompletion() throws Exception {
         final RemoteBatched server = (RemoteBatched) sessionStrategy.remoteServer;
 
