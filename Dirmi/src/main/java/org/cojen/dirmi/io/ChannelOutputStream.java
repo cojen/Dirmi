@@ -37,6 +37,8 @@ abstract class ChannelOutputStream extends OutputStream {
 
     public abstract void disconnect();
 
+    public abstract boolean outputSuspend() throws IOException;
+
     abstract void outputNotify(IOExecutor executor, Channel.Listener listener);
 
     abstract void outputClose() throws IOException;

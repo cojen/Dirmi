@@ -287,20 +287,32 @@ abstract class PacketInputStream<P extends PacketInputStream<P>> extends Channel
         return n;
     }
 
-    boolean drain(InputStream in) throws IOException {
+    /**
+     * @return false if more to drain; true does not imply that stream was recycled
+     */
+    boolean drain(InputStream in, int amount) {
         byte[] buffer;
         int start, end;
 
-        synchronized (this) {
-            while (skip(in, Integer.MAX_VALUE) > 0);
-            if (mPacketSize != -1) {
-                return false;
+        try {
+            synchronized (this) {
+                while (skip(in, amount) > 0);
+                if (mPacketSize != -1) {
+                    return mPacketSize < -1;
+                }
+                if ((buffer = mBuffer) == null) {
+                    return true;
+                }
+                start = mStart;
+                end = mEnd;
             }
-            if ((buffer = mBuffer) == null) {
-                return false;
+        } catch (IOException e) {
+            try {
+                in.close();
+            } catch (IOException e2) {
+                // Ignore.
             }
-            start = mStart;
-            end = mEnd;
+            return true;
         }
 
         P recycled = newInstance();
@@ -424,6 +436,31 @@ abstract class PacketInputStream<P extends PacketInputStream<P>> extends Channel
     }
 
     @Override
+    public synchronized boolean inputResume() {
+        if (mIn == null) {
+            return false;
+        }
+        // Peek ahead and consume EOF if possible.
+        if (mPacketSize == 0 && (mEnd - mStart) > 0 && mBuffer[mStart] == 0) {
+            try {
+                read();
+            } catch (IOException e) {
+                return false;
+            }
+        }
+        if (mPacketSize != -1) {
+            return false;
+        }
+        mPacketSize = 0;
+        return true;
+    }
+
+    @Override
+    public boolean isResumeSupported() {
+        return true;
+    }
+
+    @Override
     final void inputClose() throws IOException {
         final InputStream in = inUpdater.getAndSet(this, null);
         if (in == null) {
@@ -442,22 +479,26 @@ abstract class PacketInputStream<P extends PacketInputStream<P>> extends Channel
                 }
 
                 if (packetSize >= 0) {
+                    int avail = mEnd - mStart;
+                    if (avail > 0) {
+                        // Quick drain to see if EOF is available.
+                        if (drain(in, avail)) {
+                            return;
+                        }
+                    }
+
+                    avail = (mEnd - mStart) + in.available();
+                    if (avail > 0) {
+                        // Try drain again.
+                        if (drain(in, avail)) {
+                            return;
+                        }
+                    }
+
                     try {
                         executor().execute(new Runnable() {
                             public void run() {
-                                boolean drained;
-                                try {
-                                    drained = drain(in);
-                                } catch (IOException e) {
-                                    drained = false;
-                                }
-                                if (!drained) {
-                                    try {
-                                        in.close();
-                                    } catch (IOException e2) {
-                                        // Ignore.
-                                    }
-                                }
+                                drain(in, Integer.MAX_VALUE);
                             }
                         });
 

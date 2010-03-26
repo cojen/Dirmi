@@ -78,6 +78,7 @@ import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
 import org.cojen.dirmi.NoSuchObjectException;
+import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.ReconstructedException;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
@@ -788,9 +789,27 @@ public class StandardSession implements Session {
         }
     }
 
-    void handleRequestsAsync(final InvocationChannel invChannel) throws RejectedException {
+    void handleRequestsAsync(final InvocationChannel invChannel, final boolean inputResume)
+        throws RejectedException
+    {
         mExecutor.execute(new Runnable() {
             public void run() {
+                if (inputResume && !invChannel.inputResume()) {
+                    if (invChannel.isResumeSupported()) {
+                        // Drain all extra client data.
+                        try {
+                            while (invChannel.skip(Integer.MAX_VALUE) > 0);
+                        } catch (IOException e) {
+                            invChannel.disconnect();
+                            return;
+                        }
+                    }
+                    if (!invChannel.inputResume()) {
+                        invChannel.disconnect();
+                        return;
+                    }
+                }
+
                 handleRequests(invChannel);
             }
         });
@@ -1479,14 +1498,6 @@ public class StandardSession implements Session {
             mChannel = channel;
         }
 
-        public InvocationInputStream getInputStream() {
-            return mInvIn;
-        }
-
-        public InvocationOutputStream getOutputStream() {
-            return mInvOut;
-        }
-
         public boolean isInputReady() throws IOException {
             return mChannel.isInputReady() || mInvIn.available() > 0;
         }
@@ -1511,6 +1522,28 @@ public class StandardSession implements Session {
             mChannel.outputNotify(listener);
         }
 
+        public boolean inputResume() {
+            return mChannel.inputResume();
+        }
+
+        public boolean isResumeSupported() {
+            return mChannel.isResumeSupported();
+        }
+
+        boolean inputResume(int timeout, TimeUnit unit) throws IOException {
+            if (inputResume()) {
+                return true;
+            }
+            // Try to read EOF, with a timeout.
+            startTimeout(timeout, unit);
+            return read() < 0 && cancelTimeout() && inputResume();
+        }
+
+        public boolean outputSuspend() throws IOException {
+            mInvOut.doDrain();
+            return mChannel.outputSuspend();
+        }
+
         public boolean isClosed() {
             return mChannel.isClosed();
         }
@@ -1520,7 +1553,10 @@ public class StandardSession implements Session {
             IOException exception = null;
 
             try {
-                mInvOut.doClose();
+                // Drain first, to avoid forcing a flush to channel. This
+                // allows channel implementation to buffer any remaining
+                // packets together.
+                mInvOut.doDrain();
             } catch (IOException e) {
                 exception = e;
             }
@@ -1811,7 +1847,7 @@ public class StandardSession implements Session {
         }
     }
 
-    private class ReplacingObjectOutputStream extends ObjectOutputStream {
+    private class ReplacingObjectOutputStream extends DrainableObjectOutputStream {
         ReplacingObjectOutputStream(OutputStream out) throws IOException {
             super(out);
             enableReplaceObject(true);
@@ -1923,6 +1959,16 @@ public class StandardSession implements Session {
 
     private class SkeletonSupportImpl implements SkeletonSupport {
         @Override
+        public Pipe requestReply(InvocationChannel channel) {
+            return new ServerPipe(channel) {
+                @Override
+                void tryInputResume(InvocationChannel channel) {
+                    finishedAsync(channel, true);
+                }
+            };
+        }
+
+        @Override
         public <V> void completion(Future<V> response, RemoteCompletion<V> completion)
             throws RemoteException
         {
@@ -2012,10 +2058,14 @@ public class StandardSession implements Session {
 
         @Override
         public void finishedAsync(InvocationChannel channel) {
+            finishedAsync(channel, false);
+        }
+
+        void finishedAsync(InvocationChannel channel, boolean inputResume) {
             try {
                 // Let another thread process next requests while this thread
                 // continues to process active request.
-                handleRequestsAsync(channel);
+                handleRequestsAsync(channel, inputResume);
             } catch (RejectedException e) {
                 // 'Tis safer to close instead of trying later in the same
                 // thread. An asynchronous method takes an indefinite amount of
@@ -2231,6 +2281,51 @@ public class StandardSession implements Session {
         @Override
         public void release(InvocationChannel channel) {
             releaseLocalChannel();
+        }
+
+        @Override
+        public Pipe requestReply(InvocationChannel channel) {
+            releaseLocalChannel();
+            return new ClientPipe(channel) {
+                @Override
+                void tryInputResume(InvocationChannel channel) {
+                    if (!(channel instanceof InvocationChan)) {
+                        channel.disconnect();
+                        return;
+                    }
+
+                    final InvocationChan chan = (InvocationChan) channel;
+                    if (chan.inputResume()) {
+                        chan.recycle();
+                        return;
+                    }
+
+                    if (!chan.isResumeSupported()) {
+                        channel.disconnect();
+                        return;
+                    }
+
+                    // Don't block client.
+                    try {
+                        mExecutor.execute(new Runnable() {
+                            public void run() {
+                                try {
+                                    if (chan.inputResume(1, TimeUnit.SECONDS)) {
+                                        chan.recycle();
+                                        return;
+                                    }
+                                } catch (IOException e) {
+                                    // Ignore.
+                                }
+                                // Discard extra server data.
+                                chan.disconnect();
+                            }
+                        });
+                    } catch (RejectedException e) {
+                        chan.disconnect();
+                    }
+                }
+            };
         }
 
         @Override

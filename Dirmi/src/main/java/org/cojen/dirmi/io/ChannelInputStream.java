@@ -31,6 +31,10 @@ abstract class ChannelInputStream extends InputStream {
 
     public abstract void disconnect();
 
+    public abstract boolean inputResume();
+
+    public abstract boolean isResumeSupported();
+
     abstract void inputNotify(IOExecutor executor, Channel.Listener listener);
 
     abstract void inputClose() throws IOException;

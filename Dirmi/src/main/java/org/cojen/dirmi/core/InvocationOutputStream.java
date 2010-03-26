@@ -19,7 +19,6 @@ package org.cojen.dirmi.core;
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UTFDataFormatException;
 
@@ -57,12 +56,12 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
     static final byte NOT_NULL = 3;
 
     private final InvocationChannel mChannel;
-    private final ObjectOutputStream mOut;
+    private final DrainableObjectOutputStream mOut;
 
     /**
      * @param out stream to wrap
      */
-    public InvocationOutputStream(InvocationChannel channel, ObjectOutputStream out) {
+    public InvocationOutputStream(InvocationChannel channel, DrainableObjectOutputStream out) {
         mChannel = channel;
         mOut = out;
     }
@@ -293,6 +292,10 @@ public class InvocationOutputStream extends OutputStream implements InvocationOu
         } else {
             mChannel.close();
         }
+    }
+
+    void doDrain() throws IOException {
+        mOut.drain();
     }
 
     void doClose() throws IOException {

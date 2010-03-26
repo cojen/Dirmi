@@ -275,6 +275,21 @@ abstract class BasicChannelBroker implements ChannelBroker {
             mChannel.outputNotify(new UnregisterListener(listener));
         }
 
+        @Override
+        public boolean inputResume() {
+            return mChannel.inputResume();
+        }
+
+        @Override
+        public boolean isResumeSupported() {
+            return mChannel.isResumeSupported();
+        }
+
+        @Override
+        public boolean outputSuspend() throws IOException {
+            return mChannel.outputSuspend();
+        }
+
         private class UnregisterListener implements Channel.Listener {
             private final Channel.Listener mListener;
 

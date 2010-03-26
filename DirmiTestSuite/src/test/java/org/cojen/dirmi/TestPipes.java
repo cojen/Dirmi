@@ -345,4 +345,14 @@ public class TestPipes extends AbstractTestSuite {
 
         fail("Close didn't interrupt blocked read");
     }
+
+    @Test
+    public void requestReply() throws Exception {
+        RemotePipes pipes = (RemotePipes) sessionStrategy.remoteServer;
+        Pipe pipe = pipes.requestReply(null);
+        pipe.writeInt(123);
+        int reply = pipe.readInt();
+        assertEquals(123 + 1, reply);
+        pipe.close();
+    }
 }

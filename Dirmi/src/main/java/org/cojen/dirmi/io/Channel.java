@@ -88,6 +88,23 @@ public interface Channel extends Flushable, Closeable, Link {
     void outputNotify(Listener listener);
 
     /**
+     * Allows input to resume after reading a suspend marker.
+     *
+     * @return false if not supported or if no suspend marker is present
+     */
+    boolean inputResume();
+
+    boolean isResumeSupported();
+
+    /**
+     * If supported, writes a suspend marker and flushes the output. Input side
+     * will read EOF until resumed. Input must be resumed for each suspend.
+     *
+     * @return false if not supported or stream is closed
+     */
+    boolean outputSuspend() throws IOException;
+
+    /**
      * Returns true if channel is absolutely closed or disconnected. A return
      * value of false doesn't imply that the next I/O operation will succeed.
      */

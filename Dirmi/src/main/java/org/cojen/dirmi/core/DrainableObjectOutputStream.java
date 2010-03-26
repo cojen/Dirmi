@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006-2010 Brian S O'Neill
+ *  Copyright 2010 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,17 +16,26 @@
 
 package org.cojen.dirmi.core;
 
-import org.cojen.dirmi.Pipe;
-
-import org.cojen.dirmi.io.Channel;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.ObjectOutputStream;
 
 /**
- * Basic interface for a bidirectional method invocation I/O channel.
+ * 
  *
  * @author Brian S O'Neill
  */
-public interface InvocationChannel extends Channel, Pipe {
-    InvocationInputStream getInputStream();
+public class DrainableObjectOutputStream extends ObjectOutputStream {
+    public DrainableObjectOutputStream() throws IOException {
+        super();
+    }
 
-    InvocationOutputStream getOutputStream();
+    public DrainableObjectOutputStream(OutputStream out) throws IOException {
+        super(out);
+    }
+
+    @Override
+    public void drain() throws IOException {
+        super.drain();
+    }
 }

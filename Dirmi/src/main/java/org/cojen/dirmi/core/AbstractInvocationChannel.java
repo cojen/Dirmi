@@ -18,7 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 
 /**
  * 
@@ -29,9 +28,17 @@ abstract class AbstractInvocationChannel implements InvocationChannel {
     final InvocationInputStream mInvIn;
     final InvocationOutputStream mInvOut;
 
-    AbstractInvocationChannel(ObjectInputStream in, ObjectOutputStream out) {
+    AbstractInvocationChannel(ObjectInputStream in, DrainableObjectOutputStream out) {
         mInvIn = new InvocationInputStream(this, in);
         mInvOut = new InvocationOutputStream(this, out);
+    }
+
+    public final InvocationInputStream getInputStream() {
+        return mInvIn;
+    }
+
+    public final InvocationOutputStream getOutputStream() {
+        return mInvOut;
     }
 
     public void reset() throws IOException {
@@ -39,150 +46,150 @@ abstract class AbstractInvocationChannel implements InvocationChannel {
     }
 
     public void readFully(byte[] b) throws IOException {
-        getInputStream().readFully(b);
+        mInvIn.readFully(b);
     }
 
     public void readFully(byte[] b, int off, int len) throws IOException {
-        getInputStream().readFully(b, off, len);
+        mInvIn.readFully(b, off, len);
     }
 
     public int skipBytes(int n) throws IOException {
-        return getInputStream().skipBytes(n);
+        return mInvIn.skipBytes(n);
     }
 
     public boolean readBoolean() throws IOException {
-        return getInputStream().readBoolean();
+        return mInvIn.readBoolean();
     }
 
     public byte readByte() throws IOException {
-        return getInputStream().readByte();
+        return mInvIn.readByte();
     }
 
     public int readUnsignedByte() throws IOException {
-        return getInputStream().readUnsignedByte();
+        return mInvIn.readUnsignedByte();
     }
 
     public short readShort() throws IOException {
-        return getInputStream().readShort();
+        return mInvIn.readShort();
     }
 
     public int readUnsignedShort() throws IOException {
-        return getInputStream().readUnsignedShort();
+        return mInvIn.readUnsignedShort();
     }
 
     public char readChar() throws IOException {
-        return getInputStream().readChar();
+        return mInvIn.readChar();
     }
 
     public int readInt() throws IOException {
-        return getInputStream().readInt();
+        return mInvIn.readInt();
     }
 
     public long readLong() throws IOException {
-        return getInputStream().readLong();
+        return mInvIn.readLong();
     }
 
     public float readFloat() throws IOException {
-        return getInputStream().readFloat();
+        return mInvIn.readFloat();
     }
 
     public double readDouble() throws IOException {
-        return getInputStream().readDouble();
+        return mInvIn.readDouble();
     }
 
     public String readLine() throws IOException {
-        return getInputStream().readLine();
+        return mInvIn.readLine();
     }
 
     public String readUTF() throws IOException {
-        return getInputStream().readUTF();
+        return mInvIn.readUTF();
     }
 
     public Object readObject() throws ClassNotFoundException, IOException {
-        return getInputStream().readObject();
+        return mInvIn.readObject();
     }
 
     public int read() throws IOException {
-        return getInputStream().read();
+        return mInvIn.read();
     }
 
     public int read(byte[] b) throws IOException {
-        return getInputStream().read(b);
+        return mInvIn.read(b);
     }
 
     public int read(byte[] b, int off, int len) throws IOException {
-        return getInputStream().read(b, off, len);
+        return mInvIn.read(b, off, len);
     }
 
     public long skip(long n) throws IOException {
-        return getInputStream().skip(n);
+        return mInvIn.skip(n);
     }
 
     public int available() throws IOException {
-        return getInputStream().available();
+        return mInvIn.available();
     }
 
     public void write(int b) throws IOException {
-        getOutputStream().write(b);
+        mInvOut.write(b);
     }
 
     public void write(byte[] b) throws IOException {
-        getOutputStream().write(b);
+        mInvOut.write(b);
     }
 
     public void write(byte[] b, int off, int len) throws IOException {
-        getOutputStream().write(b, off, len);
+        mInvOut.write(b, off, len);
     }
 
     public void writeBoolean(boolean v) throws IOException {
-        getOutputStream().writeBoolean(v);
+        mInvOut.writeBoolean(v);
     }
 
     public void writeByte(int v) throws IOException {
-        getOutputStream().writeByte(v);
+        mInvOut.writeByte(v);
     }
 
     public void writeShort(int v) throws IOException {
-        getOutputStream().writeShort(v);
+        mInvOut.writeShort(v);
     }
 
     public void writeChar(int v) throws IOException {
-        getOutputStream().writeChar(v);
+        mInvOut.writeChar(v);
     }
 
     public void writeInt(int v) throws IOException {
-        getOutputStream().writeInt(v);
+        mInvOut.writeInt(v);
     }
 
     public void writeLong(long v) throws IOException {
-        getOutputStream().writeLong(v);
+        mInvOut.writeLong(v);
     }
 
     public void writeFloat(float v) throws IOException {
-        getOutputStream().writeFloat(v);
+        mInvOut.writeFloat(v);
     }
 
     public void writeDouble(double v) throws IOException {
-        getOutputStream().writeDouble(v);
+        mInvOut.writeDouble(v);
     }
 
     public void writeBytes(String s) throws IOException {
-        getOutputStream().writeBytes(s);
+        mInvOut.writeBytes(s);
     }
 
     public void writeChars(String s) throws IOException {
-        getOutputStream().writeChars(s);
+        mInvOut.writeChars(s);
     }
 
     public void writeUTF(String str) throws IOException {
-        getOutputStream().writeUTF(str);
+        mInvOut.writeUTF(str);
     }
 
     public void writeObject(Object obj) throws IOException {
-        getOutputStream().writeObject(obj);
+        mInvOut.writeObject(obj);
     }
 
     public void flush() throws IOException {
-        getOutputStream().flush();
+        mInvOut.flush();
     }
 }

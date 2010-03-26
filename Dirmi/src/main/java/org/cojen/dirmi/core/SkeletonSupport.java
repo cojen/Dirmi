@@ -21,6 +21,8 @@ import java.rmi.RemoteException;
 
 import java.util.concurrent.Future;
 
+import org.cojen.dirmi.Pipe;
+
 /**
  * Object passed to a Skeleton instance in order for it to decide when channels
  * can be reused.
@@ -28,6 +30,12 @@ import java.util.concurrent.Future;
  * @author Brian S O'Neill
  */
 public interface SkeletonSupport {
+    /**
+     * Called if channel is expected to be a request-reply Pipe. This method
+     * should not throw any exception.
+     */
+    Pipe requestReply(InvocationChannel channel);
+
     /**
      * Used by asynchronous methods which return a Future to write completion
      * response.

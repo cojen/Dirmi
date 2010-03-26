@@ -355,7 +355,11 @@ public class StubFactoryGenerator<R extends Remote> {
                 }
             }
 
-            if (method.getAsynchronousCallMode() != CallMode.EVENTUAL) {
+            if (!method.isAsynchronous() ||
+                method.getAsynchronousCallMode() == CallMode.IMMEDIATE ||
+                method.getAsynchronousCallMode() == CallMode.ACKNOWLEDGED ||
+                (!returnPipe && method.getAsynchronousCallMode() == CallMode.REQUEST_REPLY))
+            {
                 b.loadLocal(invOutVar);
                 b.invokeVirtual(INV_OUT_TYPE, "flush", null, null);
             }
@@ -399,13 +403,20 @@ public class StubFactoryGenerator<R extends Remote> {
                 invokeEnd = b.createLabel().setLocation();
 
                 if (returnPipe) {
-                    // Return channel; as a Pipe.
                     b.loadLocal(supportVar);
                     b.loadLocal(channelVar);
-                    b.invokeInterface(STUB_SUPPORT_TYPE, "release", null,
-                                      new TypeDesc[] {channelVar.getType()});
-                    genRebatch(b, supportVar, batchedChannelVar);
-                    b.loadLocal(channelVar);
+                    if (method.getAsynchronousCallMode() == CallMode.REQUEST_REPLY) {
+                        // Convert channel to request-reply Pipe.
+                        b.invokeInterface(STUB_SUPPORT_TYPE, "requestReply", returnDesc,
+                                          new TypeDesc[] {channelVar.getType()});
+                        genRebatch(b, supportVar, batchedChannelVar);
+                    } else {
+                        // Return channel as a Pipe.
+                        b.invokeInterface(STUB_SUPPORT_TYPE, "release", null,
+                                          new TypeDesc[] {channelVar.getType()});
+                        genRebatch(b, supportVar, batchedChannelVar);
+                        b.loadLocal(channelVar);
+                    }
                     b.returnValue(returnDesc);
                 } else if (compVar != null) {
                     // Finished with channel.

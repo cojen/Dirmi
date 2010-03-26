@@ -22,6 +22,7 @@ import java.rmi.RemoteException;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Pipe;
 
 /**
  * Object passed to a Stub instance in order for it to actually communicate
@@ -110,6 +111,12 @@ public interface StubSupport {
      * should not throw any exception.
      */
     void release(InvocationChannel channel);
+
+    /**
+     * Called if channel is to be used for returning a request-reply Pipe. This
+     * method should not throw any exception.
+     */
+    Pipe requestReply(InvocationChannel channel);
 
     /**
      * Called after channel usage is finished and can be reused for sending

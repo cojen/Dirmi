@@ -243,6 +243,16 @@ abstract class PacketOutputStream<P extends PacketOutputStream<P>> extends Chann
     }
 
     @Override
+    public synchronized boolean outputSuspend() throws IOException {
+        OutputStream out = mOut;
+        if (out == null) {
+            return false;
+        }
+        writeSuspendMarker(out, mBuffer, false);
+        return true;
+    }
+
+    @Override
     final void outputClose() throws IOException {
         OutputStream out = outUpdater.getAndSet(this, null);
         if (out == null) {
@@ -253,54 +263,11 @@ abstract class PacketOutputStream<P extends PacketOutputStream<P>> extends Chann
         synchronized (this) {
             buffer = mBuffer;
             mBuffer = null;
-
-            int pos = mPos;
-            if (pos >= buffer.length) {
-                // No room in buffer for empty packet header.
-                try {
-                    doWrite(out, buffer, 2, pos - 2);
-                    out.write(0);
-                    out.flush();
-                } catch (IOException e) {
-                    outputDisconnect(out);
-                    throw e;
-                }
-            } else {
-                int length = pos - 2;
-                if (length <= 0) {
-                    // Write empty packet header all by itself.
-                    try {
-                        out.write(0);
-                        out.flush();
-                    } catch (IOException e) {
-                        // No need to throw to caller since there was no user data
-                        // to flush. Stream cannot be recycled, so return.
-                        outputDisconnect(out);
-                        return;
-                    }
-                } else {
-                    // Append the empty packet header.
-                    buffer[pos] = 0;
-
-                    if (length < 0x80) {
-                        buffer[1] = (byte) length;
-                        pos = 1;
-                        length += 2;
-                    } else {
-                        buffer[1] = (byte) (length - 0x80);
-                        buffer[0] = (byte) (((length - 0x80) >> 8) | 0x80);
-                        pos = 0;
-                        length += 3;
-                    }
-
-                    try {
-                        out.write(buffer, pos, length);
-                        out.flush();
-                    } catch (IOException e) {
-                        outputDisconnect(out);
-                        throw e;
-                    }
-                }
+            try {
+                writeSuspendMarker(out, buffer, true);
+            } catch (IOException e) {
+                outputDisconnect(out);
+                throw e;
             }
         }
 
@@ -343,6 +310,54 @@ abstract class PacketOutputStream<P extends PacketOutputStream<P>> extends Chann
      * Called by close method when stream can be recycled.
      */
     protected abstract void recycled(P newInstance);
+
+    private void writeSuspendMarker(OutputStream out, byte[] buffer, boolean forClose)
+        throws IOException
+    {
+        int pos = mPos;
+        if (pos >= buffer.length) {
+            // No room in buffer for empty packet header.
+            doWrite(out, buffer, 2, pos - 2);
+            out.write(0);
+            out.flush();
+            mPos = 2;
+        } else {
+            int length = pos - 2;
+            if (length <= 0) {
+                // Write empty packet header all by itself.
+                try {
+                    out.write(0);
+                    out.flush();
+                } catch (IOException e) {
+                    if (!forClose) {
+                        throw e;
+                    }
+                    // No need to throw to caller since there was no user data
+                    // to flush. Stream cannot be recycled, so return.
+                    outputDisconnect(out);
+                    return;
+                }
+            } else {
+                // Append the empty packet header.
+                buffer[pos] = 0;
+
+                if (length < 0x80) {
+                    buffer[1] = (byte) length;
+                    pos = 1;
+                    length += 2;
+                } else {
+                    buffer[1] = (byte) (length - 0x80);
+                    buffer[0] = (byte) (((length - 0x80) >> 8) | 0x80);
+                    pos = 0;
+                    length += 3;
+                }
+
+                out.write(buffer, pos, length);
+                out.flush();
+                mPos = 2;
+            }
+        }
+    }
 
     /**
      * @param offset must be at least 2

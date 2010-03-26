@@ -107,6 +107,18 @@ abstract class SocketChannel implements Channel {
         mOut.outputNotify(mExecutor, listener);
     }
 
+    public boolean inputResume() {
+        return mIn.inputResume();
+    }
+
+    public boolean isResumeSupported() {
+        return mIn.isResumeSupported();
+    }
+
+    public boolean outputSuspend() throws IOException {
+        return mOut.outputSuspend();
+    }
+
     @Override
     public String toString() {
         return "Channel {localAddress=" + getLocalAddress() +

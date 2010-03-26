@@ -83,4 +83,14 @@ public class RemotePipesServer implements RemotePipes {
     public Pipe open(Pipe pipe) {
         return null;
     }
+
+    public Pipe requestReply(Pipe pipe) {
+        try {
+            int i = pipe.readInt();
+            pipe.writeInt(i + 1);
+            pipe.close();
+        } catch (IOException e) {
+        }
+        return null;
+    }
 }

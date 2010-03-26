@@ -19,6 +19,8 @@ package org.cojen.dirmi;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
+import org.cojen.dirmi.CallMode;
+
 /**
  * 
  *
@@ -36,4 +38,7 @@ public interface RemotePipes extends Remote {
 
     @Asynchronous
     Pipe open(Pipe pipe) throws RemoteException;
+
+    @Asynchronous(CallMode.REQUEST_REPLY)
+    Pipe requestReply(Pipe pipe) throws RemoteException;
 }

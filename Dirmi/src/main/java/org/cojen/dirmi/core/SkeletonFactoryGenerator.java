@@ -368,7 +368,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             b.loadThis();
             b.loadField(REMOTE_FIELD_NAME, remoteType);
 
-            int pipeParamIndex = -1;
+            boolean noPipeParam = true;
 
             if (!paramTypes.isEmpty()) {
                 // Read parameters onto stack.
@@ -381,8 +381,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     if (lookForPipe && Pipe.class == paramType.getType()) {
                         lookForPipe = false;
                         // Use channel as Pipe.
-                        b.loadLocal(channelVar);
-                        pipeParamIndex = i;
+                        noPipeParam = false;
+                        if (method.getAsynchronousCallMode() == CallMode.REQUEST_REPLY) {
+                            // Convert to support request-reply.
+                            b.loadThis();
+                            b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
+                            b.loadLocal(channelVar);
+                            b.invokeInterface(SKEL_SUPPORT_TYPE, "requestReply", returnDesc,
+                                              new TypeDesc[] {INV_CHANNEL_TYPE});
+                        } else {
+                            b.loadLocal(channelVar);
+                        }
                     } else {
                         invInVar = invInVar(b, channelVar, invInVar);
                         readParam(b, paramType, invInVar);
@@ -425,7 +434,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             }
 
             if (method.isAsynchronous() && !method.isBatched() && !method.isOrdered() &&
-                pipeParamIndex < 0)
+                noPipeParam)
             {
                 // Call finished method before invocation.
                 genFinishedAsync(b, channelVar);
@@ -584,12 +593,12 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         // Since asynchronous method was not executed, caller
                         // can read next request. This reduces the build up of
                         // threads caused by asynchronous methods.
-                        b.loadConstant(pipeParamIndex < 0);
+                        b.loadConstant(noPipeParam);
                         b.returnValue(TypeDesc.BOOLEAN);
 
                         isNext.setLocation();
 
-                        if (pipeParamIndex < 0) {
+                        if (noPipeParam) {
                             // Call finished method before invocation.
                             genFinishedAsync(b, channelVar);
                         }

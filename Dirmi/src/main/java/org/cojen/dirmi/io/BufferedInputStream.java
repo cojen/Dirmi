@@ -265,6 +265,16 @@ public class BufferedInputStream extends ChannelInputStream {
     }
 
     @Override
+    public boolean inputResume() {
+        return false;
+    }
+
+    @Override
+    public boolean isResumeSupported() {
+        return false;
+    }
+
+    @Override
     final void inputClose() throws IOException {
         try {
             try {

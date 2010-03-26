@@ -42,4 +42,10 @@ public enum CallMode {
      * acknowledgement that it was received.
      */
     ACKNOWLEDGED,
+
+    /**
+     * Mode applicable to {@link Pipe Pipes} which more efficiently uses
+     * network resources than a fully bidirectional pipe.
+     */
+    REQUEST_REPLY,
 }

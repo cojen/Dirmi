@@ -59,11 +59,11 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
         mIn = in;
     }
 
-    public void readFully(byte b[]) throws IOException {
+    public void readFully(byte[] b) throws IOException {
         mIn.readFully(b);
     }
 
-    public void readFully(byte b[], int offset, int length) throws IOException {
+    public void readFully(byte[] b, int offset, int length) throws IOException {
         mIn.readFully(b, offset, length);
     }
 

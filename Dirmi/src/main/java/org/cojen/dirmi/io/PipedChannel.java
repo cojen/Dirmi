@@ -111,6 +111,22 @@ class PipedChannel implements Channel {
     }
 
     @Override
+    public boolean inputResume() {
+        return false;
+    }
+
+    @Override
+    public boolean isResumeSupported() {
+        return false;
+    }
+
+    @Override
+    public boolean outputSuspend() throws IOException {
+        flush();
+        return false;
+    }
+
+    @Override
     public String toString() {
         return "Channel {localAddress=" + getLocalAddress() +
             ", remoteAddress=" + getRemoteAddress() + '}';

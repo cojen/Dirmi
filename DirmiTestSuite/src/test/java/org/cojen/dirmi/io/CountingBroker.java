@@ -179,6 +179,18 @@ public class CountingBroker implements ChannelBroker {
             mChannel.outputNotify(listener);
         }
 
+        public boolean inputResume() {
+            return mChannel.inputResume();
+        }
+
+        public boolean isResumeSupported() {
+            return mChannel.isResumeSupported();
+        }
+
+        public boolean outputSuspend() throws IOException {
+            return mChannel.outputSuspend();
+        }
+
         public void flush() throws IOException {
             mChannel.flush();
         }

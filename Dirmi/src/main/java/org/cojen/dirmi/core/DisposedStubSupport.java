@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.NoSuchObjectException;
+import org.cojen.dirmi.Pipe;
 
 /**
  * StubSupport implementation returned by the disposed method.
@@ -89,6 +90,11 @@ class DisposedStubSupport extends AbstractStubSupport {
 
     @Override
     public void release(InvocationChannel channel) {
+        throw new IllegalStateException();
+    }
+
+    @Override
+    public Pipe requestReply(InvocationChannel channel) {
         throw new IllegalStateException();
     }
 

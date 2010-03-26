@@ -222,6 +222,12 @@ public class BufferedOutputStream extends ChannelOutputStream {
     }
 
     @Override
+    public boolean outputSuspend() throws IOException {
+        flush();
+        return false;
+    }
+
+    @Override
     final void outputClose() throws IOException {
         // If closing via another thread, don't block on flush.
         close(!mWriting);
