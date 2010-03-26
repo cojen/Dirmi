@@ -54,8 +54,6 @@ abstract class ClientPipe extends WrappedPipe {
             return;
         }
         if (oldState == WRITING) {
-            // This case is unlikely to ever occur. In order for the input to
-            // be suspended, at least one read had to be attempted.
             if (mChannel.outputSuspend()) {
                 mChannel.reset();
             } else {
@@ -67,7 +65,7 @@ abstract class ClientPipe extends WrappedPipe {
     }
 
     @Override
-    Pipe readPipe() throws IOException {
+    Pipe pipeForRead() throws IOException {
         InvocationChannel channel = mChannel;
         if (mState == READING) {
             return channel;
@@ -84,7 +82,7 @@ abstract class ClientPipe extends WrappedPipe {
     }
 
     @Override
-    Pipe writePipe() throws IOException {
+    Pipe pipeForWrite() throws IOException {
         if (mState == WRITING) {
             return mChannel;
         }

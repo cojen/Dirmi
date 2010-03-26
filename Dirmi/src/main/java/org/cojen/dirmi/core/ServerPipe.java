@@ -62,7 +62,7 @@ abstract class ServerPipe extends WrappedPipe {
     }
 
     @Override
-    Pipe readPipe() throws IOException {
+    Pipe pipeForRead() throws IOException {
         if (mState == READING) {
             return mChannel;
         }
@@ -71,7 +71,7 @@ abstract class ServerPipe extends WrappedPipe {
     }
 
     @Override
-    Pipe writePipe() throws IOException {
+    Pipe pipeForWrite() throws IOException {
         // Note: The check for mState multiple times is intentional, to account
         // for concurrent modification.
         if (mState == WRITING || cStateUpdater.compareAndSet(this, READING, WRITING)

@@ -33,12 +33,12 @@ abstract class WrappedPipe implements Pipe {
     /**
      * Called immediately (and only) before every read.
      */
-    abstract Pipe readPipe() throws IOException;
+    abstract Pipe pipeForRead() throws IOException;
 
     /**
      * Called immediately (and only) before every write.
      */
-    abstract Pipe writePipe() throws IOException;
+    abstract Pipe pipeForWrite() throws IOException;
 
     /**
      * Called only for non-read or non-write operations.
@@ -81,7 +81,7 @@ abstract class WrappedPipe implements Pipe {
         try {
             return anyPipe().cancelTimeout();
         } catch (IOException e) {
-            return true;
+            return false;
         }
     }
 
@@ -97,203 +97,203 @@ abstract class WrappedPipe implements Pipe {
 
     @Override
     public void readFully(byte[] b) throws IOException {
-        readPipe().readFully(b);
+        pipeForRead().readFully(b);
     }
 
     @Override
     public void readFully(byte[] b, int off, int len) throws IOException {
-        readPipe().readFully(b, off, len);
+        pipeForRead().readFully(b, off, len);
     }
 
     @Override
     public int skipBytes(int n) throws IOException {
-        return readPipe().skipBytes(n);
+        return pipeForRead().skipBytes(n);
     }
 
     @Override
     public boolean readBoolean() throws IOException {
-        return readPipe().readBoolean();
+        return pipeForRead().readBoolean();
     }
 
     @Override
     public byte readByte() throws IOException {
-        return readPipe().readByte();
+        return pipeForRead().readByte();
     }
 
     @Override
     public int readUnsignedByte() throws IOException {
-        return readPipe().readUnsignedByte();
+        return pipeForRead().readUnsignedByte();
     }
 
     @Override
     public short readShort() throws IOException {
-        return readPipe().readShort();
+        return pipeForRead().readShort();
     }
 
     @Override
     public int readUnsignedShort() throws IOException {
-        return readPipe().readUnsignedShort();
+        return pipeForRead().readUnsignedShort();
     }
 
     @Override
     public char readChar() throws IOException {
-        return readPipe().readChar();
+        return pipeForRead().readChar();
     }
 
     @Override
     public int readInt() throws IOException {
-        return readPipe().readInt();
+        return pipeForRead().readInt();
     }
 
     @Override
     public long readLong() throws IOException {
-        return readPipe().readLong();
+        return pipeForRead().readLong();
     }
 
     @Override
     public float readFloat() throws IOException {
-        return readPipe().readFloat();
+        return pipeForRead().readFloat();
     }
 
     @Override
     public double readDouble() throws IOException {
-        return readPipe().readDouble();
+        return pipeForRead().readDouble();
     }
 
     @Override
     @Deprecated
     public String readLine() throws IOException {
-        return readPipe().readLine();
+        return pipeForRead().readLine();
     }
 
     @Override
     public String readUTF() throws IOException {
-        return readPipe().readUTF();
+        return pipeForRead().readUTF();
     }
 
     @Override
     public Throwable readThrowable() throws IOException {
-        return readPipe().readThrowable();
+        return pipeForRead().readThrowable();
     }
 
     @Override
     public Object readObject() throws ClassNotFoundException, IOException {
-        return readPipe().readObject();
+        return pipeForRead().readObject();
     }
 
     @Override
     public int read() throws IOException {
-        return readPipe().read();
+        return pipeForRead().read();
     }
 
     @Override
     public int read(byte[] b) throws IOException {
-        return readPipe().read(b);
+        return pipeForRead().read(b);
     }
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        return readPipe().read(b, off, len);
+        return pipeForRead().read(b, off, len);
     }
 
     @Override
     public long skip(long n) throws IOException {
-        return readPipe().skip(n);
+        return pipeForRead().skip(n);
     }
 
     @Override
     public int available() throws IOException {
-        return readPipe().available();
+        return pipeForRead().available();
     }
 
     @Override
     public void write(int b) throws IOException {
-        writePipe().write(b);
+        pipeForWrite().write(b);
     }
 
     @Override
     public void write(byte[] b) throws IOException {
-        writePipe().write(b);
+        pipeForWrite().write(b);
     }
 
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
-        writePipe().write(b, off, len);
+        pipeForWrite().write(b, off, len);
     }
 
     @Override
     public void writeBoolean(boolean v) throws IOException {
-        writePipe().writeBoolean(v);
+        pipeForWrite().writeBoolean(v);
     }
 
     @Override
     public void writeByte(int v) throws IOException {
-        writePipe().writeByte(v);
+        pipeForWrite().writeByte(v);
     }
 
     @Override
     public void writeShort(int v) throws IOException {
-        writePipe().writeShort(v);
+        pipeForWrite().writeShort(v);
     }
 
     @Override
     public void writeChar(int v) throws IOException {
-        writePipe().writeChar(v);
+        pipeForWrite().writeChar(v);
     }
 
     @Override
     public void writeInt(int v) throws IOException {
-        writePipe().writeInt(v);
+        pipeForWrite().writeInt(v);
     }
 
     @Override
     public void writeLong(long v) throws IOException {
-        writePipe().writeLong(v);
+        pipeForWrite().writeLong(v);
     }
 
     @Override
     public void writeFloat(float v) throws IOException {
-        writePipe().writeFloat(v);
+        pipeForWrite().writeFloat(v);
     }
 
     @Override
     public void writeDouble(double v) throws IOException {
-        writePipe().writeDouble(v);
+        pipeForWrite().writeDouble(v);
     }
 
     @Override
     public void writeBytes(String s) throws IOException {
-        writePipe().writeBytes(s);
+        pipeForWrite().writeBytes(s);
     }
 
     @Override
     public void writeChars(String s) throws IOException {
-        writePipe().writeChars(s);
+        pipeForWrite().writeChars(s);
     }
 
     @Override
     public void writeUTF(String str) throws IOException {
-        writePipe().writeUTF(str);
+        pipeForWrite().writeUTF(str);
     }
 
     @Override
     public void writeObject(Object obj) throws IOException {
-        writePipe().writeObject(obj);
+        pipeForWrite().writeObject(obj);
     }
 
     @Override
     public void writeThrowable(Throwable t) throws IOException {
-        writePipe().writeThrowable(t);
+        pipeForWrite().writeThrowable(t);
     }
 
     @Override
     public void reset() throws IOException {
-        writePipe().reset();
+        pipeForWrite().reset();
     }
 
     @Override
     public void flush() throws IOException {
-        writePipe().flush();
+        pipeForWrite().flush();
     }
 
     @Override
