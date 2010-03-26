@@ -49,19 +49,20 @@ abstract class ClientPipe extends WrappedPipe {
         if (oldState == CLOSED) {
             return;
         }
-        if (!cancelTimeout()) {
+        InvocationChannel channel = mChannel;
+        if (!channel.cancelTimeout()) {
             // Channel will close or already has.
             return;
         }
         if (oldState == WRITING) {
-            if (mChannel.outputSuspend()) {
-                mChannel.reset();
+            if (channel.outputSuspend()) {
+                channel.reset();
             } else {
-                mChannel.close();
+                channel.close();
                 return;
             }
         }
-        tryInputResume(mChannel);
+        tryInputResume(channel);
     }
 
     @Override

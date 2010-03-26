@@ -47,11 +47,11 @@ abstract class ServerPipe extends WrappedPipe {
         if (cStateUpdater.getAndSet(this, CLOSED) == CLOSED) {
             return;
         }
-        if (!cancelTimeout()) {
+        InvocationChannel channel = mChannel;
+        if (!channel.cancelTimeout()) {
             // Channel will close or already has.
             return;
         }
-        InvocationChannel channel = mChannel;
         if (channel.outputSuspend()) {
             channel.reset();
         } else {
