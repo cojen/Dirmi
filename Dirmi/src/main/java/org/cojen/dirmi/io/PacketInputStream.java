@@ -479,29 +479,12 @@ abstract class PacketInputStream<P extends PacketInputStream<P>> extends Channel
                 }
 
                 if (packetSize >= 0) {
-                    int avail = mEnd - mStart;
-                    if (avail > 0) {
-                        // Quick drain to see if EOF is available.
-                        if (drain(in, avail)) {
-                            return;
-                        }
-                    }
-
-                    avail = (mEnd - mStart) + in.available();
-                    if (avail > 0) {
-                        // Try drain again.
-                        if (drain(in, avail)) {
-                            return;
-                        }
-                    }
-
                     try {
                         executor().execute(new Runnable() {
                             public void run() {
                                 drain(in, Integer.MAX_VALUE);
                             }
                         });
-
                         return;
                     } catch (RejectedException e) {
                         // Cannot recycle.

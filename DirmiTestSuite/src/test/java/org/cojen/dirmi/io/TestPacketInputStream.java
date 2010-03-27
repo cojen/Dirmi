@@ -101,7 +101,7 @@ public class TestPacketInputStream {
         PacketInputStream recycled = pin.recycleAndWait();
         assertFalse(pin == recycled);
         assertTrue(recycled != null);
-        //assertTrue(pin.didUseExecutor());
+        assertTrue(pin.didUseExecutor());
     }
 
     @Test
@@ -138,7 +138,7 @@ public class TestPacketInputStream {
         PacketInputStream recycled = pin.recycleAndWait();
         assertFalse(pin == recycled);
         assertTrue(recycled != null);
-        //assertTrue(pin.didUseExecutor());
+        assertTrue(pin.didUseExecutor());
     }
 
     @Test
@@ -201,7 +201,7 @@ public class TestPacketInputStream {
 
         assertFalse(pin == recycled);
         assertTrue(recycled != null);
-        //assertTrue(pin.didUseExecutor());
+        assertTrue(pin.didUseExecutor());
     }
 
     @Test
