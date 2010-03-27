@@ -41,4 +41,14 @@ public interface RemotePipes extends Remote {
 
     @Asynchronous(CallMode.REQUEST_REPLY)
     Pipe requestReply(Pipe pipe) throws RemoteException;
+
+    @Asynchronous(CallMode.REQUEST_REPLY)
+    Pipe requestOnly(Pipe pipe, boolean readEOF) throws RemoteException;
+
+    void setRequestValue(int value) throws RemoteException;
+
+    int getRequestValue() throws RemoteException;
+
+    @Asynchronous(CallMode.REQUEST_REPLY)
+    Pipe replyOnly(Pipe pipe) throws RemoteException;
 }

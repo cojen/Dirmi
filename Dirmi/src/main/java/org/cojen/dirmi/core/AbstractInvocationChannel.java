@@ -33,6 +33,14 @@ abstract class AbstractInvocationChannel implements InvocationChannel {
         mInvOut = new InvocationOutputStream(this, out);
     }
 
+    /**
+     * Copy constructor which allows input to be replaced.
+     */
+    AbstractInvocationChannel(AbstractInvocationChannel chan, ObjectInputStream in) {
+        mInvIn = new InvocationInputStream(this, in);
+        mInvOut = chan.mInvOut;
+    }
+
     public final InvocationInputStream getInputStream() {
         return mInvIn;
     }

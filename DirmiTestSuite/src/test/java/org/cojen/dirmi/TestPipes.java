@@ -349,10 +349,127 @@ public class TestPipes extends AbstractTestSuite {
     @Test
     public void requestReply() throws Exception {
         RemotePipes pipes = (RemotePipes) sessionStrategy.remoteServer;
-        Pipe pipe = pipes.requestReply(null);
-        pipe.writeInt(123);
-        int reply = pipe.readInt();
-        assertEquals(123 + 1, reply);
-        pipe.close();
+        setRequestValue(pipes, 10);
+
+        {
+            Pipe pipe = pipes.requestReply(null);
+            pipe.writeInt(123);
+            int reply = pipe.readInt();
+            assertEquals(123 + 1, reply);
+            pipe.close();
+        }
+
+        {
+            Pipe pipe = pipes.requestReply(null);
+            pipe.writeInt(123);
+            pipe.readInt();
+            try {
+                pipe.writeInt(124);
+                fail();
+            } catch (IOException e) {
+            }
+            pipe.close();
+        }
+
+        {
+            Pipe pipe = pipes.requestReply(null);
+            pipe.writeInt(123);
+            int reply = pipe.readInt();
+            assertEquals(123 + 1, reply);
+            assertEquals(-1, pipe.read());
+            pipe.close();
+            // Make sure that reading EOF doesn't mess up recycled channel.
+            for (int i=0; i<10; i++) {
+                assertEquals(10, pipes.getRequestValue());
+            }
+        }
+    }
+
+    private void setRequestValue(RemotePipes pipes, int value) throws Exception {
+        pipes.setRequestValue(value);
+        for (int i=0; i<10; i++) {
+            if (pipes.getRequestValue() == value) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+        assertEquals(value, pipes.getRequestValue());
+    }
+
+    @Test
+    public void requestOnly() throws Exception {
+        requestOnly(false);
+    }
+
+    @Test
+    public void requestOnlyEOF() throws Exception {
+        requestOnly(true);
+    }
+
+    private void requestOnly(boolean readEOF) throws Exception {
+        RemotePipes pipes = (RemotePipes) sessionStrategy.remoteServer;
+        setRequestValue(pipes, 0);
+
+        {
+            Pipe pipe = pipes.requestOnly(null, readEOF);
+            pipe.writeInt(123);
+            pipe.close();
+            int expect = readEOF ? -1 : 123;
+            for (int i=0; i<10; i++) {
+                if (pipes.getRequestValue() != expect) {
+                    Thread.sleep(100);
+                }
+            }
+            for (int i=0; i<10; i++) {
+                assertEquals(expect, pipes.getRequestValue());
+            }
+        }
+
+        {
+            Pipe pipe = pipes.requestOnly(null, readEOF);
+            pipe.close();
+            for (int i=0; i<10; i++) {
+                if (pipes.getRequestValue() != Integer.MIN_VALUE) {
+                    Thread.sleep(100);
+                }
+            }
+            assertEquals(Integer.MIN_VALUE, pipes.getRequestValue());
+        }
+    }
+
+    @Test
+    public void replyOnly() throws Exception {
+        RemotePipes pipes = (RemotePipes) sessionStrategy.remoteServer;
+        setRequestValue(pipes, 10);
+
+        {
+            Pipe pipe = pipes.replyOnly(null);
+            int reply = pipe.readInt();
+            assertEquals(111, reply);
+            pipe.close();
+        }
+
+        {
+            Pipe pipe = pipes.replyOnly(null);
+            pipe.readInt();
+            try {
+                pipe.writeInt(124);
+                fail();
+            } catch (IOException e) {
+            }
+            pipe.close();
+        }
+
+        {
+            Pipe pipe = pipes.replyOnly(null);
+            int reply = pipe.readInt();
+            assertEquals(111, reply);
+            assertEquals(-1, pipe.read());
+            pipe.close();
+            // Make sure that reading EOF doesn't mess up recycled channel.
+            for (int i=0; i<10; i++) {
+                assertEquals(10, pipes.getRequestValue());
+            }
+        }
     }
 }

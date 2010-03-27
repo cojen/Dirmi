@@ -93,4 +93,36 @@ public class RemotePipesServer implements RemotePipes {
         }
         return null;
     }
+
+    private volatile int mRequestValue;
+
+    public Pipe requestOnly(Pipe pipe, boolean readEOF) {
+        try {
+            mRequestValue = pipe.readInt();
+            if (readEOF) {
+                mRequestValue = pipe.read();
+            }
+            pipe.close();
+        } catch (IOException e) {
+            mRequestValue = Integer.MIN_VALUE;
+        }
+        return null;
+    }
+
+    public void setRequestValue(int value) {
+        mRequestValue = value;
+    }
+
+    public int getRequestValue() {
+        return mRequestValue;
+    }
+
+    public Pipe replyOnly(Pipe pipe) {
+        try {
+            pipe.writeInt(111);
+            pipe.close();
+        } catch (IOException e) {
+        }
+        return null;
+    }
 }

@@ -20,6 +20,7 @@ import java.io.IOException;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -38,6 +39,7 @@ abstract class ClientPipe extends WrappedPipe {
     private final InvocationChannel mChannel;
 
     private volatile int mState;
+    private volatile boolean mCannotResume;
 
     ClientPipe(InvocationChannel channel) {
         mChannel = channel;
@@ -54,15 +56,26 @@ abstract class ClientPipe extends WrappedPipe {
             // Channel will close or already has.
             return;
         }
-        if (oldState == WRITING) {
-            if (channel.outputSuspend()) {
-                channel.reset();
-            } else {
+
+        try {
+            if (mCannotResume) {
                 channel.close();
                 return;
             }
+            if (oldState == WRITING) {
+                if (channel.outputSuspend()) {
+                    channel.reset();
+                } else {
+                    channel.close();
+                    return;
+                }
+            }
+
+            tryInputResume(channel);
+        } catch (ClosedException e) {
+            // Exception closing when already closed is bogus.
+            return;
         }
-        tryInputResume(channel);
     }
 
     @Override
@@ -72,8 +85,11 @@ abstract class ClientPipe extends WrappedPipe {
             return channel;
         }
         if (cStateUpdater.compareAndSet(this, WRITING, READING)) {
-            channel.outputSuspend();
-            channel.reset();
+            if (channel.outputSuspend()) {
+                channel.reset();
+            } else {
+                mCannotResume = true;
+            }
             return channel;
         }
         if (mState == READING) {

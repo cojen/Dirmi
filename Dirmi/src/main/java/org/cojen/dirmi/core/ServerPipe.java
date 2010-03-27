@@ -20,6 +20,7 @@ import java.io.IOException;
 
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -52,13 +53,20 @@ abstract class ServerPipe extends WrappedPipe {
             // Channel will close or already has.
             return;
         }
-        if (channel.outputSuspend()) {
-            channel.reset();
-        } else {
-            channel.close();
+
+        try {
+            if (channel.outputSuspend()) {
+                channel.reset();
+            } else {
+                channel.close();
+                return;
+            }
+
+            tryInputResume(channel);
+        } catch (ClosedException e) {
+            // Exception closing when already closed is bogus.
             return;
         }
-        tryInputResume(channel);
     }
 
     @Override

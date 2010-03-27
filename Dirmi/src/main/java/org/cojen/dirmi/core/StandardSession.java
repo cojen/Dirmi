@@ -794,23 +794,47 @@ public class StandardSession implements Session {
     {
         mExecutor.execute(new Runnable() {
             public void run() {
-                if (inputResume && !invChannel.inputResume()) {
-                    if (invChannel.isResumeSupported()) {
+                if (!inputResume) {
+                    handleRequests(invChannel);
+                    return;
+                }
+
+                if (!(invChannel instanceof InvocationChan)) {
+                    invChannel.disconnect();
+                    return;
+                }
+
+                InvocationChan chan = (InvocationChan) invChannel;
+
+                tryResume: {
+                    if (chan.inputResume()) {
+                        break tryResume;
+                    }
+                    if (chan.isResumeSupported()) {
                         // Drain all extra client data.
                         try {
-                            while (invChannel.skip(Integer.MAX_VALUE) > 0);
+                            while (chan.skip(Integer.MAX_VALUE) > 0);
                         } catch (IOException e) {
-                            invChannel.disconnect();
+                            chan.disconnect();
                             return;
                         }
                     }
-                    if (!invChannel.inputResume()) {
-                        invChannel.disconnect();
-                        return;
+                    if (chan.inputResume()) {
+                        break tryResume;
                     }
+                    chan.disconnect();
+                    return;
                 }
 
-                handleRequests(invChannel);
+                // After reading EOF, ObjectInputStream is horked so replace it.
+                try {
+                    chan = new InvocationChan(chan);
+                } catch (IOException e) {
+                    chan.disconnect();
+                    return;
+                }
+
+                handleRequests(chan);
             }
         });
     }
@@ -1498,6 +1522,14 @@ public class StandardSession implements Session {
             mChannel = channel;
         }
 
+        /**
+         * Copy constructor which use a clean ObjectInputStream.
+         */
+        InvocationChan(InvocationChan chan) throws IOException {
+            super(chan, new ResolvingObjectInputStream(chan.mChannel.getInputStream()));
+            mChannel = chan.mChannel;
+        }
+
         public boolean isInputReady() throws IOException {
             return mChannel.isInputReady() || mInvIn.available() > 0;
         }
@@ -1681,16 +1713,13 @@ public class StandardSession implements Session {
         /**
          * Recycle the channel to be used for writing new requests.
          */
-        final void recycle() {
+        void recycle() {
             try {
                 if (isClosing()) {
                     discard();
                 } else {
                     getOutputStream().reset();
-                    mTimestamp = mClockSeconds;
-                    synchronized (mChannelPool) {
-                        mChannelPool.add(this);
-                    }
+                    addToPool();
                 }
             } catch (Exception e) {
                 disconnect();
@@ -1698,7 +1727,49 @@ public class StandardSession implements Session {
             }
         }
 
-        final void discard() {
+        void inputResumeAndRecycle() {
+            if (isClosing()) {
+                disconnect();
+                return;
+            }
+
+            if (inputResume()) {
+                // After reading EOF, ObjectInputStream is horked so replace it.
+                try {
+                    new InvocationChan(this).addToPool();
+                } catch (IOException e) {
+                    disconnect();
+                }
+                return;
+            }
+
+            if (!isResumeSupported()) {
+                disconnect();
+                return;
+            }
+
+            // Don't block caller while input is drained.
+            try {
+                mExecutor.execute(new Runnable() {
+                    public void run() {
+                        try {
+                            if (inputResume(1, TimeUnit.SECONDS) && !isClosing()) {
+                                new InvocationChan(InvocationChan.this).addToPool();
+                                return;
+                            }
+                        } catch (IOException e) {
+                            // Ignore.
+                        }
+                        // Discard extra server data.
+                        disconnect();
+                    }
+                });
+            } catch (RejectedException e) {
+                disconnect();
+            }
+        }
+
+        void discard() {
             try {
                 // Flush any lingering methods which used CallMode.EVENTUAL.
                 flush();
@@ -1717,6 +1788,13 @@ public class StandardSession implements Session {
 
         int getIdleTimestamp() {
             return mTimestamp;
+        }
+
+        void addToPool() {
+            mTimestamp = mClockSeconds;
+            synchronized (mChannelPool) {
+                mChannelPool.add(this);
+            }
         }
 
         private class TimeoutTask implements Runnable {
@@ -2291,38 +2369,8 @@ public class StandardSession implements Session {
                 void tryInputResume(InvocationChannel channel) {
                     if (!(channel instanceof InvocationChan)) {
                         channel.disconnect();
-                        return;
-                    }
-
-                    final InvocationChan chan = (InvocationChan) channel;
-                    if (chan.inputResume()) {
-                        chan.recycle();
-                        return;
-                    }
-
-                    if (!chan.isResumeSupported()) {
-                        channel.disconnect();
-                        return;
-                    }
-
-                    // Don't block client.
-                    try {
-                        mExecutor.execute(new Runnable() {
-                            public void run() {
-                                try {
-                                    if (chan.inputResume(1, TimeUnit.SECONDS)) {
-                                        chan.recycle();
-                                        return;
-                                    }
-                                } catch (IOException e) {
-                                    // Ignore.
-                                }
-                                // Discard extra server data.
-                                chan.disconnect();
-                            }
-                        });
-                    } catch (RejectedException e) {
-                        chan.disconnect();
+                    } else {
+                        ((InvocationChan) channel).inputResumeAndRecycle();
                     }
                 }
             };
