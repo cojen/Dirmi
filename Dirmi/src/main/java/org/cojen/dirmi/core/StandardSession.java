@@ -1772,7 +1772,7 @@ public class StandardSession implements Session {
         void discard() {
             try {
                 // Flush any lingering methods which used CallMode.EVENTUAL.
-                flush();
+                this.flush();
             } catch (IOException e) {
                 // Ignore.
             } finally {

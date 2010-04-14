@@ -76,7 +76,7 @@ class RecyclableSocketChannel extends SocketChannel {
 
     @Override
     public void setRecycleControl(Remote control) {
-        if (control == this || !(control instanceof RecycleControl)) {
+        if (!(control instanceof RecycleControl)) {
             throw new IllegalArgumentException();
         }
         synchronized (this) {
