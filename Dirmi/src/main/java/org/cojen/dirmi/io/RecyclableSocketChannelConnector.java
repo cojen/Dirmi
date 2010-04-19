@@ -24,7 +24,7 @@ import java.net.SocketAddress;
 import javax.net.SocketFactory;
 
 /**
- * Implements a connectot using TCP/IP which supports channel recycling. A
+ * Implements a connector using TCP/IP which supports channel recycling. A
  * recycler must be installed on connected channels, and remote endpoint must
  * be using {@link RecyclableSocketChannelAcceptor}.
  *
