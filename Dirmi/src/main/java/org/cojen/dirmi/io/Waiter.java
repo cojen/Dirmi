@@ -77,7 +77,7 @@ class Waiter<T> {
         }
     }
 
-    public synchronized T waitFor(long timeout, TimeUnit unit) throws IOException {
+    public synchronized T waitFor(final long timeout, final TimeUnit unit) throws IOException {
         long timeoutNanos = unit.toNanos(timeout);
         long start = System.nanoTime();
 
