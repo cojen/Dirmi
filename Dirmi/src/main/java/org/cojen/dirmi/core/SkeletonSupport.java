@@ -74,18 +74,18 @@ public interface SkeletonSupport {
      * should not throw any exception.
      *
      * @param reset pass true if object output should be reset
-     * @return true if caller should read another request from channel
+     * @return READ_FINISHED or READ_SAME_THREAD
      */
-    boolean finished(InvocationChannel channel, boolean reset);
+    int finished(InvocationChannel channel, boolean reset);
 
     /**
      * Called after synchronous method threw an exception and is finished with
      * channel. Exception is written to channel and output is reset. This
      * method should not throw any exception.
      *
-     * @return true if caller should read another request from channel
+     * @return READ_FINISHED or READ_SAME_THREAD
      */
-    boolean finished(InvocationChannel channel, Throwable cause);
+    int finished(InvocationChannel channel, Throwable cause);
 
     /**
      * Called after asynchronous method is finished with channel. This method

@@ -19,7 +19,6 @@ package org.cojen.dirmi.io;
 import java.io.IOException;
 
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.SocketAddress;
 
 import java.util.Map;
@@ -47,7 +46,7 @@ public class RecyclableSocketChannelAcceptor extends SocketChannelAcceptor {
     }
 
     @Override
-    Channel createChannel(Socket socket, Map<Channel, Object> accepted)
+    Channel createChannel(SimpleSocket socket, Map<Channel, Object> accepted)
         throws IOException
     {
         return new RecyclableSocketChannel(executor(), socket, accepted);

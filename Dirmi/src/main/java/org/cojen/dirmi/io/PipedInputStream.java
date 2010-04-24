@@ -26,6 +26,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.RejectedException;
 
 /**
  * Unbuffered replacement for {@link java.io.PipedInputStream}. This piped
@@ -150,7 +151,7 @@ public class PipedInputStream extends InputStream {
         }
     }
 
-    void inputNotify(IOExecutor executor, Channel.Listener listener) {
+    void inputNotify(final IOExecutor executor, final Channel.Listener listener) {
         mLock.lock();
         try {
             try {
@@ -169,7 +170,19 @@ public class PipedInputStream extends InputStream {
                 mListenerQueue = queue = new LinkedList<Channel.Listener>();
             }
 
-            queue.add(listener);
+            queue.add(new Channel.Listener() {
+                public void ready() {
+                    new PipeNotify(executor, listener);
+                }
+
+                public void rejected(RejectedException cause) {
+                    listener.rejected(cause);
+                }
+
+                public void closed(IOException cause) {
+                    new PipeNotify(executor, listener, cause);
+                }
+            });
         } finally {
             mLock.unlock();
         }

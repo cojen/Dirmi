@@ -276,6 +276,11 @@ abstract class BasicChannelBroker implements ChannelBroker {
         }
 
         @Override
+        public boolean usesSelectNotification() {
+            return mChannel.usesSelectNotification();
+        }
+
+        @Override
         public boolean inputResume() {
             return mChannel.inputResume();
         }

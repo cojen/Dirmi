@@ -56,6 +56,8 @@ import org.cojen.dirmi.io.IOExecutor;
 import org.cojen.dirmi.io.PipedChannelBroker;
 import org.cojen.dirmi.io.RecyclableSocketChannelAcceptor;
 import org.cojen.dirmi.io.RecyclableSocketChannelConnector;
+import org.cojen.dirmi.io.RecyclableSocketChannelSelector;
+import org.cojen.dirmi.io.SocketChannelSelector;
 
 import org.cojen.dirmi.util.ThreadPool;
 import org.cojen.dirmi.util.Timer;
@@ -91,6 +93,8 @@ public class Environment implements Closeable {
 
     private final SocketFactory mSocketFactory;
     private final ServerSocketFactory mServerSocketFactory;
+
+    private final RecyclableSocketChannelSelector mSelector;
 
     /**
      * Construct environment which uses up to 1000 threads.
@@ -131,7 +135,7 @@ public class Environment implements Closeable {
      * @see ThreadPool
      */
     public Environment(ScheduledExecutorService executor) {
-        this(executor, null, null, null, null, null);
+        this(executor, null, null, null, null, null, null);
     }
 
     private Environment(ScheduledExecutorService executor,
@@ -139,7 +143,8 @@ public class Environment implements Closeable {
                         WeakIdentityMap<Closeable, Object> closeable,
                         AtomicBoolean closed,
                         SocketFactory sf,
-                        ServerSocketFactory ssf)
+                        ServerSocketFactory ssf,
+                        RecyclableSocketChannelSelector selector)
     {
         if (executor == null) {
             throw new IllegalArgumentException("Must provide an executor");
@@ -148,28 +153,76 @@ public class Environment implements Closeable {
         mIOExecutor = ioExecutor == null ? new IOExecutor(executor) : ioExecutor;
         mCloseableSet = closeable == null ? new WeakIdentityMap<Closeable, Object>() : closeable;
         mClosed = closed == null ? new AtomicBoolean(false) : closed;
-        mSocketFactory = sf == null ? SocketFactory.getDefault() : sf;
-        mServerSocketFactory = ssf == null ? ServerSocketFactory.getDefault() : ssf;
+        mSocketFactory = sf;
+        mServerSocketFactory = ssf;
+        mSelector = selector;
     }
 
     /**
      * Returns an environment instance which connects using the given client
      * socket factory. The returned environment is linked to this one, and
      * closing either environment closes both.
+     *
+     * @throws IllegalStateException if environment uses a selector
      */
     public Environment withClientSocketFactory(SocketFactory sf) {
+        if (mSelector != null) {
+            throw new IllegalStateException("Cannot combine socket factory and selector");
+        }
         return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
-                               sf, mServerSocketFactory);
+                               sf, mServerSocketFactory, null);
     }
 
     /**
      * Returns an environment instance which accepts using the given server
      * socket factory. The returned environment is linked to this one, and
      * closing either environment closes both.
+     *
+     * @throws IllegalStateException if environment uses a selector
      */
     public Environment withServerSocketFactory(ServerSocketFactory ssf) {
+        if (mSelector != null) {
+            throw new IllegalStateException("Cannot combine socket factory and selector");
+        }
         return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
-                               mSocketFactory, ssf);
+                               mSocketFactory, ssf, null);
+    }
+
+    /**
+     * Returns an environment instance which uses selectable sockets, reducing
+     * the amount of idle threads. The returned environment is linked to this
+     * one, and closing either environment closes both.
+     *
+     * <p>Overall performance is lower with selectable sockets, but scalability
+     * is improved. Remote call overhead is about 2 to 4 times higher, which is
+     * largely due to the inefficient design of the nio library.
+     *
+     * @throws IllegalStateException if environment uses a socket factory
+     */
+    public Environment withSocketSelector() throws IOException {
+        if (mSocketFactory != null || mServerSocketFactory != null) {
+            throw new IllegalStateException("Cannot combine socket factory and selector");
+        }
+        if (!mRecyclableSockets) {
+            throw new IllegalStateException("Cannot use unrecyclable sockets with selector");
+        }
+
+        final RecyclableSocketChannelSelector selector =
+            new RecyclableSocketChannelSelector(mIOExecutor);
+        addToClosableSet(selector);
+
+        mIOExecutor.execute(new Runnable() {
+            public void run() {
+                try {
+                    selector.selectLoop();
+                } catch (IOException e) {
+                    org.cojen.util.ThrowUnchecked.fire(e);
+                }
+            }
+        });
+
+        return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
+                               null, null, selector);
     }
 
     /**
@@ -375,10 +428,13 @@ public class Environment implements Closeable {
             mCloseableSet.clear();
         }
 
-        for (int i=0; i<2; i++) {
+        for (int i=1; i<=3; i++) {
             for (Closeable c : closable) {
-                // Close sessions before brokers to avoid blocking.
-                if ((i == 0) == (c instanceof Session)) {
+                // Close sessions before brokers to avoid blocking. Close
+                // selectors last, after all sockets are closed.
+                if ((i == 1) == (c instanceof Session) &&
+                    (i == 3) == (c instanceof SocketChannelSelector))
+                {
                     try {
                         c.close();
                     } catch (IOException e) {
@@ -422,7 +478,17 @@ public class Environment implements Closeable {
     }
 
     ChannelAcceptor newChannelAcceptor(SocketAddress localAddress) throws IOException {
-        ServerSocket ss = mServerSocketFactory.createServerSocket();
+        RecyclableSocketChannelSelector selector = mSelector;
+        if (selector != null) {
+            return selector.newChannelAcceptor(localAddress);
+        }
+
+        ServerSocketFactory ssf = mServerSocketFactory;
+        if (ssf == null) {
+            ssf = ServerSocketFactory.getDefault();
+        }
+        
+        ServerSocket ss = ssf.createServerSocket();
         if (mRecyclableSockets) {
             return new RecyclableSocketChannelAcceptor(mIOExecutor, localAddress, ss);
         } else {
@@ -431,12 +497,22 @@ public class Environment implements Closeable {
     }
 
     ChannelConnector newChannelConnector(SocketAddress remoteAddress, SocketAddress localAddress) {
+        RecyclableSocketChannelSelector selector = mSelector;
+        if (selector != null) {
+            return selector.newChannelConnector(remoteAddress, localAddress);
+        }
+
+        SocketFactory sf = mSocketFactory;
+        if (sf == null) {
+            sf = SocketFactory.getDefault();
+        }
+
         if (mRecyclableSockets) {
             return new RecyclableSocketChannelConnector
-                (mIOExecutor, remoteAddress, localAddress, mSocketFactory);
+                (mIOExecutor, remoteAddress, localAddress, sf);
         } else {
             return new BufferedSocketChannelConnector
-                (mIOExecutor, remoteAddress, localAddress, mSocketFactory);
+                (mIOExecutor, remoteAddress, localAddress, sf);
         }
     }
 

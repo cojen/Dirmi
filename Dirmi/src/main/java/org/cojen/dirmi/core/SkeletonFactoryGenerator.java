@@ -217,7 +217,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         CodeBuilder invokeBuilder;
         {
             MethodInfo mi = cf.addMethod
-                (Modifiers.PUBLIC, "invoke", TypeDesc.BOOLEAN,
+                (Modifiers.PUBLIC, "invoke", TypeDesc.INT,
                  new TypeDesc[] {TypeDesc.INT, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
             invokeBuilder = new CodeBuilder(mi);
         }
@@ -273,22 +273,22 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 String name = generateMethodName(methodNames, method);
                 TypeDesc[] params = new TypeDesc[] {INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE};
                 MethodInfo innerMethod = cf.addMethod
-                    (Modifiers.PRIVATE, name, TypeDesc.BOOLEAN, params);
+                    (Modifiers.PRIVATE, name, TypeDesc.INT, params);
                 b = new CodeBuilder(innerMethod);
 
                 invokeBuilder.loadThis();
                 invokeBuilder.loadLocal(invokeBuilder.getParameter(1));
                 invokeBuilder.loadLocal(invokeBuilder.getParameter(2));
                 if (!method.isDisposer()) {
-                    invokeBuilder.invokePrivate(name, TypeDesc.BOOLEAN, params);
-                    invokeBuilder.returnValue(TypeDesc.BOOLEAN);
+                    invokeBuilder.invokePrivate(name, TypeDesc.INT, params);
+                    invokeBuilder.returnValue(TypeDesc.INT);
                 } else {
                     if (disposerTryLabels == null) {
                         disposerTryLabels = new ArrayList<Label>();
                     }
 
                     disposerTryLabels.add(invokeBuilder.createLabel().setLocation());
-                    invokeBuilder.invokePrivate(name, TypeDesc.BOOLEAN, params);
+                    invokeBuilder.invokePrivate(name, TypeDesc.INT, params);
                     disposerTryLabels.add(invokeBuilder.createLabel().setLocation());
 
                     if (disposerGotoLabel == null) {
@@ -593,8 +593,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         // Since asynchronous method was not executed, caller
                         // can read next request. This reduces the build up of
                         // threads caused by asynchronous methods.
-                        b.loadConstant(noPipeParam);
-                        b.returnValue(TypeDesc.BOOLEAN);
+                        b.loadConstant
+                            (noPipeParam ? Skeleton.READ_ANY_THREAD : Skeleton.READ_FINISHED);
+                        b.returnValue(TypeDesc.INT);
 
                         isNext.setLocation();
 
@@ -671,9 +672,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 Label hasException = b.createLabel();
                 b.ifNullBranch(hasException, false);
 
-                // Return true so that next batch request is handled in same thread.
-                b.loadConstant(true);
-                b.returnValue(TypeDesc.BOOLEAN);
+                // Next batch request must be handled in same thread.
+                b.loadConstant(Skeleton.READ_SAME_THREAD);
+                b.returnValue(TypeDesc.INT);
 
                 // Throw exception, to stop all remaining batch requests.
                 hasException.setLocation();
@@ -689,9 +690,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         (b, returnDesc, completionVar, tryStart, tryEnd, sequenceVar);
                 }
 
-                // Return true so that next batch request is handled in same thread.
-                b.loadConstant(true);
-                b.returnValue(TypeDesc.BOOLEAN);
+                // Next batch request must be handled in same thread.
+                b.loadConstant(Skeleton.READ_SAME_THREAD);
+                b.returnValue(TypeDesc.INT);
 
                 if (completionVar == null) {
                     genExceptionHandler(b, tryStart, tryEnd, sequenceVar);
@@ -707,8 +708,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         (b, returnDesc, completionVar, tryStart, tryEnd, sequenceVar);
                 }
 
-                b.loadConstant(false);
-                b.returnValue(TypeDesc.BOOLEAN);
+                b.loadConstant(Skeleton.READ_FINISHED);
+                b.returnValue(TypeDesc.INT);
 
                 if (completionVar == null) {
                     genExceptionHandler(b, tryStart, tryEnd, sequenceVar);
@@ -719,8 +720,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                     b.loadLocal(exVar);
                     b.invokeInterface(SKEL_SUPPORT_TYPE, "uncaughtException", null,
                                       new TypeDesc[] {THROWABLE_TYPE});
-                    b.loadConstant(false);
-                    b.returnValue(TypeDesc.BOOLEAN);
+                    b.loadConstant(Skeleton.READ_FINISHED);
+                    b.returnValue(TypeDesc.INT);
                 }
             } else { // synchronous method
                 // For synchronous method, write response and flush stream.
@@ -750,7 +751,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
 
                 // Call finished method.
                 genFinished(b, channelVar, doReset);
-                b.returnValue(TypeDesc.BOOLEAN);
+                b.returnValue(TypeDesc.INT);
 
                 genExceptionHandler(b, tryStart, tryEnd, sequenceVar);
                 LocalVariable throwableVar = b.createLocalVariable(null, THROWABLE_TYPE);
@@ -760,9 +761,9 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
                 b.loadLocal(channelVar);
                 b.loadLocal(throwableVar);
-                b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.BOOLEAN,
+                b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.INT,
                                   new TypeDesc[] {INV_CHANNEL_TYPE, THROWABLE_TYPE});
-                b.returnValue(TypeDesc.BOOLEAN);
+                b.returnValue(TypeDesc.INT);
             }
         }
 
@@ -785,7 +786,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
             invokeBuilder.loadField(ID_FIELD_NAME, VERSIONED_IDENTIFIER_TYPE);
             invokeBuilder.invokeInterface(SKEL_SUPPORT_TYPE, "dispose", null,
                                           new TypeDesc[] {VERSIONED_IDENTIFIER_TYPE});
-            invokeBuilder.returnValue(TypeDesc.BOOLEAN);
+            invokeBuilder.returnValue(TypeDesc.INT);
         }
 
         if (disposerTryLabels != null) {
@@ -963,7 +964,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
         b.loadLocal(channelVar);
         b.loadConstant(reset);
-        b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.BOOLEAN,
+        b.invokeInterface(SKEL_SUPPORT_TYPE, "finished", TypeDesc.INT,
                           new TypeDesc[] {INV_CHANNEL_TYPE, TypeDesc.BOOLEAN});
     }
 

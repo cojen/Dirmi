@@ -111,7 +111,7 @@ abstract class SocketChannelConnector implements ChannelConnector {
             throw (IOException) e.getCause();
         }
 
-        return createChannel(socket);
+        return createChannel(SocketChannel.toSimpleSocket(socket));
     }
 
     @Override
@@ -195,7 +195,7 @@ abstract class SocketChannelConnector implements ChannelConnector {
         return mExecutor; 
     }
 
-    abstract Channel createChannel(Socket socket) throws IOException;
+    abstract Channel createChannel(SimpleSocket socket) throws IOException;
 
     private static void disconnect(Socket socket) {
         try {

@@ -789,56 +789,6 @@ public class StandardSession implements Session {
         }
     }
 
-    void handleRequestsAsync(final InvocationChannel invChannel, final boolean inputResume)
-        throws RejectedException
-    {
-        mExecutor.execute(new Runnable() {
-            public void run() {
-                if (!inputResume) {
-                    handleRequests(invChannel);
-                    return;
-                }
-
-                if (!(invChannel instanceof InvocationChan)) {
-                    invChannel.disconnect();
-                    return;
-                }
-
-                InvocationChan chan = (InvocationChan) invChannel;
-
-                tryResume: {
-                    if (chan.inputResume()) {
-                        break tryResume;
-                    }
-                    if (chan.isResumeSupported()) {
-                        // Drain all extra client data.
-                        try {
-                            while (chan.skip(Integer.MAX_VALUE) > 0);
-                        } catch (IOException e) {
-                            chan.disconnect();
-                            return;
-                        }
-                    }
-                    if (chan.inputResume()) {
-                        break tryResume;
-                    }
-                    chan.disconnect();
-                    return;
-                }
-
-                // After reading EOF, ObjectInputStream is horked so replace it.
-                try {
-                    chan = new InvocationChan(chan);
-                } catch (IOException e) {
-                    chan.disconnect();
-                    return;
-                }
-
-                handleRequests(chan);
-            }
-        });
-    }
-
     void handleRequests(InvocationChannel invChannel) {
         BatchedInvocationException batchedException = null;
 
@@ -898,8 +848,18 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        if (skeleton.invoke(methodId, invChannel, batchedException)) {
-                            // Handle another request.
+                        switch (skeleton.invoke(methodId, invChannel, batchedException)) {
+                        case Skeleton.READ_FINISHED: default:
+                            return;
+
+                        case Skeleton.READ_ANY_THREAD:
+                            if (invChannel.usesSelectNotification()) {
+                                listenForRequestAsync(invChannel);
+                                return;
+                            }
+                            // Fall through to next case.
+
+                        case Skeleton.READ_SAME_THREAD:
                             batchedException = null;
                             continue;
                         }
@@ -907,7 +867,6 @@ public class StandardSession implements Session {
                         batchedException = e;
                         continue;
                     }
-                    return;
                 } catch (NoSuchMethodException e) {
                     throwable = e;
                 } catch (NoSuchObjectException e) {
@@ -963,6 +922,74 @@ public class StandardSession implements Session {
         }
     }
 
+    void readRequest(InvocationChannel invChannel) {
+        if (invChannel.usesSelectNotification()) {
+            listenForRequestAsync(invChannel);
+        } else {
+            handleRequests(invChannel);
+        }
+    }
+
+    void resumeAndReadRequestAsync(final InvocationChannel invChannel) throws RejectedException {
+        mExecutor.execute(new Runnable() {
+            public void run() {
+                if (!(invChannel instanceof InvocationChan)) {
+                    invChannel.disconnect();
+                    return;
+                }
+
+                InvocationChan chan = (InvocationChan) invChannel;
+
+                tryResume: {
+                    if (chan.inputResume()) {
+                        break tryResume;
+                    }
+                    if (chan.isResumeSupported()) {
+                        // Drain all extra client data.
+                        try {
+                            while (chan.skip(Integer.MAX_VALUE) > 0);
+                        } catch (IOException e) {
+                            chan.disconnect();
+                            return;
+                        }
+                    }
+                    if (chan.inputResume()) {
+                        break tryResume;
+                    }
+                    chan.disconnect();
+                    return;
+                }
+
+                // After reading EOF, ObjectInputStream is horked so replace it.
+                try {
+                    chan = new InvocationChan(chan);
+                } catch (IOException e) {
+                    chan.disconnect();
+                    return;
+                }
+
+                readRequest(chan);
+            }
+        });
+    }
+
+    void listenForRequestAsync(final InvocationChannel invChannel) {
+        invChannel.inputNotify(new Channel.Listener() {
+            public void ready() {
+                handleRequests(invChannel);
+            }
+
+            public void rejected(RejectedException cause) {
+                closeDueToRejection(invChannel, cause);
+            }
+
+            public void closed(IOException cause) {
+                // Client closed idle connection.
+                invChannel.disconnect();
+            }
+        });
+    }
+
     /*
      * All InvocationChan instances intended to be recycled must be created
      * through this method to ensure that recycled channels are paired properly
@@ -986,7 +1013,7 @@ public class StandardSession implements Session {
                             }
 
                             if (accepted) {
-                                handleRequests(invChannel);
+                                readRequest(invChannel);
                             } else {
                                 invChannel.recycle();
                             }
@@ -1098,6 +1125,28 @@ public class StandardSession implements Session {
         } catch (Throwable e2) {
             // I give up.
         }
+    }
+
+    void closeDueToRejection(Channel channel, RejectedException cause) {
+        // 'Tis safer to close instead of trying later in the same thread. An
+        // asynchronous method takes an indefinite amount of time to complete,
+        // starving the next requests. It might be nice to send an exception to
+        // the caller, but this isn't guaranteed to work in a timely fashion
+        // either. The request arguments first need to be drained, but this can
+        // block. If any pending requests are asynchronous, then an exception
+        // cannot be sent back anyhow.
+        if (!isClosing()) {
+            IOException ex;
+            if (cause.isShutdown()) {
+                ex = new RejectedException
+                    ("No threads available; closing channel: " + channel, cause);
+            } else {
+                ex = new RejectedException
+                    ("Too many active threads; closing channel: " + channel, cause);
+            }
+            uncaughtException(ex);
+        }
+        channel.disconnect();
     }
 
     /**
@@ -1478,7 +1527,7 @@ public class StandardSession implements Session {
                 failed(e);
                 return;
             }
-            handleRequests(invChan);
+            readRequest(invChan);
         }
 
         public void rejected(RejectedException e) {
@@ -1552,6 +1601,10 @@ public class StandardSession implements Session {
 
         public void outputNotify(Listener listener) {
             mChannel.outputNotify(listener);
+        }
+
+        public boolean usesSelectNotification() {
+            return mChannel.usesSelectNotification();
         }
 
         public boolean inputResume() {
@@ -2114,7 +2167,7 @@ public class StandardSession implements Session {
         }
 
         @Override
-        public boolean finished(InvocationChannel channel, boolean reset) {
+        public int finished(InvocationChannel channel, boolean reset) {
             try {
                 channel.getOutputStream().flush();
                 if (reset) {
@@ -2127,10 +2180,10 @@ public class StandardSession implements Session {
                     // hold the TC_ENDBLOCKDATA and TC_RESET opcodes.
                     channel.getOutputStream().reset();
                 }
-                return true;
+                return Skeleton.READ_ANY_THREAD;
             } catch (IOException e) {
                 channel.disconnect();
-                return false;
+                return Skeleton.READ_FINISHED;
             }
         }
 
@@ -2141,41 +2194,26 @@ public class StandardSession implements Session {
 
         void finishedAsync(InvocationChannel channel, boolean inputResume) {
             try {
-                // Let another thread process next requests while this thread
+                // Let another thread process next request while this thread
                 // continues to process active request.
-                handleRequestsAsync(channel, inputResume);
-            } catch (RejectedException e) {
-                // 'Tis safer to close instead of trying later in the same
-                // thread. An asynchronous method takes an indefinite amount of
-                // time to complete, starving the next requests. It might be
-                // nice to send an exception to the caller, but this isn't
-                // guaranteed to work in a timely fashion either. The request
-                // arguments first need to be drained, but this can block. If
-                // any pending requests are asynchronous, then an exception
-                // cannot be sent back anyhow.
-                if (!isClosing()) {
-                    IOException ex;
-                    if (e.isShutdown()) {
-                        ex = new RejectedException
-                            ("No threads available; closing channel: " + channel, e);
-                    } else {
-                        ex = new RejectedException
-                            ("Too many active threads; closing channel: " + channel, e);
-                    }
-                    uncaughtException(ex);
+                if (inputResume) {
+                    resumeAndReadRequestAsync(channel);
+                } else {
+                    listenForRequestAsync(channel);
                 }
-                channel.disconnect();
+            } catch (RejectedException e) {
+                closeDueToRejection(channel, e);
             }
         }
 
         @Override
-        public boolean finished(InvocationChannel channel, Throwable cause) {
+        public int finished(InvocationChannel channel, Throwable cause) {
             try {
                 channel.getOutputStream().writeThrowable(cause);
                 return finished(channel, true);
             } catch (IOException e) {
                 channel.disconnect();
-                return false;
+                return Skeleton.READ_FINISHED;
             }
         }
 

@@ -43,13 +43,12 @@ import org.cojen.dirmi.Unreferenced;
 class RecyclableSocketChannel extends SocketChannel {
     private Recycler mRecycler;
     private RecycleControl mRemoteControl;
-    private boolean mCanDispose;
 
     private Input mRecycledInput;
     private Output mRecycledOutput;
     private boolean mRemoteRecycleReady;
 
-    RecyclableSocketChannel(IOExecutor executor, Socket socket,
+    RecyclableSocketChannel(IOExecutor executor, SimpleSocket socket,
                             Map<Channel, Object> accepted)
         throws IOException
     {
@@ -85,25 +84,21 @@ class RecyclableSocketChannel extends SocketChannel {
     }
 
     @Override
-    ChannelInputStream createInputStream(Socket socket) throws IOException {
+    Input createInputStream(SimpleSocket socket) throws IOException {
         return new Input(socket.getInputStream(), this);
     }
 
     @Override
-    ChannelOutputStream createOutputStream(Socket socket) throws IOException {
+    Output createOutputStream(SimpleSocket socket) throws IOException {
         return new Output(socket.getOutputStream(), this);
     }
 
     @Override
     public void close() throws IOException {
         RecycleControl remoteControl;
-        boolean canDispose;
         check: {
             synchronized (this) {
                 if (mRecycler != null && (remoteControl = mRemoteControl) != null) {
-                    canDispose = mCanDispose;
-                    // Can dispose after making remote call.
-                    mCanDispose = true;
                     break check;
                 }
             }
@@ -118,11 +113,7 @@ class RecyclableSocketChannel extends SocketChannel {
 
         try {
             // Instruct remote endpoint to stop writing.
-            if (canDispose) {
-                remoteControl.outputCloseAndDispose();
-            } else {
-                remoteControl.outputClose();
-            }
+            remoteControl.outputClose();
 
             // Start draining and unblock remote endpoint's writing.
             getInputStream().inputClose();
@@ -135,25 +126,27 @@ class RecyclableSocketChannel extends SocketChannel {
         }
     }
 
+    @Override
+    public void disconnect() {
+        if (markClosed()) {
+            super.disconnect();
+        }
+    }
+
+    protected RecyclableSocketChannel newRecycledChannel(Input in, Output out) {
+        return new RecyclableSocketChannel(this, in, out);
+    }
+
     void inputRecycled(Input in) {
         RecycleControl ready;
-        boolean canDispose;
         synchronized (this) {
             mRecycledInput = in;
-            canDispose = mCanDispose;
-            if ((ready = mRecycledOutput == null ? null : mRemoteControl) != null) {
-                // Can dispose after making remote call.
-                mCanDispose = true;
-            }
+            ready = mRecycledOutput == null ? null : mRemoteControl;
         }
 
         if (ready != null) {
             try {
-                if (canDispose) {
-                    ready.recycleReady();
-                } else {
-                    ready.recycleReadyAndDispose();
-                }
+                ready.recycleReady();
             } catch (RemoteException e) {
                 super.disconnect();
             }
@@ -164,23 +157,14 @@ class RecyclableSocketChannel extends SocketChannel {
 
     void outputRecycled(Output out) {
         RecycleControl ready;
-        boolean canDispose;
         synchronized (this) {
             mRecycledOutput = out;
-            canDispose = mCanDispose;
-            if ((ready = mRecycledInput == null ? null : mRemoteControl) != null) {
-                // Can dispose after making remote call.
-                mCanDispose = true;
-            }
+            ready = mRecycledInput == null ? null : mRemoteControl;
         }
 
         if (ready != null) {
             try {
-                if (canDispose) {
-                    ready.recycleReady();
-                } else {
-                    ready.recycleReadyAndDispose();
-                }
+                ready.recycleReady();
             } catch (RemoteException e) {
                 super.disconnect();
             }
@@ -216,7 +200,7 @@ class RecyclableSocketChannel extends SocketChannel {
             mRemoteRecycleReady = false;
         }
 
-        recycler.recycled(new RecyclableSocketChannel(this, in, out));
+        recycler.recycled(newRecycledChannel(in, out));
     }
 
     static class Input extends PacketInputStream<Input> {
@@ -317,17 +301,7 @@ class RecyclableSocketChannel extends SocketChannel {
 
         @Ordered
         @Asynchronous
-        @Disposer
-        void outputCloseAndDispose() throws RemoteException;
-
-        @Ordered
-        @Asynchronous
         void recycleReady() throws RemoteException;
-
-        @Ordered
-        @Asynchronous
-        @Disposer
-        void recycleReadyAndDispose() throws RemoteException;
     }
 
     private class LocalControl implements RecycleControl, Unreferenced {
@@ -341,18 +315,8 @@ class RecyclableSocketChannel extends SocketChannel {
         }
 
         @Override
-        public void outputCloseAndDispose() {
-            outputClose();
-        }
-
-        @Override
         public void recycleReady() {
             remoteRecycleReady();
-        }
-
-        @Override
-        public void recycleReadyAndDispose() {
-            recycleReady();
         }
 
         @Override

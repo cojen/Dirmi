@@ -171,6 +171,10 @@ public class CountingBroker implements ChannelBroker {
             return mChannel.setOutputBufferSize(size);
         }
 
+        public boolean usesSelectNotification() {
+            return mChannel.usesSelectNotification();
+        }
+
         public void inputNotify(Listener listener) {
             mChannel.inputNotify(listener);
         }

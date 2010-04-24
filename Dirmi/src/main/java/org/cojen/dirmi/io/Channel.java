@@ -28,9 +28,7 @@ import org.cojen.dirmi.Link;
 import org.cojen.dirmi.RejectedException;
 
 /**
- * Basic interface for a blocking bidirectional I/O channel. Channels cannot be
- * safely used by multiple threads, except the close and disconnect methods can
- * be called by any thread.
+ * Basic interface for a blocking bidirectional I/O channel.
  *
  * @author Brian S O'Neill
  */
@@ -86,6 +84,14 @@ public interface Channel extends Flushable, Closeable, Link {
      * registration.
      */
     void outputNotify(Listener listener);
+
+    /**
+     * Returns true to indicate that asynchronous notifications use channel
+     * selection instead of blocked threads. For channels that aren't
+     * select-based, it can be more efficient to block on I/O streams directly
+     * rather than wait for notifications.
+     */
+    boolean usesSelectNotification();
 
     /**
      * Allows input to resume after reading a suspend marker.

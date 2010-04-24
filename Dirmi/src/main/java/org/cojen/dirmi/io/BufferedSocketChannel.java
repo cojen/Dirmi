@@ -30,7 +30,7 @@ import java.util.Map;
  * @author Brian S O'Neill
  */
 class BufferedSocketChannel extends SocketChannel {
-    BufferedSocketChannel(IOExecutor executor, Socket socket, Map<Channel, Object> accepted)
+    BufferedSocketChannel(IOExecutor executor, SimpleSocket socket, Map<Channel, Object> accepted)
         throws IOException
     {
         super(executor, socket, accepted);
@@ -46,12 +46,12 @@ class BufferedSocketChannel extends SocketChannel {
     }
 
     @Override
-    ChannelInputStream createInputStream(Socket socket) throws IOException {
+    BufferedInputStream createInputStream(SimpleSocket socket) throws IOException {
         return new BufferedChannelInputStream(this, socket.getInputStream());
     }
 
     @Override
-    ChannelOutputStream createOutputStream(Socket socket) throws IOException {
+    BufferedOutputStream createOutputStream(SimpleSocket socket) throws IOException {
         return new BufferedChannelOutputStream(this, socket.getOutputStream());
     }
 }

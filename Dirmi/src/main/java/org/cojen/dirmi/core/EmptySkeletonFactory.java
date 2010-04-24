@@ -40,8 +40,8 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 return remoteServer;
             }
 
-            public boolean invoke(int methodId,
-                                  InvocationChannel channel, BatchedInvocationException exception)
+            public int invoke(int methodId,
+                              InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
             {
                 throw new NoSuchMethodException("method id: " + methodId);

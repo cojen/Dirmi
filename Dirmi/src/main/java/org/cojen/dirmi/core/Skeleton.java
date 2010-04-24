@@ -33,6 +33,13 @@ import org.cojen.dirmi.Unreferenced;
  */
 public interface Skeleton<R extends Remote> extends Unreferenced {
     /**
+     * READ_FINISHED: caller should not read any more requests.
+     * READ_ANY_THREAD: caller should read another request, using any thread.
+     * READ_SAME_THREAD: caller should read another request, in the current thread.
+     */
+    public static final int READ_FINISHED = 0, READ_ANY_THREAD = 1, READ_SAME_THREAD = 2;
+
+    /**
      * Returns the Remote object managed by this Skeleton.
      */
     R getRemoteServer();
@@ -55,7 +62,7 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
      * @param batchedException optional exception which was thrown earlier in a batch request
-     * @return true if caller should read another request from channel
+     * @return READ_FINISHED, READ_ANY_THREAD or READ_SAME_THREAD
      * @throws IOException if thrown from channel
      * @throws NoSuchMethodException if method is unknown
      * @throws NoSuchObjectException if remote parameter refers to an unknown object
@@ -64,8 +71,8 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * @throws BatchedInvocationException if method is batched and
      * throws an exception
      */
-    boolean invoke(int methodId, InvocationChannel channel,
-                   BatchedInvocationException batchedException)
+    int invoke(int methodId, InvocationChannel channel,
+               BatchedInvocationException batchedException)
         throws IOException,
                NoSuchMethodException,
                NoSuchObjectException,

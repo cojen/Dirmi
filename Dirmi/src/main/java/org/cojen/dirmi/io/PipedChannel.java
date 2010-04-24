@@ -111,6 +111,11 @@ class PipedChannel implements Channel {
     }
 
     @Override
+    public boolean usesSelectNotification() {
+        return false;
+    }
+
+    @Override
     public boolean inputResume() {
         return false;
     }

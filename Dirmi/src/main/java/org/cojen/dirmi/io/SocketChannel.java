@@ -32,18 +32,42 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
  * @author Brian S O'Neill
  */
 abstract class SocketChannel implements Channel {
+    public static SimpleSocket toSimpleSocket(final Socket socket) {
+        return new SimpleSocket() {
+            public void close() throws IOException {
+                socket.close();
+            }
+
+            public Object getLocalAddress() {
+                return socket.getLocalSocketAddress();
+            }
+
+            public Object getRemoteAddress() {
+                return socket.getRemoteSocketAddress();
+            }
+
+            public InputStream getInputStream() throws IOException {
+                return socket.getInputStream();
+            }
+
+            public OutputStream getOutputStream() throws IOException {
+                return socket.getOutputStream();
+            }
+        };
+    }
+
     private static final AtomicIntegerFieldUpdater<SocketChannel> closedUpdater =
         AtomicIntegerFieldUpdater.newUpdater(SocketChannel.class, "mClosed");
 
     private final IOExecutor mExecutor;
-    private final Socket mSocket;
+    private final SimpleSocket mSocket;
     private final ChannelInputStream mIn;
     private final ChannelOutputStream mOut;
     private final Map<Channel, Object> mAccepted;
 
     private volatile int mClosed;
 
-    SocketChannel(IOExecutor executor, Socket socket, Map<Channel, Object> accepted)
+    SocketChannel(IOExecutor executor, SimpleSocket socket, Map<Channel, Object> accepted)
         throws IOException
     {
         mExecutor = executor;
@@ -64,7 +88,10 @@ abstract class SocketChannel implements Channel {
         mSocket = channel.mSocket;
         mIn = in;
         mOut = out;
-        mAccepted = channel.mAccepted;
+        if ((mAccepted = channel.mAccepted) != null) {
+            mAccepted.put(this, "");
+            mAccepted.remove(channel);
+        }
     }
 
     public ChannelInputStream getInputStream() {
@@ -76,11 +103,11 @@ abstract class SocketChannel implements Channel {
     }
 
     public Object getLocalAddress() {
-        return mSocket.getLocalSocketAddress();
+        return mSocket.getLocalAddress();
     }
 
     public Object getRemoteAddress() {
-        return mSocket.getRemoteSocketAddress();
+        return mSocket.getRemoteAddress();
     }
 
     public boolean isInputReady() throws IOException {
@@ -127,6 +154,10 @@ abstract class SocketChannel implements Channel {
 
     public void flush() throws IOException {
         mOut.flush();
+    }
+
+    public boolean usesSelectNotification() {
+        return false;
     }
 
     public boolean isClosed() {
@@ -181,6 +212,10 @@ abstract class SocketChannel implements Channel {
         return mExecutor;
     }
 
+    protected SimpleSocket socket() {
+        return mSocket;
+    }
+
     /**
      * @return true if just marked closed
      */
@@ -191,10 +226,10 @@ abstract class SocketChannel implements Channel {
     /**
      * Called by constructor.
      */
-    abstract ChannelInputStream createInputStream(Socket socket) throws IOException;
+    abstract ChannelInputStream createInputStream(SimpleSocket socket) throws IOException;
 
     /**
      * Called by constructor.
      */
-    abstract ChannelOutputStream createOutputStream(Socket socket) throws IOException;
+    abstract ChannelOutputStream createOutputStream(SimpleSocket socket) throws IOException;
 }

@@ -166,6 +166,13 @@ public class TestAsyncMethods extends AbstractTestSuite {
 
         sleep(1000);
 
+        if (callback.value != 0) {
+            // Background activity might have caused flush. Try again.
+            callback = new CallbackImpl();
+            server.runCommand3(1, callback);
+            sleep(1000);
+        }
+
         assertEquals(0, callback.value);
 
         int[] data = new int[2000];

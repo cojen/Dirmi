@@ -120,7 +120,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
 
         socket.setTcpNoDelay(true);
 
-        return createChannel(socket, mAccepted);
+        return createChannel(SocketChannel.toSimpleSocket(socket), mAccepted);
     }
 
     @Override
@@ -205,7 +205,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         return mExecutor;
     }
 
-    abstract Channel createChannel(Socket socket, Map<Channel, Object> accepted)
+    abstract Channel createChannel(SimpleSocket socket, Map<Channel, Object> accepted)
         throws IOException;
 
     private Socket acceptSocket() throws IOException {

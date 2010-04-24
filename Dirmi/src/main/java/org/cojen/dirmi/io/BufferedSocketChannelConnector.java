@@ -18,7 +18,6 @@ package org.cojen.dirmi.io;
 
 import java.io.IOException;
 
-import java.net.Socket;
 import java.net.SocketAddress;
 
 import javax.net.SocketFactory;
@@ -58,7 +57,7 @@ public class BufferedSocketChannelConnector extends SocketChannelConnector {
     }
 
     @Override
-    Channel createChannel(Socket socket) throws IOException {
+    Channel createChannel(SimpleSocket socket) throws IOException {
         return new BufferedSocketChannel(executor(), socket, null);
     }
 }
