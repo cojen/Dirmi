@@ -160,7 +160,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
     @Override
     public String toString() {
         return "ChannelBroker {localAddress=" + getLocalAddress() +
-            ", remoteAddress=" + getRemoteAddress();
+            ", remoteAddress=" + getRemoteAddress() + '}';
     }
 
     protected void accepted(Channel channel) {

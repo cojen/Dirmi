@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.DataInput;
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -32,7 +33,9 @@ class MarshalledRemote implements Marshalled, Externalizable {
     private static final long serialVersionUID = 1;
 
     VersionedIdentifier mObjId;
+    int mObjVersion;
     VersionedIdentifier mTypeId;
+    int mTypeVersion;
     RemoteInfo mInfo;
 
     // Need public constructor for Externalizable.
@@ -51,9 +54,19 @@ class MarshalledRemote implements Marshalled, Externalizable {
         out.writeObject(mInfo);
     }
 
+    /**
+     * Must call updateRemoteVersions after using object and type.
+     */
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        mObjId = VersionedIdentifier.readAndUpdateRemoteVersion(in);
-        mTypeId = VersionedIdentifier.readAndUpdateRemoteVersion(in);
+        mObjId = VersionedIdentifier.read(in);
+        mObjVersion = in.readInt();
+        mTypeId = VersionedIdentifier.read(in);
+        mTypeVersion = in.readInt();
         mInfo = (RemoteInfo) in.readObject();
+    }
+
+    public void updateRemoteVersions() {
+        mObjId.updateRemoteVersion(mObjVersion);
+        mTypeId.updateRemoteVersion(mTypeVersion);
     }
 }

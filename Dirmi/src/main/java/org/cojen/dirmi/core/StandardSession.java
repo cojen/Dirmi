@@ -729,6 +729,9 @@ public class StandardSession implements Session {
         // possibility that the unreferenced method is not called.
         synchronized (mCloseLock) {
             if (!isClosing()) {
+                // Increment version early to prevent race condition with
+                // disposal of new skeleton instance.
+                objId.nextLocalVersion();
                 mSkeletons.putIfAbsent(objId, skeleton);
                 return true;
             }
@@ -795,20 +798,40 @@ public class StandardSession implements Session {
         while (true) {
             final VersionedIdentifier objId;
             final int methodId;
+            Skeleton skeleton;
             try {
                 DataInput din = (DataInput) invChannel.getInputStream();
-                objId = VersionedIdentifier.readAndUpdateRemoteVersion(din);
+                objId = VersionedIdentifier.read(din);
+                int objVersion = din.readInt();
                 methodId = din.readInt();
+                skeleton = mSkeletons.get(objId);
+                objId.updateRemoteVersion(objVersion);
             } catch (IOException e) {
                 invChannel.disconnect();
                 return;
             }
 
-            // Find a Skeleton to invoke.
-            Skeleton skeleton = mSkeletons.get(objId);
-
-            if (skeleton == null) {
+            skelCheck: if (skeleton == null) {
                 if (!isClosing()) {
+                    Object obj = objId.tryRetrieve();
+                    if (obj instanceof Remote) {
+                        // Re-create skeleton.
+                        Remote remote = (Remote) obj;
+                        Class remoteType = RemoteIntrospector.getRemoteType(remote);
+                        VersionedIdentifier typeId = VersionedIdentifier.identify(remoteType);
+                        SkeletonFactory factory = mSkeletonFactories.get(typeId);
+                        if (factory == null) {
+                            factory = SkeletonFactoryGenerator.getSkeletonFactory(remoteType);
+                        }
+                        SkeletonFactory existing = mSkeletonFactories.putIfAbsent(typeId, factory);
+                        if (existing != null && existing != factory) {
+                            factory = existing;
+                        }
+                        skeleton = factory.createSkeleton(objId, mSkeletonSupport, remote);
+                        addSkeleton(objId, skeleton);
+                        break skelCheck;
+                    }
+
                     Throwable t = new NoSuchObjectException("Cannot find remote object: " + objId);
 
                     boolean synchronous = (methodId & 1) == 0;
@@ -1057,8 +1080,9 @@ public class StandardSession implements Session {
 
         // Receive remote control object and link to stub without using resolveObject.
         {
-            VersionedIdentifier controlId =
-                VersionedIdentifier.readAndUpdateRemoteVersion(invChannel);
+            VersionedIdentifier controlId = VersionedIdentifier.read(invChannel);
+            int controlVersion = invChannel.readInt();
+                
             StubFactory factory = lookup(mStubFactories, controlTypeId);
             if (factory == null) {
                 RemoteInfo info = RemoteIntrospector.examine(controlType);
@@ -1072,6 +1096,8 @@ public class StandardSession implements Session {
                     factory = existing;
                 }
             }
+
+            controlId.updateRemoteVersion(controlVersion);
             Remote remoteControl = createAndRegisterStub
                 (controlId, factory, new StubSupportImpl(controlId));
             channel.setRecycleControl(remoteControl);
@@ -1359,11 +1385,6 @@ public class StandardSession implements Session {
                 // replacement stub, and so object on server side cannot be
                 // disposed. When new stub is garbage collected, another
                 // disposed message is generated.
-
-                // FIXME: Even if versions match, it doesn't totally prevent
-                // the race condition. A lock must be held on skeleton maps
-                // while this check is made.
-
                 return waits;
             }
 
@@ -1887,8 +1908,10 @@ public class StandardSession implements Session {
                 mDescriptorCache.requestReference(desc);
                 return desc;
             } else {
-                VersionedIdentifier refId = VersionedIdentifier.readAndUpdateRemoteVersion(this);
+                VersionedIdentifier refId = VersionedIdentifier.read((DataInput) this);
+                int refVersion = readInt();
                 Remote ref = findIdentifiedRemote(refId);
+                refId.updateRemoteVersion(refVersion);
                 if (ref == null && isClosing()) {
                     throw new ClosedException("Session is closed");
                 }
@@ -1947,6 +1970,7 @@ public class StandardSession implements Session {
                 {
                     Remote remote = findIdentifiedRemote(objId);
                     if (remote != null) {
+                        mr.updateRemoteVersions();
                         return remote;
                     }
                 }
@@ -1971,6 +1995,7 @@ public class StandardSession implements Session {
                     }
                 }
 
+                mr.updateRemoteVersions();
                 return createAndRegisterStub(objId, factory, new StubSupportImpl(objId));
             }
 

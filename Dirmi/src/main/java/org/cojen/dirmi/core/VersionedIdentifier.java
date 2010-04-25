@@ -73,16 +73,6 @@ public class VersionedIdentifier extends AbstractIdentifier {
         return cStore.read(in);
     }
 
-    /**
-     * Returns a deserialized identifier, which may or may not have an object
-     * registered with it. Also reads version number and updates it.
-     */
-    public static VersionedIdentifier readAndUpdateRemoteVersion(DataInput in) throws IOException {
-        VersionedIdentifier id = cStore.read(in);
-        id.updateRemoteVersion(in.readInt());
-        return id;
-    }
-
     private volatile transient int mLocalVersion;
     private volatile transient int mRemoteVersion;
 
