@@ -73,6 +73,18 @@ public class VersionedIdentifier extends AbstractIdentifier {
         return cStore.read(in);
     }
 
+    /**
+     * Returns a deserialized identifier, and also updates the remote
+     * version. This convenience method is appropriate only if the identifier
+     * will not be used to lookup a DGC managed resource. Otherwise, the remote
+     * version should be updated after the lookup.
+     */
+    public static VersionedIdentifier readAndUpdateRemoteVersion(DataInput in) throws IOException {
+        VersionedIdentifier id = read((DataInput) in);
+        id.updateRemoteVersion(in.readInt());
+        return id;
+    }
+
     private volatile transient int mLocalVersion;
     private volatile transient int mRemoteVersion;
 
