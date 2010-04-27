@@ -563,5 +563,15 @@ public class Environment implements Closeable {
         public Object getLocalAddress() {
             return mChannelConnector.getLocalAddress();
         }
+
+        @Override
+        public String toString() {
+            String str = "SessionConnector {remoteAddress=" + getRemoteAddress();
+            Object localAddress = getLocalAddress();
+            if (localAddress != null) {
+                str += ", localAddress=" + localAddress;
+            }
+            return str + '}';
+        }
     }
 }
