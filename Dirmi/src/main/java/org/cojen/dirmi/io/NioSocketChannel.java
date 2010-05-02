@@ -88,30 +88,6 @@ class NioSocketChannel implements SimpleSocket {
         mSelector.outputNotify(mChannel, listener);
     }
 
-    private void ready(final Channel.Listener listener) {
-        try {
-            mSelector.executor().execute(new Runnable() {
-                public void run() {
-                    listener.ready();
-                }
-            });
-        } catch (RejectedException e) {
-            listener.rejected(e);
-        }
-    }
-
-    private void closed(final Channel.Listener listener, final IOException cause) {
-        try {
-            mSelector.executor().execute(new Runnable() {
-                public void run() {
-                    listener.closed(cause);
-                }
-            });
-        } catch (RejectedException e) {
-            listener.rejected(e);
-        }
-    }
-
     // Class is intended to be wrapped to provide buffering and thread-safety.
     private class Input extends InputStream implements Channel.Listener {
         private ByteBuffer mBuffer;
