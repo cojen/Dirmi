@@ -293,6 +293,7 @@ public class TestSyncMethods extends AbstractTestSuite {
                    message.contains("socket") ||
                    message.contains("reset") ||
                    message.contains("aborted") ||
+                   message.contains("asynchronouscloseexception") ||
                    message.contains("recv failed"));
     }
 }

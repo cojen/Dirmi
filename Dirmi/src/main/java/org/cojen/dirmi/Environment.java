@@ -207,6 +207,28 @@ public class Environment implements Closeable {
             throw new IllegalStateException("Cannot use unrecyclable sockets with selector");
         }
 
+        // Don't allow if using buggy version.
+        check: if ("Linux".equals(System.getProperty("os.name")) &&
+            "Sun Microsystems Inc.".equals(System.getProperty("java.vendor")) &&
+            "1.6".equals(System.getProperty("java.specification.version")))
+        {
+            String version = System.getProperty("java.version");
+            int index = version.indexOf('_');
+            if (index > 0) {
+                int subVersion;
+                try {
+                    subVersion = Integer.parseInt(version.substring(index + 1));
+                } catch (RuntimeException e) {
+                    break check;
+                }
+                if (subVersion < 18) {
+                    // select throws "File exists" IOException under load (lnx)
+                    throw new IOException
+                        ("Java version doesn't have fix for bug 6693490: " + version);
+                }
+            }
+        }
+
         final RecyclableSocketChannelSelector selector =
             new RecyclableSocketChannelSelector(mIOExecutor);
         addToClosableSet(selector);
