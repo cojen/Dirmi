@@ -91,14 +91,26 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             while (true) {
                 int count = selector.select();
 
+                boolean didRegister = false;
                 Selectable selectable;
                 while ((selectable = queue.poll()) != null) {
+                    didRegister = true;
                     selectable.register(selector);
                 }
 
                 if (count == 0) {
                     if (!selector.isOpen()) {
                         return;
+                    }
+                    if (!didRegister) {
+                        // Workaround for unknown race condition in which
+                        // closed channels are not removed from the selector.
+                        // If they remain, select no longer blocks.
+                        for (SelectionKey key : selector.keys()) {
+                            if (key.isValid() && !key.channel().isOpen()) {
+                                key.cancel();
+                            }
+                        }
                     }
                 } else {
                     Iterator<SelectionKey> it = selector.selectedKeys().iterator();
