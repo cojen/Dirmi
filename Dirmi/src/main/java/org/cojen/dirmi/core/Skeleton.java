@@ -32,12 +32,14 @@ import org.cojen.dirmi.Unreferenced;
  * @see SkeletonFactory
  */
 public interface Skeleton<R extends Remote> extends Unreferenced {
-    /**
-     * READ_FINISHED: caller should not read any more requests.
-     * READ_ANY_THREAD: caller should read another request, using any thread.
-     * READ_SAME_THREAD: caller should read another request, in the current thread.
-     */
-    public static final int READ_FINISHED = 0, READ_ANY_THREAD = 1, READ_SAME_THREAD = 2;
+    /** Caller should not read any more requests. */
+    public static final int READ_FINISHED = 0;
+
+    /** Caller should read another request, using any thread. */
+    public static final int READ_ANY_THREAD = 1;
+
+    /** Caller should read another request, in the current thread. */
+    public static final int READ_SAME_THREAD = 2;
 
     /**
      * Returns the Remote object managed by this Skeleton.
