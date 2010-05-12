@@ -596,6 +596,12 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             }
         }
 
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            removeTask(this);
+            return super.cancel(mayInterruptIfRunning);
+        }
+
         long getAtNanos() {
             return mAtNanos;
         }
