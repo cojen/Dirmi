@@ -30,7 +30,6 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import org.cojen.dirmi.Asynchronous;
-import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Ordered;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.Unreferenced;
@@ -299,9 +298,21 @@ class RecyclableSocketChannel extends SocketChannel {
         @Asynchronous
         void outputClose() throws RemoteException;
 
+        // Keep this method for compatibility with older version.
+        @Ordered
+        @Asynchronous
+        @Deprecated
+        void outputCloseAndDispose() throws RemoteException;
+
         @Ordered
         @Asynchronous
         void recycleReady() throws RemoteException;
+
+        // Keep this method for compatibility with older version.
+        @Ordered
+        @Asynchronous
+        @Deprecated
+        void recycleReadyAndDispose() throws RemoteException;
     }
 
     private class LocalControl implements RecycleControl, Unreferenced {
@@ -315,8 +326,18 @@ class RecyclableSocketChannel extends SocketChannel {
         }
 
         @Override
+        public void outputCloseAndDispose() {
+            outputClose();
+        }
+
+        @Override
         public void recycleReady() {
             remoteRecycleReady();
+        }
+
+        @Override
+        public void recycleReadyAndDispose() {
+            recycleReady();
         }
 
         @Override
