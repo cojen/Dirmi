@@ -100,6 +100,10 @@ abstract class AbstractStubSupport implements StubSupport {
     }
 
     protected <T extends Throwable> T remoteException(Class<T> remoteFailureEx, Throwable cause) {
+        if (possibleCommunicationFailure(cause)) {
+            checkCommunication(cause);
+        }
+
         RemoteException ex;
         if (cause == null) {
             ex = new RemoteException();
@@ -172,12 +176,35 @@ abstract class AbstractStubSupport implements StubSupport {
             factor = 1e9 * 60 * 60;
             break;
         case DAYS:
-                factor = 1e9 * 60 * 60 * 24;
-                break;
+            factor = 1e9 * 60 * 60 * 24;
+            break;
         default:
             throw new IllegalArgumentException(unit.toString());
         }
 
         return (long) (timeout * factor);
     }
+
+    protected boolean possibleCommunicationFailure(Throwable cause) {
+        if (!(cause instanceof IOException)) {
+            return false;
+        }
+
+        if (cause.getClass() == IOException.class ||
+            cause instanceof EOFException ||
+            cause instanceof java.nio.channels.ClosedChannelException ||
+            cause instanceof ClosedException ||
+            cause.getClass().getName().startsWith("java.net"))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Asynchronously check if the session is able to communicate to the other
+     * endpoint.
+     */
+    protected abstract void checkCommunication(Throwable cause);
 }

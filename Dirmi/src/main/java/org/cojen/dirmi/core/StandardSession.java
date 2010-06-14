@@ -86,6 +86,7 @@ import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.Unbatched;
+import org.cojen.dirmi.UnimplementedMethodException;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
@@ -113,6 +114,9 @@ public class StandardSession implements Session {
 
     private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
         AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
+
+    private static final AtomicIntegerFieldUpdater<StandardSession> supressPingUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mSupressPing");
 
     private final boolean mIsolated;
 
@@ -180,6 +184,8 @@ public class StandardSession implements Session {
     final ScheduledFuture<?> mBackgroundTask;
 
     final RemoteTypeResolver mTypeResolver;
+
+    volatile int mSupressPing;
 
     final Object mCloseLock;
     private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
@@ -411,11 +417,7 @@ public class StandardSession implements Session {
                 (new BackgroundTask(), delay, delay, TimeUnit.SECONDS);
         } catch (RejectedException e) {
             String message = "Unable to start background task";
-            try {
-                closeOnFailure(message, e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            closeOnFailure(message, e);
             throw new RejectedException(message, e);
         }
 
@@ -459,18 +461,10 @@ public class StandardSession implements Session {
                 }
             }
         } catch (RemoteException e) {
-            try {
-                closeOnFailure("Closed: " + e, e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            closeOnFailure("Closed: " + e, e);
             throw e;
         } catch (InterruptedException e) {
-            try {
-                closeOnFailure("Closed: " + e, e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            closeOnFailure("Closed: " + e, e);
             throw new RemoteException(e.toString(), e);
         }
     }
@@ -509,18 +503,10 @@ public class StandardSession implements Session {
 
             return obj;
         } catch (RemoteException e) {
-            try {
-                closeOnFailure("Closed: " + e, e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            closeOnFailure("Closed: " + e, e);
             throw e;
         } catch (InterruptedException e) {
-            try {
-                closeOnFailure("Closed: " + e, e);
-            } catch (IOException e2) {
-                // Ignore.
-            }
+            closeOnFailure("Closed: " + e, e);
             throw new RemoteException(e.toString(), e);
         }
     }
@@ -570,8 +556,12 @@ public class StandardSession implements Session {
         close(true, true, null, null);
     }
 
-    void closeOnFailure(String message, Throwable exception) throws IOException {
-        close(false, false, message, exception);
+    void closeOnFailure(String message, Throwable exception) {
+        try {
+            close(false, false, message, exception);
+        } catch (IOException e) {
+            // Ignore.
+        }
     }
 
     void peerClosed(String message) {
@@ -1153,6 +1143,40 @@ public class StandardSession implements Session {
         }
     }
 
+    void checkCommunication() {
+        if (isClosing()) {
+            return;
+        }
+
+        if (!supressPingUpdater.compareAndSet(this, 0, 1)) {
+            // Another ping was recently performed, so don't do another.
+            return;
+        }
+
+        try {
+            mExecutor.execute(new Runnable() {
+                public void run() {
+                    try {
+                        try {
+                            mRemoteAdmin.ping();
+                        } catch (UnimplementedMethodException e) {
+                            // Fallback to another method for compatibility.
+                            try {
+                                mRemoteAdmin.getRemoteInfo((Identifier) null);
+                            } catch (NullPointerException e2) {
+                                // Expected with null parameter.
+                            }
+                        }
+                    } catch (RemoteException e) {
+                        closeOnFailure("Ping failure", e);
+                    }
+                }
+            });
+        } catch (RejectedException e) {
+            // Just wait for broker ping failure instead.
+        }
+    }
+
     void closeDueToRejection(Channel channel, RejectedException cause) {
         // 'Tis safer to close instead of trying later in the same thread. An
         // asynchronous method takes an indefinite amount of time to complete,
@@ -1317,6 +1341,9 @@ public class StandardSession implements Session {
             @Asynchronous
             void linkDescriptorCache(Remote link) throws RemoteException;
 
+            @Timeout(5000)
+            void ping() throws RemoteException;
+
             /**
              * Notification from client when session is not referenced any more.
              */
@@ -1440,6 +1467,10 @@ public class StandardSession implements Session {
             mDescriptorCache.link(link);
         }
 
+        public void ping() {
+            // Nothing to do. Caller reads to see if an exception was thrown.
+        }
+
         public void sessionUnreferenced() {
             setCloseState(STATE_PEER_UNREF);
         }
@@ -1461,6 +1492,9 @@ public class StandardSession implements Session {
         private int mFailedToDisposeCount;
 
         public void run() {
+            // Allow ping check again, if was supressed.
+            supressPingUpdater.compareAndSet(StandardSession.this, 1, 0);
+
             // Send batch of disposed ids to peer.
             try {
                 sendDisposedStubs();
@@ -1564,11 +1598,7 @@ public class StandardSession implements Session {
 
         public void closed(IOException e) {
             if (!isClosing()) {
-                try {
-                    closeOnFailure(e.getMessage(), e);
-                } catch (IOException e2) {
-                    // Ignore.
-                }
+                closeOnFailure(e.getMessage(), e);
             }
         }
     }
@@ -2490,6 +2520,11 @@ public class StandardSession implements Session {
             StubSupport support = new DisposedStubSupport(mObjId);
             clearStub(mObjId);
             return support;
+        }
+
+        @Override
+        protected void checkCommunication(Throwable cause) {
+            StandardSession.this.checkCommunication();
         }
 
         private InvocationChannel getChannel() throws IOException {

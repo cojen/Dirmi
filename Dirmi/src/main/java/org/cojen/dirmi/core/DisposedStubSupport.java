@@ -120,4 +120,8 @@ class DisposedStubSupport extends AbstractStubSupport {
     public StubSupport dispose() {
         return this;
     }
+
+    @Override
+    protected void checkCommunication(Throwable cause) {
+    }
 }
