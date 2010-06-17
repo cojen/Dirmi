@@ -101,6 +101,17 @@ import java.util.concurrent.TimeUnit;
  * the pipe. Timeout tasks may also be explicitly {@link #startTimeout started}
  * without requiring the annotation.
  *
+ * <p>Because pipes are bidirectional, extra communication overhead is required
+ * to support safe connection recycling. The {@link CallMode#REQUEST_REPLY
+ * request/reply} call mode requires less overhead, and is more suitable for
+ * short-lived pipes. A request/reply pipe starts in "request" mode, and then
+ * it switches to "reply" mode. Initially, the client can write to the pipe,
+ * and the server can read from the pipe. As soon as the client performs a
+ * read, it can only perform further reads. Attempting to write again causes an
+ * IOException to be thrown. Likewise, as soon as the server performs a write,
+ * it can only ever write. As with normal pipes, both endpoints must close the
+ * pipe in order for the connection resource to be fully recycled.
+ *
  * @author Brian S O'Neill
  */
 public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput, Link {
