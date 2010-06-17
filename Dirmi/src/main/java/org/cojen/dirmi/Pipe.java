@@ -107,10 +107,11 @@ import java.util.concurrent.TimeUnit;
  * short-lived pipes. A request/reply pipe starts in "request" mode, and then
  * it switches to "reply" mode. Initially, the client can write to the pipe,
  * and the server can read from the pipe. As soon as the client performs a
- * read, it can only perform further reads. Attempting to write again causes an
- * IOException to be thrown. Likewise, as soon as the server performs a write,
- * it can only ever write. As with normal pipes, both endpoints must close the
- * pipe in order for the connection resource to be fully recycled.
+ * read, it automatically flushes the pipe and then it can only perform further
+ * reads. Attempting to write again causes an {@code IOException} to be thrown.
+ * Likewise, as soon as the server performs a write, it cannot read again. As
+ * with normal pipes, both endpoints must close the pipe in order for the
+ * connection resource to be fully recycled.
  *
  * @author Brian S O'Neill
  */
