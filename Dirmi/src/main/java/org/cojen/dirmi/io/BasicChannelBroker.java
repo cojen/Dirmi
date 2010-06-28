@@ -35,6 +35,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
+
+import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
 
 /**
@@ -358,7 +360,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
         }
     }
 
-    private static abstract class PingTask implements Runnable {
+    private static abstract class PingTask extends ScheduledTask<RuntimeException> {
         private final WeakReference<BasicChannelBroker> mBrokerRef;
 
         private volatile Future<?> mScheduled;
@@ -367,7 +369,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
             mBrokerRef = new WeakReference<BasicChannelBroker>(broker);
         }
 
-        public void run() {
+        protected void doRun() {
             BasicChannelBroker broker = mBrokerRef.get();
             if (broker != null) {
                 try {

@@ -97,6 +97,7 @@ import org.cojen.dirmi.io.ChannelBroker;
 import org.cojen.dirmi.io.IOExecutor;
 
 import org.cojen.dirmi.util.ExceptionUtils;
+import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
 
 /**
@@ -406,8 +407,8 @@ public class StandardSession implements Session {
         try {
             // Start background tasks.
             mClockTask = executor.scheduleWithFixedDelay
-                (new Runnable() {
-                    public void run() {
+                (new ScheduledTask<RuntimeException>() {
+                    protected void doRun() {
                         updateClock();
                     }
                  }, 1, 1, TimeUnit.SECONDS);
@@ -1486,12 +1487,12 @@ public class StandardSession implements Session {
         }
     }
 
-    private class BackgroundTask implements Runnable {
+    private class BackgroundTask extends ScheduledTask<RuntimeException> {
         // Use this to avoid logging exceptions if failed to send disposed
         // stubs during shutdown of remote session.
         private int mFailedToDisposeCount;
 
-        public void run() {
+        protected void doRun() {
             // Allow ping check again, if was supressed.
             supressPingUpdater.compareAndSet(StandardSession.this, 1, 0);
 
@@ -1901,10 +1902,10 @@ public class StandardSession implements Session {
             }
         }
 
-        private class TimeoutTask implements Runnable {
+        private class TimeoutTask extends ScheduledTask<RuntimeException> {
             private Future<?> mMyFuture;
 
-            public synchronized void run() {
+            protected synchronized void doRun() {
                 Future<?> myFuture = mMyFuture;
                 if (myFuture != null) {
                     timedOut(myFuture);

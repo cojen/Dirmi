@@ -53,6 +53,7 @@ import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 
+import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
 
 /**
@@ -198,7 +199,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
         return mExecutor;
     }
 
-    private static abstract class Selectable implements Runnable {
+    private static abstract class Selectable extends ScheduledTask<RuntimeException> {
         abstract void register(Selector selector);
 
         abstract void rejected(RejectedException cause);
@@ -234,7 +235,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             mListener.rejected(cause);
         }
 
-        public void run() {
+        protected void doRun() {
             mListener.ready();
         }
     }
@@ -267,7 +268,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             mListener.rejected(cause);
         }
 
-        public void run() {
+        protected void doRun() {
             try {
                 mChannel.finishConnect();
                 NioSocketChannel nsc =
@@ -313,7 +314,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             mListener.rejected(cause);
         }
 
-        public void run() {
+        protected void doRun() {
             SocketChannel channel;
             try {
                 try {

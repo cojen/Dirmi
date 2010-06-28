@@ -42,6 +42,8 @@ import org.cojen.dirmi.RemoteFailure;
 
 import org.cojen.dirmi.io.IOExecutor;
 
+import org.cojen.dirmi.util.ScheduledTask;
+
 /**
  * Used by sessions to reduce overhead of serializing object stream class
  * descriptors. References to descriptors are used instead and cached.
@@ -164,8 +166,8 @@ class ClassDescriptorCache {
 
             try {
                 mSendScheduled = true;
-                mExecutor.schedule(new Runnable() {
-                    public void run() {
+                mExecutor.schedule(new ScheduledTask<RuntimeException>() {
+                    protected void doRun() {
                         sendReferenceRequests();
                     }
                 }, 10, TimeUnit.MILLISECONDS);
@@ -277,7 +279,7 @@ class ClassDescriptorCache {
         }
     }
 
-    private class RemoveInFlight implements Runnable {
+    private class RemoveInFlight extends ScheduledTask<RuntimeException> {
         private final Key mKey;
 
         private Future mFuture;
@@ -287,7 +289,7 @@ class ClassDescriptorCache {
             mKey = key;
         }
 
-        public void run() {
+        protected void doRun() {
             Future future;
 
             synchronized (this) {

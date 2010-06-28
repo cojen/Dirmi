@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.RemoteTimeoutException;
 
+import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
 
 /**
@@ -30,7 +31,7 @@ import org.cojen.dirmi.util.Timer;
  *
  * @author Brian S O'Neill
  */
-class ChannelTimeout implements Runnable {
+class ChannelTimeout extends ScheduledTask<RuntimeException> {
     private final Channel mChannel;
     private final Timer mTimer;
     private final Future<?> mFuture;
@@ -61,7 +62,7 @@ class ChannelTimeout implements Runnable {
         mFuture.cancel(false);
     }
 
-    public void run() {
+    protected void doRun() {
         synchronized (this) {
             if (mState != 0) {
                 return;

@@ -33,6 +33,8 @@ import org.cojen.util.ThrowUnchecked;
 
 import org.cojen.dirmi.RejectedException;
 
+import org.cojen.dirmi.util.ScheduledTask;
+
 /**
  * Allows a single method to be invoked on enqueued listeners. If no listeners
  * have been enqueued, then the invocation is performed later. Listener must be
@@ -81,8 +83,8 @@ class ListenerQueue<L> {
             handoffListener = mListenerQueue.remove();
         }
 
-        Runnable command = new Runnable() {
-            public void run() {
+        Runnable command = new ScheduledTask<RuntimeException>() {
+            protected void doRun() {
                 if (handoff.handoff(handoffListener)) {
                     enqueue(handoff);
                 }
