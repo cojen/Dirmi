@@ -1978,18 +1978,13 @@ public class StandardSession implements Session {
                     return type.toClass();
                 }
                 int dims = type.getDimensions();
-                try {
-                    type = TypeDesc.forClass(mTypeResolver.resolveClass(root.getRootName()));
-                } catch (ClassNotFoundException e) {
-                    // FIXME: ask remote endpoint for more info
-                    throw e;
-                }
+                type = TypeDesc.forClass(mTypeResolver.resolveClass(root.getRootName()));
                 while (--dims >= 0) {
                     type = type.toArrayType();
                 }
                 return type.toClass();
             } else {
-                return mTypeResolver.resolveClass(name, desc.getSerialVersionUID());
+                return mTypeResolver.resolveClass(name);
             }
         }
 
