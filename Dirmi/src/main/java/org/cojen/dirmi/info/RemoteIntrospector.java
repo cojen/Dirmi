@@ -1194,10 +1194,12 @@ public class RemoteIntrospector {
 
         private final Class<T> mType;
         private final int mFlags;
+        private final String mDescriptor;
 
         private RParameter(Class<T> type, int flags) {
             mType = type;
             mFlags = flags;
+            mDescriptor = TypeDesc.forClass(type).getDescriptor().intern();
         }
 
         public Class<T> getType() {
