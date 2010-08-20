@@ -27,7 +27,9 @@ import org.cojen.dirmi.Session;
 
 /**
  * Wrapper around StandardSession which supports automatic garbage collection
- * of unused sessions.
+ * of unused sessions. Session is automatically closed when both endpoints no
+ * longer reference their SessionRef, and Session has no imported or exported
+ * remote objects.
  *
  * @author Brian S O'Neill
  */
