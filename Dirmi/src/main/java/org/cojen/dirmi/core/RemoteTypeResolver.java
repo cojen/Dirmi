@@ -19,6 +19,7 @@ package org.cojen.dirmi.core;
 import java.lang.reflect.Method;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
@@ -57,7 +58,8 @@ class RemoteTypeResolver implements ClassResolver {
 
     private volatile ClassResolver mClassResolver;
 
-    private Map<Object, Class> mSyntheticTypes;
+    private Map<Object, Class> mSyntheticRemoteTypes;
+    private Map<Object, Class> mSyntheticSerializableTypes;
 
     RemoteTypeResolver() {
     }
@@ -69,6 +71,20 @@ class RemoteTypeResolver implements ClassResolver {
             clazz = ClassLoaderResolver.DEFAULT.resolveClass(name);
         }
         return clazz;
+    }
+
+    Class<?> resolveClass(String name, long serialVersionUID)
+        throws IOException, ClassNotFoundException
+    {
+        try {
+            return resolveClass(name);
+        } catch (ClassNotFoundException e) {
+            if (name.startsWith("java.")) {
+                // Cannot create a fake class without a security exception.
+                throw e;
+            }
+            return syntheticSerializableClass(name, serialVersionUID);
+        }
     }
 
     void setClassResolver(ClassResolver resolver) {
@@ -119,16 +135,16 @@ class RemoteTypeResolver implements ClassResolver {
             return Remote.class;
         }
 
-        return syntheticType(info.getName(), ifaceSet);
+        return syntheticRemoteType(info.getName(), ifaceSet);
     }
 
-    private synchronized Class<?> syntheticType(String typeName, Set<Class> ifaceSet) {
+    private synchronized Class<?> syntheticRemoteType(String typeName, Set<Class> ifaceSet) {
         Object key = KeyFactory.createKey(new Object[] {typeName, ifaceSet});
 
-        if (mSyntheticTypes == null) {
-            mSyntheticTypes = new SoftValuedHashMap<Object, Class>();
+        if (mSyntheticRemoteTypes == null) {
+            mSyntheticRemoteTypes = new SoftValuedHashMap<Object, Class>();
         } else {
-            Class type = mSyntheticTypes.get(key);
+            Class type = mSyntheticRemoteTypes.get(key);
             if (type != null) {
                 return type;
             }
@@ -158,8 +174,31 @@ class RemoteTypeResolver implements ClassResolver {
         }
 
         Class type = cf.defineClass();
-        mSyntheticTypes.put(key, type);
+        mSyntheticRemoteTypes.put(key, type);
         return type;
+    }
+
+    private synchronized Class<?> syntheticSerializableClass(String name, long serialVersionUID) {
+        Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID});
+
+        if (mSyntheticSerializableTypes == null) {
+            mSyntheticSerializableTypes = new SoftValuedHashMap<Object, Class>();
+        } else {
+            Class clazz = mSyntheticSerializableTypes.get(key);
+            if (clazz != null) {
+                return clazz;
+            }
+        }
+
+        RuntimeClassFile cf = new RuntimeClassFile(name, null, new Loader(), null, true);
+        cf.setModifiers(Modifiers.PUBLIC);
+        cf.addInterface(Serializable.class);
+        cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
+                    "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
+
+        Class clazz = cf.defineClass();
+        mSyntheticSerializableTypes.put(key, clazz);
+        return clazz;
     }
 
     private class Loader extends ClassLoader {
