@@ -20,6 +20,7 @@ import java.io.Closeable;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.EOFException;
+import java.io.Externalizable;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
@@ -1311,7 +1312,7 @@ public class StandardSession implements Session {
         }
     }
 
-    private static class Hidden {
+    static class Hidden {
         // Remote interface must be public, but hide it in a private class.
         public static interface Admin extends Remote {
             /**
@@ -1332,6 +1333,16 @@ public class StandardSession implements Session {
              */
             @Unbatched
             RemoteInfo getRemoteInfo(Identifier typeId) throws RemoteException;
+
+            /**
+             * Returns information regarding an unknown serialized class.
+             * Method is unbatched to ensure that it doesn't disrupt a batch in
+             * the current thread.
+             *
+             * @return format of serialVersionUID ':' ('S' | 'E' | 'N')
+             */
+            @Unbatched
+            String getUnknownClassInfo(String name) throws RemoteException;
 
             /**
              * Notification from client when it has disposed of identified objects.
@@ -1387,6 +1398,36 @@ public class StandardSession implements Session {
                 throw new NoSuchClassException("No Class found for id: " + typeId);
             }
             return RemoteIntrospector.examine(remoteType);
+        }
+
+        public String getUnknownClassInfo(String name) {
+            Class clazz;
+            try {
+                clazz = mTypeResolver.resolveClass(name);
+            } catch (IOException e) {
+                return null;
+            } catch (ClassNotFoundException e) {
+                return null;
+            }
+
+            if (clazz == null) {
+                return null;
+            }
+
+            long serialVersionUID;
+            char externalizable;
+            {
+                ObjectStreamClass osc = ObjectStreamClass.lookup(clazz);
+                if (osc == null) {
+                    serialVersionUID = 0;
+                    externalizable = 'N';
+                } else {
+                    serialVersionUID = osc.getSerialVersionUID();
+                    externalizable = Externalizable.class.isAssignableFrom(clazz) ? 'E' : 'S';
+                }
+            }
+
+            return String.valueOf(serialVersionUID) + ':' + externalizable;
         }
 
         /**
@@ -1978,18 +2019,14 @@ public class StandardSession implements Session {
                     return type.toClass();
                 }
                 int dims = type.getDimensions();
-                try {
-                    type = TypeDesc.forClass(mTypeResolver.resolveClass(root.getRootName()));
-                } catch (ClassNotFoundException e) {
-                    // FIXME: ask remote endpoint for more info
-                    throw e;
-                }
+                type = TypeDesc.forClass
+                    (mTypeResolver.resolveClass(root.getRootName(), mRemoteAdmin));
                 while (--dims >= 0) {
                     type = type.toArrayType();
                 }
                 return type.toClass();
             } else {
-                return mTypeResolver.resolveClass(name, desc.getSerialVersionUID());
+                return mTypeResolver.resolveClass(name, mRemoteAdmin);
             }
         }
 

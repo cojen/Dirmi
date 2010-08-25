@@ -18,6 +18,7 @@ package org.cojen.dirmi.core;
 
 import java.lang.reflect.Method;
 
+import java.io.Externalizable;
 import java.io.IOException;
 import java.io.Serializable;
 
@@ -73,7 +74,7 @@ class RemoteTypeResolver implements ClassResolver {
         return clazz;
     }
 
-    Class<?> resolveClass(String name, long serialVersionUID)
+    Class<?> resolveClass(String name, StandardSession.Hidden.Admin admin)
         throws IOException, ClassNotFoundException
     {
         try {
@@ -83,7 +84,34 @@ class RemoteTypeResolver implements ClassResolver {
                 // Cannot create a fake class without a security exception.
                 throw e;
             }
-            return syntheticSerializableClass(name, serialVersionUID);
+
+            String classInfo;
+            try {
+                classInfo = admin.getUnknownClassInfo(name);
+            } catch (IOException ioe) {
+                // Bummer. This also catches UnimplementedMethodException.
+                throw e;
+            }
+
+            if (classInfo == null) {
+                throw e;
+            }
+
+            int index = classInfo.indexOf(':');
+            if (index <= 0) {
+                throw e;
+            }
+
+            long serialVersionUID;
+            try {
+                serialVersionUID = Long.parseLong(classInfo.substring(0, index));
+            } catch (NumberFormatException nfe) {
+                throw e;
+            }
+
+            boolean externalizable = classInfo.substring(index + 1).equals("E");
+
+            return syntheticSerializableClass(name, serialVersionUID, externalizable);
         }
     }
 
@@ -178,8 +206,10 @@ class RemoteTypeResolver implements ClassResolver {
         return type;
     }
 
-    private synchronized Class<?> syntheticSerializableClass(String name, long serialVersionUID) {
-        Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID});
+    private synchronized Class<?> syntheticSerializableClass
+        (String name, long serialVersionUID, boolean externalizable)
+    {
+        Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID, externalizable});
 
         if (mSyntheticSerializableTypes == null) {
             mSyntheticSerializableTypes = new SoftValuedHashMap<Object, Class>();
@@ -192,7 +222,11 @@ class RemoteTypeResolver implements ClassResolver {
 
         RuntimeClassFile cf = new RuntimeClassFile(name, null, new Loader(), null, true);
         cf.setModifiers(Modifiers.PUBLIC);
-        cf.addInterface(Serializable.class);
+        if (externalizable) {
+            cf.addInterface(Externalizable.class);
+        } else {
+            cf.addInterface(Serializable.class);
+        }
         cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                     "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
 
