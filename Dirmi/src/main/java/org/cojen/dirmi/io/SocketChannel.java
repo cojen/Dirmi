@@ -22,8 +22,6 @@ import java.io.OutputStream;
 
 import java.net.Socket;
 
-import java.util.Map;
-
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 /**
@@ -63,21 +61,25 @@ abstract class SocketChannel implements Channel {
     private final SimpleSocket mSocket;
     private final ChannelInputStream mIn;
     private final ChannelOutputStream mOut;
-    private final Map<Channel, Object> mAccepted;
+
+    // Access while synchronized on mSocket.
+    private CloseableGroup<? super Channel>[] mGroups;
 
     private volatile int mClosed;
 
-    SocketChannel(IOExecutor executor, SimpleSocket socket, Map<Channel, Object> accepted)
-        throws IOException
-    {
+    SocketChannel(IOExecutor executor, SimpleSocket socket) throws IOException {
         mExecutor = executor;
         mSocket = socket;
-        mIn = createInputStream(socket);
-        mOut = createOutputStream(socket);
-        if (accepted != null) {
-            accepted.put(this, "");
+        try {
+            mIn = createInputStream(socket);
+            mOut = createOutputStream(socket);
+        } catch (IOException e) {
+            try {
+                socket.close();
+            } catch (IOException e2) {
+            }
+            throw e;
         }
-        mAccepted = accepted;
     }
 
     /**
@@ -88,9 +90,13 @@ abstract class SocketChannel implements Channel {
         mSocket = channel.mSocket;
         mIn = in;
         mOut = out;
-        if ((mAccepted = channel.mAccepted) != null) {
-            mAccepted.put(this, "");
-            mAccepted.remove(channel);
+        synchronized (mSocket) {
+            if ((mGroups = channel.mGroups) != null) {
+                for (CloseableGroup<? super Channel> group : mGroups) {
+                    group.remove(channel);
+                }
+                channel.mGroups = null;
+            }
         }
     }
 
@@ -160,16 +166,28 @@ abstract class SocketChannel implements Channel {
         return false;
     }
 
+    public void register(CloseableGroup<? super Channel> group) {
+        if (!group.add(this)) {
+            return;
+        }
+        synchronized (mSocket) {
+            if (mGroups == null) {
+                mGroups = new CloseableGroup[] {group};
+            } else {
+                CloseableGroup<? super Channel>[] groups = new CloseableGroup[mGroups.length + 1];
+                System.arraycopy(mGroups, 0, groups, 0, mGroups.length);
+                groups[groups.length - 1] = group;
+                mGroups = groups;
+            }
+        }
+    }
+
     public boolean isClosed() {
         return mClosed != 0;
     }
 
     public void close() throws IOException {
-        mClosed = 1;
-
-        if (mAccepted != null) {
-            mAccepted.remove(this);
-        }
+        preClose();
 
         try {
             // Ensure buffer is flushed before closing socket.
@@ -192,11 +210,7 @@ abstract class SocketChannel implements Channel {
     }
 
     public void disconnect() {
-        mClosed = 1;
-
-        if (mAccepted != null) {
-            mAccepted.remove(this);
-        }
+        preClose();
 
         mOut.outputDisconnect();
         mIn.inputDisconnect();
@@ -205,6 +219,19 @@ abstract class SocketChannel implements Channel {
             mSocket.close();
         } catch (IOException e) {
             // Ignore.
+        }
+    }
+
+    private void preClose() {
+        mClosed = 1;
+
+        synchronized (mSocket) {
+            if (mGroups != null) {
+                for (CloseableGroup<? super Channel> group : mGroups) {
+                    group.remove(this);
+                }
+                mGroups = null;
+            }
         }
     }
 

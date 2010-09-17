@@ -42,6 +42,10 @@ class ChannelConnectWaiter implements ChannelConnector.Listener {
         mWaiter.failed(e);
     }
 
+    public void closed(IOException e) {
+        mWaiter.closed(e);
+    }
+
     public Channel waitForChannel() throws IOException {
         return mWaiter.waitFor();
     }

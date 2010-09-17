@@ -62,6 +62,6 @@ public class RecyclableSocketChannelConnector extends SocketChannelConnector {
 
     @Override
     Channel createChannel(SimpleSocket socket) throws IOException {
-        return new RecyclableSocketChannel(executor(), socket, null);
+        return new RecyclableSocketChannel(executor(), socket);
     }
 }

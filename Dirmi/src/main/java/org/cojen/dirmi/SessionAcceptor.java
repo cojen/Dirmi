@@ -57,7 +57,8 @@ public interface SessionAcceptor extends Closeable {
     Object getLocalAddress();
 
     /**
-     * Prevents new sessions from being accepted and closes all existing sessions.
+     * Prevents new sessions from being accepted and closes all existing
+     * sessions created from this acceptor.
      */
     void close() throws IOException;
 }

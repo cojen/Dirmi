@@ -34,22 +34,18 @@ class PipedChannel implements Channel {
     private final Input mIn;
     private final PipedOutputStream mPout;
     private final BufferedChannelOutputStream mOut;
-    private final Map<Channel, Object> mAccepted;
+
+    //private CloseableGroup<? super Channel>[] mGroups;
 
     PipedChannel(IOExecutor executor,
                  PipedInputStream in,
                  PipedOutputStream out,
-                 int outputBufferSize,
-                 Map<Channel, Object> accepted)
+                 int outputBufferSize)
     {
         mExecutor = executor;
         mIn = new Input(in);
         mPout = out;
         mOut = new BufferedChannelOutputStream(this, out, outputBufferSize);
-        if (accepted != null) {
-            accepted.put(this, "");
-        }
-        mAccepted = accepted;
     }
 
     @Override
@@ -138,6 +134,25 @@ class PipedChannel implements Channel {
     }
 
     @Override
+    public void register(CloseableGroup<? super Channel> group) {
+        /* TODO: Can cause hang during close
+        if (!group.add(this)) {
+            return;
+        }
+        synchronized (this) {
+            if (mGroups == null) {
+                mGroups = new CloseableGroup[] {group};
+            } else {
+                CloseableGroup<? super Channel>[] groups = new CloseableGroup[mGroups.length + 1];
+                System.arraycopy(mGroups, 0, groups, 0, mGroups.length);
+                groups[groups.length - 1] = group;
+                mGroups = groups;
+            }
+        }
+        */
+    }
+
+    @Override
     public boolean isClosed() {
         return mIn.isClosed() || mPout.isClosed();
     }
@@ -149,18 +164,14 @@ class PipedChannel implements Channel {
 
     @Override
     public void close() throws IOException {
-        if (mAccepted != null) {
-            mAccepted.remove(this);
-        }
+        preClose();
         mOut.outputClose();
         mIn.inputClose();
     }
 
     @Override
     public void disconnect() {
-        if (mAccepted != null) {
-            mAccepted.remove(this);
-        }
+        preClose();
         mOut.outputDisconnect();
         mIn.inputClose();
     }
@@ -172,6 +183,17 @@ class PipedChannel implements Channel {
 
     @Override
     public void setRecycleControl(Remote control) {
+    }
+
+    private synchronized void preClose() {
+        /* TODO: Can cause hang during close
+        if (mGroups != null) {
+            for (CloseableGroup<? super Channel> group : mGroups) {
+                group.remove(this);
+            }
+            mGroups = null;
+        }
+        */
     }
 
     private class Input extends InputStream {

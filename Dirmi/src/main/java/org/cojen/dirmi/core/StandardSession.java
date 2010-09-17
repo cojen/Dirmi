@@ -95,6 +95,7 @@ import org.cojen.dirmi.info.RemoteIntrospector;
 import org.cojen.dirmi.io.Channel;
 import org.cojen.dirmi.io.ChannelAcceptor;
 import org.cojen.dirmi.io.ChannelBroker;
+import org.cojen.dirmi.io.CloseableGroup;
 import org.cojen.dirmi.io.IOExecutor;
 
 import org.cojen.dirmi.util.ExceptionUtils;
@@ -1720,6 +1721,10 @@ public class StandardSession implements Session {
         public boolean outputSuspend() throws IOException {
             mInvOut.doDrain();
             return mChannel.outputSuspend();
+        }
+
+        public void register(CloseableGroup<? super Channel> group) {
+            mChannel.register(group);
         }
 
         public boolean isClosed() {

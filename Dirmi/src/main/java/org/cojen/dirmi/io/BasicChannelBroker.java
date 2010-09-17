@@ -24,13 +24,8 @@ import java.lang.ref.WeakReference;
 
 import java.rmi.Remote;
 
-import java.util.Map;
-
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
@@ -57,8 +52,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
     protected final long mId;
     protected final Channel mControl;
 
-    private final AtomicBoolean mClosed;
-    private final Map<Accepted, Object> mAccepted;
+    protected final CloseableGroup<Channel> mAllChannels;
     private final ListenerQueue<ChannelAcceptor.Listener> mListenerQueue;
 
     private final Future<?> mScheduledPingCheck;
@@ -70,8 +64,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
     {
         mId = id;
         mControl = control;
-        mClosed = new AtomicBoolean(false);
-        mAccepted = new ConcurrentHashMap<Accepted, Object>();
+        mAllChannels = new CloseableGroup<Channel>();
 
         mListenerQueue = new ListenerQueue<ChannelAcceptor.Listener>
             (executor, ChannelAcceptor.Listener.class);
@@ -103,7 +96,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
                 mScheduledDoPing = executor.scheduleWithFixedDelay
                     (pinger, PING_DELAY_MILLIS, PING_DELAY_MILLIS, TimeUnit.MILLISECONDS);
             } catch (RejectedException e) {
-                mScheduledPingCheck.cancel(true);
+                mScheduledPingCheck.cancel(false);
                 control.disconnect();
                 throw e;
             }
@@ -166,11 +159,12 @@ abstract class BasicChannelBroker implements ChannelBroker {
     }
 
     protected void accepted(Channel channel) {
-        mListenerQueue.dequeue().accepted(new Accepted(channel));
+        channel.register(mAllChannels);
+        mListenerQueue.dequeue().accepted(channel);
     }
 
     protected void close(IOException cause) {
-        if (!mClosed.compareAndSet(false, true)) {
+        if (mAllChannels.isClosed()) {
             return;
         }
 
@@ -179,18 +173,16 @@ abstract class BasicChannelBroker implements ChannelBroker {
         }
 
         if (mScheduledPingCheck != null) {
-            mScheduledPingCheck.cancel(true);
+            mScheduledPingCheck.cancel(false);
         }
 
         if (mScheduledDoPing != null) {
-            mScheduledDoPing.cancel(true);
+            mScheduledDoPing.cancel(false);
         }
 
         mControl.disconnect();
 
-        for (Channel channel : mAccepted.keySet()) {
-            channel.disconnect();
-        }
+        mAllChannels.close();
 
         // Do last in case it blocks.
         mListenerQueue.dequeueForClose().closed(cause);
@@ -216,147 +208,6 @@ abstract class BasicChannelBroker implements ChannelBroker {
             return false;
         } else {
             return true;
-        }
-    }
-
-    private class Accepted implements Channel {
-        private final Channel mChannel;
-
-        Accepted(Channel channel) {
-            mChannel = channel;
-            mAccepted.put(this, "");
-        }
-
-        @Override
-        public Object getLocalAddress() {
-            return mChannel.getLocalAddress();
-        }
-
-        @Override
-        public Object getRemoteAddress() {
-            return mChannel.getRemoteAddress();
-        }
-
-        @Override
-        public InputStream getInputStream(){
-            return mChannel.getInputStream();
-        }
-
-        @Override
-        public OutputStream getOutputStream() {
-            return mChannel.getOutputStream();
-        }
-
-        @Override
-        public boolean isInputReady() throws IOException {
-            return mChannel.isInputReady();
-        }
-
-        @Override
-        public boolean isOutputReady() throws IOException {
-            return mChannel.isOutputReady();
-        }
-
-        @Override
-        public int setInputBufferSize(int size) {
-            return mChannel.setInputBufferSize(size);
-        }
-
-        @Override
-        public int setOutputBufferSize(int size) {
-            return mChannel.setOutputBufferSize(size);
-        }
-
-        @Override
-        public void inputNotify(Channel.Listener listener) {
-            mChannel.inputNotify(new UnregisterListener(listener));
-        }
-
-        @Override
-        public void outputNotify(Channel.Listener listener) {
-            mChannel.outputNotify(new UnregisterListener(listener));
-        }
-
-        @Override
-        public boolean usesSelectNotification() {
-            return mChannel.usesSelectNotification();
-        }
-
-        @Override
-        public boolean inputResume() {
-            return mChannel.inputResume();
-        }
-
-        @Override
-        public boolean isResumeSupported() {
-            return mChannel.isResumeSupported();
-        }
-
-        @Override
-        public boolean outputSuspend() throws IOException {
-            return mChannel.outputSuspend();
-        }
-
-        private class UnregisterListener implements Channel.Listener {
-            private final Channel.Listener mListener;
-
-            UnregisterListener(Channel.Listener listener) {
-                mListener = listener;
-            }
-
-            public void ready() {
-                mListener.ready();
-            }
-
-            public void rejected(RejectedException e) {
-                mListener.rejected(e);
-            }
-
-            public void closed(IOException e) {
-                unregister();
-                mListener.closed(e);
-            }
-        }
-
-        @Override
-        public void flush() throws IOException {
-            mChannel.flush();
-        }
-
-        @Override
-        public boolean isClosed() {
-            return mChannel.isClosed();
-        }
-
-        @Override
-        public void close() throws IOException {
-            unregister();
-            mChannel.close();
-        }
-
-        @Override
-        public void disconnect() {
-            unregister();
-            mChannel.disconnect();
-        }
-
-        @Override
-        public Remote installRecycler(Recycler recycler) {
-            return mChannel.installRecycler(recycler);
-        }
-
-        @Override
-        public void setRecycleControl(Remote control) {
-            mChannel.setRecycleControl(control);
-        }
-
-        @Override
-        public String toString() {
-            return mChannel.toString();
-        }
-
-        void unregister() {
-            mAccepted.remove(this);
         }
     }
 

@@ -198,7 +198,7 @@ public class OrderedInvoker {
         return null;
     }
  
-    private class SequencedOp implements Comparable<SequencedOp> {
+    private static class SequencedOp implements Comparable<SequencedOp> {
         final int mSequence;
 
         SequencedOp(int sequence) {

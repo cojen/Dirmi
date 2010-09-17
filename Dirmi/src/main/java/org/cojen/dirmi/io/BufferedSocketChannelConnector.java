@@ -58,6 +58,6 @@ public class BufferedSocketChannelConnector extends SocketChannelConnector {
 
     @Override
     Channel createChannel(SimpleSocket socket) throws IOException {
-        return new BufferedSocketChannel(executor(), socket, null);
+        return new BufferedSocketChannel(executor(), socket);
     }
 }

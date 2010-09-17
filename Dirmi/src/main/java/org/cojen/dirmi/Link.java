@@ -16,12 +16,14 @@
 
 package org.cojen.dirmi;
 
+import java.io.Closeable;
+
 /**
  * Represents an established connection between two endpoints.
  *
  * @author Brian S O'Neill
  */
-public interface Link {
+public interface Link extends Closeable {
     /**
      * @return local session address or null if unknown or not applicable
      */

@@ -42,10 +42,8 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -161,8 +159,10 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
      * Register a listener which is asynchronously notified when channel has
      * been connected. Listener is called at most once per registration.
      */
-    void connectNotify(SocketChannel channel, ChannelConnector.Listener listener) {
-        mQueue.add(new ConnectNotify(channel, listener));
+    void connectNotify(SocketChannel channel, CloseableGroup<Channel> connected,
+                       ChannelConnector.Listener listener)
+    {
+        mQueue.add(new ConnectNotify(channel, connected, listener));
         mSelector.wakeup();
     }
 
@@ -170,7 +170,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
      * Register a listener which is asynchronously notified when channel has
      * been accepted. Listener is called at most once per registration.
      */
-    void acceptNotify(AccessControlContext context, Map<Channel, Object> accepted,
+    void acceptNotify(AccessControlContext context, CloseableGroup<Channel> accepted,
                       ServerSocketChannel channel, ChannelAcceptor.Listener listener)
     {
         mQueue.add(new AcceptNotify(context, accepted, channel, listener));
@@ -241,10 +241,14 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
     }
 
     private class ConnectNotify extends Selectable {
+        private final CloseableGroup<Channel> mConnected;
         private final SocketChannel mChannel;
         private final ChannelConnector.Listener mListener;
 
-        ConnectNotify(SocketChannel channel, ChannelConnector.Listener listener) {
+        ConnectNotify(SocketChannel channel, CloseableGroup<Channel> connected,
+                      ChannelConnector.Listener listener)
+        {
+            mConnected = connected;
             mChannel = channel;
             mListener = listener;
         }
@@ -273,7 +277,9 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
                 mChannel.finishConnect();
                 NioSocketChannel nsc =
                     new NioSocketChannel(RecyclableSocketChannelSelector.this, mChannel);
-                mListener.connected(new NioRecyclableSocketChannel(executor(), nsc, null));
+                NioRecyclableSocketChannel nrsc = new NioRecyclableSocketChannel(executor(), nsc);
+                nrsc.register(mConnected);
+                mListener.connected(nrsc);
             } catch (IOException e) {
                 mListener.failed(e);
             }
@@ -282,11 +288,11 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
 
     private class AcceptNotify extends Selectable {
         private final AccessControlContext mContext;
-        private final Map<Channel, Object> mAccepted;
+        private final CloseableGroup<Channel> mAccepted;
         final ServerSocketChannel mChannel;
         private final ChannelAcceptor.Listener mListener;
 
-        AcceptNotify(AccessControlContext context, Map<Channel, Object> accepted,
+        AcceptNotify(AccessControlContext context, CloseableGroup<Channel> accepted,
                      ServerSocketChannel channel, ChannelAcceptor.Listener listener)
         {
             mContext = context;
@@ -344,7 +350,9 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             try {
                 NioSocketChannel nsc =
                     new NioSocketChannel(RecyclableSocketChannelSelector.this, channel);
-                mListener.accepted(new NioRecyclableSocketChannel(executor(), nsc, mAccepted));
+                NioRecyclableSocketChannel nrsc = new NioRecyclableSocketChannel(executor(), nsc);
+                nrsc.register(mAccepted);
+                mListener.accepted(nrsc);
             } catch (IOException e) {
                 mListener.failed(e);
             }
@@ -367,10 +375,8 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
         private final ServerSocketChannel mChannel;
         private final AccessControlContext mContext;
 
-        private final Map<Channel, Object> mAccepted;
+        private final CloseableGroup<Channel> mAccepted;
         final ConcurrentLinkedQueue<Channel> mAcceptQueue;
-
-        volatile boolean mClosed;
 
         NioChannelAcceptor(SocketAddress localAddress) throws IOException {
             ServerSocketChannel ssc = ServerSocketChannel.open();
@@ -381,7 +387,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             mLocalAddress = ssc.socket().getLocalSocketAddress();
             mChannel = ssc;
             mContext = AccessController.getContext();
-            mAccepted = new ConcurrentHashMap<Channel, Object>();
+            mAccepted = new CloseableGroup<Channel>();
             mAcceptQueue = new ConcurrentLinkedQueue<Channel>();
         }
 
@@ -397,9 +403,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
 
         @Override
         public Channel accept(Timer timer) throws IOException {
-            if (mClosed) {
-                throw new ClosedException();
-            }
+            mAccepted.checkClosed();
 
             class Listener implements ChannelAcceptor.Listener {
                 private Channel mChannel;
@@ -508,23 +512,13 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
 
         @Override
         public void close() {
-            mClosed = true;
+            mAccepted.close();
 
             try {
                 mChannel.close();
             } catch (IOException e) {
                 // Ignore.
             }
-
-            for (Channel channel : mAccepted.keySet()) {
-                try {
-                    channel.close();
-                } catch (IOException e) {
-                    // Ignore.
-                }
-            }
-
-            mAccepted.clear();
         }
 
         @Override
@@ -538,7 +532,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
         }
 
         boolean acceptedChannel(Channel channel) {
-            if (mClosed) {
+            if (mAccepted.isClosed()) {
                 channel.disconnect();
                 return false;
             }
@@ -551,6 +545,8 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
         final SocketAddress mLocalAddress;
         private final AccessControlContext mContext;
 
+        private final CloseableGroup<Channel> mConnected;
+
         NioChannelConnector(SocketAddress remoteAddress, SocketAddress localAddress) {
             if (remoteAddress == null) {
                 throw new IllegalArgumentException("Must provide a remote address");
@@ -558,6 +554,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             mRemoteAddress = remoteAddress;
             mLocalAddress = localAddress;
             mContext = AccessController.getContext();
+            mConnected = new CloseableGroup<Channel>();
         }
 
         @Override
@@ -577,6 +574,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
 
         @Override
         public Channel connect(long timeout, TimeUnit unit) throws IOException {
+            mConnected.checkClosed();
             ChannelConnectWaiter waiter = new ChannelConnectWaiter();
             connect(waiter);
             if (timeout < 0) {
@@ -588,6 +586,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
 
         @Override
         public Channel connect(Timer timer) throws IOException {
+            mConnected.checkClosed();
             return connect(timer.duration(), timer.unit());
         }
 
@@ -616,7 +615,12 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
                 return;
             }
 
-            connectNotify(sc, listener);
+            connectNotify(sc, mConnected, listener);
+        }
+
+        @Override
+        public void close() {
+            mConnected.close();
         }
 
         @Override

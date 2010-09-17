@@ -32,6 +32,7 @@ import java.security.PrivilegedExceptionAction;
 
 import javax.net.SocketFactory;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.util.Timer;
@@ -47,6 +48,8 @@ abstract class SocketChannelConnector implements ChannelConnector {
     private final SocketAddress mLocalAddress;
     private final SocketFactory mFactory;
     private final AccessControlContext mContext;
+
+    private final CloseableGroup<Channel> mConnected;
 
     /**
      * @param remoteAddress address to connect to
@@ -87,6 +90,7 @@ abstract class SocketChannelConnector implements ChannelConnector {
         mLocalAddress = localAddress;
         mFactory = factory;
         mContext = AccessController.getContext();
+        mConnected = new CloseableGroup<Channel>();
     }
 
     @Override
@@ -96,6 +100,8 @@ abstract class SocketChannelConnector implements ChannelConnector {
 
     @Override
     public Channel connect(final long timeout, final TimeUnit unit) throws IOException {
+        mConnected.checkClosed();
+
         if (timeout == 0) {
             throw new RemoteTimeoutException(timeout, unit);
         }
@@ -108,14 +114,18 @@ abstract class SocketChannelConnector implements ChannelConnector {
                 }
             }, mContext);
         } catch (PrivilegedActionException e) {
+            mConnected.checkClosed();
             throw (IOException) e.getCause();
         }
 
-        return createChannel(SocketChannel.toSimpleSocket(socket));
+        Channel channel = createChannel(SocketChannel.toSimpleSocket(socket));
+        channel.register(mConnected);
+        return channel;
     }
 
     @Override
     public Channel connect(Timer timer) throws IOException {
+        mConnected.checkClosed();
         return connect(RemoteTimeoutException.checkRemaining(timer), timer.unit());
     }
 
@@ -124,11 +134,20 @@ abstract class SocketChannelConnector implements ChannelConnector {
         try {
             mExecutor.execute(new Runnable() {
                 public void run() {
+                    if (mConnected.isClosed()) {
+                        listener.closed(new ClosedException());
+                        return;
+                    }
+
                     Channel channel;
                     try {
                         channel = connect();
                     } catch (IOException e) {
-                        listener.failed(e);
+                        if (mConnected.isClosed()) {
+                            listener.closed(e);
+                        } else {
+                            listener.failed(e);
+                        }
                         return;
                     }
 
@@ -173,6 +192,11 @@ abstract class SocketChannelConnector implements ChannelConnector {
             disconnect(socket);
             throw e;
         }
+    }
+
+    @Override
+    public void close() {
+        mConnected.close();
     }
 
     @Override

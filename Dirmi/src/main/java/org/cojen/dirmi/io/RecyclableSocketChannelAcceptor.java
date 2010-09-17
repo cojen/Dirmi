@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
 
-import java.util.Map;
-
 /**
  * Implements an acceptor using TCP/IP which supports channel recycling. A
  * recycler must be installed on accepted channels, and remote endpoint must be
@@ -46,9 +44,7 @@ public class RecyclableSocketChannelAcceptor extends SocketChannelAcceptor {
     }
 
     @Override
-    Channel createChannel(SimpleSocket socket, Map<Channel, Object> accepted)
-        throws IOException
-    {
-        return new RecyclableSocketChannel(executor(), socket, accepted);
+    Channel createChannel(SimpleSocket socket) throws IOException {
+        return new RecyclableSocketChannel(executor(), socket);
     }
 }

@@ -73,6 +73,10 @@ public class CountingBroker implements ChannelBroker {
             public void failed(IOException e) {
                 listener.failed(e);
             }
+
+            public void closed(IOException e) {
+                listener.closed(e);
+            }
         });
     }
 
@@ -197,6 +201,10 @@ public class CountingBroker implements ChannelBroker {
 
         public void flush() throws IOException {
             mChannel.flush();
+        }
+
+        public void register(CloseableGroup<? super Channel> group) {
+            mChannel.register(group);
         }
 
         public boolean isClosed() {

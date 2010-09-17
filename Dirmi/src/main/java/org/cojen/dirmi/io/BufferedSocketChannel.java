@@ -22,18 +22,14 @@ import java.net.Socket;
 
 import java.rmi.Remote;
 
-import java.util.Map;
-
 /**
  * 
  *
  * @author Brian S O'Neill
  */
 class BufferedSocketChannel extends SocketChannel {
-    BufferedSocketChannel(IOExecutor executor, SimpleSocket socket, Map<Channel, Object> accepted)
-        throws IOException
-    {
-        super(executor, socket, accepted);
+    BufferedSocketChannel(IOExecutor executor, SimpleSocket socket) throws IOException {
+        super(executor, socket);
     }
 
     @Override

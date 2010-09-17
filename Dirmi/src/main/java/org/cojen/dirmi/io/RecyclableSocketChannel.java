@@ -24,8 +24,6 @@ import java.net.Socket;
 
 import java.rmi.Remote;
 
-import java.util.Map;
-
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
@@ -47,11 +45,8 @@ class RecyclableSocketChannel extends SocketChannel {
     private Output mRecycledOutput;
     private boolean mRemoteRecycleReady;
 
-    RecyclableSocketChannel(IOExecutor executor, SimpleSocket socket,
-                            Map<Channel, Object> accepted)
-        throws IOException
-    {
-        super(executor, socket, accepted);
+    RecyclableSocketChannel(IOExecutor executor, SimpleSocket socket) throws IOException {
+        super(executor, socket);
     }
 
     RecyclableSocketChannel(RecyclableSocketChannel channel, Input in, Output out) {

@@ -21,9 +21,6 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.util.Map;
-
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.Lock;
@@ -69,7 +66,7 @@ public class PipedChannelBroker implements ChannelBroker {
     private final IOExecutor mExecutor;
     private final int mBufferSize;
 
-    private final Map<Channel, Object> mAccepted;
+    private final CloseableGroup<Channel> mAllChannels;
 
     volatile PipedChannelBroker mEndpoint;
 
@@ -78,7 +75,7 @@ public class PipedChannelBroker implements ChannelBroker {
     private PipedChannelBroker(IOExecutor executor, int bufferSize) {
         mExecutor = executor;
         mBufferSize = bufferSize;
-        mAccepted = new ConcurrentHashMap<Channel, Object>();
+        mAllChannels = new CloseableGroup<Channel>();
 
         mAcceptListenerQueue = new ListenerQueue<ChannelAcceptor.Listener>
             (mExecutor, ChannelAcceptor.Listener.class);
@@ -112,7 +109,8 @@ public class PipedChannelBroker implements ChannelBroker {
         PipedOutputStream aout = new PipedOutputStream(cin);
         PipedOutputStream cout = new PipedOutputStream(ain);
 
-        PipedChannel channel = new PipedChannel(mExecutor, cin, cout, mBufferSize, null);
+        PipedChannel channel = new PipedChannel(mExecutor, cin, cout, mBufferSize);
+        channel.register(mAllChannels);
         endpoint.accepted(ain, aout);
 
         return channel;
@@ -120,7 +118,8 @@ public class PipedChannelBroker implements ChannelBroker {
 
     private void accepted(PipedInputStream ain, PipedOutputStream aout) throws IOException {
         final PipedChannel channel = new PipedChannel
-            (mExecutor, ain, aout, mBufferSize, mAccepted);
+            (mExecutor, ain, aout, mBufferSize);
+        channel.register(mAllChannels);
 
         mExecutor.execute(new Runnable() {
             public void run() {
@@ -192,10 +191,7 @@ public class PipedChannelBroker implements ChannelBroker {
         PipedChannelBroker endpoint = mEndpoint;
         if (endpoint != null) {
             mEndpoint = null;
-            for (Channel channel : mAccepted.keySet()) {
-                channel.disconnect();
-            }
-
+            mAllChannels.close();
             endpoint.close();
 
             // Do last in case it blocks.

@@ -44,9 +44,12 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
     private final IOExecutor mExecutor;
     private final ChannelConnector mConnector;
 
+    private final CloseableGroup<Broker> mConnectedBrokers;
+
     public BasicChannelBrokerConnector(IOExecutor executor, ChannelConnector connector) {
         mExecutor = executor;
         mConnector = connector;
+        mConnectedBrokers = new CloseableGroup<Broker>();
     }
 
     @Override
@@ -61,6 +64,7 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
 
     @Override
     public ChannelBroker connect() throws IOException {
+        mConnectedBrokers.checkClosed();
         return connected(mConnector.connect(), null);
     }
 
@@ -78,6 +82,10 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
     public void connect(final Listener listener) {
         mConnector.connect(new ChannelConnector.Listener() {
             public void connected(Channel channel) {
+                if (mConnectedBrokers.isClosed()) {
+                    listener.closed(new ClosedException());
+                }
+
                 ChannelBroker broker;
                 try {
                     broker = BasicChannelBrokerConnector.this.connected(channel, null);
@@ -96,7 +104,16 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
             public void failed(IOException e) {
                 listener.failed(e);
             }
+
+            public void closed(IOException e) {
+                listener.closed(e);
+            }
         });
+    }
+
+    @Override
+    public void close() {
+        mConnectedBrokers.close();
     }
 
     private ChannelBroker connected(Channel channel, Timer timer) throws IOException {
@@ -125,6 +142,8 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
     private class Broker extends BasicChannelBroker {
         Broker(long id, Channel control) throws RejectedException {
             super(mExecutor, id, control);
+
+            mConnectedBrokers.add(this);
 
             mControl.inputNotify(new Channel.Listener() {
                 public void ready() {
@@ -215,7 +234,17 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
                 public void failed(IOException e) {
                     listener.failed(e);
                 }
+
+                public void closed(IOException e) {
+                    listener.closed(e);
+                }
             });
+        }
+
+        @Override
+        public void close() {
+            mConnectedBrokers.remove(this);
+            super.close();
         }
 
         @Override
@@ -235,6 +264,7 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
             dout.writeByte(ACCEPT_REQUEST);
             dout.writeLong(mId);
             dout.flush();
+            channel.register(mAllChannels);
             return channel;
         }
     }

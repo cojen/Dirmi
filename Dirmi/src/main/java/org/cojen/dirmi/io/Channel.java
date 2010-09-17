@@ -111,6 +111,12 @@ public interface Channel extends Flushable, Closeable, Link {
     boolean outputSuspend() throws IOException;
 
     /**
+     * Register this channel with at least one group. When this channel is
+     * closed, it removes itself from all groups it has been registered with.
+     */
+    void register(CloseableGroup<? super Channel> group);
+
+    /**
      * Returns true if channel is absolutely closed or disconnected. A return
      * value of false doesn't imply that the next I/O operation will succeed.
      */

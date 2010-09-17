@@ -294,6 +294,7 @@ public class TestSyncMethods extends AbstractTestSuite {
                    message.contains("reset") ||
                    message.contains("aborted") ||
                    message.contains("asynchronouscloseexception") ||
-                   message.contains("recv failed"));
+                   message.contains("recv failed") ||
+                   message.contains("ping failure"));
     }
 }

@@ -18,8 +18,6 @@ package org.cojen.dirmi.io;
 
 import java.io.IOException;
 
-import java.util.Map;
-
 import org.cojen.dirmi.RejectedException;
 
 /**
@@ -28,12 +26,8 @@ import org.cojen.dirmi.RejectedException;
  * @author Brian S O'Neill
  */
 class NioRecyclableSocketChannel extends RecyclableSocketChannel {
-    NioRecyclableSocketChannel(IOExecutor executor,
-                               NioSocketChannel channel,
-                               Map<Channel, Object> accepted)
-        throws IOException
-    {
-        super(executor, channel, accepted);
+    NioRecyclableSocketChannel(IOExecutor executor, NioSocketChannel channel) throws IOException {
+        super(executor, channel);
     }
 
     NioRecyclableSocketChannel(NioRecyclableSocketChannel channel, Input in, Output out) {

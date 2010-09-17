@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.InterruptedIOException;
 import java.io.IOException;
 
@@ -30,59 +31,82 @@ import org.cojen.dirmi.RemoteTimeoutException;
  *
  * @author Brian S O'Neill
  */
-class Waiter<T> {
-    static <T> Waiter<T> create() {
-        return new Waiter<T>();
+class Waiter<C extends Closeable> {
+    private static final int
+        AVAILABLE = 1, CLOSED = 2, INTERRUPTED = 3, TIMEOUT = 4, EXCEPTION = 5;
+
+    static <C extends Closeable> Waiter<C> create() {
+        return new Waiter<C>();
     }
 
-    private T mObject;
+    private C mObject;
     private IOException mException;
-    private boolean mClosed;
+    private int mState;
+    private long mTimeout;
+    private TimeUnit mTimeoutUnit;
 
     private Waiter() {
     }
 
-    public synchronized void available(T object) {
-        mObject = object;
-        notify();
+    public void available(C object) {
+        synchronized (this) {
+            notify();
+            if (mState == 0) {
+                mObject = object;
+                mState = AVAILABLE;
+                return;
+            }
+        }
+
+        try {
+            object.close();
+        } catch (IOException e) {
+        }
     }
 
     public synchronized void rejected(RejectedException e) {
-        mException = e;
         notify();
+        if (mState == 0) {
+            mException = e;
+            mState = EXCEPTION;
+        }
     }
 
     public synchronized void failed(IOException e) {
-        mException = e;
         notify();
+        if (mState == 0) {
+            mException = e;
+            mState = EXCEPTION;
+        }
     }
 
     public synchronized void closed(IOException e) {
-        mException = e;
-        mClosed = true;
         notify();
+        if (mState == 0) {
+            mState = CLOSED;
+        }
     }
 
-    public synchronized T waitFor() throws IOException {
+    public synchronized C waitFor() throws IOException {
         while (true) {
-            T object = check();
+            C object = check();
             if (object != null) {
                 return object;
             }
             try {
                 wait();
             } catch (InterruptedException e) {
-                throw new InterruptedIOException();
+                return interrupted();
             }
         }
     }
 
-    public synchronized T waitFor(final long timeout, final TimeUnit unit) throws IOException {
+    public synchronized C waitFor(final long timeout, final TimeUnit unit) throws IOException {
         long timeoutNanos = unit.toNanos(timeout);
         long start = System.nanoTime();
 
         while (timeoutNanos > 0) {
-            T object = check();
+            C object = check();
             if (object != null) {
                 return object;
             }
@@ -94,23 +118,41 @@ class Waiter<T> {
             try {
                 wait(Math.max(1, TimeUnit.NANOSECONDS.toMillis(timeoutNanos)));
             } catch (InterruptedException e) {
-                throw new InterruptedIOException();
+                return interrupted();
             }
         }
 
-        throw new RemoteTimeoutException(timeout, unit);
+        if (mState == 0) {
+            mState = TIMEOUT;
+            mTimeout = timeout;
+            mTimeoutUnit = unit;
+        }
+
+        return check();
     }
 
-    private T check() throws IOException {
-        if (mObject != null) {
+    private C check() throws IOException {
+        switch (mState) {
+        case AVAILABLE:
             return mObject;
-        }
-        if (mException != null) {
+        case CLOSED:
+            throw new ClosedException();
+        case INTERRUPTED:
+            throw new InterruptedIOException();
+        case TIMEOUT:
+            throw new RemoteTimeoutException(mTimeout, mTimeoutUnit);
+        case EXCEPTION:
+            mException.fillInStackTrace();
             throw mException;
         }
-        if (mClosed) {
-            throw new ClosedException();
-        }
+
         return null;
+    }
+
+    private C interrupted() throws IOException {
+        if (mState == 0) {
+            mState = INTERRUPTED;
+        }
+        return check();
     }
 }

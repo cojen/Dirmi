@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.util.concurrent.TimeUnit;
@@ -28,7 +29,7 @@ import org.cojen.dirmi.util.Timer;
  *
  * @author Brian S O'Neill
  */
-public interface ChannelBrokerConnector {
+public interface ChannelBrokerConnector extends Closeable {
     /**
      * @return remote address of connected channels or null if unknown
      */
@@ -61,6 +62,12 @@ public interface ChannelBrokerConnector {
     void connect(Listener listener);
 
     /**
+     * Prevents new brokers from being connected and closes all connected
+     * brokers.
+     */
+    void close();
+
+    /**
      * Listener for acceping channels asynchronously.
      */
     public static interface Listener {
@@ -83,5 +90,11 @@ public interface ChannelBrokerConnector {
          * by a registration thread.
          */
         void failed(IOException cause);
+
+        /**
+         * Called when broker cannot be connected because connector is closed.
+         * This method may be invoked by a registration thread.
+         */
+        void closed(IOException cause);
     }
 }

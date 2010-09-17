@@ -24,9 +24,9 @@ import java.io.OutputStream;
 
 import java.security.SecureRandom;
 
+import java.util.HashMap;
 import java.util.Map;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.util.ThrowUnchecked;
@@ -56,7 +56,9 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
     private final SecureRandom mRandom;
     private final ChannelAcceptor.Listener mBrokerListener;
 
-    private final ConcurrentHashMap<Long, Broker> mAccepted;
+    // Access these fields while synchronized on mAcceptedBrokers.
+    private final Map<Long, Broker> mAcceptedBrokers;
+    private boolean mClosed;
 
     private final ListenerQueue<ChannelBrokerAcceptor.Listener> mAcceptListenerQueue;
     private boolean mNotListening;
@@ -65,7 +67,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         mExecutor = executor;
         mAcceptor = acceptor;
         mRandom = new SecureRandom();
-        mAccepted = new ConcurrentHashMap<Long, Broker>();
+        mAcceptedBrokers = new HashMap<Long, Broker>();
 
         mAcceptListenerQueue = new ListenerQueue<ChannelBrokerAcceptor.Listener>
             (mExecutor, ChannelBrokerAcceptor.Listener.class);
@@ -158,8 +160,18 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
     @Override
     public void close() {
         mAcceptor.close();
-        for (ChannelBroker broker : mAccepted.values()) {
-            broker.close();
+
+        {
+            Map<Long, Broker> copy;
+            synchronized (mAcceptedBrokers) {
+                mClosed = true;
+                copy = new HashMap<Long, Broker>(mAcceptedBrokers);
+                mAcceptedBrokers.clear();
+            }
+
+            for (Broker broker : copy.values()) {
+                broker.close();
+            }
         }
     }
 
@@ -173,10 +185,16 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
             if (op == OPEN_REQUEST) {
                 Broker broker;
-                do {
-                    id = mRandom.nextLong();
+                synchronized (mAcceptedBrokers) {
+                    if (mClosed) {
+                        throw new ClosedException("ChannelBrokerAcceptor is closed");
+                    }
+                    do {
+                        id = mRandom.nextLong();
+                    } while (mAcceptedBrokers.containsKey(id));
                     broker = new Broker(id, channel);
-                } while (mAccepted.putIfAbsent(id, broker) != null);
+                    mAcceptedBrokers.put(id, broker);
+                }
 
                 try {
                     DataOutputStream dout = new DataOutputStream(channel.getOutputStream());
@@ -184,13 +202,12 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
                     dout.flush();
                     return broker;
                 } catch (IOException e) {
-                    mAccepted.remove(id);
+                    removeBroker(id, broker);
                     throw e;
                 }
             }
 
             if (op != ACCEPT_REQUEST && op != CONNECT_RESPONSE) {
-                channel.disconnect();
                 if (op < 0) {
                     throw new ClosedException("Accepted channel is closed");
                 } else {
@@ -203,7 +220,10 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
             timeout.cancel();
         }
 
-        Broker broker = mAccepted.get(id);
+        Broker broker;
+        synchronized (mAcceptedBrokers) {
+            broker = mAcceptedBrokers.get(id);
+        }
 
         if (broker == null) {
             channel.disconnect();
@@ -211,12 +231,20 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
 
         if (op == CONNECT_RESPONSE) {
-            broker.dequeueConnectListener().connected(channel);
+            broker.connected(channel);
         } else {
             broker.accepted(channel);
         }
 
         return null;
+    }
+
+    private void removeBroker(long id, Broker broker) {
+        synchronized (mAcceptedBrokers) {
+            if (mAcceptedBrokers.get(id) == broker) {
+                mAcceptedBrokers.remove(id);
+            }
+        }
     }
 
     private class Broker extends BasicChannelBroker {
@@ -235,6 +263,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
         @Override
         public Channel connect(long timeout, TimeUnit unit) throws IOException {
+            mAllChannels.checkClosed();
             ChannelConnectWaiter listener = new ChannelConnectWaiter();
             connect(listener);
             return listener.waitForChannel(timeout, unit);
@@ -242,6 +271,11 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
         @Override
         public void connect(final ChannelConnector.Listener listener) {
+            if (mAllChannels.isClosed()) {
+                listener.closed(new ClosedException());
+                return;
+            }
+
             try {
                 mListenerQueue.enqueue(listener);
             } catch (RejectedException e) {
@@ -265,14 +299,15 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
                 }
 
                 public void closed(IOException e) {
-                    dequeueConnectListenerForClose().failed(e);
+                    dequeueConnectListenerForClose().closed(e);
                 }
             });
         }
 
         @Override
         public void close() {
-            if (mAccepted.remove(mId, this)) {
+            removeBroker(mId, this);
+            if (!mAllChannels.isClosed()) {
                 dequeueConnectListenerForClose().failed(new ClosedException());
                 super.close();
             }
@@ -296,6 +331,11 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
         ChannelConnector.Listener dequeueConnectListenerForClose() {
             return mListenerQueue.dequeueForClose();
+        }
+
+        void connected(Channel channel) {
+            channel.register(mAllChannels);
+            dequeueConnectListener().connected(channel);
         }
     }
 

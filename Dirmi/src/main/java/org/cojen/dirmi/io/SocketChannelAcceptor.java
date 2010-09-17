@@ -23,9 +23,6 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
 
-import java.util.Map;
-
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import java.security.AccessControlContext;
@@ -51,10 +48,8 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
     private final ServerSocket mServerSocket;
     private final AccessControlContext mContext;
 
-    private final Map<Channel, Object> mAccepted;
+    private final CloseableGroup<Channel> mAccepted;
     volatile boolean mAnyAccepted;
-
-    volatile boolean mClosed;
 
     public SocketChannelAcceptor(IOExecutor executor, SocketAddress localAddress)
         throws IOException
@@ -79,7 +74,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         serverSocket.bind(localAddress);
         mLocalAddress = serverSocket.getLocalSocketAddress();
         mContext = AccessController.getContext();
-        mAccepted = new ConcurrentHashMap<Channel, Object>();
+        mAccepted = new CloseableGroup<Channel>();
     }
     
     @Override
@@ -89,9 +84,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
 
     @Override
     public synchronized Channel accept(long timeout, TimeUnit unit) throws IOException {
-        if (mClosed) {
-            throw new ClosedException();
-        }
+        mAccepted.checkClosed();
 
         if (timeout < 0) {
             mServerSocket.setSoTimeout(0);
@@ -112,22 +105,20 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         } catch (SocketTimeoutException e) {
             throw new RemoteTimeoutException(timeout, unit);
         } catch (IOException e) {
-            if (mClosed) {
-                throw new ClosedException();
-            }
+            mAccepted.checkClosed();
             throw e;
         }
 
         socket.setTcpNoDelay(true);
 
-        return createChannel(SocketChannel.toSimpleSocket(socket), mAccepted);
+        Channel channel = createChannel(SocketChannel.toSimpleSocket(socket));
+        channel.register(mAccepted);
+        return channel;
     }
 
     @Override
     public Channel accept(Timer timer) throws IOException {
-        if (mClosed) {
-            throw new ClosedException();
-        }
+        mAccepted.checkClosed();
         return accept(RemoteTimeoutException.checkRemaining(timer), timer.unit());
     }
 
@@ -136,7 +127,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         try {
             mExecutor.execute(new Runnable() {
                 public void run() {
-                    if (mClosed) {
+                    if (mAccepted.isClosed()) {
                         listener.closed(new ClosedException());
                         return;
                     }
@@ -156,7 +147,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
                             throw e;
                         }
                     } catch (IOException e) {
-                        if (mClosed) {
+                        if (mAccepted.isClosed()) {
                             listener.closed(e);
                         } else {
                             listener.failed(e);
@@ -174,20 +165,11 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
 
     @Override
     public void close() {
-        mClosed = true;
-
+        mAccepted.close();
         try {
             mServerSocket.close();
         } catch (IOException e) {
             // Ignore.
-        }
-
-        for (Channel channel : mAccepted.keySet()) {
-            try {
-                channel.close();
-            } catch (IOException e) {
-                // Ignore.
-            }
         }
     }
 
@@ -205,8 +187,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         return mExecutor;
     }
 
-    abstract Channel createChannel(SimpleSocket socket, Map<Channel, Object> accepted)
-        throws IOException;
+    abstract Channel createChannel(SimpleSocket socket) throws IOException;
 
     private Socket acceptSocket() throws IOException {
         try {
