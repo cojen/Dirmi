@@ -166,18 +166,17 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
                     if (op == PING_REQUEST) {
                         try {
                             if (cPingLogger != null) {
-                                logPingMessage("Ping request received from " + mControl);
+                                logPingMessage("Ping request from " + mControl);
                             }
                             control.getOutputStream().write(PING_RESPONSE);
                             control.getOutputStream().flush();
                             if (cPingLogger != null) {
-                                logPingMessage("Ping response sent to " + mControl);
+                                logPingMessage("Ping response to " + mControl);
                             }
                             pinged();
                         } catch (IOException e) {
                             if (cPingLogger != null) {
-                                logPingMessage
-                                    ("Ping response send failure to " + mControl + ": " + e);
+                                logPingMessage("Ping response failure to " + mControl + ": " + e);
                             }
                             close(new ClosedException("Ping failure", e));
                         }
