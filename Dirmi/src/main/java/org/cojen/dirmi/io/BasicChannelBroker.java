@@ -27,6 +27,8 @@ import java.rmi.Remote;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import java.util.logging.Logger;
+
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
@@ -48,6 +50,17 @@ abstract class BasicChannelBroker implements ChannelBroker {
 
     // No ping responses after this threshold causes broker to close.
     private static final int PING_FAILURE_MILLIS = PING_DELAY_MILLIS * 2 - PING_CHECK_DELAY_MILLIS;
+
+    static final Logger cPingLogger;
+
+    static {
+        String prop = System.getProperty(BasicChannelBroker.class.getName() + ".LOG_PINGS");
+        if (prop == null || !prop.equalsIgnoreCase("true")) {
+            cPingLogger = null;
+        } else {
+            cPingLogger = Logger.getLogger(BasicChannelBroker.class.getName());
+        }
+    }
 
     protected final long mId;
     protected final Channel mControl;
@@ -202,11 +215,28 @@ abstract class BasicChannelBroker implements ChannelBroker {
 
     protected abstract boolean doPing() throws IOException;
 
+    void logPingMessage(String message) {
+        if (cPingLogger != null) {
+            cPingLogger.info(message);
+        }
+    }
+
     private boolean pingCheck() {
-        if ((System.nanoTime() - mLastPingNanos) > PING_FAILURE_MILLIS * 1000000L) {
+        long lag = System.nanoTime() - mLastPingNanos;
+        if (lag > PING_FAILURE_MILLIS * 1000000L) {
+            if (cPingLogger != null) {
+                logPingMessage("Ping missed for " + mControl + ": " + (lag / 1000000L) + " > " + 
+                               PING_FAILURE_MILLIS);
+            }
             close(new ClosedException("Ping failure"));
             return false;
         } else {
+            if (cPingLogger != null &&
+                lag >= (PING_DELAY_MILLIS + PING_CHECK_DELAY_MILLIS) * 1000000L)
+            {
+                logPingMessage("Ping lag for " + mControl + ": " + (lag / 1000000L) + " <= " + 
+                               PING_FAILURE_MILLIS);
+            }
             return true;
         }
     }

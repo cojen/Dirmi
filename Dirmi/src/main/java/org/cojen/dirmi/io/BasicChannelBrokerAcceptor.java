@@ -320,9 +320,23 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
         @Override
         protected boolean doPing() throws IOException {
-            mControl.getOutputStream().write(PING_REQUEST);
-            mControl.flush();
-            return mControl.getInputStream().read() == PING_RESPONSE;
+            if (cPingLogger != null) {
+                logPingMessage("Ping request send to " + mControl);
+            }
+            try {
+                mControl.getOutputStream().write(PING_REQUEST);
+                mControl.flush();
+                int response = mControl.getInputStream().read();
+                if (cPingLogger != null) {
+                    logPingMessage("Ping response received from " + mControl + ": " + response);
+                }
+                return response == PING_RESPONSE;
+            } catch (IOException e) {
+                if (cPingLogger != null) {
+                    logPingMessage("Ping response receive failure from " + mControl + ": " + e);
+                }
+                throw e;
+            }
         }
 
         ChannelConnector.Listener dequeueConnectListener() {

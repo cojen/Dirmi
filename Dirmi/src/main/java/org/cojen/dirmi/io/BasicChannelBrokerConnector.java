@@ -165,10 +165,20 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
 
                     if (op == PING_REQUEST) {
                         try {
+                            if (cPingLogger != null) {
+                                logPingMessage("Ping request received from " + mControl);
+                            }
                             control.getOutputStream().write(PING_RESPONSE);
                             control.getOutputStream().flush();
+                            if (cPingLogger != null) {
+                                logPingMessage("Ping response sent to " + mControl);
+                            }
                             pinged();
                         } catch (IOException e) {
+                            if (cPingLogger != null) {
+                                logPingMessage
+                                    ("Ping response send failure to " + mControl + ": " + e);
+                            }
                             close(new ClosedException("Ping failure", e));
                         }
                         return;
@@ -193,10 +203,16 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
                     // Safer to close if no threads.
                     // FIXME: Reconsider this choice, but always close if shutdown.
                     closed(e);
+                    if (cPingLogger != null) {
+                        logPingMessage("Ping check stopping for " + mControl + ": " + e);
+                    }
                 }
 
                 public void closed(IOException e) {
                     Broker.this.close(e);
+                    if (cPingLogger != null) {
+                        logPingMessage("Ping check stopping for " + mControl + ": " + e);
+                    }
                 }
             });
         }
