@@ -137,8 +137,6 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
         }
     }
 
-    static final int MAX_PING_FAILURES = 2;
-
     private class Broker extends BasicChannelBroker {
         Broker(long id, Channel control) throws RejectedException {
             super(mExecutor, id, control);
