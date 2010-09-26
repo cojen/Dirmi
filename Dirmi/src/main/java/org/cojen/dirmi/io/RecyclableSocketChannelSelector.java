@@ -382,7 +382,7 @@ public class RecyclableSocketChannelSelector implements SocketChannelSelector {
             ServerSocketChannel ssc = ServerSocketChannel.open();
             ssc.configureBlocking(false);
             ssc.socket().setReuseAddress(true);
-            ssc.socket().bind(localAddress);
+            ssc.socket().bind(localAddress, SocketChannelAcceptor.LISTEN_BACKLOG);
 
             mLocalAddress = ssc.socket().getLocalSocketAddress();
             mChannel = ssc;
