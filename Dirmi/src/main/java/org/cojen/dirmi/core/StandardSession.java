@@ -2572,7 +2572,13 @@ public class StandardSession implements Session {
 
         @Override
         protected void checkCommunication(Throwable cause) {
-            StandardSession.this.checkCommunication();
+            // Disable this feature for now and rely on pings. If the server is
+            // temporarily overloaded, it might not be accepting new connections. This
+            // should not force the entire session to close. The remote command used to
+            // check communication should only ever operate on a pooled connection.
+            // There's currently no way to enforce this.
+
+            // StandardSession.this.checkCommunication();
         }
 
         private InvocationChannel getChannel() throws IOException {

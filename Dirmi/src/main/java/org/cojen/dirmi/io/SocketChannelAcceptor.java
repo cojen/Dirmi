@@ -43,6 +43,8 @@ import org.cojen.dirmi.util.Timer;
  * @author Brian S O'Neill
  */
 abstract class SocketChannelAcceptor implements ChannelAcceptor {
+    private static final int LISTEN_BACKLOG = 1000;
+
     private final IOExecutor mExecutor;
     private final SocketAddress mLocalAddress;
     private final ServerSocket mServerSocket;
@@ -71,7 +73,7 @@ abstract class SocketChannelAcceptor implements ChannelAcceptor {
         mExecutor = executor;
         mServerSocket = serverSocket;
         serverSocket.setReuseAddress(true);
-        serverSocket.bind(localAddress);
+        serverSocket.bind(localAddress, LISTEN_BACKLOG);
         mLocalAddress = serverSocket.getLocalSocketAddress();
         mContext = AccessController.getContext();
         mAccepted = new CloseableGroup<Channel>();
