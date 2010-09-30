@@ -389,12 +389,18 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     boolean canExit(TaskRunner runner) {
         synchronized (mScheduledTasks) {
-            if (mTaskRunner == runner) {
-                mTaskRunner = null;
-            }
-            if (mTaskRunner == null && !mScheduledTasks.isEmpty()) {
-                mTaskRunner = runner;
+            if (mScheduledTasks.isEmpty()) {
+                // No tasks to perform.
+                if (mTaskRunner == runner) {
+                    // Primary runner is exiting.
+                    mTaskRunner = null;
+                }
+            } else if (mTaskRunner == runner) {
+                // Primary runner cannot exit.
                 return false;
+            } else {
+                // Notify another runner to take over any pending tasks.
+                mScheduledTasks.notify();
             }
         }
         return true;
