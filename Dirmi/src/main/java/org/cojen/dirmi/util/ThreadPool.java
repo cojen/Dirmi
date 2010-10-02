@@ -66,7 +66,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     private final LinkedList<PooledThread> mPool;
 
     private final TreeSet<Task> mScheduledTasks;
-    private TaskRunner mTaskRunner;
+    private boolean mTaskRunnerReady;
 
     private int mActive;
     private boolean mShutdown;
@@ -314,16 +314,17 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                 throw new InternalError();
             }
             if (mScheduledTasks.first() == task) {
-                if (mTaskRunner == null) {
+                if (mTaskRunnerReady) {
+                    mScheduledTasks.notify();
+                } else {
                     TaskRunner runner = new TaskRunner();
+                    mTaskRunnerReady = true;
                     try {
                         execute(runner, true);
-                        mTaskRunner = runner;
                     } catch (RejectedExecutionException e) {
                         // Task is scheduled as soon as a thread becomes available.
+                        mTaskRunnerReady = false;
                     }
-                } else {
-                    mScheduledTasks.notify();
                 }
             }
         }
@@ -331,8 +332,10 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     TaskRunner needsTaskRunner() {
         synchronized (mScheduledTasks) {
-            if (mTaskRunner == null && !mScheduledTasks.isEmpty()) {
-                return mTaskRunner = new TaskRunner();
+            if (!mTaskRunnerReady && !mScheduledTasks.isEmpty()) {
+                TaskRunner runner = new TaskRunner();
+                mTaskRunnerReady = true;
+                return runner;
             }
         }
         return null;
@@ -347,63 +350,71 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
-    // Returns null if no more tasks
-    Task<?> acquireTask(boolean canWait) throws InterruptedException {
+    void runNextScheduledTask() {
+        Task<?> task;
+        boolean replaced;
+
         synchronized (mScheduledTasks) {
             while (true) {
                 if (mScheduledTasks.isEmpty()) {
-                    return null;
+                    mTaskRunnerReady = false;
+                    return;
                 }
-                Task<?> task = mScheduledTasks.first();
+
+                task = mScheduledTasks.first();
                 long delay = task.getAtNanos() - System.nanoTime();
+
                 if (delay <= 0) {
                     mScheduledTasks.remove(task);
-                    if (mScheduledTasks.isEmpty()) {
-                        mScheduledTasks.notifyAll();
+                    try {
+                        execute(new TaskRunner(), true);
+                        replaced = true;
+                    } catch (RejectedExecutionException e) {
+                        // Task is scheduled as soon as a thread becomes available.
+                        mTaskRunnerReady = false;
+                        replaced = false;
                     }
-                    return task;
+                    break;
                 }
-                if (canWait) {
-                    mScheduledTasks.wait(roundNanosToMillis(delay));
-                } else {
-                    return null;
-                }
-            }
-        }
-    }
 
-    boolean tryReplace(TaskRunner runner) {
-        synchronized (mScheduledTasks) {
-            if (mTaskRunner == runner) {
-                runner = new TaskRunner();
                 try {
-                    execute(runner, true);
-                    mTaskRunner = runner;
-                } catch (RejectedExecutionException e) {
-                    return false;
+                    mScheduledTasks.wait(roundNanosToMillis(delay));
+                } catch (InterruptedException e) {
+                    // Clear the interrupted status.
+                    Thread.interrupted();
+                    e = null;
                 }
             }
         }
-        return true;
-    }
 
-    boolean canExit(TaskRunner runner) {
-        synchronized (mScheduledTasks) {
-            if (mScheduledTasks.isEmpty()) {
-                // No tasks to perform.
-                if (mTaskRunner == runner) {
-                    // Primary runner is exiting.
-                    mTaskRunner = null;
+        try {
+            task.run();
+
+            if (replaced) {
+                // Run any more tasks which need to be run
+                // immediately, to avoid having to switch context.
+                while (true) {
+                    synchronized (mScheduledTasks) {
+                        if (mScheduledTasks.isEmpty()) {
+                            break;
+                        }
+                        task = mScheduledTasks.first();
+                        if ((task.getAtNanos() - System.nanoTime()) > 0) {
+                            break;
+                        }
+                        mScheduledTasks.remove(task);
+                    }
+
+                    // Clear the interrupted state, if set by previous task execution.
+                    Thread.interrupted();
+
+                    task.run();
                 }
-            } else if (mTaskRunner == runner) {
-                // Primary runner cannot exit.
-                return false;
-            } else {
-                // Notify another runner to take over any pending tasks.
-                mScheduledTasks.notify();
             }
+        } catch (Throwable e) {
+            Thread t = Thread.currentThread();
+            t.getUncaughtExceptionHandler().uncaughtException(t, e);
         }
-        return true;
     }
 
     private PooledThread newPooledThread(Runnable command) {
@@ -625,62 +636,8 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
     }
 
     private class TaskRunner implements Runnable {
-        TaskRunner() {
-        }
-
         public void run() {
-            while (true) {
-                Task<?> task;
-
-                try {
-                    task = acquireTask(true);
-
-                    if (task != null) {
-                        // Try to replace this runner, to allow task to block.
-                        boolean replaced = tryReplace(this);
-
-                        try {
-                            task.run();
-
-                            if (replaced) {
-                                // Run any more tasks which need to be run
-                                // immediately, to avoid having to switch context.
-                                while (true) {
-                                    try {
-                                        if ((task = acquireTask(false)) == null) {
-                                            break;
-                                        }
-                                    } catch (InterruptedException e) {
-                                        break;
-                                    }
-
-                                    // Be sure to clear the interrupted state.
-                                    Thread.interrupted();
-
-                                    task.run();
-                                }
-                            }
-                        } catch (Throwable e) {
-                            Thread t = Thread.currentThread();
-                            t.getUncaughtExceptionHandler().uncaughtException(t, e);
-                            e = null;
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    // Fall through.
-                    e = null;
-                }
-
-                if (canExit(this)) {
-                    break;
-                }
-
-                // Be sure to clear the interrupted state before running next task.
-                Thread.interrupted();
-
-                // Allow the garbage collector to reclaim task from stack.
-                task = null;
-            }
+            runNextScheduledTask();
         }
     }
 
