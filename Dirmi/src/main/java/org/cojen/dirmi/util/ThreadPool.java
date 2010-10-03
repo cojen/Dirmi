@@ -318,12 +318,11 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                     mScheduledTasks.notify();
                 } else {
                     TaskRunner runner = new TaskRunner();
-                    mTaskRunnerReady = true;
                     try {
                         execute(runner, true);
+                        mTaskRunnerReady = true;
                     } catch (RejectedExecutionException e) {
                         // Task is scheduled as soon as a thread becomes available.
-                        mTaskRunnerReady = false;
                     }
                 }
             }
