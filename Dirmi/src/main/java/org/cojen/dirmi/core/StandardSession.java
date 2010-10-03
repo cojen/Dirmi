@@ -86,6 +86,7 @@ import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.Timeout;
+import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.Unbatched;
 import org.cojen.dirmi.UnimplementedMethodException;
 
@@ -433,8 +434,19 @@ public class StandardSession implements Session {
         // Begin accepting new requests.
         mBroker.accept(new Handler());
 
-        // Link the ClassDescriptorCaches to enable them.
-        mRemoteAdmin.linkDescriptorCache(mDescriptorCache.localLink());
+        // Link the ClassDescriptorCaches to enable them. This remote method is blocking
+        // to ensure that when this constructor returns, remote method invocation has been
+        // tested and at least one pooled connection is available.
+        {
+            ClassDescriptorCache.Handle handle = mDescriptorCache.localLink();
+            try {
+                mRemoteAdmin.linkDescriptorCache
+                    (handle, RemoteTimeoutException.checkRemaining(timer), timer.unit());
+            } catch (UnimplementedMethodException e) {
+                // Fallback to original method.
+                mRemoteAdmin.linkDescriptorCache(handle);
+            }
+        }            
     }
 
     public void send(Object obj) throws RemoteException {
@@ -1351,8 +1363,10 @@ public class StandardSession implements Session {
             void disposed(VersionedIdentifier[] ids, int[] localVersion, int[] remoteVersions)
                 throws RemoteException;
 
-            @Asynchronous
             void linkDescriptorCache(Remote link) throws RemoteException;
+
+            void linkDescriptorCache(Remote link, @TimeoutParam long timeout, TimeUnit unit)
+                throws RemoteException;
 
             @Timeout(5000)
             void ping() throws RemoteException;
@@ -1507,6 +1521,10 @@ public class StandardSession implements Session {
         }
 
         public void linkDescriptorCache(Remote link) {
+            mDescriptorCache.link(link);
+        }
+
+        public void linkDescriptorCache(Remote link, @TimeoutParam long timeout, TimeUnit unit) {
             mDescriptorCache.link(link);
         }
 
