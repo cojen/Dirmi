@@ -42,14 +42,14 @@ import org.cojen.dirmi.util.Timer;
  * @author Brian S O'Neill
  */
 abstract class BasicChannelBroker implements ChannelBroker {
-    // How often to peform ping.
-    private static final int PING_DELAY_MILLIS = 5000;
+    // How often to perform ping task.
+    private static final int PING_DELAY_MILLIS = 2500;
 
     // How often to check if pings are being received.
     private static final int PING_CHECK_DELAY_MILLIS = 1000;
 
     // No ping responses after this threshold causes broker to close.
-    private static final int PING_FAILURE_MILLIS = PING_DELAY_MILLIS * 2 - PING_CHECK_DELAY_MILLIS;
+    private static final int PING_FAILURE_MILLIS = 10000 - PING_CHECK_DELAY_MILLIS;
 
     static final Logger cPingLogger;
 
