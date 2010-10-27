@@ -1352,7 +1352,11 @@ public class StandardSession implements Session {
              * Method is unbatched to ensure that it doesn't disrupt a batch in
              * the current thread.
              *
-             * @return format of serialVersionUID ':' ('S' | 'E' | 'N')
+             * <p>The last character in the returned signature is S for
+             * Serializable, E for Externalizable, U for enum, and N for
+             * non-serializable.
+             *
+             * @return <serialVersionUID> ':' ('S' | 'E' | 'U' | 'N')
              */
             @Unbatched
             String getUnknownClassInfo(String name) throws RemoteException;
@@ -1430,19 +1434,25 @@ public class StandardSession implements Session {
             }
 
             long serialVersionUID;
-            char externalizable;
+            char type;
             {
                 ObjectStreamClass osc = ObjectStreamClass.lookup(clazz);
                 if (osc == null) {
                     serialVersionUID = 0;
-                    externalizable = 'N';
+                    type = 'N';
                 } else {
                     serialVersionUID = osc.getSerialVersionUID();
-                    externalizable = Externalizable.class.isAssignableFrom(clazz) ? 'E' : 'S';
+                    if (Enum.class.isAssignableFrom(clazz)) {
+                        type = 'U';
+                    } else if (Externalizable.class.isAssignableFrom(clazz)) {
+                        type = 'E';
+                    } else { 
+                        type = 'S';
+                    }
                 }
             }
 
-            return String.valueOf(serialVersionUID) + ':' + externalizable;
+            return String.valueOf(serialVersionUID) + ':' + type;
         }
 
         /**

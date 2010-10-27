@@ -34,7 +34,9 @@ import java.util.TreeSet;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.cojen.classfile.CodeBuilder;
 import org.cojen.classfile.MethodDesc;
+import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
@@ -109,9 +111,9 @@ class RemoteTypeResolver implements ClassResolver {
                 throw e;
             }
 
-            boolean externalizable = classInfo.substring(index + 1).equals("E");
+            String type = classInfo.substring(index + 1);
 
-            return syntheticSerializableClass(name, serialVersionUID, externalizable);
+            return syntheticSerializableClass(name, serialVersionUID, type);
         }
     }
 
@@ -207,9 +209,9 @@ class RemoteTypeResolver implements ClassResolver {
     }
 
     private synchronized Class<?> syntheticSerializableClass
-        (String name, long serialVersionUID, boolean externalizable)
+        (String name, long serialVersionUID, String type)
     {
-        Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID, externalizable});
+        Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID, type});
 
         if (mSyntheticSerializableTypes == null) {
             mSyntheticSerializableTypes = new SoftValuedHashMap<Object, Class>();
@@ -220,15 +222,26 @@ class RemoteTypeResolver implements ClassResolver {
             }
         }
 
-        RuntimeClassFile cf = new RuntimeClassFile(name, null, new Loader(), null, true);
+        String superClassName = "U".equals(type) ? Enum.class.getName() : null;
+
+        RuntimeClassFile cf = new RuntimeClassFile(name, superClassName, new Loader(), null, true);
         cf.setModifiers(Modifiers.PUBLIC);
-        if (externalizable) {
-            cf.addInterface(Externalizable.class);
-        } else {
-            cf.addInterface(Serializable.class);
-        }
+        cf.addInterface("E".equals(type) ? Externalizable.class : Serializable.class);
         cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                     "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
+
+        if ("U".equals(type)) {
+            TypeDesc[] params  = {TypeDesc.STRING, TypeDesc.INT};
+            MethodInfo mi = cf.addConstructor(Modifiers.PRIVATE, params);
+            CodeBuilder b = new CodeBuilder(mi);
+            b.loadThis();
+            b.loadLocal(b.getParameter(0));
+            b.loadLocal(b.getParameter(1));
+            b.invokeSuperConstructor(params);
+            b.returnVoid();
+        } else {
+            cf.addDefaultConstructor();
+        }
 
         Class clazz = cf.defineClass();
         mSyntheticSerializableTypes.put(key, clazz);
