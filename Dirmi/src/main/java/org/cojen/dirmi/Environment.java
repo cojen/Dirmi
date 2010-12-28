@@ -38,8 +38,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ServerSocketFactory;
 import javax.net.SocketFactory;
 
-import org.cojen.util.WeakIdentityMap;
-
 import org.cojen.dirmi.core.StandardSession;
 import org.cojen.dirmi.core.StandardSessionAcceptor;
 
@@ -59,6 +57,7 @@ import org.cojen.dirmi.io.RecyclableSocketChannelConnector;
 import org.cojen.dirmi.io.RecyclableSocketChannelSelector;
 import org.cojen.dirmi.io.SocketChannelSelector;
 
+import org.cojen.dirmi.util.Cache;
 import org.cojen.dirmi.util.ThreadPool;
 import org.cojen.dirmi.util.Timer;
 
@@ -87,7 +86,7 @@ public class Environment implements Closeable {
     private final ScheduledExecutorService mExecutor;
     private final IOExecutor mIOExecutor;
 
-    private final WeakIdentityMap<Closeable, Object> mCloseableSet;
+    private final Cache<Closeable, Object> mCloseableSet;
     private final AtomicBoolean mClosed;
     private final boolean mRecyclableSockets = RECYCLABLE_SOCKETS;
 
@@ -140,7 +139,7 @@ public class Environment implements Closeable {
 
     private Environment(ScheduledExecutorService executor,
                         IOExecutor ioExecutor,
-                        WeakIdentityMap<Closeable, Object> closeable,
+                        Cache<Closeable, Object> closeable,
                         AtomicBoolean closed,
                         SocketFactory sf,
                         ServerSocketFactory ssf,
@@ -151,7 +150,10 @@ public class Environment implements Closeable {
         }
         mExecutor = executor;
         mIOExecutor = ioExecutor == null ? new IOExecutor(executor) : ioExecutor;
-        mCloseableSet = closeable == null ? new WeakIdentityMap<Closeable, Object>() : closeable;
+        if (closeable == null) {
+            closeable = Cache.newWeakIdentityCache(17);
+        }
+        mCloseableSet = closeable;
         mClosed = closed == null ? new AtomicBoolean(false) : closed;
         mSocketFactory = sf;
         mServerSocketFactory = ssf;
@@ -444,14 +446,15 @@ public class Environment implements Closeable {
         IOException exception = null;
 
         // Copy to avoid holding lock during close.
-        List<Closeable> closable;
+        List<Closeable> closeable;
         synchronized (mCloseableSet) {
-            closable = new ArrayList<Closeable>(mCloseableSet.keySet());
+            closeable = new ArrayList<Closeable>(mCloseableSet.size());
+            mCloseableSet.copyKeysInto(closeable);
             mCloseableSet.clear();
         }
 
         for (int i=1; i<=3; i++) {
-            for (Closeable c : closable) {
+            for (Closeable c : closeable) {
                 // Close sessions before brokers to avoid blocking. Close
                 // selectors last, after all sockets are closed.
                 if ((i == 1) == (c instanceof Session) &&

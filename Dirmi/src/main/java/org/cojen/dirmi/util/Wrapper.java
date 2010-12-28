@@ -37,7 +37,6 @@ import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.KeyFactory;
-import org.cojen.util.SoftValuedHashMap;
 import org.cojen.util.ThrowUnchecked;
 
 /**
@@ -48,10 +47,10 @@ import org.cojen.util.ThrowUnchecked;
  * @author Brian S O'Neill
  */
 public class Wrapper<B, D> {
-    private static final Map<Object, Wrapper<?, ?>> cCache;
+    private static final Cache<Object, Wrapper<?, ?>> cCache;
 
     static {
-        cCache = new SoftValuedHashMap<Object, Wrapper<?, ?>>();
+        cCache = Cache.newSoftValueCache(17);
     }
 
     /**

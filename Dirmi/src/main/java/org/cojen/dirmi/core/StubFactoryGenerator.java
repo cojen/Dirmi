@@ -47,7 +47,6 @@ import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.KeyFactory;
-import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
@@ -57,6 +56,8 @@ import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
 import org.cojen.dirmi.info.RemoteMethod;
 import org.cojen.dirmi.info.RemoteParameter;
+
+import org.cojen.dirmi.util.Cache;
 
 import static org.cojen.dirmi.core.CodeBuilderUtil.*;
 
@@ -70,10 +71,10 @@ public class StubFactoryGenerator<R extends Remote> {
     private static final String SEQUENCE_NAME = "sequence";
     private static final String SEQUENCE_UPDATER_NAME = "sequenceUpdater";
 
-    private static final Map<Object, StubFactory<?>> cCache;
+    private static final Cache<Object, StubFactory<?>> cCache;
 
     static {
-        cCache = new SoftValuedHashMap<Object, StubFactory<?>>();
+        cCache = Cache.newSoftValueCache(17);
     }
 
     /**

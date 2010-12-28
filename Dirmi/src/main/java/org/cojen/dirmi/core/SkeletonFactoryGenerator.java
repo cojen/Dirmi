@@ -50,7 +50,6 @@ import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.KeyFactory;
-import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
@@ -61,6 +60,8 @@ import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
 import org.cojen.dirmi.info.RemoteMethod;
 import org.cojen.dirmi.info.RemoteParameter;
+
+import org.cojen.dirmi.util.Cache;
 
 import static org.cojen.dirmi.core.CodeBuilderUtil.*;
 
@@ -76,10 +77,10 @@ public class SkeletonFactoryGenerator<R extends Remote> {
     private static final String ORDERED_INVOKER_FIELD_NAME = "orderedInvoker";
     private static final String METHOD_FIELD_PREFIX = "method$";
 
-    private static final Map<Object, SkeletonFactory<?>> cCache;
+    private static final Cache<Object, SkeletonFactory<?>> cCache;
 
     static {
-        cCache = new SoftValuedHashMap<Object, SkeletonFactory<?>>();
+        cCache = Cache.newSoftValueCache(17);
     }
 
     /**

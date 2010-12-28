@@ -35,13 +35,12 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import org.cojen.util.SoftValuedHashMap;
-
 import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteFailure;
 
 import org.cojen.dirmi.io.IOExecutor;
 
+import org.cojen.dirmi.util.Cache;
 import org.cojen.dirmi.util.ScheduledTask;
 
 /**
@@ -53,7 +52,7 @@ import org.cojen.dirmi.util.ScheduledTask;
 class ClassDescriptorCache {
     private final IOExecutor mExecutor;
     private final ReadWriteLock mLock;
-    private final Map<Key, Reference> mRemoteReferences;
+    private final Cache<Key, Reference> mRemoteReferences;
 
     private Handle mRemoteHandle;
 
@@ -68,7 +67,7 @@ class ClassDescriptorCache {
     ClassDescriptorCache(IOExecutor executor) {
         mExecutor = executor;
         mLock = new ReentrantReadWriteLock(false);
-        mRemoteReferences = new SoftValuedHashMap<Key, Reference>();
+        mRemoteReferences = Cache.newSoftValueCache(17);
     }
 
     /**
@@ -246,7 +245,7 @@ class ClassDescriptorCache {
 
     void receiveReferences(ReferenceTransport... refs) {
         Lock lock = mLock.writeLock();
-        Map<Key, Reference> remoteReferences = mRemoteReferences;
+        Cache<Key, Reference> remoteReferences = mRemoteReferences;
         for (ReferenceTransport ref : refs) {
             lock.lock();
             try {

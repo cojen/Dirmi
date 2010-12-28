@@ -68,9 +68,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.cojen.classfile.TypeDesc;
 
-import org.cojen.util.WeakValuedHashMap;
 import org.cojen.util.ThrowUnchecked;
-import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.ClassResolver;
@@ -99,6 +97,7 @@ import org.cojen.dirmi.io.ChannelBroker;
 import org.cojen.dirmi.io.CloseableGroup;
 import org.cojen.dirmi.io.IOExecutor;
 
+import org.cojen.dirmi.util.Cache;
 import org.cojen.dirmi.util.ExceptionUtils;
 import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
@@ -141,7 +140,7 @@ public class StandardSession implements Session {
 
     // Cache of skeleton factories created for use by batched methods which
     // return a remote object. Must explicitly synchronize access.
-    final Map<Identifier, SkeletonFactory> mRemoteSkeletonFactories;
+    final Cache<Identifier, SkeletonFactory> mRemoteSkeletonFactories;
 
     // Strong references to Skeletons. Skeletons are created as needed and can
     // be recreated as well. This map just provides quick concurrent access to
@@ -151,7 +150,7 @@ public class StandardSession implements Session {
     final SkeletonSupport mSkeletonSupport;
 
     // Cache of stub factories. Must explicitly synchronize access.
-    final Map<VersionedIdentifier, StubFactory> mStubFactories;
+    final Cache<VersionedIdentifier, StubFactory> mStubFactories;
 
     // Strong references to PhantomReferences to StubFactories.
     // PhantomReferences need to be strongly reachable or else they will be
@@ -161,7 +160,7 @@ public class StandardSession implements Session {
     final ConcurrentMap<VersionedIdentifier, StubFactoryRef> mStubFactoryRefs;
 
     // Cache of stubs. Must explicitly synchronize access.
-    final Map<VersionedIdentifier, Remote> mStubs;
+    final Cache<VersionedIdentifier, Remote> mStubs;
 
     // Strong references to PhantomReferences to Stubs. PhantomReferences need
     // to be strongly reachable or else they will be reclaimed sooner than the
@@ -281,13 +280,13 @@ public class StandardSession implements Session {
         mReferenceQueue = new ReferenceQueue<Object>();
 
         mSkeletonFactories = new ConcurrentHashMap<VersionedIdentifier, SkeletonFactory>();
-        mRemoteSkeletonFactories = new SoftValuedHashMap<Identifier, SkeletonFactory>();
+        mRemoteSkeletonFactories = Cache.newSoftValueCache(17);
         mSkeletons = new ConcurrentHashMap<VersionedIdentifier, Skeleton>();
         mSkeletonSupport = new SkeletonSupportImpl();
 
-        mStubFactories = new SoftValuedHashMap<VersionedIdentifier, StubFactory>();
+        mStubFactories = Cache.newSoftValueCache(17);
         mStubFactoryRefs = new ConcurrentHashMap<VersionedIdentifier, StubFactoryRef>();
-        mStubs = new WeakValuedHashMap<VersionedIdentifier, Remote>();
+        mStubs = Cache.newWeakValueCache(17);
         mStubRefs = new ConcurrentHashMap<VersionedIdentifier, StubRef>();
 
         mChannelPool = new LinkedList<InvocationChan>();
@@ -1088,7 +1087,7 @@ public class StandardSession implements Session {
             VersionedIdentifier controlId = VersionedIdentifier.read(invChannel);
             int controlVersion = invChannel.readInt();
                 
-            StubFactory factory = lookup(mStubFactories, controlTypeId);
+            StubFactory factory = mStubFactories.get(controlTypeId);
             if (factory == null) {
                 RemoteInfo info = RemoteIntrospector.examine(controlType);
                 factory = StubFactoryGenerator.getStubFactory(controlType, info);
@@ -1214,17 +1213,8 @@ public class StandardSession implements Session {
         channel.disconnect();
     }
 
-    /**
-     * Used in conjunction with register. Synchronizes access to map.
-     */
-    static <K extends AbstractIdentifier, V> V lookup(Map<K, V> map, K key) {
-        synchronized (map) {
-            return map.get(key);
-        }
-    }
-
     Remote findIdentifiedRemote(VersionedIdentifier objId) {
-        Remote remote = lookup(mStubs, objId);
+        Remote remote = mStubs.get(objId);
 
         if (remote == null) {
             if (mIsolated) {
@@ -1246,17 +1236,15 @@ public class StandardSession implements Session {
     }
 
     /**
-     * Used in conjunction with lookup. Synchronizes access to map.
-     *
      * @return same value instance if registered; existing instance otherwise
      */
-    static <K extends AbstractIdentifier, V> V register(Map<K, V> map, K key, V value) {
-        synchronized (map) {
-            V existing = map.get(key);
+    static <K extends AbstractIdentifier, V> V register(Cache<K, V> cache, K key, V value) {
+        synchronized (cache) {
+            V existing = cache.get(key);
             if (existing != null) {
                 return existing;
             }
-            map.put(key, value);
+            cache.put(key, value);
         }
         key.register(value);
         return value;
@@ -2082,7 +2070,7 @@ public class StandardSession implements Session {
                 }
 
                 VersionedIdentifier typeId = mr.mTypeId;
-                StubFactory factory = lookup(mStubFactories, typeId);
+                StubFactory factory = mStubFactories.get(typeId);
 
                 if (factory == null) {
                     RemoteInfo info = mr.mInfo;
@@ -2263,7 +2251,7 @@ public class StandardSession implements Session {
             // skeleton factories for batch methods, and so the use of
             // VersionedIdentifier adds no value.
 
-            SkeletonFactory factory = lookup(mRemoteSkeletonFactories, typeId);
+            SkeletonFactory factory = mRemoteSkeletonFactories.get(typeId);
             if (factory == null) {
                 RemoteInfo remoteInfo = mRemoteAdmin.getRemoteInfo(typeId);
                 factory = SkeletonFactoryGenerator.getSkeletonFactory(type, remoteInfo);

@@ -54,7 +54,6 @@ import java.lang.reflect.Modifier;
 import org.cojen.classfile.MethodDesc;
 import org.cojen.classfile.TypeDesc;
 import org.cojen.util.WeakCanonicalSet;
-import org.cojen.util.WeakIdentityMap;
 
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Batched;
@@ -69,6 +68,8 @@ import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
 import org.cojen.dirmi.Unbatched;
 
+import org.cojen.dirmi.util.Cache;
+
 /**
  * Supports examination of {@code Remote} types, returning all metadata
  * associated with it. As part of the examination, all annotations are gathered
@@ -78,13 +79,13 @@ import org.cojen.dirmi.Unbatched;
  * @author Brian S O'Neill
  */
 public class RemoteIntrospector {
-    private static final Map<Class<?>, Class<?>> cInterfaceCache;
-    private static final Map<Class<?>, RInfo> cInfoCache;
+    private static final Cache<Class<?>, Class<?>> cInterfaceCache;
+    private static final Cache<Class<?>, RInfo> cInfoCache;
     private static final WeakCanonicalSet cParameterCache;
 
     static {
-        cInterfaceCache = new WeakIdentityMap();
-        cInfoCache = new WeakIdentityMap();
+        cInterfaceCache = Cache.newWeakIdentityCache(17);
+        cInfoCache = Cache.newWeakIdentityCache(17);
         cParameterCache = new WeakCanonicalSet();
     }
 

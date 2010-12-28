@@ -42,12 +42,13 @@ import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
 import org.cojen.util.KeyFactory;
-import org.cojen.util.SoftValuedHashMap;
 
 import org.cojen.dirmi.ClassResolver;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
+
+import org.cojen.dirmi.util.Cache;
 
 /**
  * 
@@ -61,8 +62,8 @@ class RemoteTypeResolver implements ClassResolver {
 
     private volatile ClassResolver mClassResolver;
 
-    private Map<Object, Class> mSyntheticRemoteTypes;
-    private Map<Object, Class> mSyntheticSerializableTypes;
+    private Cache<Object, Class> mSyntheticRemoteTypes;
+    private Cache<Object, Class> mSyntheticSerializableTypes;
 
     RemoteTypeResolver() {
     }
@@ -172,7 +173,7 @@ class RemoteTypeResolver implements ClassResolver {
         Object key = KeyFactory.createKey(new Object[] {typeName, ifaceSet});
 
         if (mSyntheticRemoteTypes == null) {
-            mSyntheticRemoteTypes = new SoftValuedHashMap<Object, Class>();
+            mSyntheticRemoteTypes = Cache.newSoftValueCache(7);
         } else {
             Class type = mSyntheticRemoteTypes.get(key);
             if (type != null) {
@@ -214,7 +215,7 @@ class RemoteTypeResolver implements ClassResolver {
         Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID, type});
 
         if (mSyntheticSerializableTypes == null) {
-            mSyntheticSerializableTypes = new SoftValuedHashMap<Object, Class>();
+            mSyntheticSerializableTypes = Cache.newSoftValueCache(7);
         } else {
             Class clazz = mSyntheticSerializableTypes.get(key);
             if (clazz != null) {

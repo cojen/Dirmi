@@ -24,9 +24,8 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.cojen.util.WeakCanonicalSet;
-import org.cojen.util.WeakIdentityMap;
-import org.cojen.util.WeakValuedHashMap;
 
+import org.cojen.dirmi.util.Cache;
 import org.cojen.dirmi.util.Random;
 
 /**
@@ -37,14 +36,14 @@ import org.cojen.dirmi.util.Random;
 abstract class IdentifierStore<I extends AbstractIdentifier> {
     private final WeakCanonicalSet<I> mIdentifiers;
 
-    private final Map<Object, I> mObjectsToIdentifiers;
-    private final Map<I, Object> mIdentifiersToObjects;
+    private final Cache<Object, I> mObjectsToIdentifiers;
+    private final Cache<I, Object> mIdentifiersToObjects;
 
     public IdentifierStore() {
         mIdentifiers = new WeakCanonicalSet<I>();
 
-        mObjectsToIdentifiers = new WeakIdentityMap<Object, I>();
-        mIdentifiersToObjects = new WeakValuedHashMap<I, Object>();
+        mObjectsToIdentifiers = Cache.newWeakIdentityCache(17);
+        mIdentifiersToObjects = Cache.newWeakValueCache(17);
     }
 
     /**
@@ -61,7 +60,7 @@ abstract class IdentifierStore<I extends AbstractIdentifier> {
         if (id == null) {
             do {
                 id = newIdentifier(Random.randomLong());
-            } while (mIdentifiersToObjects.containsKey(id));
+            } while (mIdentifiersToObjects.get(id) != null);
             id = mIdentifiers.put(id);
             mObjectsToIdentifiers.put(obj, id);
             mIdentifiersToObjects.put(id, obj);
