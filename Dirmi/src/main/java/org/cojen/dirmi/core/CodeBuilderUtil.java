@@ -36,6 +36,7 @@ import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.UnimplementedMethodException;
 
@@ -66,6 +67,7 @@ class CodeBuilderUtil {
     static final TypeDesc PIPE_TYPE;
     static final TypeDesc DATA_OUTPUT_TYPE;
     static final TypeDesc UNREFERENCED_TYPE;
+    static final TypeDesc LINK_TYPE;
 
     static {
         IDENTIFIER_TYPE = TypeDesc.forClass(Identifier.class);
@@ -85,6 +87,7 @@ class CodeBuilderUtil {
         PIPE_TYPE = TypeDesc.forClass(Pipe.class);
         DATA_OUTPUT_TYPE = TypeDesc.forClass(DataOutput.class);
         UNREFERENCED_TYPE = TypeDesc.forClass(java.rmi.server.Unreferenced.class);
+        LINK_TYPE = TypeDesc.forClass(Link.class);
     }
 
     static boolean equalTypes(RemoteParameter a, RemoteParameter b) {

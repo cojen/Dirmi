@@ -32,6 +32,10 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 abstract class SocketChannel implements Channel {
     public static SimpleSocket toSimpleSocket(final Socket socket) {
         return new SimpleSocket() {
+            public void flush() throws IOException {
+                socket.getOutputStream().flush();
+            }
+
             public void close() throws IOException {
                 socket.close();
             }

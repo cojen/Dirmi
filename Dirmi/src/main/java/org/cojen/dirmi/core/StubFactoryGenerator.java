@@ -138,6 +138,7 @@ public class StubFactoryGenerator<R extends Remote> {
         RuntimeClassFile cf =
             createRuntimeClassFile(mRemoteInfo.getName() + "$Stub", mType.getClassLoader());
         cf.addInterface(mType);
+        cf.addInterface(Stub.class);
         cf.setSourceFile(StubFactoryGenerator.class.getName());
         cf.markSynthetic();
         cf.setTarget("1.5");
@@ -664,6 +665,18 @@ public class StubFactoryGenerator<R extends Remote> {
                             new TypeDesc[] {TypeDesc.STRING});
 
             b.returnValue(TypeDesc.STRING);
+        }
+
+        // Add magic static method for obtaining access to the session link.
+        {
+            MethodInfo mi = cf.addMethod
+                (Modifiers.PUBLIC.toStatic(true),
+                 "sessionLink", LINK_TYPE, new TypeDesc[] {cf.getType()});
+            CodeBuilder b = new CodeBuilder(mi);
+            b.loadLocal(b.getParameter(0));
+            b.loadField(STUB_SUPPORT_NAME, STUB_SUPPORT_TYPE);
+            b.invokeInterface(STUB_SUPPORT_TYPE, "sessionLink", LINK_TYPE, null);
+            b.returnValue(LINK_TYPE);
         }
 
         staticInitBuilder.returnVoid();

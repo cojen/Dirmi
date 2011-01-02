@@ -74,6 +74,7 @@ import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
 import org.cojen.dirmi.NoSuchObjectException;
@@ -875,7 +876,7 @@ public class StandardSession implements Session {
 
                 try {
                     try {
-                        switch (skeleton.invoke(methodId, invChannel, batchedException)) {
+                        switch (skeleton.invoke(this, methodId, invChannel, batchedException)) {
                         case Skeleton.READ_FINISHED: default:
                             return;
 
@@ -2363,6 +2364,11 @@ public class StandardSession implements Session {
         // Used by batched methods that return a remote object.
         private StubSupportImpl() {
             super();
+        }
+
+        @Override
+        public Link sessionLink() {
+            return LinkWrapper.wrap(StandardSession.this);
         }
 
         @Override

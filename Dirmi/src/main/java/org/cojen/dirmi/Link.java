@@ -17,13 +17,14 @@
 package org.cojen.dirmi;
 
 import java.io.Closeable;
+import java.io.Flushable;
 
 /**
  * Represents an established connection between two endpoints.
  *
  * @author Brian S O'Neill
  */
-public interface Link extends Closeable {
+public interface Link extends Closeable, Flushable {
     /**
      * @return local session address or null if unknown or not applicable
      */

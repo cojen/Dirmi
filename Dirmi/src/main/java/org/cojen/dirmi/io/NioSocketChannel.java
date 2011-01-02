@@ -55,6 +55,10 @@ class NioSocketChannel implements SimpleSocket {
         mOut = new Output();
     }
 
+    public void flush() throws IOException {
+        mOut.flush();
+    }
+
     public void close() throws IOException {
         try {
             mChannel.close();

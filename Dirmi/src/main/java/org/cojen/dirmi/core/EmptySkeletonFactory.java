@@ -20,6 +20,8 @@ import java.io.ObjectOutput;
 
 import java.rmi.Remote;
 
+import org.cojen.dirmi.Link;
+
 /**
  * Factory which creates skeletons that support no methods.
  *
@@ -40,7 +42,7 @@ class EmptySkeletonFactory implements SkeletonFactory {
                 return remoteServer;
             }
 
-            public int invoke(int methodId,
+            public int invoke(Link sessionLink, int methodId,
                               InvocationChannel channel, BatchedInvocationException exception)
                 throws NoSuchMethodException
             {

@@ -53,8 +53,10 @@ import org.cojen.util.KeyFactory;
 
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.SessionAware;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
@@ -219,7 +221,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         {
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, "invoke", TypeDesc.INT,
-                 new TypeDesc[] {TypeDesc.INT, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
+                 new TypeDesc[] {LINK_TYPE, TypeDesc.INT, INV_CHANNEL_TYPE, BATCH_INV_EX_TYPE});
             invokeBuilder = new CodeBuilder(mi);
         }
 
@@ -252,7 +254,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         }
 
         // Load methodId.
-        invokeBuilder.loadLocal(invokeBuilder.getParameter(0));
+        invokeBuilder.loadLocal(invokeBuilder.getParameter(1));
         invokeBuilder.switchBranch(cases, switchLabels, defaultLabel);
 
         // Generate case for each method.
@@ -278,8 +280,8 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 b = new CodeBuilder(innerMethod);
 
                 invokeBuilder.loadThis();
-                invokeBuilder.loadLocal(invokeBuilder.getParameter(1));
                 invokeBuilder.loadLocal(invokeBuilder.getParameter(2));
+                invokeBuilder.loadLocal(invokeBuilder.getParameter(3));
                 if (!method.isDisposer()) {
                     invokeBuilder.invokePrivate(name, TypeDesc.INT, params);
                     invokeBuilder.returnValue(TypeDesc.INT);
@@ -773,7 +775,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         invokeBuilder.newObject(NO_SUCH_METHOD_EX_TYPE);
         invokeBuilder.dup();
         // Load methodId.
-        invokeBuilder.loadLocal(invokeBuilder.getParameter(0));
+        invokeBuilder.loadLocal(invokeBuilder.getParameter(1));
         invokeBuilder.invokeStatic(TypeDesc.STRING, "valueOf",
                                    TypeDesc.STRING, new TypeDesc[] {TypeDesc.INT});
         invokeBuilder.invokeConstructor(NO_SUCH_METHOD_EX_TYPE, new TypeDesc[] {TypeDesc.STRING});
@@ -1078,19 +1080,57 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                        SkeletonSupport support,
                                        R remoteServer)
         {
-            Throwable error;
-            try {
-                return mSkeletonCtor.newInstance(objId, support, remoteServer);
-            } catch (InstantiationException e) {
-                error = e;
-            } catch (IllegalAccessException e) {
-                error = e;
-            } catch (InvocationTargetException e) {
-                error = e.getCause();
+            Skeleton<R> skeleton;
+            create: {
+                Throwable error;
+                try {
+                    skeleton = mSkeletonCtor.newInstance(objId, support, remoteServer);
+                    break create;
+                } catch (InstantiationException e) {
+                    error = e;
+                } catch (IllegalAccessException e) {
+                    error = e;
+                } catch (InvocationTargetException e) {
+                    error = e.getCause();
+                }
+                InternalError ie = new InternalError();
+                ie.initCause(error);
+                throw ie;
             }
-            InternalError ie = new InternalError();
-            ie.initCause(error);
-            throw ie;
+
+            if (remoteServer instanceof SessionAware) {
+                final Skeleton<R> fSkeleton = skeleton;
+
+                skeleton = new Skeleton<R>() {
+                    @Override
+                    public R getRemoteServer() {
+                        return fSkeleton.getRemoteServer();
+                    }
+
+                    @Override
+                    public int invoke(Link sessionLink, int methodId,
+                                      InvocationChannel channel,
+                                      BatchedInvocationException batchedException)
+                    throws IOException, NoSuchMethodException, ClassNotFoundException,
+                           BatchedInvocationException
+                    {
+                        LocalSession.THE.set(sessionLink);
+                        try {
+                            return fSkeleton.invoke
+                                (sessionLink, methodId, channel, batchedException);
+                        } finally {
+                            LocalSession.THE.remove();
+                        }
+                    }
+
+                    @Override
+                    public void unreferenced() {
+                        fSkeleton.unreferenced();
+                    }
+                };
+            }
+
+            return skeleton;
         }
     }
 }

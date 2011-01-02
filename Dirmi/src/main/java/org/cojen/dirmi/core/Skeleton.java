@@ -20,6 +20,7 @@ import java.io.IOException;
 
 import java.rmi.Remote;
 
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Unreferenced;
 
@@ -60,6 +61,7 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * exception types and handled like any other thrown exception. For
      * synchronous methods, this means the exception is written to the channel.
      *
+     * @param sessionLink link to session, used by SessionAware objects
      * @param methodId method to invoke
      * @param channel InvocationChannel for reading method arguments and for
      * writing response.
@@ -73,7 +75,8 @@ public interface Skeleton<R extends Remote> extends Unreferenced {
      * @throws BatchedInvocationException if method is batched and
      * throws an exception
      */
-    int invoke(int methodId, InvocationChannel channel,
+    int invoke(Link sessionLink,
+               int methodId, InvocationChannel channel,
                BatchedInvocationException batchedException)
         throws IOException,
                NoSuchMethodException,

@@ -22,6 +22,7 @@ import java.rmi.RemoteException;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;
 
@@ -33,6 +34,11 @@ import org.cojen.dirmi.Pipe;
 class DisposedStubSupport extends AbstractStubSupport {
     DisposedStubSupport(VersionedIdentifier id) {
         super(id);
+    }
+
+    @Override
+    public Link sessionLink() {
+        return null;
     }
 
     @Override

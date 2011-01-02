@@ -22,6 +22,7 @@ import java.rmi.RemoteException;
 import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.Completion;
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -32,6 +33,11 @@ import org.cojen.dirmi.Pipe;
  * @see StubFactory
  */
 public interface StubSupport {
+    /**
+     * Returns a link to the session that stub is bound to.
+     */
+    Link sessionLink();
+
     /**
      * Called by unbatched methods to temporarily release a thread-local channel.
      *

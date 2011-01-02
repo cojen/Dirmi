@@ -1,5 +1,5 @@
 /*
- *  Copyright 2006-2010 Brian S O'Neill
+ *  Copyright 2011 Brian S O'Neill
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,23 +16,27 @@
 
 package org.cojen.dirmi.core;
 
-import java.rmi.Remote;
-import java.rmi.RemoteException;
-
-import org.cojen.dirmi.info.RemoteInfo;
-
 /**
- * Produces new Stub instances for client-side Remote objects. A Stub instance
- * marshalls requests to a remote {@link Skeleton} which in turn calls the real
- * method. Any response is marshalled back for the Stub to decode.
+ * Marker interface for generated stubs.
  *
  * @author Brian S O'Neill
- * @see StubFactoryGenerator
  */
-public interface StubFactory<R extends Remote> {
+public interface Stub {
     /**
-     * @param support for invoking remote methods
-     * @return object which also implements {@link Stub}
+     * Stub hashcode is derived from remote object identifier.
      */
-    R createStub(StubSupport support);
+    @Override
+    int hashCode();
+
+    /**
+     * Stubs are considered equal if they have the same remote object identifier.
+     */
+    @Override
+    boolean equals(Object obj);
+
+    /**
+     * Returns remote type name concatenated with remote object identifier.
+     */
+    @Override
+    String toString();
 }
