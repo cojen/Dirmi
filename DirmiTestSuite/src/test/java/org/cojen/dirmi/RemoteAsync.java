@@ -45,6 +45,10 @@ public interface RemoteAsync extends Remote {
     @Asynchronous(CallMode.EVENTUAL)
     void data(int[] data) throws RemoteException;
 
+    // Not async -- used to ensure that session access is denied when server is not
+    // session aware.
+    void sessionAccess() throws RemoteException;
+
     public static interface Callback extends Remote {
         @Asynchronous
         @RemoteFailure(declared=false)

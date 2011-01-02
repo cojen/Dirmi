@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi;
 
+import org.junit.Assert;
+
 /**
  * 
  *
@@ -51,6 +53,15 @@ public class RemoteAsyncServer implements RemoteAsync {
 
     public void data(int[] data) {
         // Do nothing.
+    }
+
+    public void sessionAccess() {
+        try {
+            SessionAccess.current();
+            Assert.fail();
+        } catch (IllegalStateException e) {
+            // Not session aware.
+        }
     }
 
     private void done(Callback callback, int value) {

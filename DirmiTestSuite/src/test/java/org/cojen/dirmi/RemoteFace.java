@@ -44,6 +44,8 @@ public interface RemoteFace extends Remote {
 
     void fail(int[] params) throws RemoteException, IllegalArgumentException;
 
+    void sessionAccess() throws RemoteException;
+
     String[] executeQuery(String sql) throws RemoteException, SQLException;
 
     @RemoteFailure(exception=SQLException.class)

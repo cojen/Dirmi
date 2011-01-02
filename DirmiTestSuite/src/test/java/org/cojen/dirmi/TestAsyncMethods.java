@@ -225,6 +225,12 @@ public class TestAsyncMethods extends AbstractTestSuite {
         assertTrue(startWritten < endWritten);
     }
 
+    @Test
+    public void sessionAccess() throws Exception {
+        RemoteAsync server = (RemoteAsync) sessionStrategy.remoteServer;
+        server.sessionAccess();
+    }
+
     private static class CallbackImpl implements RemoteAsync.Callback {
         public volatile int value;
 

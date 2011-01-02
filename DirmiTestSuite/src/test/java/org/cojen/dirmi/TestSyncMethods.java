@@ -208,6 +208,22 @@ public class TestSyncMethods extends AbstractTestSuite {
     }
 
     @Test
+    public void sessionAccess() throws Exception {
+        try {
+            SessionAccess.obtain(null);
+            fail();
+        } catch (IllegalArgumentException e) {
+        }
+
+        RemoteFace face = (RemoteFace) sessionStrategy.remoteServer;
+
+        Link session = SessionAccess.obtain(face);
+        assertNotNull(session);
+
+        face.sessionAccess();
+    }
+
+    @Test
     public void remoteFailure() throws Exception {
         RemoteFace face = (RemoteFace) sessionStrategy.remoteServer;
         sessionStrategy.remoteSession.close();

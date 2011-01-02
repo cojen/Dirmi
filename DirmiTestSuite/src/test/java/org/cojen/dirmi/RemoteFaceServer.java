@@ -24,12 +24,14 @@ import java.util.List;
 
 import java.sql.SQLException;
 
+import org.junit.Assert;
+
 /**
  * 
  *
  * @author Brian S O'Neill
  */
-public class RemoteFaceServer implements RemoteFace {
+public class RemoteFaceServer implements RemoteFace, SessionAware {
     private String mMessage;
 
     public synchronized void doIt() {
@@ -67,6 +69,17 @@ public class RemoteFaceServer implements RemoteFace {
         if (params == null) {
             throw new IllegalArgumentException("no params");
         }
+    }
+
+    public void sessionAccess() {
+        try {
+            SessionAccess.obtain(this);
+            Assert.fail();
+        } catch (IllegalArgumentException e) {
+        }
+
+        Link session = SessionAccess.current();
+        Assert.assertNotNull(session);
     }
 
     public String[] executeQuery(String sql) throws SQLException {
