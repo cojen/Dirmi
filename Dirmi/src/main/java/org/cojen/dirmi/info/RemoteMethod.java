@@ -27,6 +27,7 @@ import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Ordered;
+import org.cojen.dirmi.Trace;
 import org.cojen.dirmi.Unbatched;
 
 /**
@@ -123,4 +124,9 @@ public interface RemoteMethod extends Serializable {
      * inherited from its enclosing interface. The unit is never null.
      */
     TimeUnit getTimeoutUnit();
+
+    /**
+     * Returns the optional trace annotation for this method, which is not serailized.
+     */
+    Trace getTraceAnnotation();
 }

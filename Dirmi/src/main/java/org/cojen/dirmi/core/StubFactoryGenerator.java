@@ -46,11 +46,13 @@ import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
+import org.cojen.util.AnnotationBuilder;
 import org.cojen.util.KeyFactory;
 
 import org.cojen.dirmi.CallMode;
 import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.Trace;
 
 import org.cojen.dirmi.info.RemoteInfo;
 import org.cojen.dirmi.info.RemoteIntrospector;
@@ -187,6 +189,14 @@ public class StubFactoryGenerator<R extends Remote> {
 
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
+
+            if (localMethod != null) {
+                Trace trace = localMethod.getTraceAnnotation();
+                if (trace != null) {
+                    new AnnotationBuilder().visit
+                        (trace, mi.addRuntimeVisibleAnnotation(TypeDesc.forClass(Trace.class)));
+                }
+            }
 
             TypeDesc[] exceptionDescs = getTypeDescs(method.getExceptionTypes());
             for (TypeDesc desc : exceptionDescs) {

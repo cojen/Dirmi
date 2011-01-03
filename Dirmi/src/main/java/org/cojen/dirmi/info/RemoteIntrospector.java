@@ -66,6 +66,7 @@ import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.TimeoutUnit;
+import org.cojen.dirmi.Trace;
 import org.cojen.dirmi.Unbatched;
 
 import org.cojen.dirmi.util.Cache;
@@ -552,6 +553,7 @@ public class RemoteIntrospector {
         private final boolean mUnbatched;
         private final boolean mOrdered;
         private final boolean mDisposer;
+        private final transient Trace mTrace;
 
         private RParameter<? extends Throwable> mRemoteFailureException;
         private boolean mRemoteFailureExceptionDeclared;
@@ -600,6 +602,8 @@ public class RemoteIntrospector {
 
             mOrdered = m.isAnnotationPresent(Ordered.class);
             mDisposer = m.isAnnotationPresent(Disposer.class);
+
+            mTrace = m.getAnnotation(Trace.class);
 
             // First pass, treat all params as serialized. Resolve on second pass.
             // This allows remote methods to pass instances of declaring class without
@@ -766,6 +770,7 @@ public class RemoteIntrospector {
             mUnbatched = existing.mUnbatched;
             mOrdered = existing.mOrdered;
             mDisposer = existing.mDisposer;
+            mTrace = existing.mTrace;
 
             mRemoteFailureException = existing.mRemoteFailureException;
             mRemoteFailureExceptionDeclared = existing.mRemoteFailureExceptionDeclared;
@@ -841,6 +846,10 @@ public class RemoteIntrospector {
 
         public TimeUnit getTimeoutUnit() {
             return mTimeoutUnit;
+        }
+
+        public Trace getTraceAnnotation() {
+            return mTrace;
         }
 
         @Override
