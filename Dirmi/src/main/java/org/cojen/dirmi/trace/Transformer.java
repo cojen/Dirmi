@@ -25,8 +25,6 @@ import java.io.OutputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 
-import java.lang.reflect.Method;
-
 import java.security.ProtectionDomain;
 
 import java.util.HashMap;
@@ -183,7 +181,6 @@ class Transformer implements ClassFileTransformer {
             // Finish registering each method.
             TypeDesc classType = TypeDesc.forClass(Class.class);
             TypeDesc classArrayType = classType.toArrayType();
-            TypeDesc methodType = TypeDesc.forClass(Method.class);
 
             for (Map.Entry<MethodInfo, MidAndOp> entry : transformedMethods.entrySet()) {
                 MethodInfo mi = entry.getKey();
