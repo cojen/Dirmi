@@ -29,7 +29,7 @@ import java.util.Map;
 public abstract class Cache<K, V> {
     public static <K, V> Cache<K, V> newSoftValueCache(int capacity) {
         try {
-            return wrap(new org.cojen.util.SoftValueCache<K, V>(capacity));
+            return Inner.newSoftValueCache(capacity);
         } catch (NoClassDefFoundError e) {
             // Use older class for compatibility.
             return wrap(new org.cojen.util.SoftValuedHashMap<K, V>(capacity));
@@ -38,7 +38,7 @@ public abstract class Cache<K, V> {
 
     public static <K, V> Cache<K, V> newWeakValueCache(int capacity) {
         try {
-            return wrap(new org.cojen.util.WeakValueCache<K, V>(capacity));
+            return Inner.newWeakValueCache(capacity);
         } catch (NoClassDefFoundError e) {
             // Use older class for compatibility.
             return wrap(new org.cojen.util.WeakValuedHashMap<K, V>(capacity));
@@ -47,7 +47,7 @@ public abstract class Cache<K, V> {
 
     public static <K, V> Cache<K, V> newWeakIdentityCache(int capacity) {
         try {
-            return wrap(new org.cojen.util.WeakIdentityCache<K, V>(capacity));
+            return Inner.newWeakIdentityCache(capacity);
         } catch (NoClassDefFoundError e) {
             // Use older class for compatibility.
             return wrap(new org.cojen.util.WeakIdentityMap<K, V>(capacity));
@@ -68,40 +68,57 @@ public abstract class Cache<K, V> {
 
     public abstract void copyKeysInto(Collection<? super K> c);
 
-    static <K, V> Cache<K, V> wrap(final org.cojen.util.Cache<K, V> cache) {
-        return new Cache<K, V>() {
-            public int size() {
-                return cache.size();
-            }
+    static final class Inner {
+        // Embed this in an inner class to allow outer class to still load if class not
+        // found. Also, signatures don't expose new classes.
 
-            public boolean isEmpty() {
-                return cache.isEmpty();
-            }
+        static <K, V> Cache<K, V> newSoftValueCache(int capacity) {
+            return wrap(new org.cojen.util.SoftValueCache<K, V>(capacity));
+        }
 
-            public V get(K key) {
-                return cache.get(key);
-            }
+        static <K, V> Cache<K, V> newWeakValueCache(int capacity) {
+            return wrap(new org.cojen.util.WeakValueCache<K, V>(capacity));
+        }
 
-            public V put(K key, V value) {
-                return cache.put(key, value);
-            }
+        static <K, V> Cache<K, V> newWeakIdentityCache(int capacity) {
+            return wrap(new org.cojen.util.WeakIdentityCache<K, V>(capacity));
+        }
 
-            public V remove(K key) {
-                return cache.remove(key);
-            }
+        private static <K, V> Cache<K, V> wrap(final org.cojen.util.Cache<K, V> cache) {
+            return new Cache<K, V>() {
+                public int size() {
+                    return cache.size();
+                }
 
-            public void clear() {
-                cache.clear();
-            }
+                public boolean isEmpty() {
+                    return cache.isEmpty();
+                }
 
-            public void copyKeysInto(Collection<? super K> c) {
-                cache.copyKeysInto(c);
-            }
+                public V get(K key) {
+                    return cache.get(key);
+                }
 
-            public String toString() {
-                return cache.toString();
-            }
-        };
+                public V put(K key, V value) {
+                    return cache.put(key, value);
+                }
+
+                public V remove(K key) {
+                    return cache.remove(key);
+                }
+
+                public void clear() {
+                    cache.clear();
+                }
+
+                public void copyKeysInto(Collection<? super K> c) {
+                    cache.copyKeysInto(c);
+                }
+
+                public String toString() {
+                    return cache.toString();
+                }
+            };
+        }
     }
 
     static <K, V> Cache<K, V> wrap(final Map<K, V> map) {
