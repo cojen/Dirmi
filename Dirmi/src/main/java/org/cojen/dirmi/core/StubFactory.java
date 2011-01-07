@@ -17,9 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.rmi.Remote;
-import java.rmi.RemoteException;
-
-import org.cojen.dirmi.info.RemoteInfo;
 
 /**
  * Produces new Stub instances for client-side Remote objects. A Stub instance

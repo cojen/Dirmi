@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
-import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.util.Timer;
 
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.OPEN_REQUEST;

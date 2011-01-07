@@ -19,12 +19,6 @@ package org.cojen.dirmi.io;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.rmi.Remote;
-import java.rmi.RemoteException;
-
-import org.cojen.dirmi.Asynchronous;
-import org.cojen.dirmi.Disposer;
-
 /**
  * 
  *

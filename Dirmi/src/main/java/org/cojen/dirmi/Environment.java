@@ -17,10 +17,7 @@
 package org.cojen.dirmi;
 
 import java.io.Closeable;
-import java.io.InterruptedIOException;
 import java.io.IOException;
-
-import java.nio.channels.ClosedByInterruptException;
 
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -29,7 +26,6 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 

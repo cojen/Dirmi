@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.InterruptedIOException;
 import java.io.IOException;
 
 import java.net.Socket;

@@ -16,13 +16,9 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 
 import java.lang.ref.WeakReference;
-
-import java.rmi.Remote;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;

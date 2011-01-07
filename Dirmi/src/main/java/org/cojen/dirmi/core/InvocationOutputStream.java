@@ -16,11 +16,9 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
-import java.io.UTFDataFormatException;
 
 import java.util.ArrayList;
 import java.util.Arrays;

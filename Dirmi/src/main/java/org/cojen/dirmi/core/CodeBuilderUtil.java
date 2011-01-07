@@ -16,11 +16,7 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.reflect.InvocationTargetException;
-
 import java.io.DataOutput;
-
-import java.rmi.Remote;
 
 import java.util.Collection;
 
@@ -29,9 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeBuilder;
-import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
-import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
 import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
@@ -40,8 +34,6 @@ import org.cojen.dirmi.Link;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.UnimplementedMethodException;
 
-import org.cojen.dirmi.info.RemoteInfo;
-import org.cojen.dirmi.info.RemoteMethod;
 import org.cojen.dirmi.info.RemoteParameter;
 
 /**

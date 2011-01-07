@@ -16,8 +16,6 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.IOException;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Constructor;

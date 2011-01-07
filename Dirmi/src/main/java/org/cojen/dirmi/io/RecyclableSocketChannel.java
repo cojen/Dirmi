@@ -20,16 +20,12 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import java.net.Socket;
-
 import java.rmi.Remote;
 
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.Ordered;
-import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.Unreferenced;
 
 /**

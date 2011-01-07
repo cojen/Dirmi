@@ -16,14 +16,9 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.Closeable;
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 
 import java.util.concurrent.TimeUnit;
-
-import java.util.concurrent.locks.Lock;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;

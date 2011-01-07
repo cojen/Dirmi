@@ -27,10 +27,6 @@ import java.nio.channels.SocketChannel;
 
 import java.net.SocketException;
 
-import java.rmi.Remote;
-
-import java.util.Map;
-
 import org.cojen.dirmi.RejectedException;
 
 /**

@@ -18,8 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.rmi.Remote;
 
-import org.cojen.dirmi.info.RemoteInfo;
-
 /**
  * Produces new {@link Skeleton} instances for server-side Remote objects.
  *

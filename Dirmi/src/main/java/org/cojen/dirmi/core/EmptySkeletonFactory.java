@@ -16,8 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.ObjectOutput;
-
 import java.rmi.Remote;
 
 import org.cojen.dirmi.Link;

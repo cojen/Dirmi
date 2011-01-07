@@ -16,10 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.reflect.InvocationTargetException;
-
-import java.rmi.Remote;
-
 import org.cojen.dirmi.Link;
 
 /**

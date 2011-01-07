@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.Closeable;
-import java.io.Externalizable;
 import java.io.Flushable;
 import java.io.IOException;
 import java.io.ObjectOutput;

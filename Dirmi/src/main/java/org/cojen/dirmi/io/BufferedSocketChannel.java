@@ -18,8 +18,6 @@ package org.cojen.dirmi.io;
 
 import java.io.IOException;
 
-import java.net.Socket;
-
 import java.rmi.Remote;
 
 /**

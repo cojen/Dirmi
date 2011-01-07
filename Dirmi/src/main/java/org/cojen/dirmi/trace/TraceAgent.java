@@ -27,8 +27,6 @@ import java.util.Random;
 
 import java.security.SecureRandom;
 
-import static org.cojen.dirmi.trace.TraceMode.*;
-
 /**
  * Instrumentation agent for tracing. To install, pass an java argument as follows:
  *

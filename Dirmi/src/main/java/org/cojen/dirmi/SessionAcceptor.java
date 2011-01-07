@@ -18,9 +18,6 @@ package org.cojen.dirmi;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.Serializable;
-
-import java.rmi.Remote;
 
 /**
  * Accepts sessions from remote endpoints.

@@ -21,8 +21,6 @@ import java.io.EOFException;
 import java.io.InputStream;
 import java.io.IOException;
 
-import java.util.Map;
-
 import org.cojen.util.WeakCanonicalSet;
 
 import org.cojen.dirmi.util.Cache;

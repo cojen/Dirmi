@@ -22,8 +22,6 @@ import java.io.ObjectStreamException;
 import java.io.OutputStream;
 import java.io.Serializable;
 
-import org.cojen.dirmi.NoSuchObjectException;
-
 /**
  * Abstract object which uniquely identifies another object.
  *

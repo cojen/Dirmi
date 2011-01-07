@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.rmi.Remote;
-import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
 

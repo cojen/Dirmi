@@ -24,9 +24,6 @@ import java.util.PriorityQueue;
 
 import java.util.concurrent.Future;
 
-import org.cojen.dirmi.MalformedRemoteObjectException;
-import org.cojen.dirmi.UnimplementedMethodException;
-
 /**
  * Utility class used by Skeletons to implement ordered method invocation.
  *

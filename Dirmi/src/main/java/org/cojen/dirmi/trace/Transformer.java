@@ -31,9 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.cojen.classfile.attribute.Annotation;
-import org.cojen.classfile.attribute.AnnotationsAttr;
 
-import org.cojen.classfile.Attribute;
 import org.cojen.classfile.ClassFile;
 import org.cojen.classfile.CodeAssembler;
 import org.cojen.classfile.CodeBuilder;

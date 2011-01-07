@@ -20,8 +20,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.ObjectInput;
 
-import java.rmi.RemoteException;
-
 import org.cojen.dirmi.ReconstructedException;
 
 /**

@@ -17,11 +17,9 @@
 package org.cojen.dirmi.core;
 
 import java.rmi.Remote;
-import java.rmi.RemoteException;
 
 import java.util.concurrent.TimeUnit;
 
-import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Link;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;

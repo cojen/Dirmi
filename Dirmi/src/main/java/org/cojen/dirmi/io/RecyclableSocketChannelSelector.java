@@ -16,16 +16,10 @@
 
 package org.cojen.dirmi.io;
 
-import java.io.Closeable;
-import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
-import java.io.OutputStream;
 
 import java.net.SocketAddress;
-import java.net.SocketException;
-
-import java.nio.ByteBuffer;
 
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ClosedSelectorException;
@@ -34,16 +28,12 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import java.rmi.Remote;
-
 import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
 import java.util.Iterator;
-import java.util.Set;
-
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
