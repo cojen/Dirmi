@@ -17,7 +17,6 @@
 package org.cojen.dirmi.util;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.TreeSet;
@@ -520,10 +519,6 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                             e = null;
                         }
                     } while ((command = needsTaskRunner()) != null);
-
-                    // Allow the garbage collector to reclaim command from
-                    // stack while we wait for another command.
-                    command = null;
 
                     threadAvailable(this);
                 }
