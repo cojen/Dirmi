@@ -109,7 +109,7 @@ public class SimpleHandler extends ScopedTraceHandler {
             b.append("    invocations:  ").append(calls).append('\n');
             if (md.hasTotalTimeNanos()) {
                 b.append("    total time:   ").append(time).append("ns\n");
-                double dTime = (double) time;
+                double dTime = time;
                 if (calls == 1) {
                     b.append("    average time: ").append(time).append("ns\n");
                 } else {

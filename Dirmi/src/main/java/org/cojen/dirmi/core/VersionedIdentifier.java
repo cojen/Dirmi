@@ -80,7 +80,7 @@ public class VersionedIdentifier extends AbstractIdentifier {
      * version should be updated after the lookup.
      */
     public static VersionedIdentifier readAndUpdateRemoteVersion(DataInput in) throws IOException {
-        VersionedIdentifier id = read((DataInput) in);
+        VersionedIdentifier id = read(in);
         id.updateRemoteVersion(in.readInt());
         return id;
     }

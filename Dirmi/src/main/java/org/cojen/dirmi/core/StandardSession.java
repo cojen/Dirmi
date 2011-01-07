@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.Closeable;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.EOFException;
@@ -25,19 +24,16 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.io.ObjectStreamException;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.io.StreamCorruptedException;
-import java.io.WriteAbortedException;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -49,11 +45,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.TreeSet;
-import java.util.Set;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -73,7 +66,6 @@ import org.cojen.util.ThrowUnchecked;
 import org.cojen.dirmi.Asynchronous;
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
-import org.cojen.dirmi.Completion;
 import org.cojen.dirmi.Link;
 import org.cojen.dirmi.MalformedRemoteObjectException;
 import org.cojen.dirmi.NoSuchClassException;
@@ -99,7 +91,6 @@ import org.cojen.dirmi.io.CloseableGroup;
 import org.cojen.dirmi.io.IOExecutor;
 
 import org.cojen.dirmi.util.Cache;
-import org.cojen.dirmi.util.ExceptionUtils;
 import org.cojen.dirmi.util.ScheduledTask;
 import org.cojen.dirmi.util.Timer;
 
@@ -805,7 +796,7 @@ public class StandardSession implements Session {
             final int methodId;
             Skeleton skeleton;
             try {
-                DataInput din = (DataInput) invChannel.getInputStream();
+                DataInput din = invChannel.getInputStream();
                 objId = VersionedIdentifier.read(din);
                 int objVersion = din.readInt();
                 methodId = din.readInt();
@@ -2400,7 +2391,7 @@ public class StandardSession implements Session {
             }
 
             try {
-                mObjId.writeWithNextVersion((DataOutput) channel.getOutputStream());
+                mObjId.writeWithNextVersion(channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }
@@ -2425,7 +2416,7 @@ public class StandardSession implements Session {
             InvocationChannel channel = getChannel(remoteFailureEx, timeout, unit);
 
             try {
-                mObjId.writeWithNextVersion((DataOutput) channel.getOutputStream());
+                mObjId.writeWithNextVersion(channel.getOutputStream());
             } catch (IOException e) {
                 throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
@@ -2468,7 +2459,7 @@ public class StandardSession implements Session {
             }
 
             try {
-                mObjId.writeWithNextVersion((DataOutput) channel.getOutputStream());
+                mObjId.writeWithNextVersion(channel.getOutputStream());
             } catch (IOException e) {
                 throw failedAndCancelTimeout(remoteFailureEx, channel, e, timeout, unit);
             }
@@ -2497,7 +2488,7 @@ public class StandardSession implements Session {
             // Write the type id and versioned object identifier.
             try {
                 typeId.write(channel);
-                support.mObjId.writeWithNextVersion((DataOutput) channel.getOutputStream());
+                support.mObjId.writeWithNextVersion(channel.getOutputStream());
             } catch (IOException e) {
                 throw failed(remoteFailureEx, channel, e);
             }

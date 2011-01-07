@@ -102,7 +102,7 @@ public class StandardSessionAcceptor implements SessionAcceptor {
             // I give up.
         }
         // Yield just in case exceptions are out of control.
-        t.yield();
+        Thread.yield();
     }
 
     private class Manual implements ChannelBrokerAcceptor.Listener {
