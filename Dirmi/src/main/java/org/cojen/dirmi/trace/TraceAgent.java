@@ -28,7 +28,7 @@ import java.util.Random;
 import java.security.SecureRandom;
 
 /**
- * Instrumentation agent for tracing. To install, pass an java argument as follows:
+ * Instrumentation agent for tracing. To install, pass a java argument as follows:
  *
  * <pre>
  * java -javaagent:&lt;path to agent jar file&gt;=&lt;class name of trace handler&gt;[;&lt;argument&gt;]
