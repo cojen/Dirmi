@@ -25,7 +25,7 @@ import org.cojen.dirmi.Link;
  *
  * @author Brian S O'Neill
  */
-public class LinkWrapper implements Link {
+class LinkWrapper implements Link {
     public static Link wrap(Link link) {
         if (!(link instanceof LinkWrapper)) {
             link = new LinkWrapper(link);
