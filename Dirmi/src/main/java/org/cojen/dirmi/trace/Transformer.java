@@ -200,16 +200,18 @@ class Transformer implements ClassFileTransformer {
                     b.loadConstant(returnType);
                 }
 
+                int hasThis = mi.getModifiers().isStatic() ? 0 : 1;
+
                 TypeDesc[] types = mi.getMethodDescriptor().getParameterTypes();
-                if (types.length == 0) {
+                if (hasThis + types.length == 0) {
                     b.loadNull();
                 } else {
-                    b.loadConstant(types.length);
+                    b.loadConstant(hasThis + types.length);
                     b.newObject(classArrayType);
                     for (int i=0; i<types.length; i++) {
                         // dup array
                         b.dup();
-                        b.loadConstant(i);
+                        b.loadConstant(hasThis + i);
                         b.loadConstant(types[i]);
                         b.storeToArray(classType);
                     }
@@ -405,9 +407,6 @@ class Transformer implements ClassFileTransformer {
                           boolean root,
                           boolean graft)
     {
-        if (mi.getMethodDescriptor().getParameterCount() == 0) {
-            args = false;
-        }
         if (mi.getMethodDescriptor().getReturnType() == TypeDesc.VOID) {
             result = false;
         }
@@ -423,25 +422,46 @@ class Transformer implements ClassFileTransformer {
 
             b.loadConstant(mid);
 
-            int argCount = mi.getMethodDescriptor().getParameterCount();
             TypeDesc[] params;
-            if (!args || argCount == 0) {
+            if (!args) {
                 params = new TypeDesc[] {TypeDesc.INT};
-            } else if (argCount == 1) {
-                params = new TypeDesc[] {TypeDesc.INT, TypeDesc.OBJECT};
-                b.loadLocal(b.getParameter(0));
-                b.convert(b.getParameter(0).getType(), TypeDesc.OBJECT);
             } else {
-                params = new TypeDesc[] {TypeDesc.INT, TypeDesc.OBJECT.toArrayType()};
-                b.loadConstant(argCount);
-                b.newObject(TypeDesc.OBJECT.toArrayType());
-                for (int i=0; i<argCount; i++) {
-                    // dup array
-                    b.dup();
-                    b.loadConstant(i);
-                    b.loadLocal(b.getParameter(i));
-                    b.convert(b.getParameter(i).getType(), TypeDesc.OBJECT);
-                    b.storeToArray(TypeDesc.OBJECT);
+                int argCount = mi.getMethodDescriptor().getParameterCount();
+                int hasThis = mi.getModifiers().isStatic() ? 0 : 1;
+                argCount += hasThis;
+
+                if (argCount == 0) {
+                    params = new TypeDesc[] {TypeDesc.INT};
+                } else if (argCount == 1) {
+                    params = new TypeDesc[] {TypeDesc.INT, TypeDesc.OBJECT};
+                    if (hasThis != 0) {
+                        b.loadThis();
+                    } else {
+                        b.loadLocal(b.getParameter(0));
+                        b.convert(b.getParameter(0).getType(), TypeDesc.OBJECT);
+                    }
+                } else {
+                    params = new TypeDesc[] {TypeDesc.INT, TypeDesc.OBJECT.toArrayType()};
+                    b.loadConstant(argCount);
+                    b.newObject(TypeDesc.OBJECT.toArrayType());
+
+                    if (hasThis != 0) {
+                        // dup array
+                        b.dup();
+                        b.loadConstant(0);
+                        b.loadThis();
+                        b.storeToArray(TypeDesc.OBJECT);
+                        argCount--;
+                    }
+
+                    for (int i=0; i<argCount; i++) {
+                        // dup array
+                        b.dup();
+                        b.loadConstant(hasThis + i);
+                        b.loadLocal(b.getParameter(i));
+                        b.convert(b.getParameter(i).getType(), TypeDesc.OBJECT);
+                        b.storeToArray(TypeDesc.OBJECT);
+                    }
                 }
             }
 

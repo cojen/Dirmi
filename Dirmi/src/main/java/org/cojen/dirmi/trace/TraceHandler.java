@@ -57,7 +57,7 @@ public interface TraceHandler {
      * no arguments.
      *
      * @param mid method id
-     * @param argument argument passed to method
+     * @param argument argument passed to method; is "this" for non-static method
      */
     void enterMethod(int mid, Object argument);
 
@@ -67,7 +67,7 @@ public interface TraceHandler {
      * no arguments.
      *
      * @param mid method id
-     * @param arguments arguments passed to method
+     * @param arguments arguments passed to method; first is "this" for non-static method
      */
     void enterMethod(int mid, Object... arguments);
 

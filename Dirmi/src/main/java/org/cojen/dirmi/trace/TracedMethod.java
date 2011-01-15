@@ -57,7 +57,9 @@ public class TracedMethod {
      * @param clazz declaring class
      * @param methodName method name or null for constructor
      * @param returnType method return type, or null if void
-     * @param paramTypes method or constructor parameter types, or null if none
+     * @param paramTypes method or constructor parameter types; first type must be null
+     * for non-static method or constructor; static method with no arguments can pass a
+     * null array
      */
     TracedMethod(int mid, String operation,
                  Class clazz, String methodName, Class returnType, Class... paramTypes)
@@ -88,12 +90,17 @@ public class TracedMethod {
             mParamTypes = null;
         } else {
             mParamTypes = new WeakReference[paramTypes.length];
+            boolean any = false;
             for (int i=0; i<paramTypes.length; i++) {
-                if (i > 0) {
+                if (any) {
                     b.append(", ");
                 }
-                b.append(TypeDesc.forClass(paramTypes[i]).getFullName());
-                mParamTypes[i] = new WeakReference<Class>(paramTypes[i]);
+                Class paramType = paramTypes[i];
+                if (paramType != null) {
+                    b.append(TypeDesc.forClass(paramType).getFullName());
+                    any = true;
+                }
+                mParamTypes[i] = paramType == null ? mClass : new WeakReference<Class>(paramType);
             }
         }
 
@@ -112,6 +119,14 @@ public class TracedMethod {
      */
     public boolean isConstructor() {
         return mMethodName == null;
+    }
+
+    /**
+     * Returns true if traced method is static.
+     */
+    public boolean isStatic() {
+        WeakReference<Class>[] paramTypes = mParamTypes;
+        return paramTypes == null || paramTypes[0] != mClass;
     }
 
     /**
@@ -144,8 +159,9 @@ public class TracedMethod {
     }
 
     /**
-     * Returns the method's parameter types, which may contain null elements if
-     * they have been garbage collected.
+     * Returns the method's parameter types, which may contain null elements if they have
+     * been garbage collected. First parameter of non-static method or constructor is
+     * always the "this" type.
      */
     public Class[] getParameterTypes() {
         WeakReference<Class>[] paramTypes = mParamTypes;
