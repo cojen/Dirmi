@@ -29,7 +29,7 @@ public class LocalSession extends ThreadLocal<Link> {
     private LocalSession() {
     }
 
-    public static Link current() {
+    public static Link tryCurrent() {
         return THE.get();
     }
 
@@ -37,7 +37,7 @@ public class LocalSession extends ThreadLocal<Link> {
     public Link get() {
         Link link = super.get();
         if (link == null) {
-            throw new IllegalStateException("No current session available");
+            return null;
         }
         if (!(link instanceof LinkWrapper)) {
             // Lazily wrap it.

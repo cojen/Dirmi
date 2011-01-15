@@ -42,7 +42,23 @@ public class SessionAccess {
      * remote object doesn't implement {@link SessionAware}
      */
     public static Link current() {
-        return LocalSession.current();
+        Link link = tryCurrent();
+        if (link == null) {
+            throw new IllegalStateException("No current session available");
+        }
+        return link;
+    }
+
+    /**
+     * Returns the current thread-local session link. The current link is set immediately
+     * before invoking a method for a {@link SessionAware} remote object, and it is cleared
+     * when the method returns. Closing the link closes the session.
+     *
+     * @return null if no link is currently available, possibly because
+     * remote object doesn't implement {@link SessionAware}
+     */
+    public static Link tryCurrent() {
+        return LocalSession.tryCurrent();
     }
 
     /**
@@ -69,5 +85,24 @@ public class SessionAccess {
             }
         }
         throw new IllegalArgumentException("Object is not a remote stub", cause);
+    }
+
+    /**
+     * Returns the link for the session that a client-side remote object is bound to.
+     *
+     * @return null if object is not a client-side remote object stub
+     */
+    public static Link tryObtain(Remote obj) {
+        try {
+            if (obj instanceof Stub) {
+                // Invoke magic generated static method.
+                Class clazz = obj.getClass();
+                return (Link) clazz.getMethod("sessionLink", clazz).invoke(null, obj);
+            }
+        } catch (NoSuchMethodException e) {
+        } catch (IllegalAccessException e) {
+        } catch (InvocationTargetException e) {
+        }
+        return null;
     }
 }
