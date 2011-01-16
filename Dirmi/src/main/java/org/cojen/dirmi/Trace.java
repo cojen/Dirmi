@@ -19,13 +19,18 @@ package org.cojen.dirmi;
 import java.lang.annotation.*;
 
 /**
- * Method annotation which indicates that it can be traced. A traced method adds overhead,
- * and so only interesting methods should be traced. In order to enable tracing, the
- * {@link org.cojen.dirmi.trace.TraceAgent TraceAgent} must be installed.
+ * Method annotation which indicates that it can be traced. In order to enable tracing,
+ * the {@link org.cojen.dirmi.trace.TraceAgent TraceAgent} must be installed. Method
+ * tracing is not limited to remote methods. Any method can be traced, even if no remote
+ * features of Dirmi are being used.
  *
  * <p>When using this annotation on remote interfaces, tracing is applied only to
  * client-side invocations. For server-side tracing, the implementing class must provide
  * its own trace annotations.
+ *
+ * <p>Because method tracing increases execution overhead, use the feature
+ * judiciously. Ideal candidates are those which perform complex calculations or depend on
+ * external resources.
  *
  * @author Brian S O'Neill
  */
