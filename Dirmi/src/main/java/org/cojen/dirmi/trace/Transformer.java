@@ -318,8 +318,7 @@ class Transformer implements ClassFileTransformer {
         }
 
         String operation;
-        boolean args, result, exception, time, alloc, root, graft;
-        alloc = false;
+        boolean args, result, exception, time, root, graft;
 
         if (traceAnnotation == null) {
             // If no user trace annotation exists, check if any trace mode is
@@ -381,7 +380,7 @@ class Transformer implements ClassFileTransformer {
             graft = getBooleanParam(memberValues, "graft", false);
         }
 
-        int mid = transform(mi, operation, args, result, exception, time, alloc, root, graft);
+        int mid = transform(mi, operation, args, result, exception, time, root, graft);
 
         transformedMethods.put(mi, new MidAndOp(mid, operation));
     }
@@ -394,7 +393,6 @@ class Transformer implements ClassFileTransformer {
      * @param time when true, pass method execution time to trace handler
      * @param root when true, indicate to trace handler that method should be reported as root
      * @param graft when true, indicate to trace handler that method should be reported as graft
-     * @param alloc when true, pass new objects to trace handler
      * @return method id
      */
     private int transform(MethodInfo mi,
@@ -403,7 +401,6 @@ class Transformer implements ClassFileTransformer {
                           boolean result,
                           boolean exception,
                           boolean time,
-                          boolean alloc,
                           boolean root,
                           boolean graft)
     {
@@ -478,11 +475,7 @@ class Transformer implements ClassFileTransformer {
         Label tryStart = b.createLabel().setLocation();
         Label tryEnd = b.createLabel();
 
-        if (!alloc) {
-            dis.disassemble(b, null, tryEnd);
-        } else {
-            dis.disassemble(new AllocTracer(b, mid), null, tryEnd);
-        }
+        dis.disassemble(b, null, tryEnd);
 
         tryEnd.setLocation();
 
@@ -595,76 +588,6 @@ class Transformer implements ClassFileTransformer {
         MidAndOp(int mid, String operation) {
             this.mid = mid;
             this.operation = operation;
-        }
-    }
-
-    private class AllocTracer extends DelegatedCodeAssembler {
-        private final int mMethodId;
-
-        private int mNewObjectCount;
-
-        AllocTracer(CodeAssembler assembler, int mid) {
-            super(assembler);
-            mMethodId = mid;
-        }
-
-        public void newObject(TypeDesc type) {
-            mAssembler.newObject(type);
-            if (type.isArray()) {
-                callTraceMethod();
-            } else {
-                // Regular objects are traced after the constructor has been
-                // called. Constructor calls of the form "this(...)" also call
-                // invokeConstructor, but there is no matching
-                // newObject. Distinguish these cases by using a counter.
-                mNewObjectCount++;
-            }
-        }
-
-        public void newObject(TypeDesc type, int dimensions) {
-            mAssembler.newObject(type, dimensions);
-            callTraceMethod();
-        }
-
-        public void invokeConstructor(TypeDesc[] params) {
-            mAssembler.invokeConstructor(params);
-            if (mNewObjectCount > 0) {
-                mNewObjectCount--;
-                callTraceMethod();
-            }
-        }
-
-        public void invokeConstructor(TypeDesc classDesc, TypeDesc[] params) {
-            mAssembler.invokeConstructor(classDesc, params);
-            if (mNewObjectCount > 0) {
-                mNewObjectCount--;
-                callTraceMethod();
-            }
-        }
-
-        public void invokeConstructor(String className, TypeDesc[] params) {
-            mAssembler.invokeConstructor(className, params);
-            if (mNewObjectCount > 0) {
-                mNewObjectCount--;
-                callTraceMethod();
-            }
-        }
-
-        private void callTraceMethod() {
-            // stack: obj
-            dup();
-            // stack: obj, obj
-            loadStaticField(mHandlerFieldName, TypeDesc.forClass(TraceHandler.class));
-            // stack: obj, obj, handler
-            swap();
-            // stack: obj, handler, obj
-            loadConstant(mMethodId);
-            // stack: obj, handler, obj, int
-            swap();
-            // stack: obj, handler, int, obj
-            invokeInterface(TypeDesc.forClass(TraceHandler.class), "newObject", null,
-                            new TypeDesc[] {TypeDesc.INT, TypeDesc.OBJECT});
-            // stack: obj
         }
     }
 }
