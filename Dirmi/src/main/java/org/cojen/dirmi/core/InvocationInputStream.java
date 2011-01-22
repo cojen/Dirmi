@@ -370,10 +370,20 @@ public class InvocationInputStream extends InputStream implements InvocationInpu
             localTrace = e.getStackTrace();
         }
 
-        // Ignore everything before the stub class.
+        // Ignore everything before the stub class, or ignore invocation of this method if
+        // throwable is read from a pipe.
+        final String thisClassName = getClass().getName();
         int i;
         for (i=0; i<localTrace.length; i++) {
-            if (STUB_GENERATOR_NAME.equals(localTrace[i].getFileName())) {
+            StackTraceElement element = localTrace[i];
+            if (STUB_GENERATOR_NAME.equals(element.getFileName())) {
+                // Keep stub method itself.
+                break;
+            }
+            if (thisClassName.equals(element.getClassName()) &&
+                "localTrace".equals(element.getMethodName()))
+            {
+                i++;
                 break;
             }
         }
