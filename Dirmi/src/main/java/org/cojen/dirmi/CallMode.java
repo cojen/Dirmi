@@ -44,8 +44,9 @@ public enum CallMode {
     ACKNOWLEDGED,
 
     /**
-     * Mode applicable to {@link Pipe Pipes} which more efficiently uses
-     * network resources than a fully bidirectional pipe.
+     * Mode applicable to {@link Pipe Pipes} which more efficiently uses network resources
+     * than a fully bidirectional pipe. Selecting this call mode for an ordinary method is
+     * equivalent to selecting immediate mode.
      */
     REQUEST_REPLY,
 }

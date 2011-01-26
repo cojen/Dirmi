@@ -113,6 +113,11 @@ import java.util.concurrent.TimeUnit;
  * with normal pipes, both endpoints must close the pipe in order for the
  * connection resource to be fully recycled.
  *
+ * <p>Request/reply pipes cannot be efficiently closed by the remote server until the pipe
+ * is in reply mode. Closing the pipe prematurely requires that all request input be
+ * automatically drained. If the request is of an unbounded size, then the server has no
+ * means to effectively abort it. Normal pipes should be used for this case instead.
+ *
  * @author Brian S O'Neill
  */
 public interface Pipe extends Flushable, Closeable, ObjectInput, ObjectOutput, Link {
