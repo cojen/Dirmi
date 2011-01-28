@@ -18,6 +18,10 @@ package org.cojen.dirmi.core;
 
 import java.lang.reflect.Constructor;
 
+import java.net.ProtocolException;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+
 import java.io.EOFException;
 import java.io.IOException;
 
@@ -185,20 +189,15 @@ abstract class AbstractStubSupport implements StubSupport {
     }
 
     protected boolean possibleCommunicationFailure(Throwable cause) {
-        if (!(cause instanceof IOException)) {
-            return false;
-        }
+        // Communication failure can be caused by a server which is temporarily
+        // overloaded, and so this should check for exceptions which clearly
+        // indicate a network problem. Otherwise, aggressive session closing
+        // could make things worse for an overloaded server.
 
-        if (cause.getClass() == IOException.class ||
-            cause instanceof EOFException ||
-            cause instanceof java.nio.channels.ClosedChannelException ||
-            cause instanceof ClosedException ||
-            cause.getClass().getName().startsWith("java.net"))
-        {
-            return true;
-        }
-
-        return false;
+        return cause instanceof IOException &&
+            (cause instanceof SocketException ||
+             cause instanceof ProtocolException ||
+             cause instanceof UnknownHostException);
     }
 
     /**
