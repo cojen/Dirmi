@@ -1332,11 +1332,15 @@ public class StandardSession implements Session {
              * Method is unbatched to ensure that it doesn't disrupt a batch in
              * the current thread.
              *
-             * <p>The last character in the returned signature is S for
-             * Serializable, E for Externalizable, U for enum, and N for
-             * non-serializable.
+             * <p>The last character in the returned signature is S for Serializable, E
+             * for Externalizable, U for enum, and N for non-serializable. The signature
+             * may also provide a superclass type and interface types. These types are
+             * repsented as ordinary Java class name signatures. If the supertype is
+             * Object, it is omitted from the signature. Likewise, additional interfaces
+             * are ommitted if they are implied by the signature type.
              *
              * @return <serialVersionUID> ':' ('S' | 'E' | 'U' | 'N')
+             * [ ':' [ <superclass type> ] ':' { <interface type> } ]
              */
             @Unbatched
             String getUnknownClassInfo(String name) throws RemoteException;
@@ -1415,24 +1419,61 @@ public class StandardSession implements Session {
 
             long serialVersionUID;
             char type;
+            String supers;
             {
                 ObjectStreamClass osc = ObjectStreamClass.lookup(clazz);
                 if (osc == null) {
                     serialVersionUID = 0;
                     type = 'N';
+                    supers = supersFor(clazz, null, (Class[]) null);
                 } else {
                     serialVersionUID = osc.getSerialVersionUID();
                     if (Enum.class.isAssignableFrom(clazz)) {
                         type = 'U';
+                        supers = supersFor(clazz, Enum.class, Comparable.class, Serializable.class);
                     } else if (Externalizable.class.isAssignableFrom(clazz)) {
                         type = 'E';
+                        supers = supersFor(clazz, null, Externalizable.class, Serializable.class);
                     } else { 
                         type = 'S';
+                        supers = supersFor(clazz, null, Serializable.class);
                     }
                 }
             }
 
-            return String.valueOf(serialVersionUID) + ':' + type;
+            StringBuilder b = new StringBuilder();
+            b.append(serialVersionUID).append(':').append(type);
+
+            if (supers != null) {
+                b.append(':');
+                b.append(supers);
+            }
+
+            return b.toString();
+        }
+
+        private String supersFor(Class clazz, Class<?> impliedSuper, Class... impliedInterfaces) {
+            StringBuilder b = new StringBuilder();
+            
+            Class<?> superclass = clazz.getSuperclass();
+            if (superclass != null && superclass != Object.class && superclass != impliedSuper) {
+                b.append(TypeDesc.forClass(superclass).getDescriptor());
+            }
+
+            b.append(':');
+
+            outer: for (Class<?> iface : clazz.getInterfaces()) {
+                if (impliedInterfaces != null) {
+                    for (Class<?> implied : impliedInterfaces) {
+                        if (iface == implied) {
+                            continue outer;
+                        }
+                    }
+                }
+                b.append(TypeDesc.forClass(iface).getDescriptor());
+            }
+
+            return b.toString();
         }
 
         /**

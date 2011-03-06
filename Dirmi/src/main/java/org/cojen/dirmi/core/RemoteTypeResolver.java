@@ -221,13 +221,69 @@ class RemoteTypeResolver implements ClassResolver {
             }
         }
 
-        String superClassName = "U".equals(type) ? Enum.class.getName() : null;
+        String supers;
+        {
+            int index = type.indexOf(':');
+            if (index <= 0) {
+                supers = null;
+            } else {
+                supers = type.substring(index + 1);
+                type = type.substring(0, index);
+            }
+        }
+
+
+        String superClassName = null;
+
+        if (supers != null) {
+            int index = supers.indexOf(':');
+            if (index <= 0) {
+                superClassName = supers;
+                supers = null;
+            } else {
+                superClassName = supers.substring(0, index);
+                supers = supers.substring(index + 1);
+            }
+
+            try {
+                superClassName = TypeDesc.forDescriptor(superClassName).getFullName();
+            } catch (IllegalArgumentException e) {
+                superClassName = null;
+            }
+        }
+
+        if (superClassName == null) {
+            superClassName = "U".equals(type) ? Enum.class.getName() : null;
+        }
 
         RuntimeClassFile cf = new RuntimeClassFile(name, superClassName, new Loader(), null, true);
         cf.setModifiers(Modifiers.PUBLIC);
-        cf.addInterface("E".equals(type) ? Externalizable.class : Serializable.class);
         cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                     "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
+
+        cf.addInterface("E".equals(type) ? Externalizable.class : Serializable.class);
+
+        while (supers != null && supers.length() > 0) {
+            String interfaceName;
+            int index = supers.indexOf(';');
+            if (index < 0) {
+                interfaceName = supers;
+                supers = null;
+            } else {
+                interfaceName = supers.substring(0, index + 1);
+                supers = supers.substring(index + 1);
+            }
+
+            try {
+                interfaceName = TypeDesc.forDescriptor(interfaceName).getFullName();
+            } catch (IllegalArgumentException e) {
+                interfaceName = null;
+            }
+
+            if (interfaceName != null) {
+                cf.addInterface(interfaceName);
+            }
+        }
 
         if ("U".equals(type)) {
             TypeDesc[] params  = {TypeDesc.STRING, TypeDesc.INT};
