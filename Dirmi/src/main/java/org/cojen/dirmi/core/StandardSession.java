@@ -1473,7 +1473,7 @@ public class StandardSession implements Session {
                 b.append(TypeDesc.forClass(iface).getDescriptor());
             }
 
-            return b.toString();
+            return b.length() <= 1 ? null : b.toString();
         }
 
         /**
