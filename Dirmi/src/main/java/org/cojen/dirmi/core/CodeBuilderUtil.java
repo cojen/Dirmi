@@ -321,11 +321,19 @@ class CodeBuilderUtil {
         if (type.isPrimitive()) {
             return true;
         }
+
+        String name = type.getRootName();
+
         try {
-            loader.loadClass(type.toClass().getName());
+            if (loader == null) {
+                Class.forName(name);
+            } else {
+                loader.loadClass(name);
+            }
         } catch (ClassNotFoundException e) {
             return false;
         }
+
         return true;
     }
 
