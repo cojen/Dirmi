@@ -310,6 +310,34 @@ class CodeBuilderUtil {
         return paramDescs;
     }
 
+    static boolean isKnownType(ClassLoader loader, TypeDesc type) {
+        if (type == null) {
+            // Assume void return type.
+            return true;
+        }
+        if (type.isArray()) {
+            type = type.getRootComponentType();
+        }
+        if (type.isPrimitive()) {
+            return true;
+        }
+        try {
+            loader.loadClass(type.toClass().getName());
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+        return true;
+    }
+
+    static boolean isKnownTypes(ClassLoader loader, TypeDesc... types) {
+        for (TypeDesc type : types) {
+            if (!isKnownType(loader, type)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * @param factoryRef Strong reference is kept to this object. As long as
      * stub or skeleton instances exist, the referenced factory will not get

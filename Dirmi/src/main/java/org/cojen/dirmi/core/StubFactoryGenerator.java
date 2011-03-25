@@ -159,27 +159,37 @@ public class StubFactoryGenerator<R extends Remote> {
 
         // Implement all methods provided by server, including ones not defined
         // by local interface. This allows the server to upgrade before the
-        // client, making new methods available via reflection.
+        // client, making new methods available via reflection. If the server
+        // provides methods which depend on unknown classes, they are skipped.
 
         boolean generatedSequenceFields = false;
         boolean hasDisposer = false;
 
-        for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
+        defineMethods: for (RemoteMethod method : mRemoteInfo.getRemoteMethods()) {
+            TypeDesc returnDesc = getTypeDesc(method.getReturnType());
+            TypeDesc[] paramDescs = getTypeDescs(method.getParameterTypes());
+
+            // Cannot implement method at all if it depends on classes not
+            // locally available.
+            if (!isKnownType(mType.getClassLoader(), returnDesc) ||
+                !isKnownTypes(mType.getClassLoader(), paramDescs))
+            {
+                continue defineMethods;
+            }
+
             hasDisposer |= method.isDisposer();
 
             RemoteMethod localMethod;
             {
                 RemoteParameter[] params = method.getParameterTypes()
                     .toArray(new RemoteParameter[method.getParameterTypes().size()]);
+
                 try {
                     localMethod = mLocalInfo.getRemoteMethod(method.getName(), params);
                 } catch (NoSuchMethodException e) {
                     localMethod = null;
                 }
             }
-
-            TypeDesc returnDesc = getTypeDesc(method.getReturnType());
-            TypeDesc[] paramDescs = getTypeDescs(method.getParameterTypes());
 
             MethodInfo mi = cf.addMethod
                 (Modifiers.PUBLIC, method.getName(), returnDesc, paramDescs);
@@ -194,7 +204,9 @@ public class StubFactoryGenerator<R extends Remote> {
 
             TypeDesc[] exceptionDescs = getTypeDescs(method.getExceptionTypes());
             for (TypeDesc desc : exceptionDescs) {
-                mi.addException(desc);
+                if (isKnownType(mType.getClassLoader(), desc)) {
+                    mi.addException(desc);
+                }
             }
 
             // Prefer locally declared exception for remote failure.
@@ -205,6 +217,9 @@ public class StubFactoryGenerator<R extends Remote> {
             } else {
                 remoteFailureExType = TypeDesc.forClass
                     (method.getRemoteFailureException().getType());
+                if (!isKnownType(mType.getClassLoader(), remoteFailureExType)) {
+                    remoteFailureExType = TypeDesc.forClass(Remote.class);
+                }
             }
 
             final CodeBuilder b = new CodeBuilder(mi);
