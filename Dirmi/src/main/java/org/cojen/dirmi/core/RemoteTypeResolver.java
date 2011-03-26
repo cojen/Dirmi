@@ -232,14 +232,16 @@ class RemoteTypeResolver implements ClassResolver {
             }
         }
 
-
         String superClassName = null;
 
         if (supers != null) {
             int index = supers.indexOf(':');
-            if (index <= 0) {
+            if (index < 0) {
                 superClassName = supers;
                 supers = null;
+            } else if (index == 0) {
+                superClassName = null;
+                supers = supers.substring(index + 1);
             } else {
                 superClassName = supers.substring(0, index);
                 supers = supers.substring(index + 1);
@@ -261,7 +263,9 @@ class RemoteTypeResolver implements ClassResolver {
         cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                     "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
 
-        cf.addInterface("E".equals(type) ? Externalizable.class : Serializable.class);
+        if (!"N".equals(type)) {
+            cf.addInterface("E".equals(type) ? Externalizable.class : Serializable.class);
+        }
 
         while (supers != null && supers.length() > 0) {
             String interfaceName;
