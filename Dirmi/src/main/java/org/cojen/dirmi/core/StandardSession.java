@@ -562,6 +562,14 @@ public class StandardSession implements Session {
         close(true, true, null, null);
     }
 
+    void close(String message) {
+        try {
+            close(true, true, message, null);
+        } catch (IOException e) {
+            // Ignore.
+        }
+    }
+
     void closeOnFailure(String message, Throwable exception) {
         try {
             close(false, false, message, exception);
@@ -2376,7 +2384,7 @@ public class StandardSession implements Session {
 
         @Override
         public OrderedInvoker createOrderedInvoker() {
-            return new OrderedInvoker();
+            return new OrderedInvoker(StandardSession.this);
         }
 
         @Override

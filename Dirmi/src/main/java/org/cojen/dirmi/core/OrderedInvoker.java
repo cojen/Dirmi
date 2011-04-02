@@ -23,6 +23,13 @@ import java.rmi.RemoteException;
 import java.util.PriorityQueue;
 
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.cojen.dirmi.RejectedException;
+
+import org.cojen.dirmi.io.IOExecutor;
+
+import org.cojen.dirmi.util.ScheduledTask;
 
 /**
  * Utility class used by Skeletons to implement ordered method invocation.
@@ -30,21 +37,40 @@ import java.util.concurrent.Future;
  * @author Brian S O'Neill
  */
 public class OrderedInvoker {
+    // Maximum time a hole in the sequence is tolerated until the session is
+    // forcibly closed. A hole indicates a communication failure, and if not
+    // filled, the pending queue grows forever. TODO: This should tie into ping
+    // failure somehow.
+    private static final int MAX_HOLE_DURATION_MILLIS = 5000;
+
+    private final StandardSession mSession;
+
     private int mLastSequence;
     private PriorityQueue<SequencedOp> mPendingOps;
     private boolean mDraining;
 
-    OrderedInvoker() {
+    private Future<?> mHoleCheckTaskFuture;
+
+    private boolean mClosed;
+
+    OrderedInvoker(StandardSession session) {
+        mSession = session;
     }
 
     /**
      * Is called by methods which cannot yield control of the current
      * thread. Call finished after invoking method.
+     *
+     * @return false if session was closed because of an unfilled hole in the ordered sequence
      */
-    public synchronized void waitForNext(int sequence) throws InterruptedException {
+    public synchronized boolean waitForNext(int sequence) throws InterruptedException {
         while (!isNext(sequence)) {
-            wait();
+            if (mClosed) {
+                return false;
+            }
+            wait(MAX_HOLE_DURATION_MILLIS);
         }
+        return true;
     }
 
     /**
@@ -52,13 +78,38 @@ public class OrderedInvoker {
      * accumulating. If false is returned, call addPendingMethod. If true is
      * returned, call finished after invoking asynchronous method.
      */
-    public synchronized boolean isNext(int sequence) {
-        return mLastSequence + 1 == sequence;
+    public boolean isNext(int sequence) {
+        try {
+            synchronized (this) {
+                if (mLastSequence + 1 == sequence) {
+                    if (mHoleCheckTaskFuture != null) {
+                        mHoleCheckTaskFuture.cancel(false);
+                        mHoleCheckTaskFuture = null;
+                    }
+                    return true;
+                }
+
+                if (mHoleCheckTaskFuture == null && !mClosed) {
+                    // There's a hole in the sequence, and so close the session
+                    // if not filled in time.
+                    mHoleCheckTaskFuture = new HoleCheckTask().schedule(mSession.mExecutor);
+                }
+            }
+        } catch (RejectedException e) {
+            // Close outside of synchronized block to allow it to block.
+            close();
+        }
+
+        return false;
     }
 
     public void finished(int sequence) {
         SequencedOp op;
         synchronized (this) {
+            if (mClosed) {
+                return;
+            }
+
             if (isNext(sequence)) {
                 mLastSequence = sequence;
                 notifyAll();
@@ -83,6 +134,11 @@ public class OrderedInvoker {
     {
         SequencedOp op;
         synchronized (this) {
+            if (mClosed) {
+                // Throw it away since it will never be executed.
+                return;
+            }
+
             addPendingOp(new SequencedOp(sequence) {
                 public void apply() {
                     try {
@@ -113,6 +169,11 @@ public class OrderedInvoker {
     {
         SequencedOp op;
         synchronized (this) {
+            if (mClosed) {
+                // Throw it away since it will never be executed.
+                return;
+            }
+
             addPendingOp(new SequencedOp(sequence) {
                 public void apply() {
                     try {
@@ -195,6 +256,38 @@ public class OrderedInvoker {
         return null;
     }
  
+    void holeCheck(Future<?> taskFuture) {
+        synchronized (this) {
+            if (taskFuture == null || mHoleCheckTaskFuture != taskFuture) {
+                // Stale task.
+                return;
+            }
+        }
+
+        // Hole not filled in time.
+        close();
+    }
+
+    private void close() {
+        synchronized (this) {
+            mClosed = true;
+            mPendingOps = null;
+            mDraining = false;
+
+            if (mHoleCheckTaskFuture != null) {
+                mHoleCheckTaskFuture.cancel(false);
+                mHoleCheckTaskFuture = null;
+            }
+
+            notifyAll();
+        }
+
+        // Close session outside of synchronized block to allow it to block.
+        mSession.close("Closing session after waiting " +
+                       MAX_HOLE_DURATION_MILLIS +
+                       " milliseconds for missing ordered method invocation");
+    }
+
     private static class SequencedOp implements Comparable<SequencedOp> {
         final int mSequence;
 
@@ -212,6 +305,20 @@ public class OrderedInvoker {
         public int compareTo(SequencedOp op) {
             // Subtract for modulo arithmetic difference.
             return mSequence - op.mSequence;
+        }
+    }
+
+    private class HoleCheckTask extends ScheduledTask<RuntimeException> {
+        private Future<?> mFuture;
+
+        Future<?> schedule(IOExecutor executor) throws RejectedException {
+            return mFuture = executor.schedule
+                (this, MAX_HOLE_DURATION_MILLIS, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        protected void doRun() {
+            holeCheck(mFuture);
         }
     }
 }

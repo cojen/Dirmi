@@ -512,11 +512,18 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                 noPendingException.setLocation();
 
                 if (method.isOrdered() && methodExists(method)) {
+                    Label isNext = b.createLabel();
+
                     if (!method.isAsynchronous() || method.isBatched()) {
                         genWaitForNext(b, sequenceVar);
-                    } else {
-                        Label isNext = b.createLabel();
+                        b.ifZeroComparisonBranch(isNext, "!=");
 
+                        // Abort invocation since session is closed.
+                        b.loadConstant(Skeleton.READ_FINISHED);
+                        b.returnValue(TypeDesc.INT);
+
+                        isNext.setLocation();
+                    } else {
                         genIsNext(b, sequenceVar);
                         b.ifZeroComparisonBranch(isNext, "!=");
 
@@ -982,7 +989,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         b.loadThis();
         b.loadField(ORDERED_INVOKER_FIELD_NAME, orderedInvokerType);
         b.loadLocal(sequenceVar);
-        b.invokeVirtual(orderedInvokerType, "waitForNext", null,
+        b.invokeVirtual(orderedInvokerType, "waitForNext", TypeDesc.BOOLEAN,
                         new TypeDesc[] {TypeDesc.INT});
     }
 
