@@ -84,7 +84,7 @@ public class CloseableGroup<C extends Closeable> implements Closeable {
     }
 
     /**
-     * Closed the group and all group members.
+     * Closes the group and all group members.
      */
     @Override
     public void close() {
