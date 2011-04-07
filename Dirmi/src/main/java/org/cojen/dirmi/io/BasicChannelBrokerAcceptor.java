@@ -201,7 +201,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
                     dout.flush();
                     return broker;
                 } catch (IOException e) {
-                    removeBroker(id, broker);
+                    broker.close();
                     throw e;
                 }
             }
@@ -222,10 +222,12 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         Broker broker;
         synchronized (mAcceptedBrokers) {
             broker = mAcceptedBrokers.get(id);
+            if (broker == null && mClosed) {
+                throw new ClosedException("ChannelBrokerAcceptor is closed");
+            }
         }
 
         if (broker == null) {
-            channel.disconnect();
             throw new IOException("No broker found for id: " + id);
         }
 
@@ -238,9 +240,24 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         return null;
     }
 
-    private void removeBroker(long id, Broker broker) {
+    void removeBroker(final long id, final Broker broker, boolean immediate) {
         synchronized (mAcceptedBrokers) {
             if (mAcceptedBrokers.get(id) == broker) {
+                if (!immediate) {
+                    // Keep it around for a bit, to avoid "No broker found"
+                    // exceptions resulting from race conditions.
+                    try {
+                        mExecutor.schedule(new Runnable() {
+                            public void run() {
+                                removeBroker(id, broker, true /* immediate*/);
+                            }
+                        }, 10, TimeUnit.SECONDS);
+                        return;
+                    } catch (RejectedException e) {
+                        // Fall through and remove now.
+                    }
+                }
+
                 mAcceptedBrokers.remove(id);
             }
         }
@@ -305,7 +322,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
 
         @Override
         public void close() {
-            removeBroker(mId, this);
+            removeBroker(mId, this, false);
             if (!mAllChannels.isClosed()) {
                 dequeueConnectListenerForClose().failed(new ClosedException());
                 super.close();
