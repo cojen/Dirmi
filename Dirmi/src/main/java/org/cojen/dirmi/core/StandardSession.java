@@ -683,10 +683,26 @@ public class StandardSession implements Session {
     // Called by SessionRef.
     void sessionUnreferenced() {
         setCloseState(STATE_UNREF);
+
+        // Method should not block because it is called by finalize method, and
+        // blocking the finalization thread prevents memory from being freed.
         try {
-            mRemoteAdmin.sessionUnreferenced();
-        } catch (RemoteException e) {
-            // Ignore.
+            mExecutor.execute(new Runnable() {
+                public void run() {
+                    try {
+                        mRemoteAdmin.sessionUnreferenced();
+                    } catch (RemoteException e) {
+                        // Ignore.
+                    }
+                }
+            });
+        } catch (RejectedException e) {
+            // Fine, risk blocking for a few seconds.
+            try {
+                mRemoteAdmin.sessionUnreferenced();
+            } catch (RemoteException e2) {
+                // Ignore.
+            }
         }
     }
 
@@ -1371,6 +1387,7 @@ public class StandardSession implements Session {
              * Notification from client when session is not referenced any more.
              */
             @Asynchronous
+            @Timeout(10000)
             void sessionUnreferenced() throws RemoteException;
 
             /**
