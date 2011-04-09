@@ -224,6 +224,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             mPool.notifyAll();
         }
         synchronized (mScheduledTasks) {
+            mScheduledTasks.clear();
             mScheduledTasks.notifyAll();
         }
     }
