@@ -468,7 +468,10 @@ public class Environment implements Closeable {
         }
 
         if (!wasClosed) {
-            mExecutor.shutdownNow();
+            // Calling shutdownNow is dangerous, since the effect of
+            // interrupting active threads is undefined. Users may access the
+            // executor directly and call shutdownNow on it.
+            mExecutor.shutdown();
         }
 
         if (exception != null) {

@@ -16,7 +16,8 @@
 
 package org.cojen.dirmi.util;
 
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.TreeSet;
@@ -63,6 +64,8 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     // Pool is accessed like a stack.
     private final LinkedList<PooledThread> mPool;
+
+    private final HashSet<PooledThread> mAllThreads;
 
     private final TreeSet<Task> mScheduledTasks;
     private boolean mTaskRunnerReady;
@@ -117,6 +120,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
         mMax = max;
         mPool = new LinkedList<PooledThread>();
+        mAllThreads = new HashSet<PooledThread>();
 
         mScheduledTasks = new TreeSet<Task>();
     }
@@ -152,8 +156,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                 }
 
                 try {
-                    thread = newPooledThread(command);
-                    thread.start();
+                    thread = startNewPooledThread(command);
                 } catch (Error e) {
                     mActive--;
                     throw e;
@@ -216,10 +219,12 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     public void shutdown() {
         synchronized (mPool) {
-            mShutdown = true;
-            Runnable shutdown = new Shutdown();
-            for (PooledThread thread : mPool) {
-                thread.setCommand(shutdown);
+            if (!mShutdown) {
+                mShutdown = true;
+                Runnable shutdown = new Shutdown();
+                for (PooledThread thread : mPool) {
+                    thread.setCommand(shutdown);
+                }
             }
             mPool.notifyAll();
         }
@@ -231,13 +236,17 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     public List<Runnable> shutdownNow() {
         shutdown();
-        List<Runnable> remaining;
-        synchronized (mScheduledTasks) {
-            remaining = new ArrayList<Runnable>(mScheduledTasks);
-            mScheduledTasks.clear();
-            mScheduledTasks.notifyAll();
+
+        synchronized (mAllThreads) {
+            for (Thread thread : mAllThreads) {
+                thread.interrupt();
+            }
         }
-        return remaining;
+
+        // Implementation has no queue, so nothing to return. Scheduled tasks
+        // should not be returned, because it would imply that they are to be
+        // invoked immediately.
+        return Collections.emptyList();
     }
 
     public boolean isShutdown() {
@@ -299,6 +308,9 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             mPool.remove(thread);
             mActive--;
             mPool.notify();
+        }
+        synchronized (mAllThreads) {
+            mAllThreads.remove(thread);
         }
     }
 
@@ -416,7 +428,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
-    private PooledThread newPooledThread(Runnable command) {
+    private PooledThread startNewPooledThread(Runnable command) {
         PooledThread thread = new PooledThread
             (mGroup, mNamePrefix + mThreadNumber.getAndIncrement(), mContext, command);
 
@@ -428,6 +440,19 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
         if (mHandler != null) {
             thread.setUncaughtExceptionHandler(mHandler);
+        }
+
+        synchronized (mAllThreads) {
+            mAllThreads.add(thread);
+        }
+
+        try {
+            thread.start();
+        } catch (Error e) {
+            synchronized (mAllThreads) {
+                mAllThreads.remove(thread);
+            }
+            throw e;
         }
 
         return thread;
