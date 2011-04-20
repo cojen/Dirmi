@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.ref.WeakReference;
+
 import java.lang.reflect.Method;
 
 import java.io.Externalizable;
@@ -81,6 +83,10 @@ class RemoteTypeResolver implements ClassResolver {
         try {
             return resolveClass(name);
         } catch (ClassNotFoundException e) {
+            if (admin == null) {
+                throw e;
+            }
+
             if (name.startsWith("java.")) {
                 // Cannot create a fake class without a security exception.
                 throw e;
@@ -112,7 +118,7 @@ class RemoteTypeResolver implements ClassResolver {
 
             String type = classInfo.substring(index + 1);
 
-            return syntheticSerializableClass(name, serialVersionUID, type);
+            return syntheticSerializableClass(name, serialVersionUID, type, admin);
         }
     }
 
@@ -179,7 +185,7 @@ class RemoteTypeResolver implements ClassResolver {
             }
         }
 
-        RuntimeClassFile cf = CodeBuilderUtil.createRuntimeClassFile(typeName, new Loader());
+        RuntimeClassFile cf = CodeBuilderUtil.createRuntimeClassFile(typeName, new Loader(null));
         cf.setModifiers(Modifiers.PUBLIC.toInterface(true));
         cf.addInterface(Remote.class);
         TypeDesc exType = TypeDesc.forClass(RemoteException.class);
@@ -208,7 +214,8 @@ class RemoteTypeResolver implements ClassResolver {
     }
 
     private synchronized Class<?> syntheticSerializableClass
-        (String name, long serialVersionUID, String type)
+        (String name, long serialVersionUID, String type, StandardSession.Hidden.Admin admin)
+        throws IOException, ClassNotFoundException
     {
         Object key = KeyFactory.createKey(new Object[] {name, serialVersionUID, type});
 
@@ -258,7 +265,9 @@ class RemoteTypeResolver implements ClassResolver {
             superClassName = "U".equals(type) ? Enum.class.getName() : null;
         }
 
-        RuntimeClassFile cf = new RuntimeClassFile(name, superClassName, new Loader(), null, true);
+        RuntimeClassFile cf = new RuntimeClassFile
+            (name, superClassName, new Loader(admin), null, true);
+
         cf.setModifiers(Modifiers.PUBLIC);
         cf.addField(Modifiers.PRIVATE.toStatic(true).toFinal(true),
                     "serialVersionUID", TypeDesc.LONG).setConstantValue(serialVersionUID);
@@ -308,10 +317,18 @@ class RemoteTypeResolver implements ClassResolver {
     }
 
     private class Loader extends ClassLoader {
+        private final WeakReference<StandardSession.Hidden.Admin> mAdminRef;
+
+        Loader(StandardSession.Hidden.Admin admin) {
+            mAdminRef = admin == null ? null
+                : new WeakReference<StandardSession.Hidden.Admin>(admin);
+        }
+
         @Override
         protected Class<?> findClass(String name) throws ClassNotFoundException {
+            StandardSession.Hidden.Admin admin = mAdminRef == null ? null : mAdminRef.get();
             try {
-                return RemoteTypeResolver.this.resolveClass(name);
+                return RemoteTypeResolver.this.resolveClass(name, admin);
             } catch (IOException e) {
                 throw new ClassNotFoundException(name + ", " + e);
             }
