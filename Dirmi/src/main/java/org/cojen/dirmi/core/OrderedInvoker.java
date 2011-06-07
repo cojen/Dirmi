@@ -41,7 +41,28 @@ public class OrderedInvoker {
     // forcibly closed. A hole indicates a communication failure, and if not
     // filled, the pending queue grows forever. TODO: This should tie into ping
     // failure somehow.
-    private static final int MAX_HOLE_DURATION_MILLIS = 5000;
+    // FIXME: The algorithm to detect holes is flawed. If a method invocation
+    // takes a long time, it is incorrectly interpretted as a hole.
+    private static final int MAX_HOLE_DURATION_MILLIS;
+
+    static {
+        int maxHoleDuration = 10000;
+
+        try {
+            String propValue = System.getProperty
+                ("org.cojen.dirmi.core.OrderedInvoker.maxHoleDurationMillis");
+
+            if (propValue != null) {
+                try {
+                    maxHoleDuration = Math.max(1, Integer.parseInt(propValue));
+                } catch (NumberFormatException e) {
+                }
+            }
+        } catch (SecurityException e) {
+        }
+
+        MAX_HOLE_DURATION_MILLIS = maxHoleDuration;
+    }
 
     private final StandardSession mSession;
 
