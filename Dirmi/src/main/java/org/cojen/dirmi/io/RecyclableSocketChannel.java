@@ -91,6 +91,8 @@ class RecyclableSocketChannel extends SocketChannel {
                 if (mRecycler != null && (remoteControl = mRemoteControl) != null) {
                     break check;
                 }
+                // Ensure stub isn't referenced, breaking remote object cycle.
+                mRemoteControl = null;
             }
             // Cannot recycle.
             super.close();
@@ -111,7 +113,7 @@ class RecyclableSocketChannel extends SocketChannel {
             // Close local output and wait for streams to recycle.
             getOutputStream().outputClose();
         } catch (IOException e) {
-            super.disconnect();
+            forceDisconnect();
             throw e;
         }
     }
@@ -119,8 +121,16 @@ class RecyclableSocketChannel extends SocketChannel {
     @Override
     public void disconnect() {
         if (markClosed()) {
-            super.disconnect();
+            forceDisconnect();
         }
+    }
+
+    void forceDisconnect() {
+        synchronized (this) {
+            // Ensure stub isn't referenced, breaking remote object cycle.
+            mRemoteControl = null;
+        }
+        super.disconnect();
     }
 
     protected RecyclableSocketChannel newRecycledChannel(Input in, Output out) {
@@ -138,7 +148,7 @@ class RecyclableSocketChannel extends SocketChannel {
             try {
                 ready.recycleReady();
             } catch (RemoteException e) {
-                super.disconnect();
+                forceDisconnect();
             }
         }
 
@@ -156,7 +166,7 @@ class RecyclableSocketChannel extends SocketChannel {
             try {
                 ready.recycleReady();
             } catch (RemoteException e) {
-                super.disconnect();
+                forceDisconnect();
             }
         }
 
@@ -333,7 +343,7 @@ class RecyclableSocketChannel extends SocketChannel {
 
         @Override
         public void unreferenced() {
-            RecyclableSocketChannel.super.disconnect();
+            RecyclableSocketChannel.this.forceDisconnect();
         }
     }
 }
