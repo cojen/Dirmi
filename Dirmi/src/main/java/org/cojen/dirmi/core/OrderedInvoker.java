@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.Closeable;
+
 import java.lang.reflect.Method;
 
 import java.rmi.RemoteException;
@@ -36,7 +38,7 @@ import org.cojen.dirmi.util.ScheduledTask;
  *
  * @author Brian S O'Neill
  */
-public class OrderedInvoker {
+public class OrderedInvoker implements Closeable {
     // Maximum time a hole in the sequence is tolerated until the session is
     // forcibly closed. A hole indicates a communication failure, and if not
     // filled, the pending queue grows forever. TODO: This should tie into ping
@@ -118,7 +120,7 @@ public class OrderedInvoker {
             }
         } catch (RejectedException e) {
             // Close outside of synchronized block to allow it to block.
-            close();
+            close(true);
         }
 
         return false;
@@ -218,6 +220,12 @@ public class OrderedInvoker {
         drainPendingOps(op);
     }
 
+    @Override
+    public void close() {
+        // Close not a failure.
+        close(false);
+    }
+
     void uncaughtException(Throwable e) {
         Throwable cause = e.getCause();
         if (cause == null) {
@@ -286,10 +294,10 @@ public class OrderedInvoker {
         }
 
         // Hole not filled in time.
-        close();
+        close(true);
     }
 
-    private void close() {
+    private void close(boolean onFailure) {
         synchronized (this) {
             mClosed = true;
             mPendingOps = null;
@@ -303,10 +311,12 @@ public class OrderedInvoker {
             notifyAll();
         }
 
-        // Close session outside of synchronized block to allow it to block.
-        mSession.close("Closing session after waiting " +
-                       MAX_HOLE_DURATION_MILLIS +
-                       " milliseconds for missing ordered method invocation");
+        if (onFailure) {
+            // Close session outside of synchronized block to allow it to block.
+            mSession.close("Closing session after waiting " +
+                           MAX_HOLE_DURATION_MILLIS +
+                           " milliseconds for missing ordered method invocation");
+        }
     }
 
     private static class SequencedOp implements Comparable<SequencedOp> {

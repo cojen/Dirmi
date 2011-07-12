@@ -816,6 +816,16 @@ public class SkeletonFactoryGenerator<R extends Remote> {
         {
             CodeBuilder b = new CodeBuilder
                 (cf.addMethod(Modifiers.PUBLIC, "unreferenced", null, null));
+
+            if (hasOrderedMethods) {
+                // Close the OrderedInvoker to prevent it from closing the
+                // session when invocation holes last too long.
+                TypeDesc orderedInvokerType = TypeDesc.forClass(OrderedInvoker.class);
+                b.loadThis();
+                b.loadField(ORDERED_INVOKER_FIELD_NAME, orderedInvokerType);
+                b.invokeVirtual(orderedInvokerType, "close", null, null);
+            }
+
             b.loadThis();
             b.loadField(REMOTE_FIELD_NAME, remoteType);
             b.instanceOf(UNREFERENCED_TYPE);
