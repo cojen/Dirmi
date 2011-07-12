@@ -1923,6 +1923,7 @@ public class StandardSession implements Session {
 
         void timedOut(Future<?> expect) {
             if (timeoutTaskUpdater.compareAndSet(this, expect, timedOut)) {
+                // FIXME: disconnect prevents proper recycling
                 // Disconnect to force immediate wakeup of blocked call to socket.
                 mChannel.disconnect();
             }

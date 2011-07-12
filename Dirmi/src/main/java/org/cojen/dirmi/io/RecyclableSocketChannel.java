@@ -25,6 +25,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 
 import org.cojen.dirmi.Asynchronous;
+import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Ordered;
 import org.cojen.dirmi.Unreferenced;
 
@@ -34,12 +35,18 @@ import org.cojen.dirmi.Unreferenced;
  * @author Brian S O'Neill
  */
 class RecyclableSocketChannel extends SocketChannel {
+    // Channel states, or'd together.
+    private static final int REMOTE_RECYCLE_READY = 1;
+    private static final int LOCAL_RECYCLE_READY = 2;
+    private static final int OUTPUT_CLOSED = 4;
+
     private Recycler mRecycler;
     private RecycleControl mRemoteControl;
 
     private Input mRecycledInput;
     private Output mRecycledOutput;
-    private boolean mRemoteRecycleReady;
+
+    private int mState;
 
     RecyclableSocketChannel(IOExecutor executor, SimpleSocket socket) throws IOException {
         super(executor, socket);
@@ -85,10 +92,18 @@ class RecyclableSocketChannel extends SocketChannel {
 
     @Override
     public void close() throws IOException {
+        if (!markClosed()) {
+            return;
+        }
+
         RecycleControl remoteControl;
+        int state;
         check: {
             synchronized (this) {
+                state = mState;
                 if (mRecycler != null && (remoteControl = mRemoteControl) != null) {
+                    state |= OUTPUT_CLOSED;
+                    mState = state;
                     break check;
                 }
                 // Ensure stub isn't referenced, breaking remote object cycle.
@@ -99,13 +114,13 @@ class RecyclableSocketChannel extends SocketChannel {
             return;
         }
 
-        if (!markClosed()) {
-            return;
-        }
-
         try {
             // Instruct remote endpoint to stop writing.
-            remoteControl.outputClose();
+            if ((state & LOCAL_RECYCLE_READY) != 0) {
+                remoteControl.outputCloseAndDispose();
+            } else {
+                remoteControl.outputClose();
+            }
 
             // Start draining and unblock remote endpoint's writing.
             getInputStream().inputClose();
@@ -133,38 +148,65 @@ class RecyclableSocketChannel extends SocketChannel {
         super.disconnect();
     }
 
+    void unreferenced() {
+        synchronized (this) {
+            // Check if unreferenced following a dispose request, in which case
+            // the request should be ignored.
+            if ((mState & REMOTE_RECYCLE_READY) != 0) {
+                return;
+            }
+        }
+        forceDisconnect();
+    }
+
     protected RecyclableSocketChannel newRecycledChannel(Input in, Output out) {
         return new RecyclableSocketChannel(this, in, out);
     }
 
     void inputRecycled(Input in) {
         RecycleControl ready;
+        int state;
         synchronized (this) {
+            state = mState;
             mRecycledInput = in;
-            ready = mRecycledOutput == null ? null : mRemoteControl;
-        }
-
-        if (ready != null) {
-            try {
-                ready.recycleReady();
-            } catch (RemoteException e) {
-                forceDisconnect();
+            if (mRecycledOutput == null) {
+                ready = null;
+            } else {
+                ready = mRemoteControl;
+                state |= LOCAL_RECYCLE_READY;
+                mState = state;
             }
         }
 
-        handoff(false);
+        localRecycled(ready, state);
     }
 
     void outputRecycled(Output out) {
         RecycleControl ready;
+        int state;
         synchronized (this) {
+            state = mState;
             mRecycledOutput = out;
-            ready = mRecycledInput == null ? null : mRemoteControl;
+            if (mRecycledInput == null) {
+                ready = null;
+            } else {
+                ready = mRemoteControl;
+                state |= LOCAL_RECYCLE_READY;
+                mState = state;
+            }
         }
 
+        localRecycled(ready, state);
+    }
+
+    private void localRecycled(RecycleControl ready, int state) {
         if (ready != null) {
             try {
-                ready.recycleReady();
+                if ((state & OUTPUT_CLOSED) != 0) {
+                    ready.recycleReadyAndDispose();
+                } else {
+                    ready.recycleReady();
+                }
             } catch (RemoteException e) {
                 forceDisconnect();
             }
@@ -183,10 +225,10 @@ class RecyclableSocketChannel extends SocketChannel {
         Recycler recycler;
         synchronized (this) {
             if (remoteKnownReady) {
-                mRemoteRecycleReady = true;
+                mState |= REMOTE_RECYCLE_READY;
             }
 
-            if (!mRemoteRecycleReady ||
+            if ((mState & REMOTE_RECYCLE_READY) == 0 ||
                 ((in = mRecycledInput) == null) ||
                 ((out = mRecycledOutput) == null))
             {
@@ -197,7 +239,6 @@ class RecyclableSocketChannel extends SocketChannel {
 
             mRecycledInput = null;
             mRecycledOutput = null;
-            mRemoteRecycleReady = false;
         }
 
         recycler.recycled(newRecycledChannel(in, out));
@@ -299,20 +340,18 @@ class RecyclableSocketChannel extends SocketChannel {
         @Asynchronous
         void outputClose() throws RemoteException;
 
-        // Keep this method for compatibility with older version.
         @Ordered
         @Asynchronous
-        @Deprecated
+        @Disposer
         void outputCloseAndDispose() throws RemoteException;
 
         @Ordered
         @Asynchronous
         void recycleReady() throws RemoteException;
 
-        // Keep this method for compatibility with older version.
         @Ordered
         @Asynchronous
-        @Deprecated
+        @Disposer
         void recycleReadyAndDispose() throws RemoteException;
     }
 
@@ -343,7 +382,7 @@ class RecyclableSocketChannel extends SocketChannel {
 
         @Override
         public void unreferenced() {
-            RecyclableSocketChannel.this.forceDisconnect();
+            RecyclableSocketChannel.this.unreferenced();
         }
     }
 }
