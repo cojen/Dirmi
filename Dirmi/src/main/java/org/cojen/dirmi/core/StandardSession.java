@@ -105,7 +105,8 @@ public class StandardSession implements Session {
 
     private static final int DEFAULT_CHANNEL_IDLE_SECONDS = 60;
     private static final int DISPOSE_BATCH = 1000;
-    private static final int TIMEOUT_SECONDS = 15;
+    private static final int CONNECT_TIMEOUT_SECONDS = 10;
+    private static final int CREATE_TIMEOUT_SECONDS = 15;
 
     private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
         AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
@@ -205,7 +206,8 @@ public class StandardSession implements Session {
                                  long timeout, TimeUnit unit)
         throws IOException
     {
-        Timer timer = timeout < 0 ? Timer.seconds(TIMEOUT_SECONDS) : new Timer(timeout, unit);
+        Timer timer = timeout < 0 ? Timer.seconds(CREATE_TIMEOUT_SECONDS)
+            : new Timer(timeout, unit);
         return new SessionRef(new StandardSession(executor, broker, timer));
     }
 
@@ -2660,7 +2662,8 @@ public class StandardSession implements Session {
             if (channel != null) {
                 return channel;
             }
-            return toInvocationChannel(mBroker.connect(), false);
+            return toInvocationChannel
+                (mBroker.connect(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS), false);
         }
 
         private <T extends Throwable> InvocationChannel getChannel(Class<T> remoteFailureEx,
