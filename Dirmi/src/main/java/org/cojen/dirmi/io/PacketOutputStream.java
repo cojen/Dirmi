@@ -39,10 +39,10 @@ abstract class PacketOutputStream<P extends PacketOutputStream<P>> extends Chann
 
     static final int DEFAULT_SIZE = 8192;
 
-    private volatile OutputStream mOut;
-    private byte[] mBuffer;
+    volatile OutputStream mOut;
+    byte[] mBuffer;
 
-    private int mPos;
+    int mPos;
 
     public PacketOutputStream(OutputStream out) {
         this(out, DEFAULT_SIZE);

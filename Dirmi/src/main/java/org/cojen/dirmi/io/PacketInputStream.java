@@ -37,11 +37,11 @@ abstract class PacketInputStream<P extends PacketInputStream<P>> extends Channel
 
     static final int DEFAULT_SIZE = 8192;
 
-    private volatile InputStream mIn;
-    private byte[] mBuffer;
+    volatile InputStream mIn;
+    byte[] mBuffer;
 
-    private int mStart;
-    private int mEnd;
+    int mStart;
+    int mEnd;
 
     /* Special values:
         0: need to read next packet header
