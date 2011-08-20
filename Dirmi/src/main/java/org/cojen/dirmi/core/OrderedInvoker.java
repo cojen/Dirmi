@@ -43,8 +43,6 @@ public class OrderedInvoker implements Closeable {
     // forcibly closed. A hole indicates a communication failure, and if not
     // filled, the pending queue grows forever. TODO: This should tie into ping
     // failure somehow.
-    // FIXME: The algorithm to detect holes is flawed. If a method invocation
-    // takes a long time, it is incorrectly interpretted as a hole.
     private static final int MAX_HOLE_DURATION_MILLIS;
 
     static {
@@ -70,6 +68,7 @@ public class OrderedInvoker implements Closeable {
 
     private int mLastSequence;
     private PriorityQueue<SequencedOp> mPendingOps;
+    private boolean mRunning;
     private boolean mDraining;
 
     private Future<?> mHoleCheckTaskFuture;
@@ -109,10 +108,11 @@ public class OrderedInvoker implements Closeable {
                         mHoleCheckTaskFuture.cancel(false);
                         mHoleCheckTaskFuture = null;
                     }
+                    mRunning = true;
                     return true;
                 }
 
-                if (mHoleCheckTaskFuture == null && !mClosed) {
+                if (!mRunning && mHoleCheckTaskFuture == null && !mClosed) {
                     // There's a hole in the sequence, and so close the session
                     // if not filled in time.
                     mHoleCheckTaskFuture = new HoleCheckTask().schedule(mSession.mExecutor);
@@ -133,7 +133,9 @@ public class OrderedInvoker implements Closeable {
                 return;
             }
 
-            if (isNext(sequence)) {
+            mRunning = false;
+
+            if (mLastSequence + 1 == sequence) {
                 mLastSequence = sequence;
                 notifyAll();
             } else {
@@ -261,7 +263,8 @@ public class OrderedInvoker implements Closeable {
                 op.apply();
             } finally {
                 synchronized (this) {
-                    if (isNext(op.mSequence)) {
+                    mRunning = false;
+                    if (mLastSequence + 1 == op.mSequence) {
                         mLastSequence = op.mSequence;
                         notifyAll();
                     }
@@ -301,6 +304,7 @@ public class OrderedInvoker implements Closeable {
         synchronized (this) {
             mClosed = true;
             mPendingOps = null;
+            mRunning = false;
             mDraining = false;
 
             if (mHoleCheckTaskFuture != null) {
