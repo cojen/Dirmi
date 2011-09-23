@@ -44,11 +44,14 @@ import org.cojen.dirmi.util.Timer;
 public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
     static final byte 
         OPEN_REQUEST = 1,
-        ACCEPT_REQUEST = 3,
+        ACCEPT_REQUEST = 3, // deprecated in favor of ACCEPT_CONFIRM_REQUEST
         CONNECT_REQUEST = 5,
         CONNECT_RESPONSE = 6,
         PING_REQUEST = 7,
-        PING_RESPONSE = 8;
+        PING_RESPONSE = 8,
+        ACCEPT_CONFIRM_REQUEST = 9,
+        ACCEPT_SUCCESS_RESPONSE = 10,
+        ACCEPT_FAILED_RESPONSE = 11;
 
     private final IOExecutor mExecutor;
     private final ChannelAcceptor mAcceptor;
@@ -206,7 +209,7 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
                 }
             }
 
-            if (op != ACCEPT_REQUEST && op != CONNECT_RESPONSE) {
+            if (op != ACCEPT_REQUEST && op != CONNECT_RESPONSE && op != ACCEPT_CONFIRM_REQUEST) {
                 if (op < 0) {
                     throw new ClosedException("Accepted channel is closed");
                 } else {
@@ -228,11 +231,23 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
 
         if (broker == null) {
-            throw new IOException("No broker found for id: " + id);
+            if (op == ACCEPT_CONFIRM_REQUEST) {
+                channel.getOutputStream().write(ACCEPT_FAILED_RESPONSE);
+                channel.getOutputStream().flush();
+            }
+            if (op == CONNECT_RESPONSE) {
+                throw new IOException("Reverse connect refers to an unknown session: " + id);
+            } else {
+                throw new IOException("Accepted connection refers to an unknown session: " + id);
+            }
         }
 
         if (op == CONNECT_RESPONSE) {
             broker.connected(channel);
+        } else if (op == ACCEPT_CONFIRM_REQUEST) {
+            channel.getOutputStream().write(ACCEPT_SUCCESS_RESPONSE);
+            channel.getOutputStream().flush();
+            broker.accepted(channel);
         } else {
             broker.accepted(channel);
         }

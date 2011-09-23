@@ -24,14 +24,17 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RejectedException;
+import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.util.Timer;
 
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.OPEN_REQUEST;
-import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.ACCEPT_REQUEST;
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.CONNECT_REQUEST;
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.CONNECT_RESPONSE;
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.PING_REQUEST;
 import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.PING_RESPONSE;
+import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.ACCEPT_REQUEST;
+import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.ACCEPT_CONFIRM_REQUEST;
+import static org.cojen.dirmi.io.BasicChannelBrokerAcceptor.ACCEPT_SUCCESS_RESPONSE;
 
 /**
  * Paired with {@link BasicChannelBrokerAcceptor} to adapt a ChannelConnector
@@ -137,6 +140,9 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
     }
 
     private class Broker extends BasicChannelBroker {
+        // 0: unknown, 1: old, 2: new
+        private volatile int mProtocol;
+
         Broker(long id, Channel control) throws RejectedException {
             super(mExecutor, id, control);
 
@@ -217,12 +223,44 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
 
         @Override
         public Channel connect() throws IOException {
-            return sendRequest(mConnector.connect());
+            return connect(new Timer(15, TimeUnit.SECONDS));
         }
 
         @Override
         public Channel connect(long timeout, TimeUnit unit) throws IOException {
-            return sendRequest(mConnector.connect(timeout, unit));
+            if (timeout < 0) {
+                Channel channel = mConnector.connect();
+                if (!sendRequest(channel)) {
+                    // Retry with old protocol.
+                    sendRequest(channel = mConnector.connect());
+                }
+                return channel;
+            } else {
+                return connect(new Timer(timeout, unit));
+            }
+        }
+
+        @Override
+        public Channel connect(Timer timer) throws IOException {
+            Channel channel = mConnector.connect
+                (RemoteTimeoutException.checkRemaining(timer), timer.unit());
+
+            ChannelTimeout timeoutTask =
+                new ChannelTimeout(mExecutor, channel,
+                                   RemoteTimeoutException.checkRemaining(timer),
+                                   timer.unit());
+
+            try {
+                if (!sendRequest(channel)) {
+                    // Retry with old protocol.
+                    channel = mConnector.connect
+                        (RemoteTimeoutException.checkRemaining(timer), timer.unit());
+                    sendRequest(channel);
+                }
+                return channel;
+            } finally {
+                timeoutTask.cancel();
+            }
         }
 
         @Override
@@ -230,7 +268,10 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
             mConnector.connect(new ChannelConnector.Listener() {
                 public void connected(Channel channel) {
                     try {
-                        channel = sendRequest(channel);
+                        if (!sendRequest(channel)) {
+                            // Retry with old protocol.
+                            channel = connect(15, TimeUnit.SECONDS);
+                        }
                     } catch (IOException e) {
                         listener.failed(e);
                         return;
@@ -271,13 +312,47 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
             throw new AssertionError();
         }
 
-        private Channel sendRequest(Channel channel) throws IOException {
+        /**
+         * @return false if channel was closed because only old protocol is supported
+         */
+        private boolean sendRequest(Channel channel) throws IOException {
             DataOutputStream dout = new DataOutputStream(channel.getOutputStream());
-            dout.writeByte(ACCEPT_REQUEST);
-            dout.writeLong(mId);
-            dout.flush();
+
+            if (mProtocol == 1) {
+                // Always use old deprecated protocol.
+                dout.writeByte(ACCEPT_REQUEST);
+                dout.writeLong(mId);
+                dout.flush();
+            } else {
+                dout.writeByte(ACCEPT_CONFIRM_REQUEST);
+                dout.writeLong(mId);
+                dout.flush();
+
+                int response = channel.getInputStream().read();
+
+                if (response < 0) {
+                    if (mProtocol == 0) {
+                        // Force old protocol.
+                        mProtocol = 1;
+                        channel.disconnect();
+                        return false;
+                    }
+                    throw new ClosedException("New connection immediately closed");
+                }
+
+                // Always use new protocol.
+                mProtocol = 2;
+
+                if (response != ACCEPT_SUCCESS_RESPONSE) {
+                    channel.disconnect();
+                    ClosedException exception = new ClosedException("Stale session");
+                    close(exception);
+                    throw exception;
+                }
+            }
+
             channel.register(mAllChannels);
-            return channel;
+            return true;
         }
     }
 }

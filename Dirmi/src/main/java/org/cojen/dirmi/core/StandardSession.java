@@ -111,8 +111,8 @@ public class StandardSession implements Session {
     private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
         AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
 
-    private static final AtomicIntegerFieldUpdater<StandardSession> supressPingUpdater =
-        AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mSupressPing");
+    private static final AtomicIntegerFieldUpdater<StandardSession> suppressPingUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mSuppressPing");
 
     private final boolean mIsolated;
 
@@ -181,7 +181,7 @@ public class StandardSession implements Session {
 
     final RemoteTypeResolver mTypeResolver;
 
-    volatile int mSupressPing;
+    volatile int mSuppressPing;
 
     final Object mCloseLock;
     private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
@@ -593,6 +593,8 @@ public class StandardSession implements Session {
     {
         if (message == null) {
             message = "Session closed";
+        } else {
+            message = "Session closed (" + message + ')';
         }
 
         // Use lock as a barrier to prevent race condition with adding entries
@@ -1180,7 +1182,7 @@ public class StandardSession implements Session {
             return;
         }
 
-        if (!supressPingUpdater.compareAndSet(this, 0, 1)) {
+        if (!suppressPingUpdater.compareAndSet(this, 0, 1)) {
             // Another ping was recently performed, so don't do another.
             return;
         }
@@ -1611,8 +1613,8 @@ public class StandardSession implements Session {
         private int mFailedToDisposeCount;
 
         protected void doRun() {
-            // Allow ping check again, if was supressed.
-            supressPingUpdater.compareAndSet(StandardSession.this, 1, 0);
+            // Allow ping check again, if was suppressed.
+            suppressPingUpdater.compareAndSet(StandardSession.this, 1, 0);
 
             // Send batch of disposed ids to peer.
             try {
