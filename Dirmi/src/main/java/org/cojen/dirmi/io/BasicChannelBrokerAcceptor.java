@@ -231,15 +231,14 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
 
         if (broker == null) {
+            if (op == CONNECT_RESPONSE) {
+                throw new IOException("Reverse connect refers to an unknown session: " + id);
+            }
             if (op == ACCEPT_CONFIRM_REQUEST) {
                 channel.getOutputStream().write(ACCEPT_FAILED_RESPONSE);
                 channel.getOutputStream().flush();
             }
-            if (op == CONNECT_RESPONSE) {
-                throw new IOException("Reverse connect refers to an unknown session: " + id);
-            } else {
-                throw new IOException("Accepted connection refers to an unknown session: " + id);
-            }
+            throw new IOException("Accepted connection refers to an unknown session: " + id);
         }
 
         if (op == CONNECT_RESPONSE) {

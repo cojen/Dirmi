@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.rmi.RemoteException;
 
+import java.util.concurrent.RejectedExecutionException;
+
 /**
  * Exception indicating that an I/O operation failed because no threads are
  * available.
@@ -68,6 +70,21 @@ public class RejectedException extends RemoteException {
      */
     public boolean isShutdown() {
         return mShutdown;
+    }
+
+    /**
+     * Throws the cause of this exception if unchecked, else throws a
+     * RejectedExecutionException.
+     */
+    public RuntimeException throwUncheckedException() {
+        Throwable cause = getCause();
+        if (cause instanceof RuntimeException) {
+            throw (RuntimeException) cause;
+        }
+        if (cause instanceof Error) {
+            throw (Error) cause;
+        }
+        throw new RejectedExecutionException(getMessage());
     }
 
     private static Throwable getCause(RejectedException e) {

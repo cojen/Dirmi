@@ -50,6 +50,7 @@ import java.util.Map;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
@@ -76,6 +77,7 @@ import org.cojen.dirmi.RejectedException;
 import org.cojen.dirmi.RemoteTimeoutException;
 import org.cojen.dirmi.Response;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.SessionCloseListener;
 import org.cojen.dirmi.Timeout;
 import org.cojen.dirmi.TimeoutParam;
 import org.cojen.dirmi.Unbatched;
@@ -183,10 +185,11 @@ public class StandardSession implements Session {
 
     volatile int mSuppressPing;
 
-    final Object mCloseLock;
+    private final Object mCloseLock;
     private static final int STATE_CLOSING = 4, STATE_UNREF = 2, STATE_PEER_UNREF = 1;
     volatile int mCloseState;
-    String mCloseMessage;
+    private String mCloseMessage;
+    private Object mCloseListeners;
 
     /**
      * @param executor shared executor for remote methods
@@ -519,6 +522,39 @@ public class StandardSession implements Session {
         }
     }
 
+    public void addCloseListener(final SessionCloseListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Listener is null");
+        }
+
+        synchronized (mCloseLock) {
+            if (mCloseListeners == null) {
+                mCloseListeners = listener;
+            } else if (mCloseListeners instanceof SessionCloseListener.Cause) {
+                // Don't add listener because session is closed. Call it from a
+                // separate thread, to match the usual behavior.
+                final Link sessionLink = LinkWrapper.wrap(this);
+                try {
+                    mExecutor.execute(new Runnable() {
+                        public void run() {
+                            listener.closed(sessionLink,
+                                            (SessionCloseListener.Cause) mCloseListeners);
+                        }
+                    });
+                } catch (RejectedException e) {
+                    throw e.throwUncheckedException();
+                }
+            } else if (mCloseListeners instanceof SessionCloseListener) {
+                CopyOnWriteArrayList list = new CopyOnWriteArrayList();
+                list.add(mCloseListeners);
+                list.add(listener);
+                mCloseListeners = list;
+            } else {
+                ((CopyOnWriteArrayList) mCloseListeners).add(listener);
+            }
+        }
+    }
+
     public void setClassResolver(ClassResolver resolver) {
         mTypeResolver.setClassResolver(resolver);
     }
@@ -561,12 +597,12 @@ public class StandardSession implements Session {
     }
 
     public void close() throws IOException {
-        close(true, true, null, null);
+        close(SessionCloseListener.Cause.LOCAL_CLOSE, null, null);
     }
 
     void close(String message) {
         try {
-            close(true, true, message, null);
+            close(SessionCloseListener.Cause.LOCAL_CLOSE, message, null);
         } catch (IOException e) {
             // Ignore.
         }
@@ -574,7 +610,7 @@ public class StandardSession implements Session {
 
     void closeOnFailure(String message, Throwable exception) {
         try {
-            close(false, false, message, exception);
+            close(SessionCloseListener.Cause.COMMUNICATION_FAILURE, message, exception);
         } catch (IOException e) {
             // Ignore.
         }
@@ -582,13 +618,13 @@ public class StandardSession implements Session {
 
     void peerClosed(String message) {
         try {
-            close(false, true, message, null);
+            close(SessionCloseListener.Cause.REMOTE_CLOSE, message, null);
         } catch (IOException e) {
             // Ignore.
         }
     }
 
-    private void close(boolean notify, boolean explicit, String message, Throwable exception)
+    private void close(SessionCloseListener.Cause cause, String message, Throwable exception)
         throws IOException
     {
         if (message == null) {
@@ -609,6 +645,14 @@ public class StandardSession implements Session {
         }
 
         try {
+            if (cause == SessionCloseListener.Cause.LOCAL_CLOSE && mRemoteAdmin != null) {
+                try {
+                    mRemoteAdmin.closedExplicitly();
+                } catch (RemoteException e) {
+                    // Ignore.
+                }
+            }
+
             {
                 ScheduledFuture<?> task = mClockTask;
                 if (task != null) {
@@ -623,30 +667,6 @@ public class StandardSession implements Session {
             // Close broker now in case any discarded channels attempt to
             // recycle and try to make new connections.
             mBroker.close();
-
-            if (notify && mRemoteAdmin != null) {
-                if (explicit) {
-                    try {
-                        mRemoteAdmin.closedExplicitly();
-                    } catch (RemoteException e) {
-                        // Ignore.
-                    }
-                } else {
-                    try {
-                        mRemoteAdmin.closedOnFailure(message, exception);
-                    } catch (RemoteException e) {
-                        // Perhaps exception is not serializable?
-                        if (exception != null) {
-                            try {
-                                mRemoteAdmin.closedOnFailure(message, null);
-                            } catch (RemoteException e2) {
-                                // Ignore.
-                            }
-                        }
-                        throw e;
-                    }
-                }
-            }
 
             {
                 // Discard channels for which remote endpoint is read blocked.
@@ -668,6 +688,24 @@ public class StandardSession implements Session {
 
             // Unblock up any threads blocked on send.
             while (mSessionExchanger.dequeue(null) != null);
+
+            // Notify all close listeners.
+            synchronized (mCloseLock) {
+                Link sessionLink = LinkWrapper.wrap(this);
+                try {
+                    if (mCloseListeners instanceof SessionCloseListener) {
+                        ((SessionCloseListener) mCloseListeners).closed(sessionLink, cause);
+                    } else if (mCloseListeners instanceof CopyOnWriteArrayList) {
+                        CopyOnWriteArrayList list = (CopyOnWriteArrayList) mCloseListeners;
+                        for (Object obj : list) {
+                            ((SessionCloseListener) obj).closed(sessionLink, cause);
+                        }
+                    }
+                } finally {
+                    // Disable adding new listeners.
+                    mCloseListeners = cause;
+                }
+            }
         }
     }
 
@@ -1397,7 +1435,6 @@ public class StandardSession implements Session {
             /**
              * Notification from client when explicitly closed.
              */
-            @Asynchronous
             @Timeout(1000)
             void closedExplicitly() throws RemoteException;
 
@@ -1597,11 +1634,11 @@ public class StandardSession implements Session {
         }
 
         public void closedExplicitly() {
-            peerClosed(null);
+            peerClosed("by remote endpoint");
         }
 
         public void closedOnFailure(String message, Throwable exception) {
-            String prefix = "Session closed by peer due to unexpected failure";
+            String prefix = "by remote endpoint due to unexpected failure";
             message = message == null ? prefix : (prefix + ": " + message);
             peerClosed(message);
         }

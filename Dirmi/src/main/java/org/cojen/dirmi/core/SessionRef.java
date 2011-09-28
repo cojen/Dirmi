@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.SessionCloseListener;
 
 /**
  * Wrapper around StandardSession which supports automatic garbage collection
@@ -62,6 +63,10 @@ class SessionRef implements Session {
 
     public Object receive(long timeout, TimeUnit unit) throws RemoteException {
         return mSession.receive(timeout, unit);
+    }
+
+    public void addCloseListener(SessionCloseListener listener) {
+        mSession.addCloseListener(listener);
     }
 
     public void setClassResolver(ClassResolver resolver) {

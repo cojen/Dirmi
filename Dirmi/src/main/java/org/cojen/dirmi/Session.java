@@ -99,6 +99,14 @@ public interface Session extends Closeable, Flushable, Link {
     Object receive(long timeout, TimeUnit unit) throws RemoteException;
 
     /**
+     * Add a listener which receives notification when this session is
+     * closed. Listener is called at most once, and then it is unregistered.
+     *
+     * @throws IllegalArgumentException if listener is null
+     */
+    void addCloseListener(SessionCloseListener listener);
+
+    /**
      * Can be called at most once to control how deserialized classes and
      * remote interfaces are resolved. If the implemention chooses to remotely
      * download classes, it is strongly recommended that a security manager be
