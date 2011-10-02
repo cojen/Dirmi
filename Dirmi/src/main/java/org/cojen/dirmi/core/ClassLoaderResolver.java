@@ -18,6 +18,8 @@ package org.cojen.dirmi.core;
 
 import org.cojen.dirmi.ClassResolver;
 
+import org.cojen.util.SoftValueCache;
+
 /**
  * 
  *
@@ -27,12 +29,19 @@ class ClassLoaderResolver implements ClassResolver {
     static final ClassResolver DEFAULT = new ClassLoaderResolver(null);
 
     private final ClassLoader mLoader;
+    private final SoftValueCache<String, Class<?>> mCache;
 
     ClassLoaderResolver(ClassLoader loader) {
         mLoader = loader;
+        mCache = new SoftValueCache<String, Class<?>>(101);
     }
 
     public Class<?> resolveClass(String name) throws ClassNotFoundException {
+        Class<?> clazz = mCache.get(name);
+        if (clazz != null) {
+            return clazz;
+        }
+
         if (mLoader == null) {
             /*
               By default, classes described by ObjectStreamClass are loaded
@@ -54,9 +63,12 @@ class ClassLoaderResolver implements ClassResolver {
               system class loader, but at least the runtime behavior will be
               consistent.
             */
-            return Class.forName(name);
+            clazz = Class.forName(name);
         } else {
-            return Class.forName(name, true, mLoader);
+            clazz = Class.forName(name, true, mLoader);
         }
+
+        Class<?> existing = mCache.putIfAbsent(name, clazz);
+        return existing != null ? existing : clazz;
     }
 }
