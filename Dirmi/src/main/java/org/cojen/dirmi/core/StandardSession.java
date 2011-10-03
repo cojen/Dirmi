@@ -109,6 +109,7 @@ public class StandardSession implements Session {
     private static final int DISPOSE_BATCH = 1000;
     private static final int CONNECT_TIMEOUT_SECONDS = 10;
     private static final int CREATE_TIMEOUT_SECONDS = 15;
+    private static final int DEFAULT_DISPOSE_DELAY_SECONDS = 10;
 
     private static final AtomicIntegerFieldUpdater<StandardSession> closeStateUpdater =
         AtomicIntegerFieldUpdater.newUpdater(StandardSession.class, "mCloseState");
@@ -839,9 +840,9 @@ public class StandardSession implements Session {
                 return;
             }
 
-            VersionedIdentifier[] disposed = new VersionedIdentifier[size];
-            int[] localVersions = new int[size];
-            int[] remoteVersions = new int[size];
+            final VersionedIdentifier[] disposed = new VersionedIdentifier[size];
+            final int[] localVersions = new int[size];
+            final int[] remoteVersions = new int[size];
 
             for (int i=0; i<size; i++) {
                 VersionedIdentifier id = disposedList.get(i);
@@ -850,7 +851,25 @@ public class StandardSession implements Session {
                 remoteVersions[i] = id.remoteVersion();
             }
 
-            mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
+            // Delay sending disposed identifiers, to account for race
+            // conditions with concurrent remote invocations.
+            int delay = DEFAULT_DISPOSE_DELAY_SECONDS;
+
+            if (delay == 0) {
+                mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
+            } else if (delay > 0) {
+                mExecutor.schedule(new Runnable() {
+                    public void run() {
+                        try {
+                            mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
+                        } catch (RemoteException e) {
+                            if (!isClosing()) {
+                                uncaughtException(e);
+                            }
+                        }
+                    }
+                }, delay, TimeUnit.SECONDS);
+            }
         }
     }
 
