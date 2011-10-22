@@ -1353,6 +1353,29 @@ public class StandardSession implements Session {
         mClockSeconds = (int) (System.nanoTime() / (1L * 1000 * 1000 * 1000));
     }
 
+    void disposeSkeleton(VersionedIdentifier objId) {
+        Skeleton skeleton = mSkeletons.remove(objId);
+        if (skeleton != null) {
+            unreferenced(skeleton);
+        }
+    }
+
+    static <V> void completion(Future<V> response, RemoteCompletion<V> completion)
+        throws RemoteException
+    {
+        try {
+            completion.complete(response == null ? null : response.get());
+        } catch (InterruptedException e) {
+            completion.exception(e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause == null) {
+                cause = e;
+            }
+            completion.exception(cause);
+        }
+    }
+
     private static abstract class Ref<T> extends PhantomReference<T> {
         public Ref(T referent, ReferenceQueue queue) {
             super(referent, queue);
@@ -2341,17 +2364,7 @@ public class StandardSession implements Session {
         public <V> void completion(Future<V> response, RemoteCompletion<V> completion)
             throws RemoteException
         {
-            try {
-                completion.complete(response == null ? null : response.get());
-            } catch (InterruptedException e) {
-                completion.exception(e);
-            } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                if (cause == null) {
-                    cause = e;
-                }
-                completion.exception(cause);
-            }
+            StandardSession.completion(response, completion);
         }
 
         @Override
@@ -2467,10 +2480,7 @@ public class StandardSession implements Session {
 
         @Override
         public void dispose(VersionedIdentifier objId) {
-            Skeleton skeleton = mSkeletons.remove(objId);
-            if (skeleton != null) {
-                unreferenced(skeleton);
-            }
+            StandardSession.this.disposeSkeleton(objId);
         }
     }
 

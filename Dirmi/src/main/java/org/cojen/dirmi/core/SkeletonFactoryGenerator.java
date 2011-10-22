@@ -44,6 +44,7 @@ import org.cojen.classfile.Label;
 import org.cojen.classfile.LocalVariable;
 import org.cojen.classfile.MethodInfo;
 import org.cojen.classfile.Modifiers;
+import org.cojen.classfile.Opcode;
 import org.cojen.classfile.RuntimeClassFile;
 import org.cojen.classfile.TypeDesc;
 
@@ -296,7 +297,16 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         disposerGotoLabel = invokeBuilder.createLabel();
                     }
 
-                    invokeBuilder.branch(disposerGotoLabel);
+                    if (method.isOrdered()) {
+                        invokeBuilder.dup();
+                        invokeBuilder.ifZeroComparisonBranch(disposerGotoLabel, ">=");
+                        // Method is pending, so don't dispose right away.
+                        invokeBuilder.loadConstant(-1);
+                        invokeBuilder.math(Opcode.IXOR);
+                        invokeBuilder.returnValue(TypeDesc.INT);
+                    } else {
+                        invokeBuilder.branch(disposerGotoLabel);
+                    }
                 }
             }
 
@@ -573,17 +583,24 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                             }
                         }
 
+                        if (method.isDisposer()) {
+                            // Pass identifier to dispose of after method finishes.
+                            b.loadThis();
+                            b.loadField(ID_FIELD_NAME, VERSIONED_IDENTIFIER_TYPE);
+                        } else {
+                            b.loadNull();
+                        }
+
                         TypeDesc[] params;
                         if (completionVar == null) {
                             params = new TypeDesc[] {
                                 TypeDesc.INT,
                                 methodType,
                                 TypeDesc.OBJECT,
-                                TypeDesc.OBJECT.toArrayType()
+                                TypeDesc.OBJECT.toArrayType(),
+                                VERSIONED_IDENTIFIER_TYPE
                             };
                         } else {
-                            b.loadThis();
-                            b.loadField(SUPPORT_FIELD_NAME, SKEL_SUPPORT_TYPE);
                             b.loadLocal(completionVar);
 
                             params = new TypeDesc[] {
@@ -591,7 +608,7 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                                 methodType,
                                 TypeDesc.OBJECT,
                                 TypeDesc.OBJECT.toArrayType(),
-                                SKEL_SUPPORT_TYPE,
+                                VERSIONED_IDENTIFIER_TYPE,
                                 TypeDesc.forClass(RemoteCompletion.class)
                             };
                         }
@@ -601,8 +618,17 @@ public class SkeletonFactoryGenerator<R extends Remote> {
                         // Since asynchronous method was not executed, caller
                         // can read next request. This reduces the build up of
                         // threads caused by asynchronous methods.
-                        b.loadConstant
-                            (noPipeParam ? Skeleton.READ_ANY_THREAD : Skeleton.READ_FINISHED);
+                        int retValue = noPipeParam
+                            ? Skeleton.READ_ANY_THREAD
+                            : Skeleton.READ_FINISHED;
+
+                        if (method.isDisposer()) {
+                            // Indicate to caller that method is pending and
+                            // should not be immediately disposed of.
+                            retValue = ~retValue;
+                        }
+
+                        b.loadConstant(retValue);
                         b.returnValue(TypeDesc.INT);
 
                         isNext.setLocation();

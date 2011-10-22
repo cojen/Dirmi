@@ -155,7 +155,8 @@ public class OrderedInvoker implements Closeable {
     public void addPendingMethod(int sequence,
                                  final Method method,
                                  final Object instance,
-                                 final Object[] params)
+                                 final Object[] params,
+                                 final VersionedIdentifier disposeId)
     {
         SequencedOp op;
         synchronized (this) {
@@ -170,6 +171,10 @@ public class OrderedInvoker implements Closeable {
                         method.invoke(instance, params);
                     } catch (Throwable e) {
                         uncaughtException(e);
+                    } finally {
+                        if (disposeId != null) {
+                            mSession.disposeSkeleton(disposeId);
+                        }
                     }
                 }
             });
@@ -189,7 +194,7 @@ public class OrderedInvoker implements Closeable {
                                      final Method method,
                                      final Object instance,
                                      final Object[] params,
-                                     final SkeletonSupport support,
+                                     final VersionedIdentifier disposeId,
                                      final RemoteCompletion<V> completion)
     {
         SequencedOp op;
@@ -203,12 +208,16 @@ public class OrderedInvoker implements Closeable {
                 public void apply() {
                     try {
                         Future<V> response = (Future<V>) method.invoke(instance, params);
-                        support.completion(response, completion);
+                        StandardSession.completion(response, completion);
                     } catch (Throwable e) {
                         try {
                             completion.exception(e);
                         } catch (RemoteException e2) {
                             // Ignore; session is broken.
+                        }
+                    } finally {
+                        if (disposeId != null) {
+                            mSession.disposeSkeleton(disposeId);
                         }
                     }
                 }
