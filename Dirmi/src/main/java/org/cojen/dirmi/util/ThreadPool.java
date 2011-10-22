@@ -280,9 +280,11 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
             do {
                 mPool.wait(roundNanosToMillis(nanos));
-                if ((nanos -= System.nanoTime() - start) <= 0) {
+                long now = System.nanoTime();
+                if ((nanos -= now - start) <= 0) {
                     return isTerminated();
                 }
+                start = now;
             } while (!isTerminated());
         }
 
