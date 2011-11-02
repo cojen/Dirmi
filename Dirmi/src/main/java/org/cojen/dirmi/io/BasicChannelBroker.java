@@ -177,24 +177,31 @@ abstract class BasicChannelBroker implements ChannelBroker {
             return;
         }
 
-        if (cause == null) {
-            cause = new ClosedException();
+        try {
+            if (cause == null) {
+                cause = new ClosedException();
+            }
+
+            if (mScheduledPingCheck != null) {
+                mScheduledPingCheck.cancel(false);
+            }
+
+            if (mScheduledDoPing != null) {
+                mScheduledDoPing.cancel(false);
+            }
+
+            mControl.disconnect();
+
+            // Disconnect will not block trying to flush output or recycle
+            // input. There's no point in attempting to recycle channels anyhow,
+            // although unflushed output will get lost. Brokers are only used by
+            // Sessions, which aren't required to flush when closed. User must
+            // explicitly flush the Session for that behavior.
+            mAllChannels.disconnect();
+        } finally {
+            // Do last in case it blocks.
+            mListenerQueue.dequeueForClose().closed(cause);
         }
-
-        if (mScheduledPingCheck != null) {
-            mScheduledPingCheck.cancel(false);
-        }
-
-        if (mScheduledDoPing != null) {
-            mScheduledDoPing.cancel(false);
-        }
-
-        mControl.disconnect();
-
-        mAllChannels.close();
-
-        // Do last in case it blocks.
-        mListenerQueue.dequeueForClose().closed(cause);
     }
 
     /**

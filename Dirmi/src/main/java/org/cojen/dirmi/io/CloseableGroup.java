@@ -104,6 +104,22 @@ public class CloseableGroup<C extends Closeable> implements Closeable {
         }
     }
 
+    /**
+     * Disconnects the group and all group members, which must be Channels.
+     */
+    void disconnect() {
+        Map<C, Object> copy;
+        synchronized (this) {
+            mClosed = true;
+            copy = new HashMap<C, Object>(mGroup);
+            mGroup.clear();
+        }
+
+        for (C c : copy.keySet()) {
+            ((Channel) c).disconnect();
+        }
+    }
+
     @Override
     public synchronized String toString() {
         return "CloseableGroup: " + mGroup.keySet();
