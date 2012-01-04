@@ -853,19 +853,32 @@ public class StandardSession implements Session {
 
             // Delay sending disposed identifiers, to account for race
             // conditions with concurrent remote invocations.
-            int delay = DEFAULT_DISPOSE_DELAY_SECONDS;
+            final int delay = DEFAULT_DISPOSE_DELAY_SECONDS;
 
             if (delay == 0) {
                 mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
             } else if (delay > 0) {
                 mExecutor.schedule(new Runnable() {
+                    int mRetryCount;
+
                     public void run() {
                         try {
                             mRemoteAdmin.disposed(disposed, localVersions, remoteVersions);
                         } catch (RemoteException e) {
-                            if (!isClosing()) {
-                                uncaughtException(e);
+                            if (isClosing()) {
+                                return;
                             }
+                            if (mRetryCount++ < 2) {
+                                try {
+                                    mExecutor.schedule(this, delay, TimeUnit.SECONDS);
+                                    return;
+                                } catch (RejectedException e2) {
+                                    if (isClosing()) {
+                                        return;
+                                    }
+                                }
+                            }
+                            closeOnFailure("Unable to dispose remote objects", e);
                         }
                     }
                 }, delay, TimeUnit.SECONDS);
