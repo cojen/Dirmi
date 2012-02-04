@@ -47,6 +47,15 @@ import java.security.PrivilegedAction;
  * @author Brian S O'Neill
  */
 public class ThreadPool extends AbstractExecutorService implements ScheduledExecutorService {
+    private static final boolean LIMIT_REACHED_THREAD_DUMP;
+    private static final boolean LIMIT_REACHED_SYSTEM_EXIT;
+
+    static {
+        String prefix = ThreadPool.class.getName() + ".limitReached";
+        LIMIT_REACHED_THREAD_DUMP = System.getProperty(prefix + "ThreadDump", "").equals("true");
+        LIMIT_REACHED_SYSTEM_EXIT = System.getProperty(prefix + "SystemExit", "").equals("true");
+    }
+
     private static final AtomicLong cPoolNumber = new AtomicLong(1);
     static final AtomicLong cTaskNumber = new AtomicLong(1);
 
@@ -147,7 +156,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
                         break find;
                     }
                     if (mActive >= mMax) {
-                        throw new RejectedExecutionException("Too many active threads");
+                        limitReached();
                     }
                     // Create a new thread if the number of active threads
                     // is less than the maximum allowed.
@@ -184,6 +193,50 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             } catch (InterruptedException e) {
                 throw new RejectedExecutionException(e);
             }
+        }
+    }
+
+    private void limitReached() {
+        String message = "Too many active threads: " + mMax;
+
+        if (LIMIT_REACHED_THREAD_DUMP) {
+            System.err.println(new java.util.Date() + ": " + message +
+                               "; dumping current thread and all pooled threads");
+            Thread current = Thread.currentThread();
+            dump(System.err, current);
+            synchronized (mAllThreads) {
+                for (PooledThread t : mAllThreads) {
+                    if (t != current) {
+                        dump(System.err, t);
+                    }
+                }
+            }
+        }
+
+        if (LIMIT_REACHED_SYSTEM_EXIT) {
+            Exception e = new RejectedExecutionException(message + "; exiting");
+            try {
+                Thread t = Thread.currentThread();
+                t.getUncaughtExceptionHandler().uncaughtException(t, e);
+                System.exit(1);
+            } catch (Throwable e2) {
+                // Cannot exit or excpetion handler is broken. Fall through and
+                // throw an exception.
+            }
+        }
+
+        throw new RejectedExecutionException(message);
+    }
+
+    private static void dump(java.io.PrintStream out, Thread t) {
+        out.println('"' + t.getName() + "\" state=" + t.getState());
+        try {
+            StackTraceElement[] trace = t.getStackTrace();
+            for (StackTraceElement element : trace) {
+                out.println("\t at " + element);
+            }
+        } catch (SecurityException e) {
+            out.println(e);
         }
     }
 
