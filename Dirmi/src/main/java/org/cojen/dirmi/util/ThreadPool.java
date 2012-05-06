@@ -134,6 +134,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         mScheduledTasks = new TreeSet<Task>();
     }
 
+    @Override
     public void execute(Runnable command) throws RejectedExecutionException {
         execute(command, false);
     }
@@ -240,14 +241,17 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
+    @Override
     public ScheduledFuture<?> schedule(final Runnable command, long delay, TimeUnit unit) {
         return new Task<Object>(Executors.callable(command), delay, 0, unit);
     }
 
+    @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
         return new Task<V>(callable, delay, 0, unit);
     }
 
+    @Override
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
                                                   long initialDelay,
                                                   long period,
@@ -259,6 +263,31 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         return new Task<Object>(Executors.callable(command), initialDelay, period, unit);
     }
 
+    /**
+     * Schedules a task which executes with a randomly selected rate, for
+     * applying jitter.
+     *
+     * @param lowPeriod low end of the random period range
+     * @param highPeriod high end of the random period range
+     */
+    public ScheduledFuture<?> scheduleAtRandomRate(Runnable command,
+                                                   long initialDelay,
+                                                   long lowPeriod,
+                                                   long highPeriod,
+                                                   TimeUnit unit)
+    {
+        if (lowPeriod < 0 || highPeriod <= 0 || lowPeriod > highPeriod) {
+            throw new IllegalArgumentException();
+        }
+        Callable<Object> callable = Executors.callable(command);
+        if (lowPeriod == highPeriod) {
+            return new Task<Object>(callable, initialDelay, lowPeriod, unit);
+        } else {
+            return new JitterTask<Object>(callable, initialDelay, lowPeriod, highPeriod, unit);
+        }
+    }
+
+    @Override
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command,
                                                      long initialDelay,
                                                      long delay,
@@ -270,6 +299,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         return new Task<Object>(Executors.callable(command), initialDelay, -delay, unit);
     }
 
+    @Override
     public void shutdown() {
         synchronized (mPool) {
             if (!mShutdown) {
@@ -287,6 +317,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
+    @Override
     public List<Runnable> shutdownNow() {
         shutdown();
 
@@ -302,18 +333,21 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         return Collections.emptyList();
     }
 
+    @Override
     public boolean isShutdown() {
         synchronized (mPool) {
             return mShutdown;
         }
     }
 
+    @Override
     public boolean isTerminated() {
         synchronized (mPool) {
             return mShutdown && mActive <= 0;
         }
     }
 
+    @Override
     public boolean awaitTermination(long time, TimeUnit unit) throws InterruptedException {
         if (time < 0) {
             return false;
@@ -563,6 +597,7 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             return command;
         }
 
+        @Override
         public void run() {
             AccessController.doPrivileged(new PrivilegedAction<Object>() {
                 public Object run() {
@@ -611,9 +646,9 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
 
     private class Task<V> extends FutureTask<V> implements ScheduledFuture<V> {
         private final long mNum;
-        private final long mPeriodNanos;
+        final long mPeriodNanos;
 
-        private volatile long mAtNanos;
+        volatile long mAtNanos;
 
         /**
          * @param period Period for repeating tasks. A positive value indicates
@@ -640,13 +675,19 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
             }
             mAtNanos = atNanos;
 
+            start();
+        }
+
+        void start() {
             scheduleTask(this);
         }
 
+        @Override
         public long getDelay(TimeUnit unit) {
             return unit.convert(mAtNanos - System.nanoTime(), TimeUnit.NANOSECONDS);
         }
 
+        @Override
         public int compareTo(Delayed delayed) {
             if (this == delayed) {
                 return 0;
@@ -710,13 +751,79 @@ public class ThreadPool extends AbstractExecutorService implements ScheduledExec
         }
     }
 
+    static int randomInt(int n) {
+        // See "Xorshift RNGs" by George Marsaglia for why these numbers were chosen.
+        n ^= (n << 13);
+        n ^= (n >>> 17);
+        n ^= (n << 5);
+        return n;
+    }
+
+    private class JitterTask<V> extends Task<V> {
+        private final long mRangeNanos;
+
+        private int mRandom;
+
+        JitterTask(Callable<V> callable, long initialDelay,
+                   long lowPeriod, long highPeriod, TimeUnit unit)
+        {
+            super(callable, initialDelay, lowPeriod, unit);
+            mRangeNanos = unit.toNanos(highPeriod - lowPeriod);
+            while ((mRandom = Random.randomInt()) == 0);
+            super.start();
+        }
+
+        @Override
+        void start() {
+        }
+
+        @Override
+        public void run() {
+            removeTask(this);
+            if (super.runAndReset()) {
+                mAtNanos += mPeriodNanos + randomLong(mRangeNanos);
+                try {
+                    scheduleTask(this);
+                } catch (RejectedExecutionException e) {
+                    // Shutdown.
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return new StringBuilder()
+                .append("ScheduledFuture {delayNanos=")
+                .append(String.valueOf(getDelay(TimeUnit.NANOSECONDS)))
+                .append(", lowPeriodNanos=").append(String.valueOf(mPeriodNanos))
+                .append(", highPeriodNanos=").append(String.valueOf(mPeriodNanos + mRangeNanos))
+                .append('}').toString();
+        }
+
+        private long randomLong(final long n) {
+            int n2 = mRandom;
+            long bits, val;
+            do {
+                int n1 = randomInt(n2);
+                n2 = randomInt(n1);
+                bits = (((((long) n1) << 32) + (long) n2) >>> 1);
+                val = bits % n;
+            } while (bits - val + n - 1 < 0);
+
+            mRandom = n2;
+            return val;
+        }
+    }
+
     private class TaskRunner implements Runnable {
+        @Override
         public void run() {
             runNextScheduledTask();
         }
     }
 
     private static class Shutdown implements Runnable {
+        @Override
         public void run() {
             throw new ThreadDeath();
         }
