@@ -22,7 +22,7 @@ package org.cojen.dirmi;
  * SessionAccess#current} from within a remote method implementation. Because extra
  * overhead is required for supporting this feature, it is not enabled by default.
  *
- * <pre>
+ * <p><pre>
  * public class RemoteLoginServer implements RemoteLogin, <b>SessionAware</b> {
  *     RemoteApp login(String username, char[] password) throws AuthException {
  *         Link session = <b>SessionAccess.current();</b>

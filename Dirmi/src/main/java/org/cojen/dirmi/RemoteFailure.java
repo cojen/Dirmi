@@ -24,7 +24,7 @@ import java.rmi.RemoteException;
  * used to indicate a remote call failure. By default, it is {@link
  * RemoteException}, and it must be declared to be thrown.
  *
- * <pre>
+ * <p><pre>
  * <b>&#64;RemoteFailure(exception=SQLException.class)</b>
  * int executeUpdate(String sql) throws SQLException;
  * </pre>

@@ -25,7 +25,7 @@ import java.lang.annotation.*;
  * impact on {@link Asynchronous} methods. In addition, it can reduce the
  * amount of concurrent thread execution.
  *
- * <pre>
+ * <p><pre>
  * <b>&#64;Ordered</b>
  * &#64;Asynchronous
  * void logInfo(String message, DateTime timestamp) throws RemoteException;

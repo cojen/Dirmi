@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  * the session is open, and all pipes are closed when the session is
  * closed. Here's an example remote method declaration which uses a pipe:
  *
- * <pre>
+ * <p><pre>
  * <b>&#64;Asynchronous</b>
  * <b>Pipe</b> uploadFile(String name, <b>Pipe</b> pipe) throws RemoteException;
  * </pre>
@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  * method simply passes null for the pipe parameter, and the server-side
  * implementation returns null instead of a pipe. Example client call:
  *
- * <pre>
+ * <p><pre>
  *     Pipe pipe = server.uploadFile("notes.txt", null);
  *     byte[] notes = ...
  *     pipe.writeInt(notes.length);
@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
  *
  * The remote method implementation might look like this:
  *
- * <pre>
+ * <p><pre>
  * public Pipe uploadFile(String name, Pipe pipe) {
  *     byte[] notes = new byte[pipe.readInt()];
  *     pipe.readFully(notes);
@@ -83,7 +83,7 @@ import java.util.concurrent.TimeUnit;
  * the pipe implicitly flushes it. If the server is required to return a value
  * over the pipe, then the client call might be written as:
  *
- * <pre>
+ * <p><pre>
  *     Pipe pipe = server.uploadFile("notes.txt", null);
  *     byte[] notes = ...
  *     pipe.writeInt(notes.length);
