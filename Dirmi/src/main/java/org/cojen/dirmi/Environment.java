@@ -386,6 +386,9 @@ public class Environment implements Closeable {
         try {
             Session session = StandardSession.create(mIOExecutor, broker, timer);
             addToClosableSet(session);
+            if (mClassLoader != null) {
+                session.setClassLoader(mClassLoader);
+            }
             return session;
         } catch (IOException e) {
             broker.close();
