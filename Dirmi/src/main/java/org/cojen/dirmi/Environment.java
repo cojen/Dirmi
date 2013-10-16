@@ -298,7 +298,31 @@ public class Environment implements Closeable {
      * automatically select a local address and any available port
      */
     public SessionAcceptor newSessionAcceptor(SocketAddress localAddress) throws IOException {
-        return StandardSessionAcceptor.create(this, newBrokerAcceptor(localAddress));
+        return newSessionAcceptor(localAddress, null);
+    }
+    
+    /**
+     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
+     * acceptAll} to start automatically accepting sessions.
+     *
+     * @param port port for accepting socket connections; pass zero to choose
+     * any available port
+     * @param loader classloader to use for all accepted sessions
+     */
+    public SessionAcceptor newSessionAcceptor(int port, ClassLoader loader) throws IOException {
+        return newSessionAcceptor(new InetSocketAddress(port), loader);
+    }
+    
+    /**
+     * Returns an acceptor of sessions. Call {@link SessionAcceptor#acceptAll
+     * acceptAll} to start automatically accepting sessions.
+     *
+     * @param localAddress address for accepting socket connections; use null to
+     * automatically select a local address and any available port
+     * @param loader classloader to use for all accepted sessions
+     */
+    public SessionAcceptor newSessionAcceptor(SocketAddress localAddress, ClassLoader loader) throws IOException {
+        return StandardSessionAcceptor.create(this, newBrokerAcceptor(localAddress), loader);
     }
 
     /**

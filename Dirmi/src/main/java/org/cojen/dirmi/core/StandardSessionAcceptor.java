@@ -36,17 +36,21 @@ import org.cojen.dirmi.io.ChannelBrokerAcceptor;
 public class StandardSessionAcceptor implements SessionAcceptor {
     final Environment mEnv;
     final ChannelBrokerAcceptor mBrokerAcceptor;
+    final ClassLoader mLoader;
 
     private Auto mAuto;
 
     /**
+     * 
      * @param environment shared environment for creating sessions
      * @param brokerAcceptor accepted brokers must always connect to same remote server
+     * @param loader The classloader to be used by accepted sessions
      */
     public static SessionAcceptor create(Environment environment,
-                                         ChannelBrokerAcceptor brokerAcceptor)
+                                         ChannelBrokerAcceptor brokerAcceptor,
+                                         ClassLoader loader)
     {
-        return new StandardSessionAcceptor(environment, brokerAcceptor);
+        return new StandardSessionAcceptor(environment, brokerAcceptor, loader);
     }
 
     /**
@@ -54,10 +58,12 @@ public class StandardSessionAcceptor implements SessionAcceptor {
      * @param brokerAcceptor accepted brokers must always connect to same remote server
      */
     private StandardSessionAcceptor(Environment environment,
-                                    ChannelBrokerAcceptor brokerAcceptor)
+                                    ChannelBrokerAcceptor brokerAcceptor,
+                                    ClassLoader loader)
     {
         mEnv = environment;
         mBrokerAcceptor = brokerAcceptor;
+        mLoader = loader;
     }
 
     public Object getLocalAddress() {
@@ -126,6 +132,10 @@ public class StandardSessionAcceptor implements SessionAcceptor {
                 return;
             }
 
+            if (mLoader != null) {
+                session.setClassLoader(mLoader);
+            }
+            
             try {
                 mListener.established(session);
             } catch (Throwable e) {
@@ -191,6 +201,10 @@ public class StandardSessionAcceptor implements SessionAcceptor {
                 return;
             }
 
+            if (mLoader != null) {
+                session.setClassLoader(mLoader);
+            }
+            
             try {
                 session.send(mShared);
             } catch (IOException e) {
