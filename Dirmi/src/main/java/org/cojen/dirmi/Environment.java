@@ -91,6 +91,8 @@ public class Environment implements Closeable {
 
     private final RecyclableSocketChannelSelector mSelector;
 
+    private final ClassLoader mClassLoader;
+
     /**
      * Construct environment which uses up to 1000 threads.
      */
@@ -130,7 +132,7 @@ public class Environment implements Closeable {
      * @see ThreadPool
      */
     public Environment(ScheduledExecutorService executor) {
-        this(executor, null, null, null, null, null, null);
+        this(executor, null, null, null, null, null, null, null);
     }
 
     private Environment(ScheduledExecutorService executor,
@@ -139,7 +141,8 @@ public class Environment implements Closeable {
                         AtomicBoolean closed,
                         SocketFactory sf,
                         ServerSocketFactory ssf,
-                        RecyclableSocketChannelSelector selector)
+                        RecyclableSocketChannelSelector selector,
+                        ClassLoader classLoader)
     {
         if (executor == null) {
             throw new IllegalArgumentException("Must provide an executor");
@@ -154,6 +157,7 @@ public class Environment implements Closeable {
         mSocketFactory = sf;
         mServerSocketFactory = ssf;
         mSelector = selector;
+        mClassLoader = classLoader;
     }
 
     /**
@@ -168,7 +172,7 @@ public class Environment implements Closeable {
             throw new IllegalStateException("Cannot combine socket factory and selector");
         }
         return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
-                               sf, mServerSocketFactory, null);
+                               sf, mServerSocketFactory, null, mClassLoader);
     }
 
     /**
@@ -183,7 +187,7 @@ public class Environment implements Closeable {
             throw new IllegalStateException("Cannot combine socket factory and selector");
         }
         return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
-                               mSocketFactory, ssf, null);
+                               mSocketFactory, ssf, null, mClassLoader);
     }
 
     /**
@@ -242,7 +246,19 @@ public class Environment implements Closeable {
         });
 
         return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
-                               null, null, selector);
+                               null, null, selector, mClassLoader);
+    }
+
+    /**
+     * Returns an environment instance which uses the provided classloader
+     * for all established sessions.
+     * 
+     * The returned environment is linked to this one,
+     * and closing either environment closes both.
+     */
+    public Environment withClassLoader(ClassLoader classLoader) {
+        return new Environment(mExecutor, mIOExecutor, mCloseableSet, mClosed,
+                               mSocketFactory, mServerSocketFactory, mSelector, mClassLoader);
     }
 
     /**
@@ -333,6 +349,9 @@ public class Environment implements Closeable {
         try {
             Session session = StandardSession.create(mIOExecutor, broker);
             addToClosableSet(session);
+            if (mClassLoader != null) {
+                session.setClassLoader(mClassLoader);
+            }
             return session;
         } catch (IOException e) {
             broker.close();
@@ -367,6 +386,9 @@ public class Environment implements Closeable {
         try {
             Session session = StandardSession.create(mIOExecutor, broker, timer);
             addToClosableSet(session);
+            if (mClassLoader != null) {
+                session.setClassLoader(mClassLoader);
+            }
             return session;
         } catch (IOException e) {
             broker.close();
