@@ -5,7 +5,7 @@
   <artifactId>dirmi</artifactId>
   <packaging>jar</packaging>
   <name>Dirmi</name>
-  <version>1.0</version>
+  <version>1.1</version>
   <description>
     Bidirectional remote method invocation.
   </description>
