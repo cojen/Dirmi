@@ -678,7 +678,11 @@ public class StandardSession implements Session {
                 }
 
                 for (InvocationChan chan : toDiscard) {
-                    chan.discard();
+                    if (cause == SessionCloseListener.Cause.LOCAL_CLOSE) {
+                        chan.discard();
+                    } else {
+                        chan.disconnect();
+                    }
                 }
             }
         } finally {
