@@ -23,7 +23,7 @@
     <dependency>
       <groupId>org.cojen</groupId>
       <artifactId>dirmi</artifactId>
-      <version>1.0</version>
+      <version>1.1.4</version>
     </dependency>
 
     <dependency>
