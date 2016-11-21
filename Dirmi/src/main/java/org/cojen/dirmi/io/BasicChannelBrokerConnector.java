@@ -295,9 +295,9 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
         }
 
         @Override
-        public void close() {
+        protected void close(IOException cause) {
             mConnectedBrokers.remove(this);
-            super.close();
+            super.close(cause);
         }
 
         @Override
