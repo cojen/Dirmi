@@ -335,11 +335,12 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
 
         @Override
-        public void close() {
+        protected void close(IOException cause) {
             removeBroker(mId, this, false);
             if (!mAllChannels.isClosed()) {
-                dequeueConnectListenerForClose().failed(new ClosedException());
-                super.close();
+                dequeueConnectListenerForClose().failed(
+                        cause != null ? cause : new ClosedException());
+                super.close(cause);
             }
         }
 
