@@ -307,7 +307,7 @@ public class BasicChannelBrokerConnector implements ChannelBrokerConnector {
         }
 
         @Override
-        protected boolean doPing() {
+        protected void doPing() {
             // Should not be called.
             throw new AssertionError();
         }

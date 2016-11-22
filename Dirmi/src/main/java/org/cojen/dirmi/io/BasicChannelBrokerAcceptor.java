@@ -284,6 +284,42 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
             super(mExecutor, id, control);
             mListenerQueue = new ListenerQueue<ChannelConnector.Listener>
                 (mExecutor, ChannelConnector.Listener.class);
+
+            mControl.inputNotify(new Channel.Listener() {
+                public void ready() {
+                    Channel control = mControl;
+                    int op;
+                    try {
+                        op = control.getInputStream().read();
+                        if (cPingLogger != null) {
+                            logPingMessage("Ping response from " + control + ": " + op);
+                        }
+                        if (op == PING_RESPONSE) {
+                            pinged();
+                        } else if (op < 0) {
+                            throw new ClosedException("Control channel is closed");
+                        } else {
+                            throw new IOException
+                                    ("Invalid operation from control channel: " + op);
+                        }
+                        control.inputNotify(this);
+                    } catch (IOException e) {
+                        closed(e);
+                    }
+                }
+
+                public void rejected(RejectedException e) {
+                    // Safer to close if no threads.
+                    closed(e);
+                }
+
+                public void closed(IOException e) {
+                    Broker.this.close(e);
+                    if (cPingLogger != null) {
+                        logPingMessage("Ping check stopping for " + mControl + ": " + e);
+                    }
+                }
+            });
         }
 
         @Override
@@ -350,18 +386,13 @@ public class BasicChannelBrokerAcceptor implements ChannelBrokerAcceptor {
         }
 
         @Override
-        protected boolean doPing() throws IOException {
+        protected void doPing() throws IOException {
             if (cPingLogger != null) {
                 logPingMessage("Ping request to " + mControl);
             }
             try {
                 mControl.getOutputStream().write(PING_REQUEST);
                 mControl.flush();
-                int response = mControl.getInputStream().read();
-                if (cPingLogger != null) {
-                    logPingMessage("Ping response from " + mControl + ": " + response);
-                }
-                return response == PING_RESPONSE;
             } catch (IOException e) {
                 if (cPingLogger != null) {
                     logPingMessage("Ping response failure from " + mControl + ": " + e);

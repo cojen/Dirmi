@@ -216,7 +216,7 @@ abstract class BasicChannelBroker implements ChannelBroker {
      */
     protected abstract boolean requirePingTask();
 
-    protected abstract boolean doPing() throws IOException;
+    protected abstract void doPing() throws IOException;
 
     void logPingMessage(String message) {
         if (cPingLogger != null) {
@@ -287,12 +287,8 @@ abstract class BasicChannelBroker implements ChannelBroker {
 
         @Override
         boolean doTask(BasicChannelBroker broker) throws IOException {
-            if (broker.doPing()) {
-                broker.pinged();
-                return true;
-            } else {
-                return false;
-            }
+            broker.doPing();
+            return true;
         }
     }
 
