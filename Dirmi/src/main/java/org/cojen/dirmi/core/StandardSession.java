@@ -38,6 +38,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
+import java.net.SocketException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
@@ -375,25 +376,41 @@ public class StandardSession implements Session {
 
             chan.startTimeout(RemoteTimeoutException.checkRemaining(timer), timer.unit());
 
-            out.writeInt(MAGIC_NUMBER);
-            out.writeInt(PROTOCOL_VERSION);
-            out.flush();
-
-            int magic = in.readInt();
-            if (magic != MAGIC_NUMBER) {
-                throw new IOException("Incorrect magic number: " + magic);
-            }
-            int version = in.readInt();
-            if (version != PROTOCOL_VERSION) {
-                throw new IOException("Unsupported protocol version: " + version);
-            }
-
             try {
-                mRemoteAdmin = (Hidden.Admin) in.readUnshared();
-            } catch (ClassNotFoundException e) {
-                IOException io = new IOException();
-                io.initCause(e);
-                throw io;
+                out.writeInt(MAGIC_NUMBER);
+                out.writeInt(PROTOCOL_VERSION);
+                out.flush();
+
+                int magic = in.readInt();
+                if (magic != MAGIC_NUMBER) {
+                    throw new IOException("Incorrect magic number: " + magic);
+                }
+                int version = in.readInt();
+                if (version != PROTOCOL_VERSION) {
+                    throw new IOException("Unsupported protocol version: " + version);
+                }
+
+                try {
+                    mRemoteAdmin = (Hidden.Admin) in.readUnshared();
+                } catch (ClassNotFoundException e) {
+                    IOException io = new IOException();
+                    io.initCause(e);
+                    throw io;
+                }
+            } catch (SocketException e) {
+                // When the InvocationChan's timer expires, it closes the connection. That
+                // causes read and write calls to fail with a SocketException that has
+                // "Socket closed" as the message, if the connection is closed in the middle
+                // of a call.
+                //
+                // If the timer is really what caused the connection to get closed, throw a
+                // RemoteTimeoutException instead.
+                RemoteTimeoutException.checkRemaining(timer);
+                throw e;
+            } catch (ClosedException e) {
+                // If the connection is closed between calls, a ClosedException is thrown.
+                RemoteTimeoutException.checkRemaining(timer);
+                throw e;
             }
 
             chan.cancelTimeout();

@@ -112,9 +112,8 @@ public class TestSessionAcceptor {
     public void connectTimeout() throws IOException {
         // A large connect timeout. The timeout is high enough that the call should easily
         // finish without timing out. For this test to cover the right paths, this timeout
-        // (when converted to seconds) must be lower than
-        // StandardSession.CREATE_TIMEOUT_SECONDS.
-        final int SUCCESS_TIMEOUT_MS = 14_000;
+        // must be lower than BasicChannelBroker.PING_DELAY_MILLIS.
+        final int SUCCESS_TIMEOUT_MS = 2_400;
         // Call ping() once without timing it, to warm up the caches
         ping(SUCCESS_TIMEOUT_MS);
 
@@ -135,7 +134,8 @@ public class TestSessionAcceptor {
                 timeouts++;
                 // This test purposely uses a timeout that is too low, so this exception is
                 // expected. Now that the client has timed out, verify the server is still
-                // healthy.
+                // healthy, and can process a new session without waiting for the old session
+                // to fail a ping.
                 ping(SUCCESS_TIMEOUT_MS);
             }
         }
