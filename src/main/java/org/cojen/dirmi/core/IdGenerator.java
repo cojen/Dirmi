@@ -38,15 +38,18 @@ final class IdGenerator {
     }
 
     /**
-     * Returns any 64-bit value.
+     * Returns any 64-bit value other than zero.
      */
     static long next() {
         long id;
-        synchronized (IdGenerator.class) {
-            id = sequence;
-            sequence = id + 1;
-        }
-        return scramble(id) ^ sequenceMask;
+        do {
+            synchronized (IdGenerator.class) {
+                id = sequence;
+                sequence = id + 1;
+            }
+            id = scramble(id) ^ sequenceMask;
+        } while (id == 0);
+        return id;
     }
 
     /**
