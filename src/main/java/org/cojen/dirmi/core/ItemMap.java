@@ -50,14 +50,30 @@ final class ItemMap<I extends Item> {
         mSize = 0;
     }
 
-    synchronized void put(I item) {
+    @SuppressWarnings("unchecked")
+    synchronized I put(I item) {
         Item[] items = mItems;
         int slot = ((int) item.id) & (items.length - 1);
 
-        for (Item it = items[slot]; it != null; it = it.mNext) {
+        for (Item it = items[slot], prev = null; it != null; ) {
             if (it == item) {
-                return;
+                return item;
             }
+            Item next = it.mNext;
+            if (it.id == item.id) {
+                if (prev == null) {
+                    item.mNext = next;
+                } else {
+                    prev.mNext = next;
+                    item.mNext = items[slot];
+                }
+                VarHandle.storeStoreFence(); // ensure that item fields are safely visible
+                items[slot] = item;
+                it.mNext = null;
+                return (I) it;
+            }
+            prev = it;
+            it = next;
         }
 
         int size = mSize;
@@ -71,6 +87,8 @@ final class ItemMap<I extends Item> {
         items[slot] = item;
 
         mSize = size + 1;
+
+        return null;
     }
 
     /**

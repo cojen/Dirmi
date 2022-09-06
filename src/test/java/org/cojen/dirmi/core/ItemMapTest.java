@@ -45,11 +45,11 @@ public class ItemMapTest {
             } catch (NoSuchObjectException e) {
             }
 
-            map.put(items[i]);
+            assertNull(map.put(items[i]));
         }
 
         // Put again is harmless.
-        map.put(items[0]);
+        assertTrue(items[0] == map.put(items[0]));
 
         for (int i=0; i<items.length; i++) {
             assertEquals(items[i], map.get(items[i].id));
@@ -95,7 +95,7 @@ public class ItemMapTest {
         var map = new ItemMap<Item>();
 
         var item = new Item(IdGenerator.next(IdGenerator.I_CLIENT));
-        map.put(item);
+        assertNull(map.put(item));
         assertEquals(item, map.get(item.id));
         assertEquals(1, map.size());
 
@@ -108,8 +108,31 @@ public class ItemMapTest {
         } catch (NoSuchObjectException e) {
         }
 
-        map.put(item);
+        assertNull(map.put(item));
         assertEquals(item, map.get(item.id));
         assertEquals(1, map.size());
+    }
+
+    @Test
+    public void replace() throws Exception {
+        var map = new ItemMap<Item>();
+
+        var items = new Item[1000];
+        for (int i=0; i<items.length; i++) {
+            items[i] = new Item(IdGenerator.next(IdGenerator.I_SERVER));
+            assertNull(map.put(items[i]));
+        }
+
+        var replacements = new Item[items.length];
+        for (int i=0; i<items.length; i++) {
+            replacements[i] = new Item(items[i].id);
+            assertTrue(items[i] == map.put(replacements[i]));
+        }
+        
+        assertEquals(items.length, map.size());
+
+        for (int i=0; i<items.length; i++) {
+            assertEquals(replacements[i], map.get(replacements[i].id));
+        }
     }
 }
