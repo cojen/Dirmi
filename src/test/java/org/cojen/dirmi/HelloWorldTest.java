@@ -16,7 +16,14 @@
 
 package org.cojen.dirmi;
 
+import java.net.ProtocolFamily;
 import java.net.ServerSocket;
+import java.net.SocketAddress;
+import java.net.StandardProtocolFamily;
+
+import java.nio.file.Path;
+
+import java.nio.channels.ServerSocketChannel;
 
 import org.junit.*;
 import static org.junit.Assert.*;
@@ -32,7 +39,7 @@ public class HelloWorldTest {
     }
 
     @Test
-    public void basic() throws Exception {
+    public void inetSocket() throws Exception {
         var server = Environment.create();
         server.export("main", new ControlServer());
         var ss = new ServerSocket(0);
@@ -40,6 +47,71 @@ public class HelloWorldTest {
 
         var client = Environment.create();
         var session = client.connect(Control.class, "main", "localhost", ss.getLocalPort());
+        var control = session.root();
+
+        assertEquals("HelloWorld", control.call("Hello"));
+        assertEquals("Hello!!! World", control.call("Hello!!! "));
+
+        try {
+            System.out.println(control.call(null));
+            fail();
+        } catch (RuntimeException e) {
+            assertEquals("yo", e.getMessage());
+        }
+
+        server.close();
+        client.close();
+        session.close();
+    }
+
+    @Test
+    public void inetSocketChannel() throws Exception {
+        var server = Environment.create();
+        server.export("main", new ControlServer());
+        var ss = ServerSocketChannel.open().bind(null);
+        server.acceptAll(ss);
+
+        var client = Environment.create();
+        var session = client.connect(Control.class, "main", ss.getLocalAddress());
+        var control = session.root();
+
+        assertEquals("HelloWorld", control.call("Hello"));
+        assertEquals("Hello!!! World", control.call("Hello!!! "));
+
+        try {
+            System.out.println(control.call(null));
+            fail();
+        } catch (RuntimeException e) {
+            assertEquals("yo", e.getMessage());
+        }
+
+        server.close();
+        client.close();
+        session.close();
+    }
+
+    @Test
+    public void domainSocketChannel() throws Exception {
+        if (Runtime.version().feature() < 16) {
+            // Domain socket support isn't available.
+            return;
+        }
+
+        var family = (ProtocolFamily) StandardProtocolFamily.class.getField("UNIX").get(null);
+        var ss = (ServerSocketChannel) ServerSocketChannel.class.getMethod
+            ("open", ProtocolFamily.class).invoke(null, family);
+        ss.bind(null);
+        SocketAddress address = ss.getLocalAddress();
+
+        Path path = (Path) address.getClass().getMethod("getPath").invoke(address);
+        path.toFile().deleteOnExit();
+
+        var server = Environment.create();
+        server.export("main", new ControlServer());
+        server.acceptAll(ss);
+
+        var client = Environment.create();
+        var session = client.connect(Control.class, "main", address);
         var control = session.root();
 
         assertEquals("HelloWorld", control.call("Hello"));

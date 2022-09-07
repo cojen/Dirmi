@@ -466,11 +466,21 @@ public final class Engine implements Environment {
                 return;
             }
 
+            boolean noDelay = true;
+
             while (!isClosed()) {
                 Socket s = null;
                 try {
                     s = mSocket.accept();
-                    s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+
+                    if (noDelay) {
+                        try {
+                            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+                        } catch (UnsupportedOperationException e) {
+                            noDelay = false;
+                        }
+                    }
+
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
@@ -507,11 +517,21 @@ public final class Engine implements Environment {
                 return;
             }
 
+            boolean noDelay = true;
+
             while (!isClosed()) {
                 SocketChannel s = null;
                 try {
                     s = mChannel.accept();
-                    s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+
+                    if (noDelay) {
+                        try {
+                            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+                        } catch (UnsupportedOperationException e) {
+                            noDelay = false;
+                        }
+                    }
+
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
