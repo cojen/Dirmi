@@ -14,24 +14,29 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.core;
+package org.cojen.dirmi;
+
+import java.rmi.RemoteException;
 
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * Generic exception indicating that a resource is closed.
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
  */
-public class Item {
-    // Remote object id.
-    protected final long id;
+public class ClosedException extends RemoteException {
+    public ClosedException() {
+        this("Closed");
+    }
 
-    // ItemMap collision chain.
-    Item mNext;
+    public ClosedException(String message) {
+        super(message);
+    }
 
-    Item(long id) {
-        this.id = id;
+    public ClosedException(Throwable cause) {
+        super(cause.getMessage(), cause);
+    }
+
+    public ClosedException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

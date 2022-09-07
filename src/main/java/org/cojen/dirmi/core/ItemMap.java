@@ -27,8 +27,8 @@ import org.cojen.dirmi.NoSuchObjectException;
  *
  * @author Brian S O'Neill
  */
-final class ItemMap<I extends Item> {
-    private static final int INITIAL_CAPACITY = 8; // must be power of 2
+class ItemMap<I extends Item> {
+    static final int INITIAL_CAPACITY = 8; // must be power of 2
 
     private Item[] mItems;
     private int mSize;
@@ -160,14 +160,12 @@ final class ItemMap<I extends Item> {
 
         var newItems = new Item[capacity];
 
-        int newMask = capacity - 1;
-
         for (int i=0; i<items.length; i++) {
             for (Item it = items[i]; it != null; ) {
                 Item next = it.mNext;
-                int ix = ((int) it.id) & newMask;
-                it.mNext = newItems[ix];
-                newItems[ix] = it;
+                int slot = ((int) it.id) & (newItems.length - 1);
+                it.mNext = newItems[slot];
+                newItems[slot] = it;
                 it = next;
             }
         }

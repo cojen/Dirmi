@@ -23,7 +23,6 @@ import java.security.SecureRandom;
  * are depleted, and then the same sequence repeats.
  *
  * @author Brian S O'Neill
- * @see IdMap
  */
 final class IdGenerator {
     static long I_SERVER = 0, I_CLIENT = 0b01L << 62, I_ALIAS = 0b10L << 62;

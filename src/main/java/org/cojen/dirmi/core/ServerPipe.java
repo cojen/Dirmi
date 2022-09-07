@@ -16,22 +16,25 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * 
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
  */
-public class Item {
-    // Remote object id.
-    protected final long id;
+final class ServerPipe extends BufferedPipe {
+    //final ServerSession mSession;
 
-    // ItemMap collision chain.
-    Item mNext;
-
-    Item(long id) {
-        this.id = id;
+    ServerPipe(InputStream in, OutputStream out) {
+        super(in, out);
+        //mSession = session;
     }
+
+    /* FIXME
+    @Override
+    public void recycle() throws IOException {
+    }
+    */
 }

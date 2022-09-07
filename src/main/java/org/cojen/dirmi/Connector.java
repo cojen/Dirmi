@@ -14,24 +14,30 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.core;
+package org.cojen.dirmi;
+
+import java.io.IOException;
+
+import java.net.SocketAddress;
+
+import org.cojen.dirmi.core.DirectConnector;
 
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * 
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
  */
-public class Item {
-    // Remote object id.
-    protected final long id;
-
-    // ItemMap collision chain.
-    Item mNext;
-
-    Item(long id) {
-        this.id = id;
+@FunctionalInterface
+public interface Connector {
+    /**
+     * Returns a default connector that directly connects the socket.
+     */
+    static Connector direct() {
+        return DirectConnector.THE;
     }
+
+    /**
+     * Called to establish a new connection, which is then passed to the given session.
+     */
+    void connect(Session<?> s, SocketAddress address) throws IOException;
 }

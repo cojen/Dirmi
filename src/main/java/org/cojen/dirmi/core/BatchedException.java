@@ -17,21 +17,29 @@
 package org.cojen.dirmi.core;
 
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * Wraps an exception caught when invoking a batched method, to be written to the client after
+ * all input has been drained.
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
+ * @see BatchedContext
  */
-public class Item {
-    // Remote object id.
-    protected final long id;
+public final class BatchedException extends Exception {
+    static BatchedException make(Throwable ex) {
+        if (ex instanceof BatchedException) {
+            return (BatchedException) ex;
+        }
+        return new BatchedException(ex);
+    }
 
-    // ItemMap collision chain.
-    Item mNext;
+    private BatchedException(Throwable cause) {
+        super(cause);
+    }
 
-    Item(long id) {
-        this.id = id;
+    /**
+     * The exception shouldn't propagate to the caller so no need to capture the trace.
+     */
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
     }
 }

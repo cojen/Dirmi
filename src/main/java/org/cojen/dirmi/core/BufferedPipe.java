@@ -444,7 +444,7 @@ class BufferedPipe implements Pipe {
             case T_BIG_INTEGER:     simple = readBigInteger(readUnsignedByte()); break loop;
             case T_BIG_INTEGER_L:   simple = readBigInteger(readInt()); break loop;
             case T_BIG_DECIMAL:     simple = readBigDecimal(); break loop;
-            case T_THROWABLE:       return readThrowable(null);
+            case T_THROWABLE:       return readThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
             case T_REMOTE_INFO:     return RemoteInfo.readFrom(this);
             default: throw inputException(new InvalidObjectException("Unknown type: " + typeCode));
@@ -764,10 +764,7 @@ class BufferedPipe implements Pipe {
         return new BigDecimal(unscaled, scale);
     }
 
-    /**
-     * @param stitch non-null to keep the local trace and stitch these traces in the middle
-     */
-    private Throwable readThrowable(StackTraceElement[] stitch) throws IOException {
+    private Throwable readThrowable() throws IOException {
         int format = readUnsignedByte();
         if (format != 1) {
             throw inputException(new InvalidObjectException("Unknown format: " + format));
@@ -809,28 +806,6 @@ class BufferedPipe implements Pipe {
 
         if (trace == null) {
             trace = new StackTraceElement[0];
-        }
-
-        if (stitch != null) {
-            StackTraceElement[] local = t.getStackTrace();
-
-            // Prune out the call to this method.
-            String thisClass = getClass().getName();
-            for (int i=0; i<local.length; i++) {
-                StackTraceElement e = local[i];
-                if (thisClass.equals(e.getClassName())
-                    && "readThrowable".equals(e.getMethodName()))
-                {
-                    local = Arrays.copyOfRange(local, i + 1, local.length);
-                    break;
-                }
-            }
-
-            var combined = new StackTraceElement[trace.length + stitch.length + local.length];
-            System.arraycopy(trace, 0, combined, 0, trace.length);
-            System.arraycopy(stitch, 0, combined, trace.length, stitch.length);
-            System.arraycopy(local, 0, combined, trace.length + stitch.length, local.length);
-            trace = combined;
         }
 
         t.setStackTrace(trace);
@@ -1579,7 +1554,7 @@ class BufferedPipe implements Pipe {
             byte[] buf = mOutBuffer;
             buf[end++] = T_REMOTE_T; // remote id and type
             cLongArrayBEHandle.set(buf, end, v.id);
-            cLongArrayBEHandle.set(buf, end, v.typeId);
+            cLongArrayBEHandle.set(buf, end, v.typeId());
             mOutEnd = end + 16;
         }
     }
@@ -1744,11 +1719,17 @@ class BufferedPipe implements Pipe {
         return (i | (i >> 16)) + 1;
     }
 
+    boolean isEmpty() {
+        return available() == 0 && mOutEnd == 0;
+    }
+
+    @Override
+    public void recycle() throws IOException {
+        close();
+    }
+
     @Override
     public final void close() throws IOException {
-        // TODO: Support recycling with a subclass. Replace mSourceIn and mSourceOut with fake
-        // streams that always fail. Use closed nullInputStream and nullOutputStream singleton
-        // instances.
         close(null);
     }
 

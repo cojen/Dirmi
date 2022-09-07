@@ -17,21 +17,22 @@
 package org.cojen.dirmi.core;
 
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * Wraps an exception caught when invoking a server-side piped method. Is used by
+ * SkeletonSupport to distinguish a general I/O exception from something which should be logged
+ * as being uncaught.
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
  */
-public class Item {
-    // Remote object id.
-    protected final long id;
+public final class UncaughtException extends Exception {
+    public UncaughtException(Throwable cause) {
+        super(cause);
+    }
 
-    // ItemMap collision chain.
-    Item mNext;
-
-    Item(long id) {
-        this.id = id;
+    /**
+     * The exception shouldn't propagate to the caller so no need to capture the trace.
+     */
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
     }
 }

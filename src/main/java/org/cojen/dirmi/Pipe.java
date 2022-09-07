@@ -80,6 +80,12 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput {
     OutputStream getOutputStream();
 
     /**
+     * Attempt to recycle the connection instead of closing it. Caller must ensure that the
+     * pipe has no pending input or unflushed output.
+     */
+    void recycle() throws IOException;
+
+    /**
      * {@inheritDoc}
      */
     @Override

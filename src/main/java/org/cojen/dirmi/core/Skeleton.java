@@ -28,12 +28,11 @@ import org.cojen.dirmi.Pipe;
  * @see SkeletonFactory
  */
 public abstract class Skeleton<R> extends Item {
-    protected final long typeId;
-
-    public Skeleton(long id, long typeId) {
+    public Skeleton(long id) {
         super(id);
-        this.typeId = typeId;
     }
+
+    public abstract long typeId();
 
     /**
      * Returns the Remote object managed by this Skeleton.
