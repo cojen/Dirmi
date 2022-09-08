@@ -17,8 +17,8 @@
 package org.cojen.dirmi;
 
 /**
- * Thrown if an attempt is made to invoke a method on an object that no longer exists in the
- * remote virtual machine.
+ * Thrown when attempting to invoke a method against an object that is unknown to a {@link
+ * Session session}.
  *
  * @author Brian S O'Neill
  */

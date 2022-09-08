@@ -38,7 +38,7 @@ import org.cojen.dirmi.core.CoreUtils;
 import org.cojen.dirmi.core.Engine;
 
 /**
- * 
+ * Sharable environment for connecting and accepting remote sessions.
  *
  * @author Brian S O'Neill
  */
@@ -126,7 +126,7 @@ public interface Environment extends Closeable {
 
     /**
      * Call to establish a new client-side session. A remote server must be accepting
-     * connections and it must also export the given named object.
+     * connections, and it must also export the given named object.
      *
      * @param type the type of the root object which is exported by the remote server
      * @param name the name of the root object which is exported by the remote server
@@ -141,7 +141,7 @@ public interface Environment extends Closeable {
 
     /**
      * Call to establish a new client-side session. A remote server must be accepting
-     * connections and it must also export the given named object.
+     * connections, and it must also export the given named object.
      *
      * @param name the name of the root object which is exported by the remote server
      * @param host server host address to connect to
@@ -159,8 +159,8 @@ public interface Environment extends Closeable {
     }
 
     /**
-     * Assign a connector for establishing new client-side sessions. By default, the {@link
-     * Connector#direct direct} connector is used.
+     * Assign a connector for establishing new client-side socket connections. By default, the
+     * {@link Connector#direct direct} connector is used.
      *
      * @param c non-null connector
      * @return the previously assigned connector

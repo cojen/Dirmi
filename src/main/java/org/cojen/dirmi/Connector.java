@@ -23,21 +23,24 @@ import java.net.SocketAddress;
 import org.cojen.dirmi.core.DirectConnector;
 
 /**
- * 
+ * Defines a function which is called whenever client-side socket connections need to be
+ * established.
  *
  * @author Brian S O'Neill
+ * @see Environment#connector Environment.connector
  */
 @FunctionalInterface
 public interface Connector {
     /**
-     * Returns a default connector that directly connects the socket.
+     * Returns a default connector that directly connects sockets.
      */
     static Connector direct() {
         return DirectConnector.THE;
     }
 
     /**
-     * Called to establish a new connection, which is then passed to the given session.
+     * Called to establish a new socket connection, which is then passed to one of the
+     * session's {@code connected} methods.
      */
     void connect(Session<?> s, SocketAddress address) throws IOException;
 }

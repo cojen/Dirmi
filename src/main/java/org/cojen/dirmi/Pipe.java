@@ -68,14 +68,14 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput {
     boolean disableReferences();
 
     /**
-     * Returns the pipe's InputStream which also implements ObjectInput. Closing the stream is
-     * equivalent to closing the pipe.
+     * Returns the pipe's {@code InputStream} which also implements {@code
+     * ObjectInput}. Closing the stream is equivalent to closing the pipe.
      */
     InputStream getInputStream();
 
     /**
-     * Returns the pipe's OutputStream which also implements ObjectOutput. Closing the stream
-     * is equivalent to closing the pipe.
+     * Returns the pipe's {@code OutputStream} which also implements {@code
+     * ObjectOutput}. Closing the stream is equivalent to closing the pipe.
      */
     OutputStream getOutputStream();
 
@@ -86,7 +86,8 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput {
     void recycle() throws IOException;
 
     /**
-     * {@inheritDoc}
+     * Read and return an object. Unlike the inherited method, reading from a pipe never throws
+     * a {@link ClassNotFoundException}.
      */
     @Override
     Object readObject() throws IOException;

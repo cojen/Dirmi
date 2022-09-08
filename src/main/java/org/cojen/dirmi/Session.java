@@ -29,9 +29,12 @@ import java.nio.channels.SocketChannel;
 import org.cojen.dirmi.core.CoreUtils;
 
 /**
- * 
+ * Manages a client-side or server-side remote session, which establishes new socket
+ * connections as needed. Remote calls over a session are initated from the {@link #root root}
+ * object, which can return additional remote objects.
  *
  * @author Brian S O'Neill
+ * @see Environment#connect Environment.connect
  */
 public interface Session<R> extends Closeable {
     /**
