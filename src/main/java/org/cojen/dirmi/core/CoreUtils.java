@@ -114,23 +114,7 @@ public final class CoreUtils {
             return (T) new RemoteException(cause);
         }
 
-        // RemoteMethod should have already verified that the remoteFailureEx class has an
-        // appropriate constructor.
-
-        try {
-            return (T) remoteFailureEx.getConstructor(Throwable.class).newInstance(cause);
-        } catch (Throwable e) {
-        }
-
-        try {
-            return (T) remoteFailureEx.getConstructor(String.class, Throwable.class)
-                .newInstance(cause.toString(), cause);
-        } catch (Throwable e) {
-        }
-
-        // Give up and return the cause anyhow, possibly unchecked.
-
-        return (T) cause;
+        return ExceptionWrapper.forClass(remoteFailureEx).wrap(cause);
     }
 
     static void writeParam(Variable pipeVar, Variable paramVar) {

@@ -45,7 +45,12 @@ public class CoreUtilsTest {
         assertTrue(e instanceof RemoteException);
         assertNull(e.getCause());
 
-        // MyEx1 doesn't have an appropriate constructor.
+        // MyEx0 doesn't have an appropriate constructor.
+        e = remoteException(MyEx0.class, null);
+        assertTrue(e instanceof RemoteException);
+        assertNull(e.getCause());
+
+        // MyEx1 isn't public.
         e = remoteException(MyEx1.class, null);
         assertTrue(e instanceof RemoteException);
         assertNull(e.getCause());
@@ -93,10 +98,25 @@ public class CoreUtilsTest {
         assertTrue(e instanceof MyEx3);
         assertTrue(e.getCause() instanceof SocketException);
         assertEquals(SocketException.class.getName() + ": fail", e.getMessage());
+
+        e = remoteException(MyEx4.class, new SocketException("fail"));
+        assertTrue(e instanceof MyEx4);
+        assertTrue(e.getCause() instanceof SocketException);
+
+        e = remoteException(MyEx5.class, new SocketException("fail"));
+        assertTrue(e instanceof MyEx5);
+        assertTrue(e.getCause() instanceof SocketException);
+        assertEquals(SocketException.class.getName() + ": fail", e.getMessage());
     }
 
-    public static class MyEx1 extends Exception {
-        private MyEx1() {
+    public static class MyEx0 extends Exception {
+        private MyEx0() {
+        }
+    }
+
+    static class MyEx1 extends Exception {
+        public MyEx1(Throwable cause) {
+            super(cause);
         }
     }
 
@@ -109,6 +129,18 @@ public class CoreUtilsTest {
     public static class MyEx3 extends Exception {
         public MyEx3(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    public static class MyEx4 extends Exception {
+        public MyEx4() {
+            super();
+        }
+    }
+
+    public static class MyEx5 extends Exception {
+        public MyEx5(String message) {
+            super(message);
         }
     }
 }
