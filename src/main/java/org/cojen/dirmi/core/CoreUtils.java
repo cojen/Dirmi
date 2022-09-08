@@ -18,8 +18,14 @@ package org.cojen.dirmi.core;
 
 import java.io.Closeable;
 import java.io.EOFException;
+import java.io.IOException;
 
 import java.lang.reflect.Constructor;
+
+import java.net.Socket;
+import java.net.StandardSocketOptions;
+
+import java.nio.channels.SocketChannel;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Variable;
@@ -33,10 +39,23 @@ import org.cojen.dirmi.RemoteException;
  *
  * @author Brian S O'Neill
  */
-final class CoreUtils {
+public final class CoreUtils {
     static final long PROTOCOL_V2 = 4052788960387224692L;
 
     static final Object MAKER_KEY = new Object();
+
+    public static void setOptions(Socket s) throws IOException {
+        if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
+            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+        }
+    }
+
+    public static void setOptions(SocketChannel s) throws IOException {
+        if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
+            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
+        }
+        s.configureBlocking(true);
+    }
 
     /**
      * Grants the given maker access to the core package.

@@ -34,6 +34,7 @@ import java.util.Objects;
 
 import java.util.concurrent.Executor;
 
+import org.cojen.dirmi.core.CoreUtils;
 import org.cojen.dirmi.core.Engine;
 
 /**
@@ -96,6 +97,7 @@ public interface Environment extends Closeable {
      * which isn't exported
      */
     default Session<?> accepted(Socket s) throws IOException {
+        CoreUtils.setOptions(s);
         return accepted(s.getInputStream(), s.getOutputStream());
     }
 
@@ -108,7 +110,7 @@ public interface Environment extends Closeable {
      * which isn't exported
      */
     default Session<?> accepted(SocketChannel s) throws IOException {
-        s.configureBlocking(true);
+        CoreUtils.setOptions(s);
         return accepted(Channels.newInputStream(s), Channels.newOutputStream(s));
     }
 

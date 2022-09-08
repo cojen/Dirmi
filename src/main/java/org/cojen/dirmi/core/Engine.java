@@ -28,7 +28,6 @@ import java.lang.invoke.VarHandle;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
-import java.net.StandardSocketOptions;
 
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -466,21 +465,10 @@ public final class Engine implements Environment {
                 return;
             }
 
-            boolean noDelay = true;
-
             while (!isClosed()) {
                 Socket s = null;
                 try {
                     s = mSocket.accept();
-
-                    if (noDelay) {
-                        try {
-                            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
-                        } catch (UnsupportedOperationException e) {
-                            noDelay = false;
-                        }
-                    }
-
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
@@ -517,21 +505,10 @@ public final class Engine implements Environment {
                 return;
             }
 
-            boolean noDelay = true;
-
             while (!isClosed()) {
                 SocketChannel s = null;
                 try {
                     s = mChannel.accept();
-
-                    if (noDelay) {
-                        try {
-                            s.setOption(StandardSocketOptions.TCP_NODELAY, true);
-                        } catch (UnsupportedOperationException e) {
-                            noDelay = false;
-                        }
-                    }
-
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);

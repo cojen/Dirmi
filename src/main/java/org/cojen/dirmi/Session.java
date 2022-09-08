@@ -26,6 +26,8 @@ import java.net.Socket;
 import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 
+import org.cojen.dirmi.core.CoreUtils;
+
 /**
  * 
  *
@@ -41,6 +43,7 @@ public interface Session<R> extends Closeable {
      * Receives new connections from a {@link Connector Connector}.
      */
     default void connected(Socket s) throws IOException {
+        CoreUtils.setOptions(s);
         connected(s.getInputStream(), s.getOutputStream());
     }
 
@@ -48,7 +51,7 @@ public interface Session<R> extends Closeable {
      * Receives new connections from a {@link Connector Connector}.
      */
     default void connected(SocketChannel s) throws IOException {
-        s.configureBlocking(true);
+        CoreUtils.setOptions(s);
         connected(Channels.newInputStream(s), Channels.newOutputStream(s));
     }
 
