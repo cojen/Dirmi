@@ -16,8 +16,6 @@
 
 package org.cojen.dirmi;
 
-import java.rmi.RemoteException;
-
 /**
  * Generic exception indicating that a resource is closed.
  *
