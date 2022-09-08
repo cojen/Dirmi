@@ -67,9 +67,14 @@ public final class CoreUtils {
     }
 
     static boolean isRemote(Class<?> clazz) {
-        return Remote.class.isAssignableFrom(clazz) ||
-            // Be lenient and also support java.rmi interfaces.
-            java.rmi.Remote.class.isAssignableFrom(clazz);
+        try {
+            return Remote.class.isAssignableFrom(clazz) ||
+                // Be lenient and also support java.rmi interfaces.
+                java.rmi.Remote.class.isAssignableFrom(clazz);
+        } catch (Throwable e) {
+            // The java.rmi module might not be found.
+            return false;
+        }
     }
 
     static boolean isUnchecked(Class<? extends Throwable> clazz) {
@@ -94,80 +99,38 @@ public final class CoreUtils {
 
     @SuppressWarnings("unchecked")
     static <T extends Throwable> T remoteException(Class<T> remoteFailureEx, Throwable cause) {
-        RemoteException ex;
-
         if (cause == null) {
-            ex = new RemoteException();
-        } else {
-            if (cause instanceof EOFException) {
-                // EOF is not as meaningful in this context, so replace it.
-                cause = new ClosedException("Pipe input is closed");
-            }
-
-            if (remoteFailureEx.isAssignableFrom(cause.getClass())) {
-                return (T) cause;
-            }
-
-            if (cause instanceof RemoteException) {
-                ex = (RemoteException) cause;
-            } else {
-                String message = cause.getMessage();
-                if (message == null || (message = message.trim()).length() == 0) {
-                    message = cause.toString();
-                }
-                ex = new RemoteException(message, cause);
-            }
+            cause = new RemoteException();
+        } else if (cause instanceof EOFException) {
+            // EOF is not meaningful in this context, so replace it.
+            cause = new ClosedException("Pipe input is closed");
         }
 
-        if (!remoteFailureEx.isAssignableFrom(RemoteException.class)) {
-            // Try to construct the preferred exception type.
-
-            try {
-                return (T) remoteFailureEx.getConstructor(Throwable.class).newInstance(ex);
-            } catch (Throwable e) {
-            }
-
-            try {
-                return (T) remoteFailureEx.getConstructor(String.class, Throwable.class)
-                    .newInstance(ex.getMessage(), ex);
-            } catch (Throwable e) {
-            }
-
-            Constructor stringCtor = null;
-
-            try {
-                stringCtor = remoteFailureEx.getConstructor(String.class);
-                var t = (T) stringCtor.newInstance(ex.getMessage());
-                t.initCause(ex); // might fail too
-                return t;
-            } catch (Throwable e) {
-            }
-
-            for (Constructor ctor : remoteFailureEx.getConstructors()) {
-                Class[] paramTypes = ctor.getParameterTypes();
-                if (paramTypes.length != 1) {
-                    continue;
-                }
-                if (paramTypes[0].isAssignableFrom(RemoteException.class)) {
-                    try {
-                        return (T) ctor.newInstance(ex);
-                    } catch (Throwable e) {
-                    }
-                }
-            }
-
-            if (stringCtor != null) {
-                // Try this one again, but with the full exception string and no cause.
-                try {
-                    return (T) stringCtor.newInstance(ex.toString());
-                } catch (Throwable e) {
-                }
-            }
-
-            // Give up and return the RemoteException anyhow, possibly unchecked.
+        if (remoteFailureEx.isInstance(cause)) {
+            return (T) cause;
         }
 
-        return (T) ex;
+        if (remoteFailureEx == RemoteException.class) {
+            return (T) new RemoteException(cause);
+        }
+
+        // RemoteMethod should have already verified that the remoteFailureEx class has an
+        // appropriate constructor.
+
+        try {
+            return (T) remoteFailureEx.getConstructor(Throwable.class).newInstance(cause);
+        } catch (Throwable e) {
+        }
+
+        try {
+            return (T) remoteFailureEx.getConstructor(String.class, Throwable.class)
+                .newInstance(cause.toString(), cause);
+        } catch (Throwable e) {
+        }
+
+        // Give up and return the cause anyhow, possibly unchecked.
+
+        return (T) cause;
     }
 
     static void writeParam(Variable pipeVar, Variable paramVar) {

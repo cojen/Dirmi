@@ -715,6 +715,39 @@ public class RemoteInfoTest {
         }
     }
 
+    public static class C5 extends Exception {
+        public C5(String msg) {
+        }
+
+        C5(Throwable cause) {
+        }
+    }
+
+    public static interface R37 extends Remote {
+        @RemoteFailure(exception=C5.class)
+        void foo() throws C5;
+    }
+
+    @Test
+    public void unsupportedExceptionType() {
+        try {
+            RemoteInfo.examine(R37.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "must have a public constructor");
+        }
+    }
+
+    public static interface R38 extends Remote {
+        @RemoteFailure(exception=java.rmi.RemoteException.class)
+        void foo() throws java.rmi.RemoteException;
+    }
+
+    @Test
+    public void supportedExceptionType() {
+        RemoteInfo.examine(R38.class);
+    }
+
     private void confirm(IllegalArgumentException e, String substring) {
         if (!e.getMessage().contains(substring)) {
             throw e;

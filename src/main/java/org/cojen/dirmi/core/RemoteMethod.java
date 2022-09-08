@@ -107,10 +107,29 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
 
                 if (remoteFailureException == null) {
                     remoteFailureException = RemoteException.class;
-                } else if (!Modifier.isPublic(remoteFailureException.getModifiers())) {
-                    throw new IllegalArgumentException
-                        ("Remote failure exception must be public: " +
-                         remoteFailureException.getName());
+                } else {
+                    if (!Modifier.isPublic(remoteFailureException.getModifiers())) {
+                        throw new IllegalArgumentException
+                            ("Remote failure exception must be public: " +
+                             remoteFailureException.getName());
+                    }
+
+                    ctorCheck: {
+                        try {
+                            remoteFailureException.getConstructor(Throwable.class);
+                            break ctorCheck;
+                        } catch (NoSuchMethodException e) {
+                        }
+                        try {
+                            remoteFailureException.getConstructor(String.class, Throwable.class);
+                            break ctorCheck;
+                        } catch (NoSuchMethodException e) {
+                        }
+                        throw new IllegalArgumentException
+                            ("Remote failure exception must have a public constructor " +
+                             "which accepts a Throwable cause: " +
+                             remoteFailureException.getName());
+                    }
                 }
 
                 if (!ann.declared() || CoreUtils.isUnchecked(remoteFailureException)) {
@@ -204,11 +223,15 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
 
                 if (remoteFailureException == RemoteException.class) {
                     // Be lenient and also support java.rmi interfaces.
-                    for (Class<?> exceptionType : exceptionTypes) {
-                        if (exceptionType.isAssignableFrom(java.rmi.RemoteException.class)) {
-                            remoteFailureException = java.rmi.RemoteException.class;
-                            break check;
+                    try {
+                        for (Class<?> exceptionType : exceptionTypes) {
+                            if (exceptionType.isAssignableFrom(java.rmi.RemoteException.class)) {
+                                remoteFailureException = java.rmi.RemoteException.class;
+                                break check;
+                            }
                         }
+                    } catch (Throwable e) {
+                        // The java.rmi module might not be found.
                     }
                 }
 
