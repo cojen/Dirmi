@@ -35,7 +35,7 @@ import org.cojen.maker.Variable;
  *
  * @author Brian S O'Neill
  */
-public abstract class ExceptionWrapper {
+abstract class ExceptionWrapper {
     private static final SoftCache<Class<?>, ExceptionWrapper> cCache = new SoftCache<>();
 
     static ExceptionWrapper forClass(Class<?> exceptionType) {
@@ -54,7 +54,7 @@ public abstract class ExceptionWrapper {
         return wrapper;
     }
 
-    protected abstract <T extends Throwable> T wrap(Throwable cause);
+    abstract <T extends Throwable> T wrap(Throwable cause);
 
     private static ExceptionWrapper makeWrapper(Class<?> exceptionType) {
         int style = 0;
@@ -94,10 +94,10 @@ public abstract class ExceptionWrapper {
             return Rethrow.THE;
         }
 
-        ClassMaker cm = ClassMaker.begin().extend(ExceptionWrapper.class);
-        cm.addConstructor();
+        ClassMaker cm = ClassMaker.begin(null, MethodHandles.lookup());
+        cm.extend(ExceptionWrapper.class).addConstructor();
 
-        MethodMaker mm = cm.addMethod(Throwable.class, "wrap", Throwable.class).protected_();
+        MethodMaker mm = cm.addMethod(Throwable.class, "wrap", Throwable.class);
 
         switch (style) {
         case 1: {
@@ -155,7 +155,7 @@ public abstract class ExceptionWrapper {
 
         @Override
         @SuppressWarnings("unchecked")
-        protected <T extends Throwable> T wrap(Throwable cause) {
+        <T extends Throwable> T wrap(Throwable cause) {
             return (T) cause;
         }
     }
