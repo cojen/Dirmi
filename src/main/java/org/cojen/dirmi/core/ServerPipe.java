@@ -24,17 +24,15 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-final class ServerPipe extends BufferedPipe {
-    //final ServerSession mSession;
+final class ServerPipe extends CorePipe {
+    ServerSession mSession;
 
     ServerPipe(InputStream in, OutputStream out) {
         super(in, out);
-        //mSession = session;
     }
 
-    /* FIXME
     @Override
-    public void recycle() throws IOException {
+    protected CoreSession session() {
+        return mSession;
     }
-    */
 }

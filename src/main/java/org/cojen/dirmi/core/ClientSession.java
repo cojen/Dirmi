@@ -22,8 +22,6 @@ import java.io.OutputStream;
 
 import java.net.SocketAddress;
 
-import java.util.concurrent.locks.ReentrantLock;
-
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 
@@ -32,17 +30,13 @@ import org.cojen.dirmi.Session;
  *
  * @author Brian S O'Neill
  */
-final class ClientSession<R> extends Item implements Session<R> {
-    final Engine mEngine;
+final class ClientSession<R> extends CoreSession<R> {
     final SocketAddress mAddress;
 
     private final Support mSupport;
     private final ItemMap<Stub> mStubs;
 
     // FIXME: Stale connections need to be removed from the pool.
-    // FIXME: Use a simple spinlock.
-    private final ReentrantLock mPoolLock;
-    private ClientPipe mPoolFirst, mPoolLast;
 
     private long mServerSessionId;
     private R mRoot;
@@ -50,12 +44,10 @@ final class ClientSession<R> extends Item implements Session<R> {
     // FIXME: Note that ClientPipe needs to access the ItemMap for resolving remote objects.
 
     ClientSession(Engine engine, SocketAddress addr) {
-        super(IdGenerator.next());
-        mEngine = engine;
+        super(engine);
         mAddress = addr;
         mSupport = new Support();
         mStubs = new ItemMap<>();
-        mPoolLock = new ReentrantLock();
     }
 
     /**
@@ -104,32 +96,28 @@ final class ClientSession<R> extends Item implements Session<R> {
             }
         }
 
-        recycle(pipe);
+        recycleConnection(pipe);
     }
 
     @Override
     public void reset() {
-        // FIXME: Need to define a session version number, known by all ClientPipes. Force
-        // close pipes that have the wrong version when they're recycled. If an exception is
-        // thrown when accessing a pipe, call reset but pass in the version number. Ignore the
-        // reset request if the version doesn't match.
+        closeAllConnections();
 
-        ClientPipe pipe;
+        // FIXME: Calling reset should also close the control connection. Need to then
+        // immediately establish a new connection. When the connected method is called, it
+        // needs to detect that no connections currently exist and so it becomes the new
+        // control connection. A new session needs to be created. So the initial connect code
+        // in the Engine class should move to the session. A new client session id is needed
+        // each time. This should cause all object ids known by all stubs to become invalid
+        // because the server-side session will close too once the control connection is
+        // closed. There's a bit of a race here, but that seems okay. Note that stubs which
+        // have been disposed of need to remember this so that don't attempt to restore
+        // themselves. Only needs to apply to restorable stubs, and so just clear the path?
 
-        var lock = mPoolLock;
-        lock.lock();
-        try {
-            pipe = mPoolFirst;
-            mPoolFirst = null;
-            mPoolLast = null;
-        } finally {
-            lock.unlock();
-        }
-
-        while (pipe != null) {
-            CoreUtils.closeQuietly(pipe);
-            pipe = pipe.mNext;
-        }
+        // FIXME: There's a still an odd (although unlikely) case in which the new session is
+        // established with a restarted server process and the new object ids collide with the
+        // old ods. A sweep through the stubs might be safer. Set the object id to zero unless
+        // the stub refers to the current client session id.
     }
 
     @Override
@@ -138,48 +126,15 @@ final class ClientSession<R> extends Item implements Session<R> {
         reset();
     }
 
-    void recycle(ClientPipe pipe) {
-        var lock = mPoolLock;
-        lock.lock();
-        try {
-            ClientPipe last = mPoolLast;
-            if (last == null) {
-                mPoolFirst = pipe;
-                mPoolLast = pipe;
-            } else {
-                pipe.mPrev = last;
-                last.mNext = pipe;
-                mPoolLast = pipe;
-            }
-        } finally {
-            lock.unlock();
-        }
-    }
-
     /**
      * Returns a new or existing connection. Closing it attempts to recycle it.
      */
-    ClientPipe connect() throws IOException {
+    CorePipe connect() throws IOException {
         while (true) {
-            var lock = mPoolLock;
-            lock.lock();
-            try {
-                ClientPipe last = mPoolLast;
-                if (last != null) {
-                    ClientPipe prev = last.mPrev;
-                    mPoolLast = prev;
-                    if (prev == null) {
-                        mPoolFirst = null;
-                    } else {
-                        prev.mNext = null;
-                        last.mPrev = null;
-                    }
-                    return last;
-                }
-            } finally {
-                lock.unlock();
+            CorePipe pipe = tryObtainConnection();
+            if (pipe != null) {
+                return pipe;
             }
-
             mEngine.checkClosed().connect(this, mAddress);
         }
     }

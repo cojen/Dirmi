@@ -1733,7 +1733,7 @@ class BufferedPipe implements Pipe {
         close(null);
     }
 
-    private void close(IOException ex) throws IOException {
+    protected void close(IOException ex) throws IOException {
         try {
             mSourceOut.close();
         } catch (IOException e) {

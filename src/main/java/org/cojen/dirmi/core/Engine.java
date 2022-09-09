@@ -210,6 +210,8 @@ public final class Engine implements Environment {
                 sessions.put(session);
             }
 
+            session.registerNewConnection(pipe);
+
             // FIXME: start a task to keep reading the control connection
 
             return session;
@@ -238,7 +240,7 @@ public final class Engine implements Environment {
         byte[] bname = binaryName(name);
 
         var session = new ClientSession<R>(this, addr);
-        ClientPipe pipe = session.connect();
+        CorePipe pipe = session.connect();
 
         try {
             session.writeHeader(pipe, 0); // server session of zero creates a new session

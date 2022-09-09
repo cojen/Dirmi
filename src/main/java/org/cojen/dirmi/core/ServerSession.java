@@ -30,9 +30,7 @@ import org.cojen.dirmi.Session;
  *
  * @author Brian S O'Neill
  */
-final class ServerSession<R> extends Item implements Session<R> {
-    final Engine mEngine;
-
+final class ServerSession<R> extends CoreSession<R> {
     private final Support mSupport;
     private final SkeletonMap mSkeletons;
     private final Skeleton<R> mRoot;
@@ -41,8 +39,7 @@ final class ServerSession<R> extends Item implements Session<R> {
      * @param rootInfo client-side root info
      */
     ServerSession(Engine engine, R root, RemoteInfo rootInfo) throws IOException {
-        super(IdGenerator.next());
-        mEngine = engine;
+        super(engine);
         mSupport = new Support();
         mSkeletons = new SkeletonMap(this, IdGenerator.I_SERVER);
 
@@ -75,20 +72,19 @@ final class ServerSession<R> extends Item implements Session<R> {
 
     @Override
     public void reset() {
-        // FIXME: reset
-        throw null;
+        closeAllConnections();
     }
 
     @Override
     public void close() {
-        // FIXME: close
-        throw null;
+        // FIXME: disable new connections
+        reset();
     }
 
     void accepted(ServerPipe pipe) throws IOException {
-        // FIXME: register the pipe/invoker
-        var invoker = new Invoker(pipe);
-        mEngine.execute(invoker);
+        pipe.mSession = this;
+        registerNewConnection(pipe);
+        mEngine.execute(new Invoker(pipe));
     }
 
     /**
@@ -156,7 +152,6 @@ final class ServerSession<R> extends Item implements Session<R> {
 
         @Override
         public void close() throws IOException {
-            // FIXME: unregister
             mPipe.close();
         }
     }

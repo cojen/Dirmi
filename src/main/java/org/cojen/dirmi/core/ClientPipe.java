@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.InputStream;
-import java.io.IOException;
 import java.io.OutputStream;
 
 /**
@@ -25,11 +24,8 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-final class ClientPipe extends BufferedPipe {
+final class ClientPipe extends CorePipe {
     final ClientSession mSession;
-
-    // Accessed by ClientSession.
-    ClientPipe mPrev, mNext;
 
     ClientPipe(ClientSession session, InputStream in, OutputStream out) {
         super(in, out);
@@ -37,11 +33,7 @@ final class ClientPipe extends BufferedPipe {
     }
 
     @Override
-    public void recycle() throws IOException {
-        if (isEmpty()) {
-            mSession.recycle(this);
-        } else {
-            close();
-        }
+    protected CoreSession session() {
+        return mSession;
     }
 }
