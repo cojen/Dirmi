@@ -42,6 +42,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Connector;
 import org.cojen.dirmi.Environment;
@@ -54,6 +57,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
+    private final Lock mLock;
     private final Executor mExecutor;
     private final boolean mOwnsExecutor;
 
@@ -86,6 +90,7 @@ public final class Engine implements Environment {
     }
 
     private Engine(Executor executor, boolean ownsExecutor) {
+        mLock = new ReentrantLock();
         if (executor == null) {
             executor = Executors.newCachedThreadPool();
         }
@@ -103,13 +108,16 @@ public final class Engine implements Environment {
             RemoteExaminer.remoteType(obj);
         }
 
-        synchronized (this) {
+        mLock.lock();
+        try {
             checkClosed();
             var exports = mExports;
             if (exports == null) {
                 mExports = exports = new ConcurrentSkipListMap<>(Arrays::compare);
             }
             return obj == null ? exports.remove(bname) : exports.put(bname, obj);
+        } finally {
+            mLock.unlock();
         }
     }
 
@@ -128,7 +136,8 @@ public final class Engine implements Environment {
     }
 
     private Closeable acceptAll(Object ss, Acceptor acceptor) throws IOException {
-        synchronized (this) {
+        mLock.lock();
+        try {
             checkClosed();
             if (mAcceptors == null) {
                 mAcceptors = new IdentityHashMap<>();
@@ -136,6 +145,8 @@ public final class Engine implements Environment {
             if (mAcceptors.putIfAbsent(ss, acceptor) != null) {
                 throw new IllegalStateException("Already accepting connections from " + ss);
             }
+        } finally {
+            mLock.unlock();
         }
 
         execute(acceptor);
@@ -143,9 +154,14 @@ public final class Engine implements Environment {
         return acceptor;
     }
 
-    private synchronized void unregister(Object ss, Acceptor acceptor) {
-        if (mAcceptors != null) {
-            mAcceptors.remove(ss, acceptor);
+    private void unregister(Object ss, Acceptor acceptor) {
+        mLock.lock();
+        try {
+            if (mAcceptors != null) {
+                mAcceptors.remove(ss, acceptor);
+            }
+        } finally {
+            mLock.unlock();
         }
     }
 
@@ -203,13 +219,16 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
-            synchronized (this) {
+            mLock.lock();
+            try {
                 checkClosed();
                 ItemMap<ServerSession> sessions = mServerSessions;
                 if (sessions == null) {
                     mServerSessions = sessions = new ItemMap<>();
                 }
                 sessions.put(session);
+            } finally {
+                mLock.unlock();
             }
 
             // FIXME: start a task to keep reading the control connection
@@ -271,13 +290,16 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, serverInfo, rootId, rootTypeId);
 
-            synchronized (this) {
+            mLock.lock();
+            try {
                 checkClosed();
                 ItemMap<ClientSession> sessions = mClientSessions;
                 if (sessions == null) {
                     mClientSessions = sessions = new ItemMap<>();
                 }
                 sessions.put(session);
+            } finally {
+                mLock.unlock();
             }
 
             // FIXME: start a task to keep reading the control connection
@@ -291,11 +313,16 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public synchronized Connector connector(Connector c) throws IOException {
-        Objects.requireNonNull(c);
-        Connector old = checkClosed();
-        cConnectorHandle.setRelease(this, Connector.direct());
-        return old;
+    public Connector connector(Connector c) throws IOException {
+        mLock.lock();
+        try {
+            Objects.requireNonNull(c);
+            Connector old = checkClosed();
+            cConnectorHandle.setRelease(this, Connector.direct());
+            return old;
+        } finally {
+            mLock.unlock();
+        }
     }
 
     @Override
@@ -305,7 +332,8 @@ public final class Engine implements Environment {
 
         Map<Object, Acceptor> acceptors;
 
-        synchronized (this) {
+        mLock.lock();
+        try {
             if (mConnector == null) {
                 return;
             }
@@ -321,6 +349,8 @@ public final class Engine implements Environment {
 
             acceptors = mAcceptors;
             mAcceptors = null;
+        } finally {
+            mLock.unlock();
         }
 
         if (acceptors != null) {
@@ -365,6 +395,10 @@ public final class Engine implements Environment {
             throw new ClosedException("Environment is closed");
         }
         return c;
+    }
+
+    boolean isClosed() {
+        return cConnectorHandle.getAcquire(this) == null;
     }
 
     /**
@@ -437,7 +471,14 @@ public final class Engine implements Environment {
         }
 
         protected final boolean isClosed() {
-            return mState < 0;
+            if (mState < 0) {
+                return true;
+            }
+            if (Engine.this.isClosed()) {
+                CoreUtils.closeQuietly(this);
+                return true;
+            }
+            return false;
         }
 
         protected final void doClose(Closeable ss) {
