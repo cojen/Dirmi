@@ -36,12 +36,14 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.PriorityQueue;
 
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -57,9 +59,15 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
-    private final Lock mLock;
+    private final Lock mMainLock;
+
     private final Executor mExecutor;
     private final boolean mOwnsExecutor;
+
+    private final Lock mSchedulerLock;
+    private final Condition mSchedulerCondition;
+    private final PriorityQueue<Scheduled> mScheduledQueue;
+    private boolean mSchedulerRunning;
 
     private volatile ItemMap<ServerSession> mServerSessions;
     private volatile ItemMap<ClientSession> mClientSessions;
@@ -90,12 +98,18 @@ public final class Engine implements Environment {
     }
 
     private Engine(Executor executor, boolean ownsExecutor) {
-        mLock = new ReentrantLock();
+        mMainLock = new ReentrantLock();
+
         if (executor == null) {
             executor = Executors.newCachedThreadPool();
         }
         mExecutor = executor;
         mOwnsExecutor = ownsExecutor;
+
+        mSchedulerLock = new ReentrantLock();
+        mSchedulerCondition = mSchedulerLock.newCondition();
+        mScheduledQueue = new PriorityQueue<>();
+
         cConnectorHandle.setRelease(this, Connector.direct());
     }
 
@@ -108,7 +122,7 @@ public final class Engine implements Environment {
             RemoteExaminer.remoteType(obj);
         }
 
-        mLock.lock();
+        mMainLock.lock();
         try {
             checkClosed();
             var exports = mExports;
@@ -117,7 +131,7 @@ public final class Engine implements Environment {
             }
             return obj == null ? exports.remove(bname) : exports.put(bname, obj);
         } finally {
-            mLock.unlock();
+            mMainLock.unlock();
         }
     }
 
@@ -136,7 +150,7 @@ public final class Engine implements Environment {
     }
 
     private Closeable acceptAll(Object ss, Acceptor acceptor) throws IOException {
-        mLock.lock();
+        mMainLock.lock();
         try {
             checkClosed();
             if (mAcceptors == null) {
@@ -146,7 +160,7 @@ public final class Engine implements Environment {
                 throw new IllegalStateException("Already accepting connections from " + ss);
             }
         } finally {
-            mLock.unlock();
+            mMainLock.unlock();
         }
 
         execute(acceptor);
@@ -155,13 +169,13 @@ public final class Engine implements Environment {
     }
 
     private void unregister(Object ss, Acceptor acceptor) {
-        mLock.lock();
+        mMainLock.lock();
         try {
             if (mAcceptors != null) {
                 mAcceptors.remove(ss, acceptor);
             }
         } finally {
-            mLock.unlock();
+            mMainLock.unlock();
         }
     }
 
@@ -219,7 +233,7 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
-            mLock.lock();
+            mMainLock.lock();
             try {
                 checkClosed();
                 ItemMap<ServerSession> sessions = mServerSessions;
@@ -228,7 +242,7 @@ public final class Engine implements Environment {
                 }
                 sessions.put(session);
             } finally {
-                mLock.unlock();
+                mMainLock.unlock();
             }
 
             // FIXME: start a task to keep reading the control connection
@@ -290,7 +304,7 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, serverInfo, rootId, rootTypeId);
 
-            mLock.lock();
+            mMainLock.lock();
             try {
                 checkClosed();
                 ItemMap<ClientSession> sessions = mClientSessions;
@@ -299,7 +313,7 @@ public final class Engine implements Environment {
                 }
                 sessions.put(session);
             } finally {
-                mLock.unlock();
+                mMainLock.unlock();
             }
 
             // FIXME: start a task to keep reading the control connection
@@ -314,14 +328,14 @@ public final class Engine implements Environment {
 
     @Override
     public Connector connector(Connector c) throws IOException {
-        mLock.lock();
+        mMainLock.lock();
         try {
             Objects.requireNonNull(c);
             Connector old = checkClosed();
             cConnectorHandle.setRelease(this, Connector.direct());
             return old;
         } finally {
-            mLock.unlock();
+            mMainLock.unlock();
         }
     }
 
@@ -332,7 +346,7 @@ public final class Engine implements Environment {
 
         Map<Object, Acceptor> acceptors;
 
-        mLock.lock();
+        mMainLock.lock();
         try {
             if (mConnector == null) {
                 return;
@@ -350,7 +364,15 @@ public final class Engine implements Environment {
             acceptors = mAcceptors;
             mAcceptors = null;
         } finally {
-            mLock.unlock();
+            mMainLock.unlock();
+        }
+
+        mSchedulerLock.lock();
+        try {
+            mScheduledQueue.clear();
+            mSchedulerCondition.signal();
+        } finally {
+            mSchedulerLock.unlock();
         }
 
         if (acceptors != null) {
@@ -386,6 +408,80 @@ public final class Engine implements Environment {
             }
             checkClosed();
             throw new RemoteException(e);
+        }
+    }
+
+    boolean scheduleMillis(Scheduled task, long delayMillis) throws IOException {
+        return scheduleNanos(task, delayMillis * 1_000_000L);
+    }
+
+    boolean scheduleNanos(Scheduled task, long delayNanos) throws IOException {
+        task.mAtNanos = System.nanoTime() + delayNanos;
+
+        mSchedulerLock.lock();
+        try {
+            if (isClosed()) {
+                return false;
+            }
+
+            mScheduledQueue.add(task);
+            
+            if (!mSchedulerRunning) {
+                execute(this::runScheduledTasks);
+                mSchedulerRunning = true;
+            } else if (mScheduledQueue.peek() == task) {
+                mSchedulerCondition.signal();
+            }
+
+            return true;
+        } finally {
+            mSchedulerLock.unlock();
+        }
+    }
+
+    private void runScheduledTasks() {
+        while (true) {
+            Scheduled task;
+
+            mSchedulerLock.lock();
+            try {
+                while (true) {
+                    task = mScheduledQueue.peek();
+                    if (task == null) {
+                        mSchedulerRunning = false;
+                        return;
+                    }
+                    long delayNanos = task.mAtNanos - System.nanoTime();
+                    if (delayNanos <= 0) {
+                        break;
+                    }
+                    try {
+                        mSchedulerCondition.awaitNanos(delayNanos);
+                    } catch (InterruptedException e) {
+                        // Check if closed at the start of the loop.
+                    }
+                }
+
+                if (task != mScheduledQueue.remove()) {
+                    throw new AssertionError();
+                }
+            } catch (Throwable e) {
+                mSchedulerRunning = false;
+                throw e;
+            } finally {
+                mSchedulerLock.unlock();
+            }
+
+            try {
+                mExecutor.execute(task);
+            } catch (Throwable e) {
+                if (task instanceof Closeable) {
+                    CoreUtils.closeQuietly((Closeable) task);
+                }
+                // FIXME: log it?
+                CoreUtils.uncaughtException(e);
+                return;
+            }
         }
     }
 
