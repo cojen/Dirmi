@@ -82,7 +82,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     public void connected(InputStream in, OutputStream out) throws IOException {
-        var pipe = new ClientPipe(this, in, out);
+        var pipe = new CorePipe(in, out);
 
         long serverSessionId = mServerSessionId;
         if (serverSessionId != 0) {
@@ -96,34 +96,7 @@ final class ClientSession<R> extends CoreSession<R> {
             }
         }
 
-        recycleConnection(pipe);
-    }
-
-    @Override
-    public void reset() {
-        closeAllConnections();
-
-        // FIXME: Calling reset should also close the control connection. Need to then
-        // immediately establish a new connection. When the connected method is called, it
-        // needs to detect that no connections currently exist and so it becomes the new
-        // control connection. A new session needs to be created. So the initial connect code
-        // in the Engine class should move to the session. A new client session id is needed
-        // each time. This should cause all object ids known by all stubs to become invalid
-        // because the server-side session will close too once the control connection is
-        // closed. There's a bit of a race here, but that seems okay. Note that stubs which
-        // have been disposed of need to remember this so that don't attempt to restore
-        // themselves. Only needs to apply to restorable stubs, and so just clear the path?
-
-        // FIXME: There's a still an odd (although unlikely) case in which the new session is
-        // established with a restarted server process and the new object ids collide with the
-        // old ods. A sweep through the stubs might be safer. Set the object id to zero unless
-        // the stub refers to the current client session id.
-    }
-
-    @Override
-    public void close() {
-        // FIXME: disable new connections
-        reset();
+        registerNewAvailableConnection(pipe);
     }
 
     /**

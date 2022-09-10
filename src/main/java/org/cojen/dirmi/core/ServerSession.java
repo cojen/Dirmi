@@ -70,21 +70,31 @@ final class ServerSession<R> extends CoreSession<R> {
         throw null;
     }
 
-    @Override
-    public void reset() {
-        closeAllConnections();
-    }
-
-    @Override
-    public void close() {
-        // FIXME: disable new connections
-        reset();
-    }
-
-    void accepted(ServerPipe pipe) throws IOException {
-        pipe.mSession = this;
+    void accepted(CorePipe pipe) throws IOException {
         registerNewConnection(pipe);
-        mEngine.execute(new Invoker(pipe));
+        startInvoker(pipe);
+    }
+
+    @Override
+    protected boolean recycleConnection(CorePipe pipe) {
+        if (super.recycleConnection(pipe)) {
+            try {
+                startInvoker(pipe);
+                return true;
+            } catch (IOException e) {
+                // Ignore.
+            }
+        }
+        return false;
+    }
+
+    private void startInvoker(CorePipe pipe) throws IOException {
+        try {
+            mEngine.execute(new Invoker(pipe));
+        } catch (IOException e) {
+            closeConnection(pipe);
+            throw e;
+        }
     }
 
     /**
@@ -114,9 +124,9 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     private final class Invoker implements Runnable, Closeable {
-        private final ServerPipe mPipe;
+        private final CorePipe mPipe;
 
-        Invoker(ServerPipe pipe) {
+        Invoker(CorePipe pipe) {
             mPipe = pipe;
         }
 

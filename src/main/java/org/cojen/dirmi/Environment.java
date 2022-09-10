@@ -168,13 +168,6 @@ public interface Environment extends Closeable {
     Connector connector(Connector c) throws IOException;
 
     /**
-     * Resets all active sessions.
-     *
-     * @see Session#reset
-     */
-    void reset();
-
-    /**
      * Stops accepting new sessions, closes all existing sessions, and disposes of all exported
      * objects.
      */

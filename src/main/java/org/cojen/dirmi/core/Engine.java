@@ -150,7 +150,7 @@ public final class Engine implements Environment {
 
     @Override
     public Session<?> accepted(InputStream in, OutputStream out) throws IOException {
-        var pipe = new ServerPipe(in, out);
+        var pipe = new CorePipe(in, out);
 
         long clientSessionId = 0;
 
@@ -280,40 +280,12 @@ public final class Engine implements Environment {
         }
     }
 
-
-    /*
-      FIXME: notes
-
-      Both sides then read commands from the initial connection forever. When any connection
-      fails, reset the session. This also invalidates the stubs. All connections need to know
-      the current session version number. Reset is ignored if the version number doesn't
-      match. Sweep through the ItemMap and invalidate all stubs by setting the object id to
-      0. It will be restored later (if possible). If disposed, then don't try to
-      restore. Disposed stubs should have been removed from the ItemMap already.
-
-      What to do when the restored object type info has changed? Need to generate and call a
-      delegate. What happens if a big delegate chain is created? Or can I use indy methods and
-      swap the implementation that way? All the indy methods would need the id any support
-      object to be passed in. This doesn't seem any better. Note that StubFactory instances are
-      cached by the local type and the server-side remote info.  For this reason, the delegate
-      approach seems better. Still the chain problem remains...
-
-      How about this: Whenever the session is reset, clear out the delegate to force it to
-      create a clean replacement. This should prevent chain formation.
-    */
-
     @Override
     public synchronized Connector connector(Connector c) throws IOException {
         Objects.requireNonNull(c);
         Connector old = checkClosed();
         cConnectorHandle.setRelease(this, Connector.direct());
         return old;
-    }
-
-    @Override
-    public void reset() {
-        // FIXME: reset
-        throw null;
     }
 
     @Override

@@ -64,12 +64,6 @@ public interface Session<R> extends Closeable {
     void connected(InputStream in, OutputStream out) throws IOException;
 
     /**
-     * Closes all connections but allows new connections to be established. All non-restorable
-     * remote objects are invalidated as a side effect.
-     */
-    void reset();
-
-    /**
      * Closes all connections and immediately closes any future connections. All remote objects
      * are invalidated as a side effect.
      */

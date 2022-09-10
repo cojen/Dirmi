@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Session;
 
 /**
@@ -31,7 +32,7 @@ import org.cojen.dirmi.Session;
 abstract class CoreSession<R> extends Item implements Session<R> {
     private static final int SPIN_LIMIT;
 
-    private static final VarHandle cConLockHandle, cConVersionHandle, cPipeVersionHandle;
+    private static final VarHandle cConLockHandle;
 
     static {
         SPIN_LIMIT = Runtime.getRuntime().availableProcessors() > 1 ? 1 << 10 : 1;
@@ -39,8 +40,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         try {
             var lookup = MethodHandles.lookup();
             cConLockHandle = lookup.findVarHandle(CoreSession.class, "mConLock", int.class);
-            cConVersionHandle = lookup.findVarHandle(CoreSession.class, "mConVersion", int.class);
-            cPipeVersionHandle = lookup.findVarHandle(CorePipe.class, "mVersion", int.class);
         } catch (Throwable e) {
             throw new Error(e);
         }
@@ -54,23 +53,23 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // currently being used. Connections which range from avail to last are waiting to be used.
     private CorePipe mConFirst, mConAvail, mConLast;
 
-    // Valid versions are 1 to max int.
-    private int mConVersion;
+    private boolean mClosed;
 
     CoreSession(Engine engine) {
         super(IdGenerator.next());
         mEngine = engine;
-        mConVersion = 1;
         VarHandle.storeStoreFence();
     }
 
     /**
      * Track a new connection as being immediately used (not available for other uses).
      */
-    protected final void registerNewConnection(CorePipe pipe) {
+    protected final void registerNewConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
         try {
-            pipe.mVersion = mConVersion;
+            checkClosed();
+            pipe.mSession = this;
+
             CorePipe first = mConFirst;
             if (first == null) {
                 mConLast = pipe;
@@ -85,82 +84,86 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     /**
-     * Track a new or existing connection as being available for use.
+     * Track a new connection as being available from the tryObtainConnection method.
      */
-    protected final void recycleConnection(CorePipe pipe) {
+    protected final void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
         recycle: try {
-            int pipeVersion = pipe.mVersion;
+            checkClosed();
+            pipe.mSession = this;
 
-            if (pipeVersion < 0) {
-                // Was closed or removed.
-                return;
-            }
-
-            int conVersion = mConVersion;
-
-            if (pipeVersion == conVersion) {
-                // Existing connection.
-
-                CorePipe avail = mConAvail;
-                if (avail == pipe) {
-                    // It's already available.
-                    return;
-                }
-
-                if (avail == null) {
-                    mConAvail = pipe;
-                }
-
-                CorePipe next = pipe.mConNext;
-                if (next == null) {
-                    // It's already the last in the list.
-                    assert pipe == mConLast;
-                    return;
-                }
-
-                // Remove from the list.
-                CorePipe prev = pipe.mConPrev;
-                if (prev == null) {
-                    assert pipe == mConFirst;
-                    mConFirst = next;
-                } else {
-                    prev.mConNext = next;
-                }
-                next.mConPrev = prev;
-
-                // Add the connection as the last in the list.
-                pipe.mConNext = null;
-                CorePipe last = mConLast;
+            CorePipe last = mConLast;
+            if (last == null) {
+                mConFirst = pipe;
+                mConAvail = pipe;
+            } else {
                 pipe.mConPrev = last;
                 last.mConNext = pipe;
-            } else if (pipeVersion == 0) {
-                // New connection.
-                pipe.mVersion = conVersion;
-                CorePipe last = mConLast;
-                if (last == null) {
-                    mConFirst = pipe;
-                    mConAvail = pipe;
-                } else {
-                    pipe.mConPrev = last;
-                    last.mConNext = pipe;
-                    if (mConAvail == null) {
-                        mConAvail = last;
-                    }
+                if (mConAvail == null) {
+                    mConAvail = last;
                 }
-            } else {
-                // Old connection; close it.
+            }
+            mConLast = pipe;
+        } finally {
+            conLockRelease();
+        }
+    }
+
+    /**
+     * Track an existing connection as being available from the tryObtainConnection method.
+     */
+    protected boolean recycleConnection(CorePipe pipe) {
+        conLockAcquire();
+        recycle: try {
+            if (mClosed || pipe.mClosed) {
+                doRemoveConnection(pipe);
+                pipe.mClosed = true;
                 break recycle;
             }
+
+            CorePipe avail = mConAvail;
+            if (avail == pipe) {
+                // It's already available.
+                return true;
+            }
+
+            if (avail == null) {
+                mConAvail = pipe;
+            }
+
+            CorePipe next = pipe.mConNext;
+            if (next == null) {
+                // It's already the last in the list.
+                assert pipe == mConLast;
+                return true;
+            }
+
+            // Remove from the list.
+            CorePipe prev = pipe.mConPrev;
+            if (prev == null) {
+                assert pipe == mConFirst;
+                mConFirst = next;
+            } else {
+                prev.mConNext = next;
+            }
+            next.mConPrev = prev;
+
+            // Add the connection as the last in the list.
+            pipe.mConNext = null;
+            CorePipe last = mConLast;
+            pipe.mConPrev = last;
+            last.mConNext = pipe;
                 
             mConLast = pipe;
 
-            return;
+            return true;
         } finally {
             conLockRelease();
         }
 
-        doClose(pipe);
+        pipe.doClose();
+
+        return false;
     }
 
     /**
@@ -168,9 +171,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * connection is tracked as being used and not available for other uses. The connection
      * should be recycled or closed when not used anymore.
      */
-    protected final CorePipe tryObtainConnection() {
+    protected final CorePipe tryObtainConnection() throws ClosedException {
         conLockAcquire();
         try {
+            checkClosed();
+
             CorePipe avail = mConAvail;
             CorePipe pipe;
             if (avail == null || (pipe = mConLast) == null) {
@@ -206,52 +211,48 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     protected final void closeConnection(CorePipe pipe) {
         conLockAcquire();
         try {
-            if (pipe.mVersion == mConVersion) {
-                pipe.mVersion = -1;
-
-                CorePipe next = pipe.mConNext;
-
-                if (pipe == mConAvail) {
-                    mConAvail = next;
-                }
-
-                CorePipe prev = pipe.mConPrev;
-
-                if (prev == null) {
-                    assert pipe == mConFirst;
-                    mConFirst = next;
-                } else {
-                    prev.mConNext = next;
-                }
-
-                if (next == null) {
-                    assert pipe == mConLast;
-                    mConLast = prev;
-                } else {
-                    next.mConPrev = prev;
-                }
-            }
+            pipe.mClosed = true;
+            doRemoveConnection(pipe);
         } finally {
             conLockRelease();
         }
 
-        doClose(pipe);
+        pipe.doClose();
     }
 
-    /**
-     * Removes all connections from the tracked set and closes them.
-     */
-    protected final void closeAllConnections() {
+    // Caller must hold mConLock.
+    private void doRemoveConnection(CorePipe pipe) {
+        CorePipe next = pipe.mConNext;
+
+        if (pipe == mConAvail) {
+            mConAvail = next;
+        }
+
+        CorePipe prev = pipe.mConPrev;
+
+        if (prev != null) {
+            prev.mConNext = next;
+        } else if (pipe == mConFirst) {
+            mConFirst = next;
+        }
+
+        if (next != null) {
+            next.mConPrev = prev;
+        } else if (pipe == mConLast) {
+            mConLast = prev;
+        }
+
+        pipe.mConPrev = null;
+        pipe.mConNext = null;
+    }
+
+    @Override
+    public void close() {
         CorePipe pipe;
 
         conLockAcquire();
         try {
-            int version = mConVersion + 1;
-            if (version <= 0) { // wrapped around
-                version = 1;
-            }
-            mConVersion = version;
-
+            mClosed = true;
             pipe = mConFirst;
             mConFirst = null;
             mConAvail = null;
@@ -261,19 +262,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
 
         while (pipe != null) {
-            doClose(pipe);
-            pipe = pipe.mConNext;
+            CorePipe next = pipe.mConNext;
+            pipe.mConPrev = null;
+            pipe.mConNext = null;
+            pipe.doClose();
+            pipe = next;
         }
     }
 
-    private void doClose(CorePipe pipe) {
-        cPipeVersionHandle.setOpaque(pipe, -1);
-        pipe.mConPrev = null;
-        pipe.mConNext = null;
-        try {
-            pipe.doClose();
-        } catch (IOException e) {
-            // Ignore.
+    private void checkClosed() throws ClosedException {
+        if (mClosed) {
+            throw new ClosedException("Session is closed");
         }
     }
 

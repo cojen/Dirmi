@@ -25,26 +25,24 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-abstract class CorePipe extends BufferedPipe {
+final class CorePipe extends BufferedPipe {
+    // Accessed by CoreSession.
+    CoreSession mSession;
+
     // Accessed by CoreSession.
     CorePipe mConPrev, mConNext;
 
     // Accessed by CoreSession.
-    int mVersion;
+    boolean mClosed;
 
     CorePipe(InputStream in, OutputStream out) {
         super(in, out);
     }
 
-    /**
-     * @return null if not assigned yet
-     */
-    protected abstract CoreSession session();
-
     @Override
-    public final void recycle() throws IOException {
+    public void recycle() throws IOException {
         CoreSession session;
-        if (isEmpty() && (session = session()) != null) {
+        if (isEmpty() && (session = mSession) != null) {
             session.recycleConnection(this);
         } else {
             close();
@@ -55,8 +53,8 @@ abstract class CorePipe extends BufferedPipe {
      * @param ex can be null
      */
     @Override
-    protected final void close(IOException ex) throws IOException {
-        CoreSession session = session();
+    protected void close(IOException ex) throws IOException {
+        CoreSession session = mSession;
         if (session == null) {
             super.close(ex);
         } else {
@@ -68,7 +66,11 @@ abstract class CorePipe extends BufferedPipe {
      * Forcibly close the connection without attempting to remove it from the session. Should
      * only be called by CoreSession.
      */
-    protected final void doClose() throws IOException {
-        super.close(null);
+    void doClose() {
+        try {
+            super.close(null);
+        } catch (IOException e) {
+            // Ignore.
+        }
     }
 }
