@@ -20,6 +20,8 @@ import java.lang.invoke.VarHandle;
 
 import java.util.Arrays;
 
+import java.util.function.Consumer;
+
 import org.cojen.dirmi.NoSuchObjectException;
 
 /**
@@ -141,6 +143,16 @@ class ItemMap<I extends Item> {
         }
 
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    synchronized void forEach(Consumer<I> action) {
+        Item[] items = mItems;
+        for (int i=0; i<items.length; i++) {
+            for (Item it = items[i]; it != null; it = it.mNext) {
+                action.accept((I) it);
+            }
+        }
     }
 
     /**

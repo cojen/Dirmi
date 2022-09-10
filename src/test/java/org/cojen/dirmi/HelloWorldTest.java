@@ -40,13 +40,13 @@ public class HelloWorldTest {
 
     @Test
     public void inetSocket() throws Exception {
-        var server = Environment.create();
-        server.export("main", new ControlServer());
+        var serverEnv = Environment.create();
+        serverEnv.export("main", new ControlServer());
         var ss = new ServerSocket(0);
-        server.acceptAll(ss);
+        serverEnv.acceptAll(ss);
 
-        var client = Environment.create();
-        var session = client.connect(Control.class, "main", "localhost", ss.getLocalPort());
+        var clientEnv = Environment.create();
+        var session = clientEnv.connect(Control.class, "main", "localhost", ss.getLocalPort());
         var control = session.root();
 
         assertEquals("HelloWorld", control.call("Hello"));
@@ -59,20 +59,19 @@ public class HelloWorldTest {
             assertEquals("yo", e.getMessage());
         }
 
-        server.close();
-        client.close();
-        session.close();
+        serverEnv.close();
+        clientEnv.close();
     }
 
     @Test
     public void inetSocketChannel() throws Exception {
-        var server = Environment.create();
-        server.export("main", new ControlServer());
+        var serverEnv = Environment.create();
+        serverEnv.export("main", new ControlServer());
         var ss = ServerSocketChannel.open().bind(null);
-        server.acceptAll(ss);
+        serverEnv.acceptAll(ss);
 
-        var client = Environment.create();
-        var session = client.connect(Control.class, "main", ss.getLocalAddress());
+        var clientEnv = Environment.create();
+        var session = clientEnv.connect(Control.class, "main", ss.getLocalAddress());
         var control = session.root();
 
         assertEquals("HelloWorld", control.call("Hello"));
@@ -85,9 +84,8 @@ public class HelloWorldTest {
             assertEquals("yo", e.getMessage());
         }
 
-        server.close();
-        client.close();
-        session.close();
+        serverEnv.close();
+        clientEnv.close();
     }
 
     @Test
@@ -106,12 +104,12 @@ public class HelloWorldTest {
         Path path = (Path) address.getClass().getMethod("getPath").invoke(address);
         path.toFile().deleteOnExit();
 
-        var server = Environment.create();
-        server.export("main", new ControlServer());
-        server.acceptAll(ss);
+        var serverEnv = Environment.create();
+        serverEnv.export("main", new ControlServer());
+        serverEnv.acceptAll(ss);
 
-        var client = Environment.create();
-        var session = client.connect(Control.class, "main", address);
+        var clientEnv = Environment.create();
+        var session = clientEnv.connect(Control.class, "main", address);
         var control = session.root();
 
         assertEquals("HelloWorld", control.call("Hello"));
@@ -124,9 +122,8 @@ public class HelloWorldTest {
             assertEquals("yo", e.getMessage());
         }
 
-        server.close();
-        client.close();
-        session.close();
+        serverEnv.close();
+        clientEnv.close();
     }
 
     public static interface Control extends Remote {

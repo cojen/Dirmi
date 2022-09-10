@@ -58,6 +58,7 @@ public final class Engine implements Environment {
     private final boolean mOwnsExecutor;
 
     private volatile ItemMap<ServerSession> mServerSessions;
+    private volatile ItemMap<ClientSession> mClientSessions;
 
     private volatile ConcurrentSkipListMap<byte[], Object> mExports;
 
@@ -195,6 +196,7 @@ public final class Engine implements Environment {
             RemoteInfo serverInfo = RemoteInfo.examine(rootType);
 
             var session = new ServerSession<Object>(this, root, clientInfo);
+            session.registerNewConnection(pipe);
 
             session.writeHeader(pipe, clientSessionId);
             pipe.writeObject(serverInfo);
@@ -209,8 +211,6 @@ public final class Engine implements Environment {
                 }
                 sessions.put(session);
             }
-
-            session.registerNewConnection(pipe);
 
             // FIXME: start a task to keep reading the control connection
 
@@ -243,6 +243,8 @@ public final class Engine implements Environment {
         CorePipe pipe = session.connect();
 
         try {
+            session.registerNewConnection(pipe);
+
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
             pipe.writeObject(info); // root object type
@@ -269,7 +271,15 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, serverInfo, rootId, rootTypeId);
 
-            // FIXME: register the session
+            synchronized (this) {
+                checkClosed();
+                ItemMap<ClientSession> sessions = mClientSessions;
+                if (sessions == null) {
+                    mClientSessions = sessions = new ItemMap<>();
+                }
+                sessions.put(session);
+            }
+
             // FIXME: start a task to keep reading the control connection
 
             return session;
@@ -290,6 +300,9 @@ public final class Engine implements Environment {
 
     @Override
     public void close() {
+        ItemMap<ServerSession> serverSessions;
+        ItemMap<ClientSession> clientSessions;
+
         Map<Object, Acceptor> acceptors;
 
         synchronized (this) {
@@ -299,9 +312,12 @@ public final class Engine implements Environment {
 
             cConnectorHandle.setRelease(this, (Connector) null);
 
-            if (mExports != null) {
-                mExports = null;
-            }
+            serverSessions = mServerSessions;
+            mServerSessions = null;
+            clientSessions = mClientSessions;
+            mClientSessions = null;
+
+            mExports = null;
 
             acceptors = mAcceptors;
             mAcceptors = null;
@@ -313,10 +329,17 @@ public final class Engine implements Environment {
             }
         }
 
-        // FIXME: close sessions
+        closeAll(serverSessions);
+        closeAll(clientSessions);
 
         if (mOwnsExecutor && mExecutor instanceof ExecutorService) {
             ((ExecutorService) mExecutor).shutdown();
+        }
+    }
+
+    private static void closeAll(ItemMap<? extends CoreSession> sessions) {
+        if (sessions != null) {
+            sessions.forEach(CoreSession::close);
         }
     }
 
@@ -331,9 +354,7 @@ public final class Engine implements Environment {
             if (task instanceof Closeable) {
                 CoreUtils.closeQuietly((Closeable) task);
             }
-            synchronized (this) {
-                checkClosed();
-            }
+            checkClosed();
             throw new RemoteException(e);
         }
     }

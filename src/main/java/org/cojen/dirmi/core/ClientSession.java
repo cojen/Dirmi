@@ -31,8 +31,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class ClientSession<R> extends CoreSession<R> {
-    final SocketAddress mAddress;
-
+    private final SocketAddress mAddress;
     private final Support mSupport;
     private final ItemMap<Stub> mStubs;
 
