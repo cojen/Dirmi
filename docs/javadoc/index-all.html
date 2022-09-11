@@ -50,7 +50,7 @@ loadScripts(document, 'script');</script>
 <div class="header">
 <h1>Index</h1>
 </div>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
 <h2 class="title" id="I:A">A</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#acceptAll(java.net.ServerSocket)" class="member-name-link">acceptAll(ServerSocket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
@@ -61,11 +61,11 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Accept all server-side connections from the given <code>ServerSocketChannel</code>.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#accepted(java.io.InputStream,java.io.OutputStream)" class="member-name-link">accepted(InputStream, OutputStream)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#accepted(java.net.Socket)" class="member-name-link">accepted(Socket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
 <div class="block">Call when a server-side connection has been explicitly accepted.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#accepted(java.net.Socket)" class="member-name-link">accepted(Socket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#accepted(java.net.SocketAddress,java.net.SocketAddress,java.io.InputStream,java.io.OutputStream)" class="member-name-link">accepted(SocketAddress, SocketAddress, InputStream, OutputStream)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
 <div class="block">Call when a server-side connection has been explicitly accepted.</div>
 </dd>
@@ -117,11 +117,11 @@ loadScripts(document, 'script');</script>
 <div class="block">Called to establish a new socket connection, which is then passed to one of the
  session's <code>connected</code> methods.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.io.InputStream,java.io.OutputStream)" class="member-name-link">connected(InputStream, OutputStream)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.net.Socket)" class="member-name-link">connected(Socket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
 <div class="block">Receives new connections from a <a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.net.Socket)" class="member-name-link">connected(Socket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.net.SocketAddress,java.net.SocketAddress,java.io.InputStream,java.io.OutputStream)" class="member-name-link">connected(SocketAddress, SocketAddress, InputStream, OutputStream)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
 <div class="block">Receives new connections from a <a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
 </dd>
@@ -200,6 +200,13 @@ loadScripts(document, 'script');</script>
  ObjectOutput</code>.</div>
 </dd>
 </dl>
+<h2 class="title" id="I:L">L</h2>
+<dl class="index">
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#localAddress()" class="member-name-link">localAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
+<dd>
+<div class="block">Returns the socket address that this pipe is bound to.</div>
+</dd>
+</dl>
 <h2 class="title" id="I:N">N</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html" class="type-name-link" title="class in org.cojen.dirmi">NoSuchObjectException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
@@ -239,6 +246,10 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Marker for designating a remote interface.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#remoteAddress()" class="member-name-link">remoteAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
+<dd>
+<div class="block">Returns the socket address that this pipe is connected to.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" class="type-name-link" title="class in org.cojen.dirmi">RemoteException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Default exception thrown to indicate a remote call failure.</div>
@@ -276,7 +287,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Identify a method which should never be included in a <a href="org.cojen.dirmi/org/cojen/dirmi/Batched.html" title="annotation interface in org.cojen.dirmi"><code>batched</code></a> request.</div>
 </dd>
 </dl>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
 <footer role="contentinfo">
 <hr>
 <p class="legal-copy"><small>Copyright &#169; 2006&#x2013;2022 <a href="https://github.com/cojen">Cojen</a>. All rights reserved.</small></p>

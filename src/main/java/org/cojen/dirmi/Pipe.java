@@ -27,6 +27,8 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.math.BigDecimal;
 
+import java.net.SocketAddress;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +49,16 @@ import java.util.Set;
  * @author Brian S O'Neill
  */
 public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput {
+    /**
+     * Returns the socket address that this pipe is bound to. Returns null if not applicable.
+     */
+    SocketAddress localAddress();
+
+    /**
+     * Returns the socket address that this pipe is connected to. Returns null if not applicable.
+     */
+    SocketAddress remoteAddress();
+
     /**
      * Enables tracking of object references as they are written, for correctly serializing
      * object graphs, and to potentially reduce the overall encoding size. This mode has higher

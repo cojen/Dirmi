@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import java.net.Socket;
+import java.net.SocketAddress;
 
 import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
@@ -47,7 +48,8 @@ public interface Session<R> extends Closeable {
      */
     default void connected(Socket s) throws IOException {
         CoreUtils.setOptions(s);
-        connected(s.getInputStream(), s.getOutputStream());
+        connected(s.getLocalSocketAddress(), s.getRemoteSocketAddress(),
+                  s.getInputStream(), s.getOutputStream());
     }
 
     /**
@@ -55,13 +57,16 @@ public interface Session<R> extends Closeable {
      */
     default void connected(SocketChannel s) throws IOException {
         CoreUtils.setOptions(s);
-        connected(Channels.newInputStream(s), Channels.newOutputStream(s));
+        connected(s.getLocalAddress(), s.getRemoteAddress(),
+                  Channels.newInputStream(s), Channels.newOutputStream(s));
     }
 
     /**
      * Receives new connections from a {@link Connector Connector}.
      */
-    void connected(InputStream in, OutputStream out) throws IOException;
+    void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+                   InputStream in, OutputStream out)
+        throws IOException;
 
     /**
      * Closes all connections and immediately closes any future connections. All remote objects

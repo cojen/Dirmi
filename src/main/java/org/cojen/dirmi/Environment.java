@@ -98,7 +98,8 @@ public interface Environment extends Closeable {
      */
     default Session<?> accepted(Socket s) throws IOException {
         CoreUtils.setOptions(s);
-        return accepted(s.getInputStream(), s.getOutputStream());
+        return accepted(s.getLocalSocketAddress(), s.getRemoteSocketAddress(),
+                        s.getInputStream(), s.getOutputStream());
     }
 
     /**
@@ -111,7 +112,8 @@ public interface Environment extends Closeable {
      */
     default Session<?> accepted(SocketChannel s) throws IOException {
         CoreUtils.setOptions(s);
-        return accepted(Channels.newInputStream(s), Channels.newOutputStream(s));
+        return accepted(s.getLocalAddress(), s.getRemoteAddress(),
+                        Channels.newInputStream(s), Channels.newOutputStream(s));
     }
 
     /**
@@ -122,7 +124,9 @@ public interface Environment extends Closeable {
      * @throws IOException if a communication failure or if the client is requesting an object
      * which isn't exported
      */
-    Session<?> accepted(InputStream in, OutputStream out) throws IOException;
+    Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAttr,
+                        InputStream in, OutputStream out)
+        throws IOException;
 
     /**
      * Call to establish a new client-side session. A remote server must be accepting

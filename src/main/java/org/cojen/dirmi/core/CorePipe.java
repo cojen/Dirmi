@@ -20,6 +20,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.net.SocketAddress;
+
 /**
  * Base class for ClientPipe and ServerPipe.
  *
@@ -35,8 +37,10 @@ final class CorePipe extends BufferedPipe {
     // Accessed by CoreSession.
     boolean mClosed;
 
-    CorePipe(InputStream in, OutputStream out) {
-        super(in, out);
+    CorePipe(SocketAddress localAddr, SocketAddress remoteAttr,
+             InputStream in, OutputStream out)
+    {
+        super(localAddr, remoteAttr, in, out);
     }
 
     @Override

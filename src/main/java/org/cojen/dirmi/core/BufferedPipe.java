@@ -34,6 +34,8 @@ import java.io.UTFDataFormatException;
 import java.math.BigInteger;
 import java.math.BigDecimal;
 
+import java.net.SocketAddress;
+
 import java.nio.ByteOrder;
 
 import java.util.ArrayList;
@@ -74,6 +76,8 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    private final SocketAddress mLocalAddress, mRemoteAddress;
+
     private final InputStream mSourceIn;
     private final OutputStream mSourceOut;
 
@@ -91,6 +95,14 @@ class BufferedPipe implements Pipe {
     private Out mOut;
 
     BufferedPipe(InputStream in, OutputStream out) {
+        this(null, null, in, out);
+    }
+
+    BufferedPipe(SocketAddress localAddr, SocketAddress remoteAttr,
+                 InputStream in, OutputStream out)
+    {
+        mLocalAddress = localAddr;
+        mRemoteAddress = remoteAttr;
         Objects.requireNonNull(in);
         Objects.requireNonNull(out);
         mSourceIn = in;
@@ -1633,6 +1645,16 @@ class BufferedPipe implements Pipe {
             writeVarTypeCode(T_REFERENCE, identifier);
             return true;
         }
+    }
+
+    @Override
+    public SocketAddress localAddress() {
+        return mLocalAddress;
+    }
+
+    @Override
+    public SocketAddress remoteAddress() {
+        return mRemoteAddress;
     }
 
     @Override

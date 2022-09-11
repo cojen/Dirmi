@@ -31,7 +31,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class ClientSession<R> extends CoreSession<R> {
-    private final SocketAddress mAddress;
+    private final SocketAddress mRemoteAddress;
     private final Support mSupport;
     private final ItemMap<Stub> mStubs;
 
@@ -42,9 +42,9 @@ final class ClientSession<R> extends CoreSession<R> {
 
     // FIXME: Note that ClientPipe needs to access the ItemMap for resolving remote objects.
 
-    ClientSession(Engine engine, SocketAddress addr) {
+    ClientSession(Engine engine, SocketAddress remoteAddr) {
         super(engine);
-        mAddress = addr;
+        mRemoteAddress = remoteAddr;
         mSupport = new Support();
         mStubs = new ItemMap<>();
     }
@@ -80,8 +80,10 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    public void connected(InputStream in, OutputStream out) throws IOException {
-        var pipe = new CorePipe(in, out);
+    public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+                          InputStream in, OutputStream out) throws IOException
+    {
+        var pipe = new CorePipe(localAddr, remoteAttr, in, out);
 
         long serverSessionId = mServerSessionId;
         if (serverSessionId != 0) {
@@ -107,13 +109,11 @@ final class ClientSession<R> extends CoreSession<R> {
             if (pipe != null) {
                 return pipe;
             }
-            mEngine.checkClosed().connect(this, mAddress);
+            mEngine.checkClosed().connect(this, mRemoteAddress);
         }
     }
 
     private final class Support implements StubSupport {
-        private volatile StackTraceElement mStitch;
-
         @Override
         public Pipe unbatch() {
             // FIXME: unbatch
@@ -155,13 +155,13 @@ final class ClientSession<R> extends CoreSession<R> {
             // Augment the stack trace with a local trace.
 
             StackTraceElement[] trace = ex.getStackTrace();
-            StackTraceElement stitch = stitch();
+            StackTraceElement[] stitch = stitch(pipe);
             StackTraceElement[] local = new Throwable().getStackTrace();
 
-            var combined = new StackTraceElement[trace.length + 1 + local.length];
+            var combined = new StackTraceElement[trace.length + stitch.length + local.length];
             System.arraycopy(trace, 0, combined, 0, trace.length);
-            combined[trace.length] = stitch;
-            System.arraycopy(local, 0, combined, trace.length + 1, local.length);
+            System.arraycopy(stitch, 0, combined, trace.length, stitch.length);
+            System.arraycopy(local, 0, combined, trace.length + stitch.length, local.length);
 
             ex.setStackTrace(combined);
 
@@ -202,13 +202,32 @@ final class ClientSession<R> extends CoreSession<R> {
             throw null;
         }
 
-        private StackTraceElement stitch() {
-            StackTraceElement stitch = mStitch;
-            if (stitch == null) {
-                mStitch = stitch = new StackTraceElement
-                    ("...remote method invocation..", "", mAddress.toString(), -1);
+        /**
+         * Returns pseudo traces which report the pipe's local and remote addresses.
+         */
+        private StackTraceElement[] stitch(Pipe pipe) {
+            StackTraceElement remote = trace(pipe.remoteAddress());
+            StackTraceElement local = trace(pipe.localAddress());
+
+            if (remote == null) {
+                if (local == null) {
+                    return new StackTraceElement[0];
+                } else {
+                    return new StackTraceElement[] {local};
+                }
+            } else if (local == null) {
+                return new StackTraceElement[] {remote};
+            } else {
+                return new StackTraceElement[] {remote, local};
             }
-            return stitch;
+        }
+
+        private StackTraceElement trace(SocketAddress address) {
+            String str;
+            if (address == null || (str = address.toString()).isEmpty()) {
+                return null;
+            }
+            return new StackTraceElement("...remote method invocation..", "", str, -1);
         }
     }
 }

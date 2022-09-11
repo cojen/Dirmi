@@ -21,6 +21,8 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import java.net.SocketAddress;
+
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
@@ -65,8 +67,12 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    public void connected(InputStream in, OutputStream out) throws IOException {
-        // FIXME: unsupported? what does it mean to call this method?
+    public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+                          InputStream in, OutputStream out)
+        throws IOException
+    {
+        // FIXME: Use this with server-side connection request. Signal a condition variable
+        // when a connection arrives.
         throw null;
     }
 

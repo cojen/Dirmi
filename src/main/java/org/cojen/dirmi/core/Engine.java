@@ -180,8 +180,11 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public Session<?> accepted(InputStream in, OutputStream out) throws IOException {
-        var pipe = new CorePipe(in, out);
+    public Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAttr,
+                               InputStream in, OutputStream out)
+        throws IOException
+    {
+        var pipe = new CorePipe(localAddr, remoteAttr, in, out);
 
         long clientSessionId = 0;
 
