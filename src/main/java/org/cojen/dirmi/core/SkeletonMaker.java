@@ -126,6 +126,8 @@ final class SkeletonMaker<R> {
     }
 
     private MethodHandles.Lookup finishSkeleton() {
+        mSkeletonMaker.addMethod(Class.class, "type").public_().return_(mType);
+
         mSkeletonMaker.addMethod(long.class, "typeId").public_().return_(IdGenerator.next());
 
         {

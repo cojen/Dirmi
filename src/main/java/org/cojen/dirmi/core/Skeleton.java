@@ -32,6 +32,8 @@ public abstract class Skeleton<R> extends Item {
         super(id);
     }
 
+    public abstract Class<R> type();
+
     public abstract long typeId();
 
     /**
