@@ -19,7 +19,6 @@ package org.cojen.dirmi.core;
 import java.lang.invoke.MethodHandles;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.SortedSet;
 
 import org.cojen.maker.ClassMaker;
@@ -34,39 +33,35 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class SkeletonMaker<R> {
-    private static final SoftCache<TypeInfoKey, SkeletonFactory<?>> cCache = new SoftCache<>();
+    private static final SoftCache<Class<?>, SkeletonFactory<?>> cCache = new SoftCache<>();
 
     /**
      * Returns a new or cached SkeletonFactory.
      *
      * @param type non-null server-side remote interface to examine
-     * @param info client-side type information
      * @throws IllegalArgumentException if type is malformed
      */
     @SuppressWarnings("unchecked")
-    static <R> SkeletonFactory<R> factoryFor(Class<R> type, RemoteInfo info) {
-        var key = new TypeInfoKey(type, info);
-        var factory = (SkeletonFactory<R>) cCache.get(key);
+    static <R> SkeletonFactory<R> factoryFor(Class<R> type) {
+        var factory = (SkeletonFactory<R>) cCache.get(type);
         if (factory == null) synchronized (cCache) {
-            factory = (SkeletonFactory<R>) cCache.get(key);
+            factory = (SkeletonFactory<R>) cCache.get(type);
             if (factory == null) {
-                factory = new SkeletonMaker<R>(type, info).finishFactory();
-                cCache.put(key, factory);
+                factory = new SkeletonMaker<R>(type).finishFactory();
+                cCache.put(type, factory);
             }
         }
         return factory;
     }
 
     private final Class<R> mType;
-    private final RemoteInfo mClientInfo;
     private final RemoteInfo mServerInfo;
     private final Class<?> mInvokerClass;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mSkeletonMaker;
 
-    private SkeletonMaker(Class<R> type, RemoteInfo info) {
+    private SkeletonMaker(Class<R> type) {
         mType = type;
-        mClientInfo = info;
         mServerInfo = RemoteInfo.examine(type);
 
         mInvokerClass = InvokerMaker.invokerFor(type);
@@ -140,7 +135,6 @@ final class SkeletonMaker<R> {
             mm.return_(mm.this_().invoke(mType, "server", null));
         }
 
-        SortedSet<RemoteMethod> clientMethods = mClientInfo.remoteMethods();
         SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
 
         MethodMaker mm = mSkeletonMaker.addMethod
@@ -162,45 +156,14 @@ final class SkeletonMaker<R> {
             methodIdVar.set(pipeVar.invoke("readInt"));
         }
 
-        var methodNames = new HashMap<String, Integer>();
         var caseMap = new HashMap<Integer, CaseInfo>();
+        {
+            int methodId = 0;
+            var methodNames = new HashMap<String, Integer>();
 
-        Iterator<RemoteMethod> it1 = clientMethods.iterator();
-        Iterator<RemoteMethod> it2 = serverMethods.iterator();
-
-        RemoteMethod clientMethod = null;
-
-        RemoteMethod serverMethod = null;
-        int serverMethodId = -1;
-        String serverMethodName = null;
-
-        while (true) {
-            if (clientMethod == null) {
-                if (!it1.hasNext()) {
-                    break;
-                }
-                clientMethod = it1.next();
-            }
-
-            if (serverMethod == null) {
-                if (!it2.hasNext()) {
-                    break;
-                }
-                serverMethod = it2.next();
-                serverMethodId++;
-                serverMethodName = InvokerMaker.generateMethodName(methodNames, serverMethod);
-            }
-
-            int cmp = clientMethod.compareTo(serverMethod);
-
-            if (cmp < 0) {
-                // Skip over methods that only exist on the client-side.
-                clientMethod = null;
-            } else {
-                var ci = new CaseInfo(clientMethod, serverMethod, serverMethodName);
-                caseMap.put(serverMethodId, ci);
-                clientMethod = null;
-                serverMethod = null;
+            for (RemoteMethod serverMethod : serverMethods) {
+                String name = InvokerMaker.generateMethodName(methodNames, serverMethod);
+                caseMap.put(methodId++, new CaseInfo(serverMethod, name));
             }
         }
 
@@ -252,12 +215,10 @@ final class SkeletonMaker<R> {
     }
 
     private static class CaseInfo {
-        final RemoteMethod clientMethod;
         final RemoteMethod serverMethod;
         final String serverMethodName;
 
-        CaseInfo(RemoteMethod clientMethod, RemoteMethod serverMethod, String serverMethodName) {
-            this.clientMethod = clientMethod;
+        CaseInfo(RemoteMethod serverMethod, String serverMethodName) {
             this.serverMethod = serverMethod;
             this.serverMethodName = serverMethodName;
         }

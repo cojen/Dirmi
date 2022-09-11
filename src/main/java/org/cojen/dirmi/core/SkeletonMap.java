@@ -16,8 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.IOException;
-
 import java.lang.invoke.VarHandle;
 
 import java.util.concurrent.CountDownLatch;
@@ -45,12 +43,9 @@ final class SkeletonMap extends ItemMap<Skeleton> {
 
     /**
      * Returns the skeleton instance for the given server object, making it if necessary.
-     *
-     * @param info client-side info; can pass null if unknown
-     * @throws IOException thrown by clientRemoteInfo if no info was passed in
      */
     @SuppressWarnings("unchecked")
-    <R> Skeleton<R> skeletonFor(R server, RemoteInfo info) throws IOException {
+    <R> Skeleton<R> skeletonFor(R server) {
         int hash = System.identityHashCode(server);
 
         while (true) {
@@ -97,10 +92,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
 
                 try {
                     var type = (Class<R>) RemoteExaminer.remoteType(server);
-                    if (info == null) {
-                        info = mSession.clientRemoteInfo(type);
-                    }
-                    SkeletonFactory<R> factory = SkeletonMaker.factoryFor(type, info);
+                    SkeletonFactory<R> factory = SkeletonMaker.factoryFor(type);
                     long id = IdGenerator.next(mType);
                     Skeleton<R> skeleton = factory.newSkeleton(id, mSession.support(), server);
                     VarHandle.storeStoreFence();

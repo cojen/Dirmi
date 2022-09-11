@@ -20,7 +20,6 @@ package org.cojen.dirmi.core;
  * Cache key which combines a type class and a type info object.
  *
  * @author Brian S O'Neill
- * @see SkeletonMaker
  * @see StubMaker
  */
 final class TypeInfoKey {

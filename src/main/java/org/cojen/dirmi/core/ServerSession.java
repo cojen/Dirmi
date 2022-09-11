@@ -40,14 +40,14 @@ final class ServerSession<R> extends CoreSession<R> {
     /**
      * @param rootInfo client-side root info
      */
-    ServerSession(Engine engine, R root, RemoteInfo rootInfo) throws IOException {
+    ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
         super(engine);
         mSupport = new Support();
         mSkeletons = new SkeletonMap(this, IdGenerator.I_SERVER);
 
         // FIXME: stash rootInfo in a string to info map
 
-        mRoot = mSkeletons.skeletonFor(root, rootInfo);
+        mRoot = mSkeletons.skeletonFor(root);
     }
 
     /**
