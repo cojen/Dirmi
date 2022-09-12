@@ -70,9 +70,9 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
 
         var entries = mEntries;
         int hash = key.hashCode();
-        int index = hash & (entries.length - 1);
+        int slot = hash & (entries.length - 1);
 
-        for (Entry<K, V> e = entries[index], prev = null; e != null; e = e.mNext) {
+        for (Entry<K, V> e = entries[slot], prev = null; e != null; e = e.mNext) {
             if (e.mKey.equals(key)) {
                 V replaced = e.get();
                 if (replaced != null) {
@@ -83,10 +83,10 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
                     newEntry.mNext = e.mNext;
                 } else {
                     prev.mNext = e.mNext;
-                    newEntry.mNext = entries[index];
+                    newEntry.mNext = entries[slot];
                 }
                 VarHandle.storeStoreFence(); // ensure that entry value is safely visible
-                entries[index] = newEntry;
+                entries[slot] = newEntry;
                 return replaced;
             } else {
                 prev = e;
@@ -98,28 +98,23 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
         if ((size + (size >> 1)) >= entries.length && entries.length < (1 << 30)) {
             // Rehash.
             var newEntries = new Entry[entries.length << 1];
-            size = 0;
             for (int i=0; i<entries.length; i++) {
-                for (var existing = entries[i]; existing != null; ) {
-                    var e = existing;
-                    existing = existing.mNext;
-                    if (e.get() != null) {
-                        size++;
-                        index = e.mHash & (newEntries.length - 1);
-                        e.mNext = newEntries[index];
-                        newEntries[index] = e;
-                    }
+                for (var e = entries[i]; e != null; ) {
+                    Entry next = e.mNext;
+                    slot = e.mHash & (newEntries.length - 1);
+                    e.mNext = newEntries[slot];
+                    newEntries[slot] = e;
+                    e = next;
                 }
             }
             mEntries = entries = newEntries;
-            mSize = size;
-            index = hash & (entries.length - 1);
+            slot = hash & (entries.length - 1);
         }
 
         var newEntry = new Entry<K, V>(key, value, hash, this);
-        newEntry.mNext = entries[index];
+        newEntry.mNext = entries[slot];
         VarHandle.storeStoreFence(); // ensure that entry value is safely visible
-        entries[index] = newEntry;
+        entries[slot] = newEntry;
         mSize++;
 
         return null;
@@ -165,4 +160,3 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
         }
     }
 }
-

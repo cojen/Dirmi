@@ -45,6 +45,7 @@ final class RemoteInfo {
     private static final int F_UNDECLARED_EX = 1;
 
     private static final SoftCache<Class<?>, RemoteInfo> cCache = new SoftCache<>();
+    private static final CanonicalSet<RemoteInfo> cCanonical = new CanonicalSet<>();
 
     /**
      * @param type non-null remote interface to examine
@@ -138,6 +139,7 @@ final class RemoteInfo {
             String remoteFailureString = remoteFailureException.getName().intern();
 
             info = new RemoteInfo(flags, name, remoteFailureString, interfaces, methods);
+            info = cCanonical.add(info);
 
             cCache.put(type, info);
 
@@ -300,7 +302,8 @@ final class RemoteInfo {
             }
         }
 
-        return new RemoteInfo(flags, name, remoteFailureException, interfaceNames, remoteMethods);
+        return cCanonical.add
+            (new RemoteInfo(flags, name, remoteFailureException, interfaceNames, remoteMethods));
     }
 
     static List<String> readInternedStringList(Pipe pipe) throws IOException {

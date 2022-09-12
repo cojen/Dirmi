@@ -76,9 +76,9 @@ final class ReferenceMap {
     int add(Object object) {
         var entries = mEntries;
         int hash = System.identityHashCode(object);
-        int index = hash & (entries.length - 1);
+        int slot = hash & (entries.length - 1);
 
-        for (Entry e = entries[index]; e != null; e = e.mNext) {
+        for (Entry e = entries[slot]; e != null; e = e.mNext) {
             if (object == e.mObject) {
                 // Entry already exists.
                 return e.mIdentifier;
@@ -98,20 +98,20 @@ final class ReferenceMap {
                 for (int i=0; i<entries.length; i++) {
                     for (var e = entries[i]; e != null; ) {
                         Entry next = e.mNext;
-                        index = e.mHash & (newEntries.length - 1);
-                        e.mNext = newEntries[index];
-                        newEntries[index] = e;
+                        slot = e.mHash & (newEntries.length - 1);
+                        e.mNext = newEntries[slot];
+                        newEntries[slot] = e;
                         e = next;
                     }
                 }
                 mEntries = entries = newEntries;
-                index = hash & (entries.length - 1);
+                slot = hash & (entries.length - 1);
             }
         }
 
         var newEntry = new Entry(object, hash, size);
-        newEntry.mNext = entries[index];
-        entries[index] = newEntry;
+        newEntry.mNext = entries[slot];
+        entries[slot] = newEntry;
         mSize = size + 1;
 
         return ~size;
