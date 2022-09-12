@@ -210,7 +210,7 @@ public final class Engine implements Environment {
             }
 
             Object name = pipe.readObject();
-            var clientInfo = (RemoteInfo) pipe.readObject();
+            RemoteInfo clientInfo = RemoteInfo.readFrom(pipe);
             Object metadata = pipe.readObject();
 
             var exports = mExports;
@@ -232,7 +232,7 @@ public final class Engine implements Environment {
             session.registerNewConnection(pipe);
 
             session.writeHeader(pipe, clientSessionId);
-            pipe.writeObject(serverInfo);
+            serverInfo.writeTo(pipe);
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
@@ -283,7 +283,7 @@ public final class Engine implements Environment {
 
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
-            pipe.writeObject(info); // root object type
+            info.writeTo(pipe);  // root object type
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
@@ -302,7 +302,7 @@ public final class Engine implements Environment {
 
             long rootId = pipe.readLong();
             long rootTypeId = pipe.readLong();
-            var serverInfo = (RemoteInfo) pipe.readObject();
+            RemoteInfo serverInfo = RemoteInfo.readFrom(pipe);
             Object metadata = pipe.readObject();
 
             session.init(serverSessionId, type, serverInfo, rootId, rootTypeId);

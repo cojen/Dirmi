@@ -380,7 +380,6 @@ public class PipeTest {
             new Object[] {
                 true, 'a', 1.23f, 2.34d, (byte) 3, (short) 4, 5, 6L,
                 BigInteger.valueOf(100), new BigDecimal("3.14"),
-                RemoteInfo.examine(RemoteInfoTest.R30.class),
                 new Object[] {new int[] {1, 2, 3}, new String[] {"a", "b", "c"}},
             },
 
@@ -404,7 +403,6 @@ public class PipeTest {
             new Map[] {Map.of("hello", "world")},
             new BigInteger[] {BigInteger.valueOf(123)},
             new BigDecimal[] {BigDecimal.ONE},
-            new RemoteInfo[] {RemoteInfo.examine(RemoteInfoTest.R30.class)},
         };
 
         for (Object a : arrays) {

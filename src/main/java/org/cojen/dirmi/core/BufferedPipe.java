@@ -458,7 +458,6 @@ class BufferedPipe implements Pipe {
             case T_BIG_DECIMAL:     simple = readBigDecimal(); break loop;
             case T_THROWABLE:       return readThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
-            case T_REMOTE_INFO:     return RemoteInfo.readFrom(this);
             default: throw inputException(new InvalidObjectException("Unknown type: " + typeCode));
             }
         }
@@ -714,7 +713,6 @@ class BufferedPipe implements Pipe {
         case T_BIG_DECIMAL: array = new BigDecimal[length]; break;
         case T_THROWABLE: array = new Throwable[length]; break;
         case T_STACK_TRACE: array = new StackTraceElement[length]; break;
-        case T_REMOTE_INFO: array = new RemoteInfo[length]; break;
         case T_REMOTE: case T_REMOTE_T: array = new Item[length]; break;
 
         default: array = new Object[length]; break;
@@ -1172,7 +1170,6 @@ class BufferedPipe implements Pipe {
         case T_BIG_DECIMAL: writeObject((BigDecimal) v); break;
         case T_THROWABLE: writeObject((Throwable) v); break;
         case T_STACK_TRACE: writeObject((StackTraceElement) v); break;
-        case T_REMOTE_INFO: writeObject((RemoteInfo) v); break;
         case T_REMOTE: writeObject((Stub) v); break;
         case T_REMOTE_T: writeObject((Skeleton) v); break;
         default:
@@ -1538,13 +1535,6 @@ class BufferedPipe implements Pipe {
             }
         } finally {
             disableReferences();
-        }
-    }
-
-    void writeObject(RemoteInfo v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
-            write(T_REMOTE_INFO);
-            v.writeTo(this);
         }
     }
 

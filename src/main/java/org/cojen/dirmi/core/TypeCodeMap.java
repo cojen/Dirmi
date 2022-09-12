@@ -63,7 +63,6 @@ final class TypeCodeMap {
         map.put(BigDecimal.class, T_BIG_DECIMAL);
         map.put(Throwable.class, T_THROWABLE);
         map.put(StackTraceElement.class, T_STACK_TRACE);
-        map.put(RemoteInfo.class, T_REMOTE_INFO);
         map.put(Stub.class, T_REMOTE);
         map.put(Skeleton.class, T_REMOTE_T);
 
@@ -97,7 +96,6 @@ final class TypeCodeMap {
         case T_BIG_DECIMAL: return BigDecimal.class;
         case T_THROWABLE: return Throwable.class;
         case T_STACK_TRACE: return StackTraceElement.class;
-        case T_REMOTE_INFO: return RemoteInfo.class;
         case T_REMOTE: case T_REMOTE_T: return Item.class;
         default: return Object.class;
         }

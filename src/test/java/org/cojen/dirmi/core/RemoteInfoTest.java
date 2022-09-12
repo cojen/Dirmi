@@ -627,14 +627,14 @@ public class RemoteInfoTest {
 
         var bout = new ByteArrayOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
-        pipe.writeObject(info);
+        info.writeTo(pipe);
         pipe.flush();
 
         byte[] bytes = bout.toByteArray();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
-        var info2 = (RemoteInfo) pipe.readObject();
+        RemoteInfo info2 = RemoteInfo.readFrom(pipe);
         assertEquals(info, info2);
         assertEquals(info.hashCode(), info2.hashCode());
 
