@@ -21,6 +21,8 @@ import org.cojen.dirmi.Session;
 
 import java.io.IOException;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.SocketAddress;
 
 import java.nio.channels.SocketChannel;
@@ -34,7 +36,23 @@ public final class DirectConnector implements Connector {
     public static final DirectConnector THE = new DirectConnector();
 
     @Override
-    public void connect(Session s, SocketAddress address) throws IOException {
-        s.connected(SocketChannel.open(address));
+    public void connect(Session session, SocketAddress address) throws IOException {
+        if (address instanceof InetSocketAddress) {
+            /*
+              Favor the Socket class, due to a 20 year old SocketChannel design flaw which
+              prevents concurrent reads and writes. It's finally fixed in Java 19.
+
+              https://bugs.openjdk.org/browse/JDK-8279339
+
+              If the given address isn't supported, then the SocketChannel must be used, but it
+              won't work correctly for anything older than Java 19. The only other known
+              address type is UnixDomainSocketAddress, added in Java 16.
+            */
+            var s = new Socket();
+            s.connect(address);
+            session.connected(s);
+        } else {
+            session.connected(SocketChannel.open(address));
+        }
     }
 }
