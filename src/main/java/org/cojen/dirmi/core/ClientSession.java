@@ -32,7 +32,6 @@ import org.cojen.dirmi.Session;
  */
 final class ClientSession<R> extends CoreSession<R> {
     private final SocketAddress mRemoteAddress;
-    private final Support mSupport;
 
     // FIXME: Stale connections need to be removed from the pool.
 
@@ -42,7 +41,6 @@ final class ClientSession<R> extends CoreSession<R> {
     ClientSession(Engine engine, SocketAddress remoteAddr) {
         super(engine, IdGenerator.I_CLIENT);
         mRemoteAddress = remoteAddr;
-        mSupport = new Support();
     }
 
     /**
@@ -65,7 +63,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
         factory = mStubFactories.putIfAbsent(factory);
-        Stub root = factory.newStub(rootId, mSupport);
+        Stub root = factory.newStub(rootId, mStubSupport);
         mStubs.put(root);
         mRoot = (R) root;
     }
@@ -102,9 +100,7 @@ final class ClientSession<R> extends CoreSession<R> {
         registerNewAvailableConnection(pipe);
     }
 
-    /**
-     * Returns a new or existing connection. Closing it attempts to recycle it.
-     */
+    @Override
     CorePipe connect() throws IOException {
         while (true) {
             CorePipe pipe = tryObtainConnection();
@@ -112,135 +108,6 @@ final class ClientSession<R> extends CoreSession<R> {
                 return pipe;
             }
             mEngine.checkClosed().connect(this, mRemoteAddress);
-        }
-    }
-
-    @Override
-    StubSupport stubSupport() {
-        return mSupport;
-    }
-
-    @Override
-    SkeletonSupport skeletonSupport() {
-        // FIXME: skeletonSupport
-        throw null;
-    }
-
-    private final class Support implements StubSupport {
-        @Override
-        public Pipe unbatch() {
-            // FIXME: unbatch
-            throw null;
-        }
-
-        @Override
-        public void rebatch(Pipe pipe) {
-            // FIXME: rebatch
-            throw null;
-        }
-
-        @Override
-        public <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T {
-            try {
-                return ClientSession.this.connect();
-            } catch (Throwable e) {
-                throw CoreUtils.remoteException(remoteFailureException, e);
-            }
-        }
-
-        @Override
-        public <T extends Throwable, R> R createBatchedRemote(Class<T> remoteFailureException,
-                                                              Pipe pipe, Class<R> type)
-            throws T
-        {
-            // FIXME: createBatchedRemote
-            throw null;
-        }
-
-        @Override
-        public Throwable readResponse(Pipe pipe) throws IOException {
-            var ex = (Throwable) pipe.readObject();
-
-            if (ex == null) {
-                return null;
-            }
-
-            // Augment the stack trace with a local trace.
-
-            StackTraceElement[] trace = ex.getStackTrace();
-            StackTraceElement[] stitch = stitch(pipe);
-            StackTraceElement[] local = new Throwable().getStackTrace();
-
-            var combined = new StackTraceElement[trace.length + stitch.length + local.length];
-            System.arraycopy(trace, 0, combined, 0, trace.length);
-            System.arraycopy(stitch, 0, combined, trace.length, stitch.length);
-            System.arraycopy(local, 0, combined, trace.length + stitch.length, local.length);
-
-            ex.setStackTrace(combined);
-
-            return ex;
-        }
-
-        @Override
-        public void finished(Pipe pipe) {
-            try {
-                pipe.recycle();
-            } catch (IOException e) {
-                // FIXME: log it
-                CoreUtils.uncaughtException(e);
-            }
-        }
-
-        @Override
-        public void batched(Pipe pipe) {
-            // FIXME: batched
-            throw null;
-        }
-
-        @Override
-        public void release(Pipe pipe) {
-            // Nothing to do.
-        }
-
-        @Override
-        public <T extends Throwable> T failed(Class<T> remoteFailureException,
-                                              Pipe pipe, Throwable cause)
-        {
-            return CoreUtils.remoteException(remoteFailureException, cause);
-        }
-
-        @Override
-        public StubSupport dispose(Stub stub) {
-            mStubs.remove(stub);
-            return DisposedStubSupport.THE;
-        }
-
-        /**
-         * Returns pseudo traces which report the pipe's local and remote addresses.
-         */
-        private StackTraceElement[] stitch(Pipe pipe) {
-            StackTraceElement remote = trace(pipe.remoteAddress());
-            StackTraceElement local = trace(pipe.localAddress());
-
-            if (remote == null) {
-                if (local == null) {
-                    return new StackTraceElement[0];
-                } else {
-                    return new StackTraceElement[] {local};
-                }
-            } else if (local == null) {
-                return new StackTraceElement[] {remote};
-            } else {
-                return new StackTraceElement[] {remote, local};
-            }
-        }
-
-        private StackTraceElement trace(SocketAddress address) {
-            String str;
-            if (address == null || (str = address.toString()).isEmpty()) {
-                return null;
-            }
-            return new StackTraceElement("...remote method invocation..", "", str, -1);
         }
     }
 }

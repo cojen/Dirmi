@@ -595,11 +595,11 @@ public final class Engine implements Environment {
     private abstract class Acceptor implements Closeable, Runnable {
         private volatile int mState;
 
-        protected final boolean start() {
+        final boolean start() {
             return cStateHandle.compareAndSet(this, 0, 1);
         }
 
-        protected final boolean isClosed() {
+        final boolean isClosed() {
             if (mState < 0) {
                 return true;
             }
@@ -610,7 +610,7 @@ public final class Engine implements Environment {
             return false;
         }
 
-        protected final void doClose(Closeable ss) {
+        final void doClose(Closeable ss) {
             mState = -1;
             CoreUtils.closeQuietly(ss);
             unregister(ss, this);

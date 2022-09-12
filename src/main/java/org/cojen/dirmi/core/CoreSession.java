@@ -59,6 +59,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final SkeletonMap mSkeletons;
     final ItemMap<Item> mKnownTypes; // tracks types known by the client-side
 
+    final CoreStubSupport mStubSupport;
+    final CoreSkeletonSupport mSkeletonSupport;
+
     private final Lock mControlLock;
     private CorePipe mControlPipe;
 
@@ -80,13 +83,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mStubFactories = new ItemMap<StubFactory>();
         mSkeletons = new SkeletonMap(this, idType);
         mKnownTypes = new ItemMap<>();
+
+        mStubSupport = new CoreStubSupport(this);
+        mSkeletonSupport = new CoreSkeletonSupport(this);
+
         mControlLock = new ReentrantLock();
     }
 
     /**
      * Track a new connection as being immediately used (not available for other uses).
      */
-    protected final void registerNewConnection(CorePipe pipe) throws ClosedException {
+    final void registerNewConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
         try {
             checkClosed();
@@ -108,7 +115,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Track a new connection as being available from the tryObtainConnection method.
      */
-    protected final void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+    final void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
         recycle: try {
             checkClosed();
@@ -134,7 +141,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Track an existing connection as being available from the tryObtainConnection method.
      */
-    protected boolean recycleConnection(CorePipe pipe) {
+    boolean recycleConnection(CorePipe pipe) {
         conLockAcquire();
         recycle: try {
             if (mClosed || pipe.mClosed) {
@@ -193,7 +200,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * connection is tracked as being used and not available for other uses. The connection
      * should be recycled or closed when not used anymore.
      */
-    protected final CorePipe tryObtainConnection() throws ClosedException {
+    final CorePipe tryObtainConnection() throws ClosedException {
         conLockAcquire();
         try {
             checkClosed();
@@ -230,7 +237,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Remove the connection from the tracked set and close it.
      */
-    protected final void closeConnection(CorePipe pipe) {
+    final void closeConnection(CorePipe pipe) {
         conLockAcquire();
         try {
             pipe.mClosed = true;
@@ -300,7 +307,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Starts a task to read and process commands over the control connection.
      */
-    void processControlConnection(CorePipe pipe) throws IOException {
+    final void processControlConnection(CorePipe pipe) throws IOException {
         mControlLock.lock();
         mControlPipe = pipe;
         mControlLock.unlock();
@@ -324,13 +331,18 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         });
     }
 
+    /**
+     * Returns a new or existing connection. Closing it attempts to recycle it.
+     */
+    abstract CorePipe connect() throws IOException;
+
     Stub stubFor(long id) throws IOException {
         return mStubs.get(id);
     }
 
     Stub stubFor(long id, long typeId) throws IOException {
         StubFactory factory = mStubFactories.get(typeId);
-        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+        return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
     Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
@@ -348,7 +360,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         // Notify the other side that it can stop sending type info.
         mEngine.tryExecute(() -> notifyKnownType(typeId));
 
-        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+        return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
     private void notifyKnownType(long typeId) {
@@ -379,10 +391,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             info.writeTo(pipe);
         }
     }
-
-    abstract StubSupport stubSupport();
-
-    abstract SkeletonSupport skeletonSupport();
 
     private void checkClosed() throws ClosedException {
         if (mClosed) {

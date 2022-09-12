@@ -33,7 +33,6 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class ServerSession<R> extends CoreSession<R> {
-    private final Support mSupport;
     private final Skeleton<R> mRoot;
 
     /**
@@ -41,7 +40,6 @@ final class ServerSession<R> extends CoreSession<R> {
      */
     ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
         super(engine, IdGenerator.I_SERVER);
-        mSupport = new Support();
 
         // FIXME: stash rootInfo in a string to info map
 
@@ -87,7 +85,7 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    protected boolean recycleConnection(CorePipe pipe) {
+    boolean recycleConnection(CorePipe pipe) {
         if (super.recycleConnection(pipe)) {
             try {
                 startProcessor(pipe);
@@ -99,45 +97,18 @@ final class ServerSession<R> extends CoreSession<R> {
         return false;
     }
 
+    @Override
+    CorePipe connect() throws IOException {
+        // FIXME: connect
+        throw new IOException();
+    }
+
     private void startProcessor(CorePipe pipe) throws IOException {
         try {
             mEngine.execute(new Processor(pipe));
         } catch (IOException e) {
             closeConnection(pipe);
             throw e;
-        }
-    }
-
-    /**
-     * Returns the remote info for the given type, as known by the client.
-     */
-    RemoteInfo clientRemoteInfo(Class<?> type) throws IOException {
-        // FIXME: consult the map or make a remote call and cache the results
-        throw null;
-    }
-
-    @Override
-    StubSupport stubSupport() {
-        // FIXME: stubSupport
-        throw null;
-    }
-
-    @Override
-    SkeletonSupport skeletonSupport() {
-        return mSupport;
-    }
-
-    private final class Support implements SkeletonSupport {
-        @Override
-        public Object handleException(Pipe pipe, Throwable ex) {
-            // FIXME: handleException
-            ex.printStackTrace();
-            throw null;
-        }
-
-        @Override
-        public void dispose(Skeleton<?> skeleton) {
-            mSkeletons.remove(skeleton);
         }
     }
 

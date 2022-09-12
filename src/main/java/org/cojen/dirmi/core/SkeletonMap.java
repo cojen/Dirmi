@@ -143,7 +143,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                     SkeletonFactory<R> factory = SkeletonMaker.factoryFor(type);
                     long id = IdGenerator.next(mIdType);
                     Skeleton<R> skeleton = factory.newSkeleton
-                        (id, mSession.skeletonSupport(), server);
+                        (id, mSession.mSkeletonSupport, server);
                     VarHandle.storeStoreFence();
 
                     super.put(skeleton);

@@ -479,15 +479,15 @@ class BufferedPipe implements Pipe {
         return simple;
     }
 
-    protected Stub stubFor(long id) throws IOException {
+    Stub stubFor(long id) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
-    protected Stub stubFor(long id, long typeId) throws IOException {
+    Stub stubFor(long id, long typeId) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
-    protected Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
@@ -1207,14 +1207,14 @@ class BufferedPipe implements Pipe {
     /**
      * @param server non-null server side object
      */
-    protected void writeSkeleton(Object server) throws IOException {
+    void writeSkeleton(Object server) throws IOException {
         throw unsupported(server);
     }
 
     /**
      * @param typeCode T_REMOTE_T or T_REMOTE_TI
      */
-    protected void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
+    void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
         requireOutput(17);
         int end = mOutEnd;
         byte[] buf = mOutBuffer;
@@ -1779,7 +1779,7 @@ class BufferedPipe implements Pipe {
         close(null);
     }
 
-    protected void close(IOException ex) throws IOException {
+    void close(IOException ex) throws IOException {
         try {
             mSourceOut.close();
         } catch (IOException e) {

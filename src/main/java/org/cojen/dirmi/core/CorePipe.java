@@ -44,22 +44,22 @@ final class CorePipe extends BufferedPipe {
     }
 
     @Override
-    protected Stub stubFor(long id) throws IOException {
+    Stub stubFor(long id) throws IOException {
         return mSession.stubFor(id);
     }
 
     @Override
-    protected Stub stubFor(long id, long typeId) throws IOException {
+    Stub stubFor(long id, long typeId) throws IOException {
         return mSession.stubFor(id, typeId);
     }
 
     @Override
-    protected Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
         return mSession.stubFor(id, typeId, info);
     }
 
     @Override
-    protected void writeSkeleton(Object server) throws IOException {
+    void writeSkeleton(Object server) throws IOException {
         mSession.writeSkeleton(this, server);
     }
 
@@ -77,7 +77,7 @@ final class CorePipe extends BufferedPipe {
      * @param ex can be null
      */
     @Override
-    protected void close(IOException ex) throws IOException {
+    void close(IOException ex) throws IOException {
         CoreSession session = mSession;
         if (session == null) {
             super.close(ex);
