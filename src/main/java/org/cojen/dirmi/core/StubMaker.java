@@ -16,7 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
 import java.util.Iterator;
@@ -36,97 +38,75 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class StubMaker {
-    private static final SoftCache<TypeInfoKey, StubFactory> cCache = new SoftCache<>();
+    private static final SoftCache<TypeInfoKey, MethodHandle> cCache = new SoftCache<>();
 
     /**
-     * Returns a new or cached StubFactory.
+     * Returns a new StubFactory instance.
      *
      * @param type non-null client-side remote interface to examine
+     * @param typeId server-side type id
      * @param info server-side type information
      * @throws IllegalArgumentException if type is malformed
      * @throws NoClassDefFoundError if the remote failure class isn't found or if the batched
      * remote object class isn't found
      */
-    static StubFactory factoryFor(Class<?> type, RemoteInfo info) {
+    static StubFactory factoryFor(Class<?> type, long typeId, RemoteInfo info) {
         var key = new TypeInfoKey(type, info);
-        var factory = cCache.get(key);
-        if (factory == null) synchronized (cCache) {
-            factory = cCache.get(key);
-            if (factory == null) {
-                factory = new StubMaker(type, info).finishFactory();
-                cCache.put(key, factory);
+        var mh = cCache.get(key);
+        if (mh == null) synchronized (cCache) {
+            mh = cCache.get(key);
+            if (mh == null) {
+                mh = new StubMaker(type, info).finishFactory();
+                cCache.put(key, mh);
             }
         }
-        return factory;
+
+        try {
+            return (StubFactory) mh.invoke(typeId);
+        } catch (Throwable e) {
+            throw new AssertionError(e);
+        }
     }
 
-    private final Class<?> mType;
     private final RemoteInfo mClientInfo;
     private final RemoteInfo mServerInfo;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mStubMaker;
 
     private StubMaker(Class<?> type, RemoteInfo info) {
-        mType = type;
         mClientInfo = RemoteInfo.examine(type);
         mServerInfo = info;
 
         String sourceFile = StubMaker.class.getSimpleName();
 
         mFactoryMaker = ClassMaker.begin(type.getName(), type.getClassLoader(), CoreUtils.MAKER_KEY)
-            .implement(StubFactory.class).final_().sourceFile(sourceFile);
+            .extend(StubFactory.class).final_().sourceFile(sourceFile);
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
             .extend(Stub.class).implement(type).final_().sourceFile(sourceFile);
-
-        // Need to define the stub constructor (and its dependencies) early in order for the
-        // factory to see it.
-
-        mStubMaker.addField(StubSupport.class, "support").private_();
-
-        MethodMaker mm = mStubMaker.addConstructor(long.class, StubSupport.class);
-        mm.invokeSuperConstructor(mm.param(0));
-        mm.field("support").set(mm.param(1));
-        mm.var(VarHandle.class).invoke("storeStoreFence");
     }
 
     /**
+     * @return a StubFactory constructor which accepts a typeId
      * @throws NoClassDefFoundError if the remote failure class isn't found or if the batched
      * remote object class isn't found
      */
-    private StubFactory finishFactory() {
-        // Need to finish the factory before the stub because it's needed by the stub.
-        mFactoryMaker.addConstructor();
+    private MethodHandle finishFactory() {
+        Class<?> stubClass = finishStub();
 
-        MethodMaker mm = mFactoryMaker.addMethod
-            (Stub.class, "newStub", long.class, StubSupport.class);
-        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1)));
+        MethodMaker mm = mFactoryMaker.addConstructor(long.class);
+        mm.invokeSuperConstructor(mm.param(0));
 
-        // Need to finish this now because the call to get the stub lookup forces it to be
-        // initialized. This in turn runs the static initializer (see below) which needs to be
-        // able to see the factory class.
-        Class<?> factoryClass = mFactoryMaker.finish();
+        mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
+        mm.public_().return_(mm.new_(stubClass, mm.param(0), mm.param(1)));
 
-        // Because the cache maintains a soft reference to the factory, maintain a strong
-        // static reference to the singleton factory instance from the stub, to prevent the
-        // factory instance from being GC'd too soon. If it was GC'd too soon, then new classes
-        // might be generated again even when stub instances still might exist. Maintaining a
-        // strong factory reference from the cache would prevent it from being GC'd at all,
-        // because the factory indirectly refers to the cache key.
-        mStubMaker.addField(StubFactory.class, "factory").private_().static_().final_();
-        mm = mStubMaker.addClinit();
-        mm.field("factory").set(mm.new_(mFactoryMaker));
-
-        MethodHandles.Lookup stubLookup = finishStub();
-        Class<?> stubClass = stubLookup.lookupClass();
+        MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
 
         try {
-            var mh = stubLookup.findStaticGetter(stubClass, "factory", StubFactory.class);
-            return (StubFactory) mh.invokeExact();
-        } catch (RuntimeException | Error e) {
-            throw e;
-        } catch (Throwable e) {
+            return lookup.findConstructor
+                (lookup.lookupClass(), MethodType.methodType(void.class, long.class));
+        } catch (Exception e) {
             throw new AssertionError(e);
         }
     }
@@ -137,7 +117,16 @@ final class StubMaker {
      * @throws NoClassDefFoundError if the remote failure class isn't found or if the batched
      * remote object class isn't found
      */
-    private MethodHandles.Lookup finishStub() {
+    private Class<?> finishStub() {
+        mStubMaker.addField(StubSupport.class, "support").private_();
+
+        {
+            MethodMaker mm = mStubMaker.addConstructor(long.class, StubSupport.class);
+            mm.invokeSuperConstructor(mm.param(0));
+            mm.field("support").set(mm.param(1));
+            mm.var(VarHandle.class).invoke("storeStoreFence");
+        }
+
         SortedSet<RemoteMethod> clientMethods = mClientInfo.remoteMethods();
         SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
 
@@ -335,7 +324,7 @@ final class StubMaker {
             serverMethod = null;
         }
 
-        return mStubMaker.finishLookup();
+        return mStubMaker.finish();
     }
 
     private Class<?> classFor(Object obj) throws NoClassDefFoundError {

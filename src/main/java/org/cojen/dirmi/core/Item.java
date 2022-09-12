@@ -25,7 +25,6 @@ package org.cojen.dirmi.core;
  * @see IdGenerator
  */
 public class Item {
-    // Remote object id.
     protected final long id;
 
     // ItemMap collision chain.

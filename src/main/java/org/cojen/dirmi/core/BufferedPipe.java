@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;
 
 import static org.cojen.dirmi.core.TypeCodes.*;
@@ -458,6 +459,17 @@ class BufferedPipe implements Pipe {
             case T_BIG_DECIMAL:     simple = readBigDecimal(); break loop;
             case T_THROWABLE:       return readThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
+
+            case T_REMOTE:          simple = stubFor(readLong()); break loop;
+            case T_REMOTE_T:        simple = stubFor(readLong(), readLong()); break loop;
+            case T_REMOTE_TI: {
+                long id = readLong();
+                long typeId = readLong();
+                RemoteInfo info = RemoteInfo.readFrom(this);
+                simple = stubFor(id, typeId, info);
+                break loop;
+            }
+
             default: throw inputException(new InvalidObjectException("Unknown type: " + typeCode));
             }
         }
@@ -465,6 +477,18 @@ class BufferedPipe implements Pipe {
         stashReference(simple);
  
         return simple;
+    }
+
+    protected Stub stubFor(long id) throws IOException {
+        throw new NoSuchObjectException(id);
+    }
+
+    protected Stub stubFor(long id, long typeId) throws IOException {
+        throw new NoSuchObjectException(id);
+    }
+
+    protected Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+        throw new NoSuchObjectException(id);
     }
 
     private Object readReference(int identifier) throws IOException {
@@ -1171,11 +1195,33 @@ class BufferedPipe implements Pipe {
         case T_THROWABLE: writeObject((Throwable) v); break;
         case T_STACK_TRACE: writeObject((StackTraceElement) v); break;
         case T_REMOTE: writeObject((Stub) v); break;
-        case T_REMOTE_T: writeObject((Skeleton) v); break;
-        default:
-            throw new IllegalArgumentException
-                ("Unsupported object type: " + v.getClass().getName());
+        case T_REMOTE_T: writeSkeleton(v); break;
+        default: throw unsupported(v);
         }
+    }
+
+    private static IllegalArgumentException unsupported(Object v) {
+        return new IllegalArgumentException("Unsupported object type: " + v.getClass().getName());
+    }
+
+    /**
+     * @param server non-null server side object
+     */
+    protected void writeSkeleton(Object server) throws IOException {
+        throw unsupported(server);
+    }
+
+    /**
+     * @param typeCode T_REMOTE_T or T_REMOTE_TI
+     */
+    protected void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
+        requireOutput(17);
+        int end = mOutEnd;
+        byte[] buf = mOutBuffer;
+        buf[end++] = typeCode;
+        cLongArrayBEHandle.set(buf, end, skeleton.id);
+        cLongArrayBEHandle.set(buf, end + 8, skeleton.typeId());
+        mOutEnd = end + 16;
     }
 
     @Override
@@ -1546,18 +1592,6 @@ class BufferedPipe implements Pipe {
             buf[end++] = T_REMOTE; // remote id
             cLongArrayBEHandle.set(buf, end, v.id);
             mOutEnd = end + 8;
-        }
-    }
-
-    void writeObject(Skeleton v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
-            requireOutput(17);
-            int end = mOutEnd;
-            byte[] buf = mOutBuffer;
-            buf[end++] = T_REMOTE_T; // remote id and type
-            cLongArrayBEHandle.set(buf, end, v.id);
-            cLongArrayBEHandle.set(buf, end, v.typeId());
-            mOutEnd = end + 16;
         }
     }
 

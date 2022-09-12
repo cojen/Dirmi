@@ -23,10 +23,17 @@ package org.cojen.dirmi.core;
  *
  * @author Brian S O'Neill
  */
-public interface StubFactory {
+public abstract class StubFactory extends Item {
+    /**
+     * @param typeId remote object type id
+     */
+    protected StubFactory(long typeId) {
+        super(typeId);
+    }
+
     /**
      * @param id remote object identifier
      * @param support for invoking remote methods
      */
-    Stub newStub(long id, StubSupport support);
+    protected abstract Stub newStub(long id, StubSupport support);
 }

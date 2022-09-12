@@ -26,4 +26,8 @@ public class NoSuchObjectException extends RemoteException {
     public NoSuchObjectException(String message) {
         super(message);
     }
+
+    public NoSuchObjectException(long objectId) {
+        this(String.valueOf(objectId));
+    }
 }

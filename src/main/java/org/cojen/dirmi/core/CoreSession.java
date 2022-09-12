@@ -21,7 +21,12 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 
 /**
@@ -30,6 +35,9 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 abstract class CoreSession<R> extends Item implements Session<R> {
+    // Control commands.
+    private static final int C_KNOWN_TYPE = 2;
+
     private static final int SPIN_LIMIT;
 
     private static final VarHandle cConLockHandle;
@@ -46,6 +54,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final Engine mEngine;
+    final ItemMap<Stub> mStubs;
+    final ItemMap<StubFactory> mStubFactories;
+    final SkeletonMap mSkeletons;
+    final ItemMap<Item> mKnownTypes; // tracks types known by the client-side
+
+    private final Lock mControlLock;
+    private CorePipe mControlPipe;
 
     private volatile int mConLock;
 
@@ -55,10 +70,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private boolean mClosed;
 
-    CoreSession(Engine engine) {
+    /**
+     * @param idType type of skeleton ids to generate; see IdGenerator
+     */
+    CoreSession(Engine engine, long idType) {
         super(IdGenerator.next());
         mEngine = engine;
-        VarHandle.storeStoreFence();
+        mStubs = new ItemMap<Stub>();
+        mStubFactories = new ItemMap<StubFactory>();
+        mSkeletons = new SkeletonMap(this, idType);
+        mKnownTypes = new ItemMap<>();
+        mControlLock = new ReentrantLock();
     }
 
     /**
@@ -268,7 +290,99 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             pipe.doClose();
             pipe = next;
         }
+
+        mStubs.clear();
+        mStubFactories.clear();
+        mSkeletons.clear();
+        mKnownTypes.clear();
     }
+
+    /**
+     * Starts a task to read and process commands over the control connection.
+     */
+    void processControlConnection(CorePipe pipe) throws IOException {
+        mControlLock.lock();
+        mControlPipe = pipe;
+        mControlLock.unlock();
+
+        mEngine.execute(() -> {
+            try {
+                while (true) {
+                    int command = pipe.readUnsignedByte();
+                    switch (command) {
+                    case C_KNOWN_TYPE:
+                        mKnownTypes.putIfAbsent(new Item(pipe.readLong()));
+                        break;
+                    default:
+                        throw new RemoteException("Unknown command: " + command);
+                    }
+                }
+            } catch (Throwable e) {
+                // FIXME: pass the exception so that it can be logged
+                close();
+            }
+        });
+    }
+
+    Stub stubFor(long id) throws IOException {
+        return mStubs.get(id);
+    }
+
+    Stub stubFor(long id, long typeId) throws IOException {
+        StubFactory factory = mStubFactories.get(typeId);
+        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+    }
+
+    Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+        Class<?> type;
+        try {
+            type = Class.forName(info.name(), false, root().getClass().getClassLoader());
+        } catch (ClassNotFoundException e) {
+            // The remote methods will only be available via reflection.
+            type = Remote.class;
+        }
+
+        StubFactory factory = StubMaker.factoryFor(type, typeId, info);
+        factory = mStubFactories.putIfAbsent(factory);
+
+        // Notify the other side that it can stop sending type info.
+        mEngine.tryExecute(() -> notifyKnownType(typeId));
+
+        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+    }
+
+    private void notifyKnownType(long typeId) {
+        try {
+            mControlLock.lock();
+            try {
+                mControlPipe.write(C_KNOWN_TYPE);
+                mControlPipe.writeLong(typeId);
+                mControlPipe.flush();
+            } finally {
+                mControlLock.unlock();
+            }
+        } catch (IOException e) {
+            // Ignore.
+        }
+    }
+
+    void writeSkeleton(CorePipe pipe, Object server) throws IOException {
+        Skeleton<?> skeleton = mSkeletons.skeletonFor(server);
+
+        if (mKnownTypes.tryGet(skeleton.typeId()) != null) {
+            // Write the remote identifier and the remote type.
+            pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_T, skeleton);
+        } else {
+            // Write the remote identifier, the remote type, and the remote info.
+            RemoteInfo info = RemoteInfo.examine(skeleton.type());
+            pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_TI, skeleton);
+            info.writeTo(pipe);
+        }
+    }
+
+    abstract StubSupport stubSupport();
+
+    abstract SkeletonSupport skeletonSupport();
 
     private void checkClosed() throws ClosedException {
         if (mClosed) {

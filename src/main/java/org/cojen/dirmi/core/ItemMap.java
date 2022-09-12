@@ -32,8 +32,8 @@ import org.cojen.dirmi.NoSuchObjectException;
 class ItemMap<I extends Item> {
     static final int INITIAL_CAPACITY = 8; // must be power of 2
 
-    private Item[] mItems;
-    private int mSize;
+    protected Item[] mItems;
+    protected int mSize;
 
     ItemMap() {
         mItems = new Item[INITIAL_CAPACITY];
@@ -52,6 +52,9 @@ class ItemMap<I extends Item> {
         mSize = 0;
     }
 
+    /**
+     * @return old item
+     */
     @SuppressWarnings("unchecked")
     synchronized I put(I item) {
         Item[] items = mItems;
@@ -78,6 +81,35 @@ class ItemMap<I extends Item> {
             it = next;
         }
 
+        doPut(items, item, slot);
+
+        return null;
+    }
+
+    /**
+     * @return existing item or the given item
+     */
+    @SuppressWarnings("unchecked")
+    synchronized I putIfAbsent(I item) {
+        Item[] items = mItems;
+        int slot = ((int) item.id) & (items.length - 1);
+
+        for (Item it = items[slot]; it != null; it = it.mNext) {
+            if (it == item) {
+                return item;
+            }
+            if (it.id == item.id) {
+                return (I) it;
+            }
+        }
+
+        doPut(items, item, slot);
+
+        return item;
+    }
+
+    // Caller must be synchronized.
+    protected void doPut(Item[] items, I item, int slot) {
         int size = mSize;
         if ((size + (size >> 1)) >= items.length && grow()) {
             items = mItems;
@@ -89,7 +121,20 @@ class ItemMap<I extends Item> {
         items[slot] = item;
 
         mSize = size + 1;
+    }
 
+    /**
+     * Get an item by its identifier, returning null if not found. This method doesn't perform
+     * any synchronization and so it can yield false negatives.
+     */
+    @SuppressWarnings("unchecked")
+    I tryGet(long id) {
+        Item[] items = mItems;
+        for (Item it = items[((int) id) & (items.length - 1)]; it != null; it = it.mNext) {
+            if (it.id == id) {
+                return (I) it;
+            }
+        }
         return null;
     }
 
@@ -115,7 +160,7 @@ class ItemMap<I extends Item> {
             }
         }
 
-        throw new NoSuchObjectException(String.valueOf(id));
+        throw new NoSuchObjectException(id);
     }
 
     /**
@@ -145,6 +190,13 @@ class ItemMap<I extends Item> {
         return null;
     }
 
+    /**
+     * Remove an item from the map.
+     */
+    void remove(I item) {
+        remove(item.id);
+    }
+
     @SuppressWarnings("unchecked")
     synchronized void forEach(Consumer<I> action) {
         Item[] items = mItems;
@@ -153,13 +205,6 @@ class ItemMap<I extends Item> {
                 action.accept((I) it);
             }
         }
-    }
-
-    /**
-     * Remove an item from the map.
-     */
-    void remove(I item) {
-        remove(item.id);
     }
 
     private boolean grow() {

@@ -33,20 +33,16 @@ import org.cojen.dirmi.Session;
 final class ClientSession<R> extends CoreSession<R> {
     private final SocketAddress mRemoteAddress;
     private final Support mSupport;
-    private final ItemMap<Stub> mStubs;
 
     // FIXME: Stale connections need to be removed from the pool.
 
     private long mServerSessionId;
     private R mRoot;
 
-    // FIXME: Note that ClientPipe needs to access the ItemMap for resolving remote objects.
-
     ClientSession(Engine engine, SocketAddress remoteAddr) {
-        super(engine);
+        super(engine, IdGenerator.I_CLIENT);
         mRemoteAddress = remoteAddr;
         mSupport = new Support();
-        mStubs = new ItemMap<>();
     }
 
     /**
@@ -64,14 +60,20 @@ final class ClientSession<R> extends CoreSession<R> {
      * @param rootInfo server-side root info
      */
     @SuppressWarnings("unchecked")
-    void init(long serverId, Class<R> rootType, RemoteInfo rootInfo, long rootId, long rootTypeId) {
+    void init(long serverId, Class<R> rootType, long rootTypeId, RemoteInfo rootInfo, long rootId) {
         mServerSessionId = serverId;
 
-        // FIXME: stash rootInfo and rootTypeId in some kind of map
-
-        Stub root = StubMaker.factoryFor(rootType, rootInfo).newStub(rootId, mSupport);
+        StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
+        factory = mStubFactories.putIfAbsent(factory);
+        Stub root = factory.newStub(rootId, mSupport);
         mStubs.put(root);
         mRoot = (R) root;
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        mEngine.removeSession(this);
     }
 
     @Override
@@ -111,6 +113,17 @@ final class ClientSession<R> extends CoreSession<R> {
             }
             mEngine.checkClosed().connect(this, mRemoteAddress);
         }
+    }
+
+    @Override
+    StubSupport stubSupport() {
+        return mSupport;
+    }
+
+    @Override
+    SkeletonSupport skeletonSupport() {
+        // FIXME: skeletonSupport
+        throw null;
     }
 
     private final class Support implements StubSupport {
@@ -198,8 +211,8 @@ final class ClientSession<R> extends CoreSession<R> {
 
         @Override
         public StubSupport dispose(Stub stub) {
-            // FIXME: dispose
-            throw null;
+            mStubs.remove(stub);
+            return DisposedStubSupport.THE;
         }
 
         /**

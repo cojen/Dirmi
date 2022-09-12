@@ -236,6 +236,8 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
+            session.processControlConnection(pipe);
+
             mMainLock.lock();
             try {
                 checkClosed();
@@ -247,8 +249,6 @@ public final class Engine implements Environment {
             } finally {
                 mMainLock.unlock();
             }
-
-            // FIXME: start a task to keep reading the control connection
 
             return session;
         } catch (RemoteException e) {
@@ -305,7 +305,9 @@ public final class Engine implements Environment {
             RemoteInfo serverInfo = RemoteInfo.readFrom(pipe);
             Object metadata = pipe.readObject();
 
-            session.init(serverSessionId, type, serverInfo, rootId, rootTypeId);
+            session.init(serverSessionId, type, rootTypeId, serverInfo, rootId);
+
+            session.processControlConnection(pipe);
 
             mMainLock.lock();
             try {
@@ -318,8 +320,6 @@ public final class Engine implements Environment {
             } finally {
                 mMainLock.unlock();
             }
-
-            // FIXME: start a task to keep reading the control connection
 
             return session;
         } catch (Throwable e) {
@@ -398,6 +398,20 @@ public final class Engine implements Environment {
         }
     }
 
+    void removeSession(ServerSession session) {
+        ItemMap<ServerSession> sessions = mServerSessions;
+        if (sessions != null) {
+            sessions.remove(session);
+        }
+    }
+
+    void removeSession(ClientSession session) {
+        ItemMap<ClientSession> sessions = mClientSessions;
+        if (sessions != null) {
+            sessions.remove(session);
+        }
+    }
+
     /**
      * Attempt to execute the task in a separate thread. If an exception is thrown from this
      * method and the task also implements Closeable, then the task is closed.
@@ -411,6 +425,22 @@ public final class Engine implements Environment {
             }
             checkClosed();
             throw new RemoteException(e);
+        }
+    }
+
+    /**
+     * Attempt to execute the task in a separate thread. If unable and the task also implements
+     * Closeable, then the task is closed.
+     */
+    boolean tryExecute(Runnable task) {
+        try {
+            mExecutor.execute(task);
+            return true;
+        } catch (Throwable e) {
+            if (task instanceof Closeable) {
+                CoreUtils.closeQuietly((Closeable) task);
+            }
+            return false;
         }
     }
 

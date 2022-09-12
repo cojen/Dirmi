@@ -18,27 +18,76 @@ package org.cojen.dirmi.core;
 
 import java.lang.invoke.VarHandle;
 
+import java.util.Arrays;
+
 import java.util.concurrent.CountDownLatch;
 
 /**
- * 
+ * Specialized ItemMap for tracking Skeleton instances. Never directly put entries into the map
+ * -- always call the skeletonFor method.
  *
  * @author Brian S O'Neill
  */
 final class SkeletonMap extends ItemMap<Skeleton> {
-    private final ServerSession mSession;
-    private final long mType;
+    private final CoreSession mSession;
+    private final long mIdType;
 
     private Entry[] mEntries;
     private int mSize;
 
     /**
-     * @param type IdGenerator.I_SERVER or IdGenerator.I_CLIENT
+     * @param idType IdGenerator.I_SERVER or IdGenerator.I_CLIENT
      */
-    SkeletonMap(ServerSession session, long type) {
+    SkeletonMap(CoreSession session, long idType) {
         mSession = session;
-        mType = type;
+        mIdType = idType;
         mEntries = new Entry[INITIAL_CAPACITY];
+    }
+
+    @Override
+    synchronized void clear() {
+        super.clear();
+
+        Entry[] entries = mEntries;
+        for (int i=0; i<entries.length; i++) {
+            for (Entry e = entries[i]; e != null; e = e.mNext) {
+                Object skeletonOrLatch = e.mSkeletonOrLatch;
+                if (skeletonOrLatch instanceof CountDownLatch) {
+                    ((CountDownLatch) skeletonOrLatch).countDown();
+                }
+            }
+        }
+
+        if (entries.length == INITIAL_CAPACITY) {
+            Arrays.fill(entries, null);
+        } else {
+            mEntries = new Entry[INITIAL_CAPACITY];
+        }
+    }
+
+    @Override
+    Skeleton put(Skeleton skeleton) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    Skeleton putIfAbsent(Skeleton skeleton) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    synchronized Skeleton remove(long id) {
+        Skeleton skeleton = super.remove(id);
+        if (skeleton != null) {
+            removeServer(skeleton.server());
+        }
+        return skeleton;
+    }
+
+    @Override
+    synchronized void remove(Skeleton skeleton) {
+        super.remove(skeleton.id);
+        removeServer(skeleton.server());
     }
 
     /**
@@ -49,26 +98,25 @@ final class SkeletonMap extends ItemMap<Skeleton> {
         int hash = System.identityHashCode(server);
 
         while (true) {
-            Entry found;
+            Entry entry;
             find: {
                 // Quick find without synchronization.
                 Entry[] entries = mEntries;
                 for (Entry e = entries[hash & (entries.length - 1)]; e != null; e = e.mNext) {
                     if (e.mServer == server) {
-                        found = e;
+                        entry = e;
                         break find;
                     }
                 }
 
                 CountDownLatch latch;
-                Entry entry;
 
                 synchronized (this) {
                     entries = mEntries;
                     int slot = hash & (entries.length - 1);
                     for (Entry e = entries[slot]; e != null; e = e.mNext) {
                         if (e.mServer == server) {
-                            found = e;
+                            entry = e;
                             break find;
                         }
                     }
@@ -93,8 +141,9 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                 try {
                     var type = (Class<R>) RemoteExaminer.remoteType(server);
                     SkeletonFactory<R> factory = SkeletonMaker.factoryFor(type);
-                    long id = IdGenerator.next(mType);
-                    Skeleton<R> skeleton = factory.newSkeleton(id, mSession.support(), server);
+                    long id = IdGenerator.next(mIdType);
+                    Skeleton<R> skeleton = factory.newSkeleton
+                        (id, mSession.skeletonSupport(), server);
                     VarHandle.storeStoreFence();
 
                     super.put(skeleton);
@@ -110,7 +159,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                 }
             }
 
-            Object skeletonOrLatch = found.mSkeletonOrLatch;
+            Object skeletonOrLatch = entry.mSkeletonOrLatch;
 
             if (skeletonOrLatch instanceof Skeleton) {
                 return (Skeleton<R>) skeletonOrLatch;
@@ -124,7 +173,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
         }
     }
 
-    synchronized void removeServer(Object server) {
+    private synchronized void removeServer(Object server) {
         Entry found;
         find: {
             Entry[] entries = mEntries;

@@ -34,20 +34,19 @@ import org.cojen.dirmi.Session;
  */
 final class ServerSession<R> extends CoreSession<R> {
     private final Support mSupport;
-    private final SkeletonMap mSkeletons;
     private final Skeleton<R> mRoot;
 
     /**
      * @param rootInfo client-side root info
      */
     ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
-        super(engine);
+        super(engine, IdGenerator.I_SERVER);
         mSupport = new Support();
-        mSkeletons = new SkeletonMap(this, IdGenerator.I_SERVER);
 
         // FIXME: stash rootInfo in a string to info map
 
         mRoot = mSkeletons.skeletonFor(root);
+        mKnownTypes.put(new Item(mRoot.typeId()));
     }
 
     /**
@@ -59,6 +58,12 @@ final class ServerSession<R> extends CoreSession<R> {
         pipe.writeLong(id);
         pipe.writeLong(mRoot.id);
         pipe.writeLong(mRoot.typeId());
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        mEngine.removeSession(this);
     }
 
     @Override
@@ -78,14 +83,14 @@ final class ServerSession<R> extends CoreSession<R> {
 
     void accepted(CorePipe pipe) throws IOException {
         registerNewConnection(pipe);
-        startInvoker(pipe);
+        startProcessor(pipe);
     }
 
     @Override
     protected boolean recycleConnection(CorePipe pipe) {
         if (super.recycleConnection(pipe)) {
             try {
-                startInvoker(pipe);
+                startProcessor(pipe);
                 return true;
             } catch (IOException e) {
                 // Ignore.
@@ -94,9 +99,9 @@ final class ServerSession<R> extends CoreSession<R> {
         return false;
     }
 
-    private void startInvoker(CorePipe pipe) throws IOException {
+    private void startProcessor(CorePipe pipe) throws IOException {
         try {
-            mEngine.execute(new Invoker(pipe));
+            mEngine.execute(new Processor(pipe));
         } catch (IOException e) {
             closeConnection(pipe);
             throw e;
@@ -111,7 +116,14 @@ final class ServerSession<R> extends CoreSession<R> {
         throw null;
     }
 
-    SkeletonSupport support() {
+    @Override
+    StubSupport stubSupport() {
+        // FIXME: stubSupport
+        throw null;
+    }
+
+    @Override
+    SkeletonSupport skeletonSupport() {
         return mSupport;
     }
 
@@ -119,20 +131,20 @@ final class ServerSession<R> extends CoreSession<R> {
         @Override
         public Object handleException(Pipe pipe, Throwable ex) {
             // FIXME: handleException
+            ex.printStackTrace();
             throw null;
         }
 
         @Override
         public void dispose(Skeleton<?> skeleton) {
-            // FIXME: dispose
-            throw null;
+            mSkeletons.remove(skeleton);
         }
     }
 
-    private final class Invoker implements Runnable, Closeable {
+    private final class Processor implements Runnable, Closeable {
         private final CorePipe mPipe;
 
-        Invoker(CorePipe pipe) {
+        Processor(CorePipe pipe) {
             mPipe = pipe;
         }
 

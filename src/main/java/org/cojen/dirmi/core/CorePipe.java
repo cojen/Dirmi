@@ -23,13 +23,13 @@ import java.io.OutputStream;
 import java.net.SocketAddress;
 
 /**
- * Base class for ClientPipe and ServerPipe.
+ * Pipe implementation used by CoreSession.
  *
  * @author Brian S O'Neill
  */
 final class CorePipe extends BufferedPipe {
     // Accessed by CoreSession.
-    CoreSession mSession;
+    CoreSession<?> mSession;
 
     // Accessed by CoreSession.
     CorePipe mConPrev, mConNext;
@@ -41,6 +41,26 @@ final class CorePipe extends BufferedPipe {
              InputStream in, OutputStream out)
     {
         super(localAddr, remoteAttr, in, out);
+    }
+
+    @Override
+    protected Stub stubFor(long id) throws IOException {
+        return mSession.stubFor(id);
+    }
+
+    @Override
+    protected Stub stubFor(long id, long typeId) throws IOException {
+        return mSession.stubFor(id, typeId);
+    }
+
+    @Override
+    protected Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+        return mSession.stubFor(id, typeId, info);
+    }
+
+    @Override
+    protected void writeSkeleton(Object server) throws IOException {
+        mSession.writeSkeleton(this, server);
     }
 
     @Override

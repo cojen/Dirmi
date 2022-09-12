@@ -64,7 +64,6 @@ final class TypeCodeMap {
         map.put(Throwable.class, T_THROWABLE);
         map.put(StackTraceElement.class, T_STACK_TRACE);
         map.put(Stub.class, T_REMOTE);
-        map.put(Skeleton.class, T_REMOTE_T);
 
         THE = map;
     }
@@ -109,10 +108,8 @@ final class TypeCodeMap {
             return true;
         }
         int typeCode = THE.find(clazz);
-        if (typeCode == 0) {
-            return THE.isAssignableTo(clazz);
-        }
-        return clazz == typeClass(typeCode);
+        return (typeCode == 0 ? THE.isAssignableTo(clazz) : (clazz == typeClass(typeCode)))
+            || CoreUtils.isRemote(clazz);
     }
 
     private Entry[] mEntries;
@@ -151,6 +148,10 @@ final class TypeCodeMap {
             typeCode = T_SET;
         } else if (Map.class.isAssignableFrom(clazz)) {
             typeCode = T_MAP;
+        } else if (Stub.class.isAssignableFrom(clazz)) {
+            typeCode = T_REMOTE;
+        } else if (CoreUtils.isRemote(clazz)) {
+            typeCode = T_REMOTE_T;
         } else {
             return 0;
         }

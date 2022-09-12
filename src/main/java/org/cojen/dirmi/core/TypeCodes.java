@@ -68,6 +68,7 @@ class TypeCodes {
         T_BIG_DECIMAL = 44,
         T_THROWABLE = 45,
         T_STACK_TRACE = 46,
-        T_REMOTE = 47,
-        T_REMOTE_T = 48;
+        T_REMOTE = 47,    // remote object id
+        T_REMOTE_T = 48,  // remote object id + type id
+        T_REMOTE_TI = 49; // remote object id + type id + info
 }
