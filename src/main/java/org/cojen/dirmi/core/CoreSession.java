@@ -129,7 +129,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 pipe.mConPrev = last;
                 last.mConNext = pipe;
                 if (mConAvail == null) {
-                    mConAvail = last;
+                    mConAvail = pipe;
                 }
             }
             mConLast = pipe;

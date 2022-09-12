@@ -279,8 +279,6 @@ public final class Engine implements Environment {
         CorePipe pipe = session.connect();
 
         try {
-            session.registerNewConnection(pipe);
-
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
             info.writeTo(pipe);  // root object type

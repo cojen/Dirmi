@@ -1797,6 +1797,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    @Override
+    public String toString() {
+        return "Pipe{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
+    }
+
     /**
      * Can only be safely called by the reading thread.
      */
