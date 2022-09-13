@@ -96,6 +96,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     /**
      * Track a new connection as being immediately used (not available for other uses).
+     * If an exception is thrown, the pipe is closed as a side effect.
      */
     final void registerNewConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
@@ -111,6 +112,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 first.mConPrev = pipe;
             }
             mConFirst = pipe;
+        } catch (Throwable e) {
+            CoreUtils.closeQuietly(pipe);
+            throw e;
         } finally {
             conLockRelease();
         }
@@ -118,6 +122,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     /**
      * Track a new connection as being available from the tryObtainConnection method.
+     * If an exception is thrown, the pipe is closed as a side effect.
      */
     void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
@@ -137,6 +142,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 }
             }
             mConLast = pipe;
+        } catch (Throwable e) {
+            CoreUtils.closeQuietly(pipe);
+            throw e;
         } finally {
             conLockRelease();
         }
