@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.lang.invoke.MethodHandles;
@@ -25,6 +26,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
@@ -36,7 +38,7 @@ import org.cojen.dirmi.Session;
  */
 abstract class CoreSession<R> extends Item implements Session<R> {
     // Control commands.
-    private static final int C_KNOWN_TYPE = 2;
+    static final int C_KNOWN_TYPE = 2, C_REQUEST_CONNECTION = 3, C_MESSAGE = 4;
 
     private static final int SPIN_LIMIT;
 
@@ -62,8 +64,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final CoreStubSupport mStubSupport;
     final CoreSkeletonSupport mSkeletonSupport;
 
-    private final Lock mControlLock;
-    private CorePipe mControlPipe;
+    final Lock mControlLock;
+    CorePipe mControlPipe;
 
     private volatile int mConLock;
 
@@ -117,7 +119,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      */
     final void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
-        recycle: try {
+        try {
             checkClosed();
             pipe.mSession = this;
 
@@ -139,55 +141,74 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     /**
-     * Track an existing connection as being available from the tryObtainConnection method.
+     * Track an existing connection as being available from the tryObtainConnection method,
+     * unless the pipe is M_SERVER in which case startRequestProcessor is called instead.
+     *
+     * @return true if the pipe is available from the tryObtainConnection method
      */
     boolean recycleConnection(CorePipe pipe) {
-        conLockAcquire();
-        recycle: try {
-            if (mClosed || pipe.mClosed) {
-                doRemoveConnection(pipe);
-                pipe.mClosed = true;
-                break recycle;
-            }
+        recycle: {
+            conLockAcquire();
+            client: try {
+                int mode;
+                if (mClosed || (mode = pipe.mMode) == CorePipe.M_CLOSED) {
+                    doRemoveConnection(pipe);
+                    pipe.mMode = CorePipe.M_CLOSED;
+                    break recycle;
+                }
 
-            CorePipe avail = mConAvail;
-            if (avail == pipe) {
-                // It's already available.
+                if (mode == CorePipe.M_SERVER) {
+                    break client;
+                }
+
+                CorePipe avail = mConAvail;
+                if (avail == pipe) {
+                    // It's already available.
+                    return true;
+                }
+
+                if (avail == null) {
+                    mConAvail = pipe;
+                }
+
+                CorePipe next = pipe.mConNext;
+                if (next == null) {
+                    // It's already the last in the list.
+                    assert pipe == mConLast;
+                    return true;
+                }
+
+                // Remove from the list.
+                CorePipe prev = pipe.mConPrev;
+                if (prev == null) {
+                    assert pipe == mConFirst;
+                    mConFirst = next;
+                } else {
+                    prev.mConNext = next;
+                }
+                next.mConPrev = prev;
+
+                // Add the connection as the last in the list.
+                pipe.mConNext = null;
+                CorePipe last = mConLast;
+                pipe.mConPrev = last;
+                last.mConNext = pipe;
+
+                mConLast = pipe;
+
                 return true;
+            } finally {
+                conLockRelease();
             }
 
-            if (avail == null) {
-                mConAvail = pipe;
+            try {
+                startRequestProcessor(pipe);
+            } catch (IOException e) {
+                // FIXME: log it?
+                CoreUtils.uncaughtException(e);
             }
 
-            CorePipe next = pipe.mConNext;
-            if (next == null) {
-                // It's already the last in the list.
-                assert pipe == mConLast;
-                return true;
-            }
-
-            // Remove from the list.
-            CorePipe prev = pipe.mConPrev;
-            if (prev == null) {
-                assert pipe == mConFirst;
-                mConFirst = next;
-            } else {
-                prev.mConNext = next;
-            }
-            next.mConPrev = prev;
-
-            // Add the connection as the last in the list.
-            pipe.mConNext = null;
-            CorePipe last = mConLast;
-            pipe.mConPrev = last;
-            last.mConNext = pipe;
-                
-            mConLast = pipe;
-
-            return true;
-        } finally {
-            conLockRelease();
+            return false;
         }
 
         pipe.doClose();
@@ -235,12 +256,24 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     /**
+     * Remove the connection from the tracked set without closing it.
+     */
+    final void removeConnection(CorePipe pipe) {
+        conLockAcquire();
+        try {
+            doRemoveConnection(pipe);
+        } finally {
+            conLockRelease();
+        }
+    }
+
+    /**
      * Remove the connection from the tracked set and close it.
      */
     final void closeConnection(CorePipe pipe) {
         conLockAcquire();
         try {
-            pipe.mClosed = true;
+            pipe.mMode = CorePipe.M_CLOSED;
             doRemoveConnection(pipe);
         } finally {
             conLockRelease();
@@ -320,6 +353,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     case C_KNOWN_TYPE:
                         mKnownTypes.putIfAbsent(new Item(pipe.readLong()));
                         break;
+                    case C_REQUEST_CONNECTION:
+                        long id = pipe.readLong();
+                        mEngine.execute(() -> reverseConnect(id));
+                        break;
+                    case C_MESSAGE:
+                        Object message = pipe.readObject();
+                        // Ignore for now.
+                        break;
                     default:
                         throw new RemoteException("Unknown command: " + command);
                     }
@@ -335,6 +376,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * Returns a new or existing connection. Closing it attempts to recycle it.
      */
     abstract CorePipe connect() throws IOException;
+
+    /**
+     * Is overridden by ClientSession to reverse a connection to be used on this side for
+     * making requests.
+     *
+     * @param id the object id to invoke
+     */
+    void reverseConnect(long id) {
+    }
 
     Stub stubFor(long id) throws IOException {
         return mStubs.get(id);
@@ -398,7 +448,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    private void conLockAcquire() {
+    void conLockAcquire() {
         int trials = 0;
         while (mConLock != 0 || !cConLockHandle.compareAndSet(this, 0, 1)) {
             if (++trials >= SPIN_LIMIT) {
@@ -410,7 +460,66 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    private void conLockRelease() {
+    void conLockRelease() {
         mConLock = 0;
+    }
+
+    /**
+     * Start processing incoming remote requests over the given pipe. If an exception is
+     * thrown, the pipe is closed.
+     */
+    void startRequestProcessor(CorePipe pipe) throws IOException {
+        try {
+            mEngine.execute(new Processor(pipe));
+        } catch (IOException e) {
+            closeConnection(pipe);
+            throw e;
+        }
+    }
+
+    private final class Processor implements Runnable, Closeable {
+        private final CorePipe mPipe;
+
+        Processor(CorePipe pipe) {
+            mPipe = pipe;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    long id = mPipe.readLong();
+
+                    Skeleton skeleton;
+                    try {
+                        skeleton = mSkeletons.get(id);
+                    } catch (NoSuchObjectException e) {
+                        // FIXME: Try to write back to the client, but all input must be
+                        // drained first to avoid deadlocks. Launch a thread to drain input and
+                        // let the client close the connection. Launch another task to force
+                        // close after a timeout.
+                        throw e;
+                    }
+
+                    // FIXME: proper context handling
+                    Object context = skeleton.invoke(mPipe, null);
+
+                    if (context == BatchedContext.STOP_READING) {
+                        return;
+                    }
+                }
+            } catch (Throwable e) {
+                CoreUtils.closeQuietly(this);
+                if (!(e instanceof IOException)) {
+                    // FIXME: log it?
+                    CoreUtils.uncaughtException(e);
+                }
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            mPipe.close();
+        }
     }
 }

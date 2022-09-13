@@ -184,7 +184,7 @@ public final class Engine implements Environment {
                                InputStream in, OutputStream out)
         throws IOException
     {
-        var pipe = new CorePipe(localAddr, remoteAttr, in, out);
+        var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
 
         long clientSessionId = 0;
 

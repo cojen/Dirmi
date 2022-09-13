@@ -23,8 +23,8 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Specialized ItemMap for tracking Skeleton instances. Never directly put entries into the map
- * -- always call the skeletonFor method.
+ * Specialized ItemMap for tracking Skeleton instances. Never put ordinary skeletons directly
+ * into the map -- always call the skeletonFor method instead.
  *
  * @author Brian S O'Neill
  */
@@ -63,16 +63,6 @@ final class SkeletonMap extends ItemMap<Skeleton> {
         } else {
             mEntries = new Entry[INITIAL_CAPACITY];
         }
-    }
-
-    @Override
-    Skeleton put(Skeleton skeleton) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    Skeleton putIfAbsent(Skeleton skeleton) {
-        throw new UnsupportedOperationException();
     }
 
     @Override

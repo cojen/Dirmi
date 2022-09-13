@@ -66,14 +66,54 @@ public class RemoteObjectTest {
         assertEquals("hello 456", r2.c2());
     }
 
+    @Test
+    public void callback() throws Exception {
+        R1 root = mSession.root();
+
+        var callback = new R3() {
+            private String mMessage;
+
+            @Override
+            public synchronized void c3(String message) {
+                mMessage = message;
+                notify();
+            }
+
+            public synchronized String await(long remaining) throws Exception {
+                long end = System.currentTimeMillis() + remaining;
+                while (true) {
+                    if (mMessage != null) {
+                        return mMessage;
+                    }
+                    if (remaining <= 0) {
+                        throw new Exception("timeout");
+                    }
+                    wait(remaining);
+                    remaining = end - System.currentTimeMillis();
+                }
+            }
+        };
+
+        root.c2(callback);
+
+        assertEquals("hello", callback.await(10_000));
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
+
+        void c2(R3 callback) throws RemoteException;
     }
 
     private static class R1Server implements R1 {
         @Override
         public R2 c1(int param) {
             return new R2Server(param);
+        }
+
+        @Override
+        public void c2(R3 callback) throws RemoteException {
+            callback.c3("hello");
         }
     }
 
@@ -92,5 +132,9 @@ public class RemoteObjectTest {
         public String c2() {
             return "hello " + mParam;
         }
+    }
+
+    public static interface R3 extends Remote {
+        void c3(String message) throws RemoteException;
     }
 }

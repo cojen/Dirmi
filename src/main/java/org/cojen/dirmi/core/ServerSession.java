@@ -16,16 +16,15 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
 import java.net.SocketAddress;
 
-import org.cojen.dirmi.NoSuchObjectException;
+import java.util.concurrent.locks.LockSupport;
+
 import org.cojen.dirmi.Pipe;
-import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -34,6 +33,9 @@ import org.cojen.dirmi.Session;
  */
 final class ServerSession<R> extends CoreSession<R> {
     private final Skeleton<R> mRoot;
+
+    // Queue of threads waiting for a reverse connection to be established.
+    private ConnectWaiter mFirstWaiter, mLastWaiter;
 
     /**
      * @param rootInfo client-side root info
@@ -45,6 +47,9 @@ final class ServerSession<R> extends CoreSession<R> {
 
         mRoot = mSkeletons.skeletonFor(root);
         mKnownTypes.put(new Item(mRoot.typeId()));
+
+        // For accepting reverse connections.
+        mSkeletons.put(new Connector());
     }
 
     /**
@@ -74,84 +79,128 @@ final class ServerSession<R> extends CoreSession<R> {
                           InputStream in, OutputStream out)
         throws IOException
     {
-        // FIXME: Use this with server-side connection request. Signal a condition variable
-        // when a connection arrives.
+        // FIXME: reject?
         throw null;
     }
 
+    /**
+     * @param pipe must have M_SERVER mode
+     */
     void accepted(CorePipe pipe) throws IOException {
         registerNewConnection(pipe);
-        startProcessor(pipe);
+        startRequestProcessor(pipe);
     }
 
     @Override
     boolean recycleConnection(CorePipe pipe) {
-        if (super.recycleConnection(pipe)) {
-            try {
-                startProcessor(pipe);
-                return true;
-            } catch (IOException e) {
-                // Ignore.
-            }
+        if (!super.recycleConnection(pipe)) {
+            return false;
         }
-        return false;
+
+        conLockAcquire();
+        try {
+            ConnectWaiter first = mFirstWaiter;
+            if (first != null) {
+                first.mSignaled = true;
+                LockSupport.unpark(first.mThread);
+                ConnectWaiter next = first.mNext;
+                mFirstWaiter = next;
+                if (next == null) {
+                    mLastWaiter = null;
+                }
+            }
+        } finally {
+            conLockRelease();
+        }
+
+        return true;
     }
 
     @Override
     CorePipe connect() throws IOException {
-        // FIXME: connect
-        throw new IOException();
-    }
+        ConnectWaiter waiter = null;
 
-    private void startProcessor(CorePipe pipe) throws IOException {
-        try {
-            mEngine.execute(new Processor(pipe));
-        } catch (IOException e) {
-            closeConnection(pipe);
-            throw e;
-        }
-    }
+        while (true) {
+            CorePipe pipe = tryObtainConnection();
 
-    private final class Processor implements Runnable, Closeable {
-        private final CorePipe mPipe;
+            if (pipe != null) {
+                return pipe;
+            }
 
-        Processor(CorePipe pipe) {
-            mPipe = pipe;
-        }
-
-        @Override
-        public void run() {
+            mControlLock.lock();
             try {
-                while (true) {
-                    long id = mPipe.readLong();
-
-                    Skeleton skeleton;
-                    try {
-                        skeleton = mSkeletons.get(id);
-                    } catch (NoSuchObjectException e) {
-                        // FIXME: Try to write back to the client, but all input must be
-                        // drained first to avoid deadlocks. Launch a thread to drain input and
-                        // let the client close the connection. Launch another task to force
-                        // close after a timeout.
-                        throw e;
-                    }
-
-                    // FIXME: context
-                    skeleton.invoke(mPipe, null);
-                }
-            } catch (IOException e) {
-                // Ignore.
-            } catch (Throwable e) {
-                // FIXME: log it?
-                CoreUtils.uncaughtException(e);
+                mControlPipe.write(C_REQUEST_CONNECTION);
+                // Pass object 0, which refers to the Connector instance.
+                mControlPipe.writeLong(0);
+                mControlPipe.flush();
             } finally {
-                CoreUtils.closeQuietly(this);
+                mControlLock.unlock();
+            }
+
+            if (waiter == null) {
+                waiter = new ConnectWaiter(Thread.currentThread());
+
+                conLockAcquire();
+                try {
+                    ConnectWaiter last = mLastWaiter;
+                    if (last == null) {
+                        mFirstWaiter = waiter;
+                    } else {
+                        last.mNext = waiter;
+                    }
+                    mLastWaiter = waiter;
+                } finally {
+                    conLockRelease();
+                }
+            }
+
+            LockSupport.park();
+
+            if (waiter.mSignaled) {
+                waiter = null;
             }
         }
+    }
+
+    /**
+     * Pseudo skeleton used for accepting reverse connections from the client.
+     */
+    private final class Connector extends Skeleton {
+        Connector() {
+            super(0);
+        }
 
         @Override
-        public void close() throws IOException {
-            mPipe.close();
+        public Class type() {
+            return Connector.class;
+        }
+
+        @Override
+        public long typeId() {
+            return 0;
+        }
+
+        @Override
+        public Object server() {
+            return this;
+        }
+
+        @Override
+        public Object invoke(Pipe pipe, Object context) throws IOException {
+            var cp = (CorePipe) pipe;
+            cp.mMode = CorePipe.M_CLIENT;
+            recycleConnection(cp);
+            return BatchedContext.STOP_READING;
+        }
+    }
+
+    private final class ConnectWaiter {
+        final Thread mThread;
+        ConnectWaiter mNext;
+        volatile boolean mSignaled;
+
+        ConnectWaiter(Thread thread) {
+            mThread = thread;
         }
     }
 }

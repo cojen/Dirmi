@@ -33,7 +33,7 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     @Override
     public Object handleException(Pipe pipe, Throwable ex) {
         // FIXME: handleException
-        ex.printStackTrace();
+        CoreUtils.uncaughtException(ex);
         throw null;
     }
 

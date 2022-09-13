@@ -1799,7 +1799,8 @@ class BufferedPipe implements Pipe {
 
     @Override
     public String toString() {
-        return "Pipe{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
+        return "Pipe@" + Integer.toHexString(System.identityHashCode(this)) +
+            "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
     /**

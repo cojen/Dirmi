@@ -28,6 +28,9 @@ import java.net.SocketAddress;
  * @author Brian S O'Neill
  */
 final class CorePipe extends BufferedPipe {
+    // Values for mMode.
+    static final int M_CLIENT = 1, M_SERVER = 2, M_CLOSED = 3;
+
     // Accessed by CoreSession.
     CoreSession<?> mSession;
 
@@ -35,12 +38,13 @@ final class CorePipe extends BufferedPipe {
     CorePipe mConPrev, mConNext;
 
     // Accessed by CoreSession.
-    boolean mClosed;
+    int mMode;
 
     CorePipe(SocketAddress localAddr, SocketAddress remoteAttr,
-             InputStream in, OutputStream out)
+             InputStream in, OutputStream out, int mode)
     {
         super(localAddr, remoteAttr, in, out);
+        mMode = mode;
     }
 
     @Override

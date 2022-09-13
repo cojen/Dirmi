@@ -23,7 +23,6 @@ import java.io.OutputStream;
 import java.net.SocketAddress;
 
 import org.cojen.dirmi.Pipe;
-import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -83,7 +82,7 @@ final class ClientSession<R> extends CoreSession<R> {
     public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
                           InputStream in, OutputStream out) throws IOException
     {
-        var pipe = new CorePipe(localAddr, remoteAttr, in, out);
+        var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_CLIENT);
 
         long serverSessionId = mServerSessionId;
         if (serverSessionId != 0) {
@@ -108,6 +107,20 @@ final class ClientSession<R> extends CoreSession<R> {
                 return pipe;
             }
             mEngine.checkClosed().connect(this, mRemoteAddress);
+        }
+    }
+
+    @Override
+    void reverseConnect(long id) {
+        try {
+            CorePipe pipe = connect();
+            pipe.writeLong(id);
+            pipe.flush();
+            pipe.mMode = CorePipe.M_SERVER;
+            recycleConnection(pipe);
+        } catch (IOException e) {
+            // FIXME: log and close session?
+            CoreUtils.uncaughtException(e);
         }
     }
 }
