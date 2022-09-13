@@ -75,13 +75,39 @@ final class CoreStubSupport implements StubSupport {
         // Augment the stack trace with a local trace.
 
         StackTraceElement[] trace = ex.getStackTrace();
-        StackTraceElement[] stitch = stitch(pipe);
-        StackTraceElement[] local = new Throwable().getStackTrace();
+        int traceLength = trace.length;
 
-        var combined = new StackTraceElement[trace.length + stitch.length + local.length];
-        System.arraycopy(trace, 0, combined, 0, trace.length);
-        System.arraycopy(stitch, 0, combined, trace.length, stitch.length);
-        System.arraycopy(local, 0, combined, trace.length + stitch.length, local.length);
+        // Prune the local trace for all calls that occur before (and including) the invoker.
+        String fileName = InvokerMaker.class.getSimpleName();
+        for (int i=trace.length; --i>=0; ) {
+            StackTraceElement element = trace[i];
+            if (fileName.equals(element.getFileName())) {
+                traceLength = i;
+                break;
+            }
+        }
+
+        StackTraceElement[] stitch = stitch(pipe);
+
+        StackTraceElement[] local = new Throwable().getStackTrace();
+        int localStart = 0;
+        int localLength = local.length;
+
+        // Prune the local trace for all calls that occur after the stub.
+        fileName = StubMaker.class.getSimpleName();
+        for (int i=0; i<local.length; i++) {
+            StackTraceElement element = local[i];
+            if (fileName.equals(element.getFileName())) {
+                localStart = i;
+                localLength = local.length - i;
+                break;
+            }
+        }
+
+        var combined = new StackTraceElement[traceLength + stitch.length + localLength];
+        System.arraycopy(trace, 0, combined, 0, traceLength);
+        System.arraycopy(stitch, 0, combined, traceLength, stitch.length);
+        System.arraycopy(local, localStart, combined, traceLength + stitch.length, localLength);
 
         ex.setStackTrace(combined);
 
