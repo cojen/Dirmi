@@ -64,6 +64,14 @@ public class RemoteObjectTest {
 
         r2 = root.c1(456);
         assertEquals("hello 456", r2.c2());
+
+        r2.dispose();
+        try {
+            r2.c2();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
     }
 
     @Test
@@ -114,11 +122,22 @@ public class RemoteObjectTest {
         @Override
         public void c2(R3 callback) throws RemoteException {
             callback.c3("hello");
+
+            try {
+                callback.c3("world");
+                fail();
+            } catch (ClosedException e) {
+                assertTrue(e.getMessage().contains("disposed"));
+            }
         }
     }
 
     public static interface R2 extends Remote {
         String c2() throws RemoteException;
+
+        @Disposer
+        @RemoteFailure(declared=false)
+        void dispose();
     }
 
     private static class R2Server implements R2 {
@@ -132,9 +151,14 @@ public class RemoteObjectTest {
         public String c2() {
             return "hello " + mParam;
         }
+
+        @Disposer
+        public void dispose() {
+        }
     }
 
     public static interface R3 extends Remote {
+        @Disposer
         void c3(String message) throws RemoteException;
     }
 }
