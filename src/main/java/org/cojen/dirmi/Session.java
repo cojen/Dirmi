@@ -37,7 +37,7 @@ import org.cojen.dirmi.core.CoreUtils;
  * @author Brian S O'Neill
  * @see Environment#connect Environment.connect
  */
-public interface Session<R> extends Closeable {
+public interface Session<R> extends Closeable, Link {
     /**
      * Returns the root object which was exported or imported.
      */

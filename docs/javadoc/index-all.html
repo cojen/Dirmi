@@ -202,9 +202,13 @@ loadScripts(document, 'script');</script>
 </dl>
 <h2 class="title" id="I:L">L</h2>
 <dl class="index">
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#localAddress()" class="member-name-link">localAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Link.html" class="type-name-link" title="interface in org.cojen.dirmi">Link</a> - Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Returns the socket address that this pipe is bound to.</div>
+<div class="block">Represents an established connection between two endpoints.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Link.html#localAddress()" class="member-name-link">localAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Link.html" title="interface in org.cojen.dirmi">Link</a></dt>
+<dd>
+<div class="block">Returns the local link address, or null if unknown or not applicable.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:N">N</h2>
@@ -213,6 +217,8 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Thrown when attempting to invoke a method against an object that is unknown to a <a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi"><code>session</code></a>.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html#%3Cinit%3E(long)" class="member-name-link">NoSuchObjectException(long)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html" title="class in org.cojen.dirmi">NoSuchObjectException</a></dt>
+<dd>&nbsp;</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html#%3Cinit%3E(java.lang.String)" class="member-name-link">NoSuchObjectException(String)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html" title="class in org.cojen.dirmi">NoSuchObjectException</a></dt>
 <dd>&nbsp;</dd>
 </dl>
@@ -246,9 +252,9 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Marker for designating a remote interface.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#remoteAddress()" class="member-name-link">remoteAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Link.html#remoteAddress()" class="member-name-link">remoteAddress()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Link.html" title="interface in org.cojen.dirmi">Link</a></dt>
 <dd>
-<div class="block">Returns the socket address that this pipe is connected to.</div>
+<div class="block">Returns the remote link address, or null if unknown or not applicable.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" class="type-name-link" title="class in org.cojen.dirmi">RemoteException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>

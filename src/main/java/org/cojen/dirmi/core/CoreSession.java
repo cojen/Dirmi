@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import java.net.SocketAddress;
+
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -315,6 +317,18 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         pipe.mConPrev = null;
         pipe.mConNext = null;
+    }
+
+    @Override
+    public SocketAddress localAddress() {
+        CorePipe pipe = mControlPipe;
+        return pipe == null ? null : pipe.localAddress();
+    }
+
+    @Override
+    public SocketAddress remoteAddress() {
+        CorePipe pipe = mControlPipe;
+        return pipe == null ? null : pipe.remoteAddress();
     }
 
     @Override
