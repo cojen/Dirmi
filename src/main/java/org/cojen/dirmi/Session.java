@@ -45,6 +45,8 @@ public interface Session<R> extends Closeable, Link {
 
     /**
      * Receives new connections from a {@link Connector Connector}.
+     *
+     * @throws UnsupportedOperationException if not supported by this session
      */
     default void connected(Socket s) throws IOException {
         CoreUtils.setOptions(s);
@@ -54,6 +56,8 @@ public interface Session<R> extends Closeable, Link {
 
     /**
      * Receives new connections from a {@link Connector Connector}.
+     *
+     * @throws UnsupportedOperationException if not supported by this session
      */
     default void connected(SocketChannel s) throws IOException {
         CoreUtils.setOptions(s);
@@ -63,6 +67,8 @@ public interface Session<R> extends Closeable, Link {
 
     /**
      * Receives new connections from a {@link Connector Connector}.
+     *
+     * @throws UnsupportedOperationException if not supported by this session
      */
     void connected(SocketAddress localAddr, SocketAddress remoteAttr,
                    InputStream in, OutputStream out)

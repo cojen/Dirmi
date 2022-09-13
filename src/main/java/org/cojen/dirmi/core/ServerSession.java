@@ -105,10 +105,8 @@ final class ServerSession<R> extends CoreSession<R> {
     @Override
     public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
                           InputStream in, OutputStream out)
-        throws IOException
     {
-        // FIXME: reject?
-        throw null;
+        throw new UnsupportedOperationException();
     }
 
     /**
