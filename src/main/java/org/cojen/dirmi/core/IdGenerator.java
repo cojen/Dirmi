@@ -25,10 +25,6 @@ import java.security.SecureRandom;
  * @author Brian S O'Neill
  */
 final class IdGenerator {
-    // FIXME: I think the SERVER/CLIENT distinction can go away. Sending the typeId is enough
-    // to indicate what side the object belongs to.
-    static long I_SERVER = 0, I_CLIENT = 0b01L << 62, I_ALIAS = 0b10L << 62;
-
     private static final long sequenceMask;
     private static long sequence;
 
@@ -54,15 +50,26 @@ final class IdGenerator {
     }
 
     /**
-     * Returns an identifier in which the upper two bits signify what type it is. Calling this
-     * method depletes the sequence at a higher rate.
-     *
-     * @param idType I_SERVER or I_CLIENT optionally combined with I_ALIAS
+     * Returns a positive non-zero identifier. Calling this method depletes the sequence at a
+     * higher rate.
      */
-    static long next(long idType) {
+    static long nextPositive() {
         while (true) {
             long id = next();
-            if ((id & (0b11L << 62)) == idType) {
+            if (id > 0) {
+                return id;
+            }
+        }
+    }
+
+    /**
+     * Returns a negative identifier. Calling this method depletes the sequence at a higher
+     * rate.
+     */
+    static long nextNegative() {
+        while (true) {
+            long id = next();
+            if (id < 0) {
                 return id;
             }
         }

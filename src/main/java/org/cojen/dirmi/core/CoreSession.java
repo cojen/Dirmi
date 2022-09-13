@@ -80,12 +80,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * @param idType type of skeleton ids to generate; see IdGenerator
      */
-    CoreSession(Engine engine, long idType) {
+    CoreSession(Engine engine) {
         super(IdGenerator.next());
         mEngine = engine;
         mStubs = new ItemMap<Stub>();
         mStubFactories = new ItemMap<StubFactory>();
-        mSkeletons = new SkeletonMap(this, idType);
+        mSkeletons = new SkeletonMap(this);
         mKnownTypes = new ItemMap<>();
 
         mStubSupport = new CoreStubSupport(this);

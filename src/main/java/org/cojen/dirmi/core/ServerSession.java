@@ -41,7 +41,7 @@ final class ServerSession<R> extends CoreSession<R> {
 
     private final Skeleton<R> mRoot;
 
-    private final long mReverseId = IdGenerator.next(IdGenerator.I_SERVER);
+    private final long mReverseId = IdGenerator.nextPositive();
 
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
@@ -50,7 +50,7 @@ final class ServerSession<R> extends CoreSession<R> {
      * @param rootInfo client-side root info
      */
     ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
-        super(engine, IdGenerator.I_SERVER);
+        super(engine);
 
         // FIXME: stash rootInfo in a string to info map
 

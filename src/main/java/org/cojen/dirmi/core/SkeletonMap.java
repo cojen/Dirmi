@@ -30,17 +30,12 @@ import java.util.concurrent.CountDownLatch;
  */
 final class SkeletonMap extends ItemMap<Skeleton> {
     private final CoreSession mSession;
-    private final long mIdType;
 
     private Entry[] mEntries;
     private int mSize;
 
-    /**
-     * @param idType IdGenerator.I_SERVER or IdGenerator.I_CLIENT
-     */
-    SkeletonMap(CoreSession session, long idType) {
+    SkeletonMap(CoreSession session) {
         mSession = session;
-        mIdType = idType;
         mEntries = new Entry[INITIAL_CAPACITY];
     }
 
@@ -131,7 +126,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                 try {
                     var type = (Class<R>) RemoteExaminer.remoteType(server);
                     SkeletonFactory<R> factory = SkeletonMaker.factoryFor(type);
-                    long id = IdGenerator.next(mIdType);
+                    long id = IdGenerator.nextPositive();
                     Skeleton<R> skeleton = factory.newSkeleton
                         (id, mSession.mSkeletonSupport, server);
                     VarHandle.storeStoreFence();

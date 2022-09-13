@@ -42,11 +42,11 @@ public class IdGeneratorTest {
     }
 
     @Test
-    public void nextServerId() {
+    public void nextPositiveId() {
         long last = 0;
         for (int i=0; i<10; i++) {
-            long id = IdGenerator.next(IdGenerator.I_SERVER);
-            assertEquals(0b00, id >>> 62);
+            long id = IdGenerator.nextPositive();
+            assertTrue(id > 0);
             if (i != 0) {
                 assertNotEquals(last, id);
             }
@@ -55,37 +55,11 @@ public class IdGeneratorTest {
     }
 
     @Test
-    public void nextClientId() {
+    public void nextNegativeId() {
         long last = 0;
         for (int i=0; i<10; i++) {
-            long id = IdGenerator.next(IdGenerator.I_CLIENT);
-            assertEquals(0b01, id >>> 62);
-            if (i != 0) {
-                assertNotEquals(last, id);
-            }
-            last = id;
-        }
-    }
-
-    @Test
-    public void nextServerAliasId() {
-        long last = 0;
-        for (int i=0; i<10; i++) {
-            long id = IdGenerator.next(IdGenerator.I_SERVER | IdGenerator.I_ALIAS);
-            assertEquals(0b10, id >>> 62);
-            if (i != 0) {
-                assertNotEquals(last, id);
-            }
-            last = id;
-        }
-    }
-
-    @Test
-    public void nextClientAliasId() {
-        long last = 0;
-        for (int i=0; i<10; i++) {
-            long id = IdGenerator.next(IdGenerator.I_CLIENT | IdGenerator.I_ALIAS);
-            assertEquals(0b11, id >>> 62);
+            long id = IdGenerator.nextNegative();
+            assertTrue(id < 0);
             if (i != 0) {
                 assertNotEquals(last, id);
             }

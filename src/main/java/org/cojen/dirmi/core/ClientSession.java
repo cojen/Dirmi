@@ -38,7 +38,7 @@ final class ClientSession<R> extends CoreSession<R> {
     private R mRoot;
 
     ClientSession(Engine engine, SocketAddress remoteAddr) {
-        super(engine, IdGenerator.I_CLIENT);
+        super(engine);
         mRemoteAddress = remoteAddr;
     }
 

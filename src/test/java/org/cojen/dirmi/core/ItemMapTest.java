@@ -37,7 +37,7 @@ public class ItemMapTest {
 
         var items = new Item[1000];
         for (int i=0; i<items.length; i++) {
-            items[i] = new Item(IdGenerator.next(IdGenerator.I_SERVER));
+            items[i] = new Item(IdGenerator.nextPositive());
 
             try {
                 assertNull(map.get(items[i].id));
@@ -94,7 +94,7 @@ public class ItemMapTest {
     public void clear() throws Exception {
         var map = new ItemMap<Item>();
 
-        var item = new Item(IdGenerator.next(IdGenerator.I_CLIENT));
+        var item = new Item(IdGenerator.nextPositive());
         assertNull(map.put(item));
         assertEquals(item, map.get(item.id));
         assertEquals(1, map.size());
@@ -119,7 +119,7 @@ public class ItemMapTest {
 
         var items = new Item[1000];
         for (int i=0; i<items.length; i++) {
-            items[i] = new Item(IdGenerator.next(IdGenerator.I_SERVER));
+            items[i] = new Item(IdGenerator.nextPositive());
             assertNull(map.put(items[i]));
         }
 
