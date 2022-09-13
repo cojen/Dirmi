@@ -24,6 +24,7 @@ import java.net.SocketAddress;
 
 import java.util.concurrent.locks.LockSupport;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -32,7 +33,15 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class ServerSession<R> extends CoreSession<R> {
+    static {
+        // Reduce the risk of "lost unpark" due to classloading.
+        // https://bugs.openjdk.java.net/browse/JDK-8074773
+        Class<?> clazz = LockSupport.class;
+    }
+
     private final Skeleton<R> mRoot;
+
+    private final long mReverseId = IdGenerator.next(IdGenerator.I_SERVER);
 
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
@@ -49,7 +58,7 @@ final class ServerSession<R> extends CoreSession<R> {
         mKnownTypes.put(new Item(mRoot.typeId()));
 
         // For accepting reverse connections.
-        mSkeletons.put(new Connector());
+        mSkeletons.put(new Connector(mReverseId));
     }
 
     /**
@@ -66,7 +75,26 @@ final class ServerSession<R> extends CoreSession<R> {
     @Override
     public void close() {
         super.close();
+
         mEngine.removeSession(this);
+
+        // Unpark all reverse connection waiters. They'll try to request a connection and fail
+        // with an exception.
+
+        ConnectWaiter waiter;
+        conLockAcquire();
+        try {
+            waiter = mFirstWaiter;
+            mFirstWaiter = null;
+            mLastWaiter = null;
+        } finally {
+            conLockRelease();
+        }
+
+        while (waiter != null) {
+            waiter.unpark();
+            waiter = waiter.mNext;
+        }
     }
 
     @Override
@@ -92,32 +120,50 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
+    void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+        super.registerNewAvailableConnection(pipe);
+        notifyConnectWaiter();
+    }
+
+    @Override
     boolean recycleConnection(CorePipe pipe) {
-        if (!super.recycleConnection(pipe)) {
+        if (super.recycleConnection(pipe)) {
+            notifyConnectWaiter();
+            return true;
+        } else {
             return false;
         }
+    }
 
+    private void notifyConnectWaiter() {
+        ConnectWaiter waiter;
         conLockAcquire();
         try {
-            ConnectWaiter first = mFirstWaiter;
-            if (first != null) {
-                first.mSignaled = true;
-                LockSupport.unpark(first.mThread);
-                ConnectWaiter next = first.mNext;
-                mFirstWaiter = next;
-                if (next == null) {
-                    mLastWaiter = null;
-                }
+            waiter = mFirstWaiter;
+            if (waiter == null) {
+                return;
+            }
+            ConnectWaiter next = waiter.mNext;
+            mFirstWaiter = next;
+            if (next == null) {
+                mLastWaiter = null;
             }
         } finally {
             conLockRelease();
         }
 
-        return true;
+        waiter.unpark();
     }
 
     @Override
     CorePipe connect() throws IOException {
+        // Establish a reverse connection. Request that the client connect to this side (the
+        // server) and start reading requests. The client can create a new connection or remove
+        // from one from its connection pool. To designate the connection that was selected,
+        // the client must first invoke the object that was provided by the request, passing no
+        // method id or parameters. The special Connector skeleton is invoked on this side,
+        // completing the reversal.
+
         ConnectWaiter waiter = null;
 
         while (true) {
@@ -130,14 +176,13 @@ final class ServerSession<R> extends CoreSession<R> {
             mControlLock.lock();
             try {
                 mControlPipe.write(C_REQUEST_CONNECTION);
-                // Pass object 0, which refers to the Connector instance.
-                mControlPipe.writeLong(0);
+                mControlPipe.writeLong(mReverseId);
                 mControlPipe.flush();
             } finally {
                 mControlLock.unlock();
             }
 
-            if (waiter == null) {
+            if (waiter == null || waiter.mUnparked) {
                 waiter = new ConnectWaiter(Thread.currentThread());
 
                 conLockAcquire();
@@ -154,11 +199,13 @@ final class ServerSession<R> extends CoreSession<R> {
                 }
             }
 
-            LockSupport.park();
-
-            if (waiter.mSignaled) {
-                waiter = null;
+            // Need to double check in case a connection became available immediately before
+            // the enqueue operation. The notify might unpark this thread or another one.
+            if (hasAvailableConnection()) {
+                notifyConnectWaiter();
             }
+
+            LockSupport.park();
         }
     }
 
@@ -166,8 +213,8 @@ final class ServerSession<R> extends CoreSession<R> {
      * Pseudo skeleton used for accepting reverse connections from the client.
      */
     private final class Connector extends Skeleton {
-        Connector() {
-            super(0);
+        Connector(long id) {
+            super(id);
         }
 
         @Override
@@ -197,10 +244,15 @@ final class ServerSession<R> extends CoreSession<R> {
     private final class ConnectWaiter {
         final Thread mThread;
         ConnectWaiter mNext;
-        volatile boolean mSignaled;
+        volatile boolean mUnparked;
 
         ConnectWaiter(Thread thread) {
             mThread = thread;
+        }
+
+        void unpark() {
+            mUnparked = true;
+            LockSupport.unpark(mThread);
         }
     }
 }

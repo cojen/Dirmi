@@ -117,7 +117,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Track a new connection as being available from the tryObtainConnection method.
      */
-    final void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+    void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
         conLockAcquire();
         try {
             checkClosed();
@@ -250,6 +250,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             }
 
             return pipe;
+        } finally {
+            conLockRelease();
+        }
+    }
+
+    final boolean hasAvailableConnection() {
+        conLockAcquire();
+        try {
+            return mConAvail != null;
         } finally {
             conLockRelease();
         }
