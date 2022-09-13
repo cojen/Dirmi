@@ -518,6 +518,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         @Override
         public void run() {
             try {
+                Object context = null;
+
                 while (true) {
                     long id = mPipe.readLong();
 
@@ -532,8 +534,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         throw e;
                     }
 
-                    // FIXME: proper context handling
-                    Object context = skeleton.invoke(mPipe, null);
+                    context = skeleton.invoke(mPipe, context);
 
                     if (context == BatchedContext.STOP_READING) {
                         return;
