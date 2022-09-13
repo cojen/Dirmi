@@ -417,16 +417,16 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     void reverseConnect(long id) {
     }
 
-    Stub stubFor(long id) throws IOException {
-        return mStubs.get(id);
+    Object objectFor(long id) throws IOException {
+        return mSkeletons.get(id).server();
     }
 
-    Stub stubFor(long id, long typeId) throws IOException {
+    Object objectFor(long id, long typeId) throws IOException {
         StubFactory factory = mStubFactories.get(typeId);
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
-    Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
         Class<?> type;
         try {
             type = Class.forName(info.name(), false, root().getClass().getClassLoader());

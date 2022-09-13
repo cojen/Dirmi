@@ -460,13 +460,13 @@ class BufferedPipe implements Pipe {
             case T_THROWABLE:       return readThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
 
-            case T_REMOTE:          simple = stubFor(readLong()); break loop;
-            case T_REMOTE_T:        simple = stubFor(readLong(), readLong()); break loop;
+            case T_REMOTE:          simple = objectFor(readLong()); break loop;
+            case T_REMOTE_T:        simple = objectFor(readLong(), readLong()); break loop;
             case T_REMOTE_TI: {
                 long id = readLong();
                 long typeId = readLong();
                 RemoteInfo info = RemoteInfo.readFrom(this);
-                simple = stubFor(id, typeId, info);
+                simple = objectFor(id, typeId, info);
                 break loop;
             }
 
@@ -479,15 +479,15 @@ class BufferedPipe implements Pipe {
         return simple;
     }
 
-    Stub stubFor(long id) throws IOException {
+    Object objectFor(long id) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
-    Stub stubFor(long id, long typeId) throws IOException {
+    Object objectFor(long id, long typeId) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
-    Stub stubFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
         throw new NoSuchObjectException(id);
     }
 

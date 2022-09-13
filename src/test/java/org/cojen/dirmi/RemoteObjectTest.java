@@ -107,10 +107,34 @@ public class RemoteObjectTest {
         assertEquals("hello", callback.await(10_000));
     }
 
+    @Test
+    public void passback() throws Exception {
+        R1 root = mSession.root();
+
+        R2 r2 = root.c1(123);
+        assertEquals("hello 123", r2.c2());
+
+        Object[] result = root.c3(r2);
+        assertEquals(3, result.length);
+        assertTrue(result[0] instanceof org.cojen.dirmi.core.Stub);
+        assertEquals(R2Server.class.getName(), result[1]);
+        assertEquals("hello 123", result[2]);
+
+        r2.dispose();
+        try {
+            r2.c2();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 
         void c2(R3 callback) throws RemoteException;
+
+        Object[] c3(R2 r2) throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -129,6 +153,11 @@ public class RemoteObjectTest {
             } catch (ClosedException e) {
                 assertTrue(e.getMessage().contains("disposed"));
             }
+        }
+
+        @Override
+        public Object[] c3(R2 r2) throws RemoteException {
+            return new Object[] {r2, r2.getClass().getName(), r2.c2()};
         }
     }
 
