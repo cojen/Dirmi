@@ -1164,7 +1164,7 @@ class BufferedPipe implements Pipe {
     @Override
     public final void writeObject(Object v) throws IOException {
         if (v == null) {
-            tryWriteReferenceOrNull(null);
+            writeNull();
             return;
         }
 
@@ -1550,6 +1550,17 @@ class BufferedPipe implements Pipe {
 
     @Override
     public final void writeObject(Throwable v) throws IOException {
+        // This method is called to write remote method responses, which is usually null. Only
+        // call the writeThrowable method when there's an actual throwable to write, because it
+        // then enables reference tracking mode, which allocates objects, etc.
+        if (v == null) {
+            writeNull();
+        } else {
+            writeThrowable(v);
+        }
+    }
+
+    private void writeThrowable(Throwable v) throws IOException {
         enableReferences();
         try {
             if (!tryWriteReferenceOrNull(v)) {
@@ -1567,20 +1578,25 @@ class BufferedPipe implements Pipe {
 
     @Override
     public final void writeObject(StackTraceElement v) throws IOException {
-        enableReferences();
-        try {
-            if (!tryWriteReferenceOrNull(v)) {
-                writeShort((T_STACK_TRACE << 8) | 1); // type code and encoding format
-                writeObject(v.getClassLoaderName());
-                writeObject(v.getModuleName());
-                writeObject(v.getModuleVersion());
-                writeObject(v.getClassName());
-                writeObject(v.getMethodName());
-                writeObject(v.getFileName());
-                writeInt(v.getLineNumber());
+        if (v == null) {
+            // Don't enable reference tracking mode when given null.
+            writeNull();
+        } else {
+            enableReferences();
+            try {
+                if (!tryWriteReferenceOrNull(v)) {
+                    writeShort((T_STACK_TRACE << 8) | 1); // type code and encoding format
+                    writeObject(v.getClassLoaderName());
+                    writeObject(v.getModuleName());
+                    writeObject(v.getModuleVersion());
+                    writeObject(v.getClassName());
+                    writeObject(v.getMethodName());
+                    writeObject(v.getFileName());
+                    writeInt(v.getLineNumber());
+                }
+            } finally {
+                disableReferences();
             }
-        } finally {
-            disableReferences();
         }
     }
 
@@ -1617,6 +1633,16 @@ class BufferedPipe implements Pipe {
             buf[end++] = (byte) (typeCode + 1);
             cIntArrayBEHandle.set(buf, end, value);
             mOutEnd = end + 4;
+        }
+    }
+
+    private void writeNull() throws IOException {
+        ReferenceMap refMap = mOutRefMap;
+        if (refMap == null || !refMap.isDisabled()) {
+            write(T_NULL);
+        } else {
+            writeShort((T_REF_MODE_OFF << 8) | T_NULL);
+            mOutRefMap = null;
         }
     }
 
