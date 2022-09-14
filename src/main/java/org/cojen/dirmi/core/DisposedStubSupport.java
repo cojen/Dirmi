@@ -65,10 +65,6 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public void release(Pipe pipe) {
-    }
-
-    @Override
     public <T extends Throwable> T failed(Class<T> remoteFailureException,
                                           Pipe pipe, Throwable cause)
     {

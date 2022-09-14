@@ -274,7 +274,6 @@ final class StubMaker {
 
             if (serverMethod.isPiped()) {
                 invokeEnd.here();
-                supportVar.invoke("release", pipeVar);
                 mm.return_(pipeVar);
             } else if (serverMethod.isBatched()) {
                 invokeEnd.here();

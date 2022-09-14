@@ -131,11 +131,6 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public void release(Pipe pipe) {
-        // Nothing to do.
-    }
-
-    @Override
     public <T extends Throwable> T failed(Class<T> remoteFailureException,
                                           Pipe pipe, Throwable cause)
     {

@@ -79,12 +79,6 @@ public interface StubSupport {
     void batched(Pipe pipe);
 
     /**
-     * Called if the pipe is to be returned to the client. This method should not throw any
-     * exception.
-     */
-    void release(Pipe pipe);
-
-    /**
      * Called if invocation failed due to a problem with the pipe, and it should be
      * closed. This method should not throw any exception, but it must return an appropriate
      * Throwable which will get thrown to the client.
