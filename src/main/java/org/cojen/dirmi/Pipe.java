@@ -33,11 +33,12 @@ import java.util.Set;
 
 /**
  * A pipe is a bidirectional stream which supports basic object serialization. Only simple
- * types and collections can be serialized, the original classes aren't necessarily preserved,
- * and graph structure isn't guaranteed.
+ * types and collections can be serialized, and the original classes aren't necessarily
+ * preserved. Graph structure isn't preserved unless reference tracking is {@link
+ * #enableReferences enabled}.
  *
- * <p>Pipes are only partially thread-safe. Reading and writing can be performed by independent
- * threads, but concurrent reads and concurrent writes isn't supported.
+ * <p>Pipes are only partially thread-safe. Reading and writing is concurrent, but at most one
+ * thread can be reading, and at most one thread can be writing.
  *
  * <p>Pipes are fully buffered, and closing the pipe directly discards any buffered
  * writes. Closing the {@code OutputStream} will attempt to flush the buffer first, although it
@@ -60,7 +61,7 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
 
     /**
      * Disables tracking of object references. Memory isn't freed on the remote side until
-     * another object is read.
+     * another it reads another object.
      *
      * @return true if fully disabled
      * @throws IllegalStateException if not currently enabled
@@ -68,19 +69,19 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     boolean disableReferences();
 
     /**
-     * Returns the pipe's {@code InputStream} which also implements {@code
+     * Returns the pipe's {@code InputStream}, which also implements {@code
      * ObjectInput}. Closing the stream is equivalent to closing the pipe.
      */
     InputStream getInputStream();
 
     /**
-     * Returns the pipe's {@code OutputStream} which also implements {@code
+     * Returns the pipe's {@code OutputStream}, which also implements {@code
      * ObjectOutput}. Closing the stream is equivalent to closing the pipe.
      */
     OutputStream getOutputStream();
 
     /**
-     * Attempt to recycle the connection instead of closing it. Caller must ensure that the
+     * Attempt to recycle the connection instead of closing it. The caller must ensure that the
      * pipe has no pending input or unflushed output.
      */
     void recycle() throws IOException;

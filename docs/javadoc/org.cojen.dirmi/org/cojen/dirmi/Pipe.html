@@ -100,11 +100,11 @@ loadScripts(document, 'script');</script>
 <div class="type-signature"><span class="modifiers">public interface </span><span class="element-name type-name-label">Pipe</span><span class="extends-implements">
 extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a>, <a href="Link.html" title="interface in org.cojen.dirmi">Link</a></span></div>
 <div class="block">A pipe is a bidirectional stream which supports basic object serialization. Only simple
- types and collections can be serialized, the original classes aren't necessarily preserved,
- and graph structure isn't guaranteed.
+ types and collections can be serialized, and the original classes aren't necessarily
+ preserved. Graph structure isn't preserved unless reference tracking is <a href="#enableReferences()"><code>enabled</code></a>.
 
- <p>Pipes are only partially thread-safe. Reading and writing can be performed by independent
- threads, but concurrent reads and concurrent writes isn't supported.
+ <p>Pipes are only partially thread-safe. Reading and writing is concurrent, but at most one
+ thread can be reading, and at most one thread can be writing.
 
  <p>Pipes are fully buffered, and closing the pipe directly discards any buffered
  writes. Closing the <code>OutputStream</code> will attempt to flush the buffer first, although it
@@ -138,13 +138,13 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getInputStream()" class="member-name-link">getInputStream</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Returns the pipe's <code>InputStream</code> which also implements <code>
+<div class="block">Returns the pipe's <code>InputStream</code>, which also implements <code>
  ObjectInput</code>.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getOutputStream()" class="member-name-link">getOutputStream</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Returns the pipe's <code>OutputStream</code> which also implements <code>
+<div class="block">Returns the pipe's <code>OutputStream</code>, which also implements <code>
  ObjectOutput</code>.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
@@ -210,7 +210,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <h3>disableReferences</h3>
 <div class="member-signature"><span class="return-type">boolean</span>&nbsp;<span class="element-name">disableReferences</span>()</div>
 <div class="block">Disables tracking of object references. Memory isn't freed on the remote side until
- another object is read.</div>
+ another it reads another object.</div>
 <dl class="notes">
 <dt>Returns:</dt>
 <dd>true if fully disabled</dd>
@@ -223,7 +223,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <section class="detail" id="getInputStream()">
 <h3>getInputStream</h3>
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></span>&nbsp;<span class="element-name">getInputStream</span>()</div>
-<div class="block">Returns the pipe's <code>InputStream</code> which also implements <code>
+<div class="block">Returns the pipe's <code>InputStream</code>, which also implements <code>
  ObjectInput</code>. Closing the stream is equivalent to closing the pipe.</div>
 </section>
 </li>
@@ -231,7 +231,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <section class="detail" id="getOutputStream()">
 <h3>getOutputStream</h3>
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></span>&nbsp;<span class="element-name">getOutputStream</span>()</div>
-<div class="block">Returns the pipe's <code>OutputStream</code> which also implements <code>
+<div class="block">Returns the pipe's <code>OutputStream</code>, which also implements <code>
  ObjectOutput</code>. Closing the stream is equivalent to closing the pipe.</div>
 </section>
 </li>
@@ -240,7 +240,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <h3>recycle</h3>
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">recycle</span>()
       throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Attempt to recycle the connection instead of closing it. Caller must ensure that the
+<div class="block">Attempt to recycle the connection instead of closing it. The caller must ensure that the
  pipe has no pending input or unflushed output.</div>
 <dl class="notes">
 <dt>Throws:</dt>
