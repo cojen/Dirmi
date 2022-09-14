@@ -19,6 +19,7 @@ package org.cojen.dirmi.core;
 import java.io.IOException;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.Session;
 
 /**
  * Object passed to a Stub instance in order for it to communicate with a remote object.
@@ -27,6 +28,8 @@ import org.cojen.dirmi.Pipe;
  * @see StubFactory
  */
 public interface StubSupport {
+    Session session();
+
     /**
      * Called by unbatched methods to temporarily release a thread-local pipe.
      *

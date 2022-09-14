@@ -39,6 +39,26 @@ import org.cojen.dirmi.core.CoreUtils;
  */
 public interface Session<R> extends Closeable, Link {
     /**
+     * Access the session that the given remote object is bound to.
+     *
+     * @throws IllegalArgumentException if not given a remote stub
+     * @throws IllegalStateException if the object is disposed
+     */
+    public static Session<?> access(Object obj) {
+        return CoreUtils.accessSession(obj);
+    }
+
+    /**
+     * Returns the current thread-local session, which is available to a remote method
+     * implementation when it's invoked.
+     *
+     * @throws IllegalStateException if no current session
+     */
+    public static Session<?> current() {
+        return CoreUtils.currentSession();
+    }
+
+    /**
      * Returns the root object which was exported or imported.
      */
     R root();

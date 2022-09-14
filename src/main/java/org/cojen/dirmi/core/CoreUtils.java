@@ -33,6 +33,7 @@ import org.cojen.maker.Variable;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -43,6 +44,8 @@ public final class CoreUtils {
     static final long PROTOCOL_V2 = 4052788960387224692L;
 
     static final Object MAKER_KEY = new Object();
+
+    static final ThreadLocal<Session> CURRENT_SESSION = new ThreadLocal<>();
 
     public static void setOptions(Socket s) throws IOException {
         if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
@@ -55,6 +58,21 @@ public final class CoreUtils {
             s.setOption(StandardSocketOptions.TCP_NODELAY, true);
         }
         s.configureBlocking(true);
+    }
+
+    public static Session accessSession(Object obj) {
+        if (!(obj instanceof Stub)) {
+            throw new IllegalArgumentException();
+        }
+        return ((StubSupport) Stub.SUPPORT_HANDLE.getOpaque((Stub) obj)).session();
+    }
+
+    public static Session currentSession() {
+        Session session = CURRENT_SESSION.get();
+        if (session == null) {
+            throw new IllegalStateException();
+        }
+        return session;
     }
 
     /**

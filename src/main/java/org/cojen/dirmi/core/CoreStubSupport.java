@@ -35,6 +35,11 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
+    public CoreSession session() {
+        return mSession;
+    }
+
+    @Override
     public Pipe unbatch() {
         // FIXME: unbatch
         throw null;

@@ -118,13 +118,9 @@ final class StubMaker {
      * remote object class isn't found
      */
     private Class<?> finishStub() {
-        mStubMaker.addField(StubSupport.class, "support").private_();
-
         {
             MethodMaker mm = mStubMaker.addConstructor(long.class, StubSupport.class);
-            mm.invokeSuperConstructor(mm.param(0));
-            mm.field("support").set(mm.param(1));
-            mm.var(VarHandle.class).invoke("storeStoreFence");
+            mm.invokeSuperConstructor(mm.param(0), mm.param(1));
         }
 
         SortedSet<RemoteMethod> clientMethods = mClientInfo.remoteMethods();

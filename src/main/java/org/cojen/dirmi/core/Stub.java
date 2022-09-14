@@ -16,6 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import org.cojen.dirmi.Remote;
 
 /**
@@ -24,7 +27,22 @@ import org.cojen.dirmi.Remote;
  * @author Brian S O'Neill
  */
 public class Stub extends Item implements Remote {
-    public Stub(long id) {
+    static final VarHandle SUPPORT_HANDLE;
+
+    static {
+        try {
+            var lookup = MethodHandles.lookup();
+            SUPPORT_HANDLE = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
+        } catch (Throwable e) {
+            throw new Error(e);
+        }
+    }
+
+    protected StubSupport support;
+
+    public Stub(long id, StubSupport support) {
         super(id);
+        this.support = support;
+        VarHandle.storeStoreFence();
     }
 }

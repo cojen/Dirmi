@@ -20,6 +20,7 @@ import java.io.IOException;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -28,6 +29,11 @@ import org.cojen.dirmi.Pipe;
  */
 final class DisposedStubSupport implements StubSupport {
     static final DisposedStubSupport THE = new DisposedStubSupport();
+
+    @Override
+    public Session session() {
+        throw new IllegalStateException("Object is disposed");
+    }
 
     @Override
     public Pipe unbatch() {

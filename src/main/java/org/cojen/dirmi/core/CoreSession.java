@@ -368,6 +368,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mKnownTypes.clear();
     }
 
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + '@' +
+            Integer.toHexString(System.identityHashCode(this)) +
+            "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
+    }
+
     /**
      * Starts a task to read and process commands over the control connection.
      */
@@ -518,6 +525,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         @Override
         public void run() {
             try {
+                CoreUtils.CURRENT_SESSION.set(CoreSession.this);
                 Object context = null;
 
                 while (true) {
@@ -546,6 +554,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     // FIXME: log it?
                     CoreUtils.uncaughtException(e);
                 }
+            } finally {
+                CoreUtils.CURRENT_SESSION.remove();
             }
         }
 

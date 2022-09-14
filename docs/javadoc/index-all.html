@@ -73,6 +73,10 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Call when a server-side connection has been explicitly accepted.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#access(java.lang.Object)" class="member-name-link">access(Object)</a> - Static method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Access the session that the given remote object is bound to.</div>
+</dd>
 </dl>
 <h2 class="title" id="I:B">B</h2>
 <dl class="index">
@@ -145,6 +149,11 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#create(java.util.concurrent.Executor)" class="member-name-link">create(Executor)</a> - Static method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
 <div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#current()" class="member-name-link">current()</a> - Static method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Returns the current thread-local session, which is available to a remote method
+ implementation when it's invoked.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:D">D</h2>

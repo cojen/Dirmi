@@ -65,12 +65,28 @@ public class RemoteObjectTest {
         r2 = root.c1(456);
         assertEquals("hello 456", r2.c2());
 
+        assertEquals(mSession, Session.access(root));
+        assertEquals(mSession, Session.access(r2));
+
         r2.dispose();
         try {
             r2.c2();
             fail();
         } catch (ClosedException e) {
             assertTrue(e.getMessage().contains("disposed"));
+        }
+
+        try {
+            Session.access(r2);
+            fail();
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
+
+        try {
+            Session.access(this);
+            fail();
+        } catch (IllegalArgumentException e) {
         }
     }
 
@@ -129,12 +145,26 @@ public class RemoteObjectTest {
         }
     }
 
+    @Test
+    public void currentSession() throws Exception {
+        try {
+            Session.current();
+            fail();
+        } catch (IllegalStateException e) {
+        }
+
+        R1 root = mSession.root();
+        assertTrue(root.c4().contains("ServerSession"));
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 
         void c2(R3 callback) throws RemoteException;
 
         Object[] c3(R2 r2) throws RemoteException;
+
+        String c4() throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -158,6 +188,11 @@ public class RemoteObjectTest {
         @Override
         public Object[] c3(R2 r2) throws RemoteException {
             return new Object[] {r2, r2.getClass().getName(), r2.c2()};
+        }
+
+        @Override
+        public String c4() {
+            return Session.current().toString();
         }
     }
 
