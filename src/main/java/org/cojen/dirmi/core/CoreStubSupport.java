@@ -67,11 +67,13 @@ final class CoreStubSupport implements StubSupport {
     @Override
     public Throwable readResponse(Pipe pipe) throws IOException {
         var ex = (Throwable) pipe.readObject();
-
-        if (ex == null) {
-            return null;
+        if (ex != null) {
+            assignTrace(pipe, ex);
         }
+        return ex;
+    }
 
+    private void assignTrace(Pipe pipe, Throwable ex) {
         // Augment the stack trace with a local trace.
 
         StackTraceElement[] trace = ex.getStackTrace();
@@ -110,8 +112,6 @@ final class CoreStubSupport implements StubSupport {
         System.arraycopy(local, localStart, combined, traceLength + stitch.length, localLength);
 
         ex.setStackTrace(combined);
-
-        return ex;
     }
 
     @Override
