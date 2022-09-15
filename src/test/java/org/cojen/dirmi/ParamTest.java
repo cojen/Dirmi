@@ -50,7 +50,10 @@ public class ParamTest {
         assertEquals(12345, r1.echo((short) 12345));
         assertEquals(Integer.MAX_VALUE, r1.echo(Integer.MAX_VALUE));
         assertEquals(Long.MIN_VALUE, r1.echo(Long.MIN_VALUE));
+        assertEquals("hello", r1.echo("hello"));
+        assertEquals(null, r1.echo((Object) null));
         assertEquals(Thread.State.BLOCKED, r1.echo(Thread.State.BLOCKED));
+        assertEquals(null, r1.echo((Thread.State) null));
 
         env.close();
     }
@@ -72,6 +75,8 @@ public class ParamTest {
         int echo(int v);
 
         long echo(long v);
+
+        Object echo(Object v);
 
         Thread.State echo(Thread.State v);
     }
@@ -114,6 +119,11 @@ public class ParamTest {
 
         @Override
         public long echo(long v) {
+            return v;
+        }
+
+        @Override
+        public Object echo(Object v) {
             return v;
         }
 

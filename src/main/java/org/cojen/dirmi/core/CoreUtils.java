@@ -28,6 +28,8 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.SocketChannel;
 
 import org.cojen.maker.ClassMaker;
+import org.cojen.maker.Label;
+import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
 import org.cojen.dirmi.ClosedException;
@@ -142,7 +144,14 @@ public final class CoreUtils {
             if (!type.isEnum()) {
                 pipeVar.invoke("writeObject", paramVar);
             } else {
+                MethodMaker mm = paramVar.methodMaker();
+                Label notNull = mm.label();
+                paramVar.ifNe(null, notNull);
+                pipeVar.invoke(void.class, "writeObject", new Object[]{Object.class}, (Object)null);
+                Label done = mm.label().goto_();
+                notNull.here();
                 pipeVar.invoke("writeObject", paramVar.invoke("name"));
+                done.here();
             }
         } else {
             String m;
@@ -171,16 +180,22 @@ public final class CoreUtils {
 
     static void readParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
-        Variable resultVar;
 
         if (!type.isPrimitive()) {
             var objectVar = pipeVar.invoke("readObject");
             if (!type.isEnum()) {
-                resultVar = type == Object.class ? objectVar : objectVar.cast(type);
+                paramVar.set(type == Object.class ? objectVar : objectVar.cast(type));
             } else {
+                MethodMaker mm = paramVar.methodMaker();
                 var nameVar = objectVar.cast(String.class);
-                var enumVar = paramVar.methodMaker().var(Enum.class);
-                resultVar = enumVar.invoke("valueOf", type, nameVar).cast(type);
+                Label notNull = mm.label();
+                nameVar.ifNe(null, notNull);
+                paramVar.set(null);
+                Label done = mm.label().goto_();
+                notNull.here();
+                var enumVar = mm.var(Enum.class);
+                paramVar.set(enumVar.invoke("valueOf", type, nameVar).cast(type));
+                done.here();
             }
         } else {
             String m;
@@ -203,9 +218,7 @@ public final class CoreUtils {
             } else {
                 throw new AssertionError();
             }
-            resultVar = pipeVar.invoke(m);
+            paramVar.set(pipeVar.invoke(m));
         }
-
-        paramVar.set(resultVar);
     }
 }
