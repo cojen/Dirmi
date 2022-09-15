@@ -32,17 +32,18 @@ public class RemoteObjectTest {
     }
 
     private Environment mServerEnv, mClientEnv;
+    private ServerSocket mServerSocket;
     private Session<R1> mSession;
 
     @Before
     public void setup() throws Exception {
         mServerEnv = Environment.create();
         mServerEnv.export("main", new R1Server());
-        var ss = new ServerSocket(0);
-        mServerEnv.acceptAll(ss);
+        mServerSocket = new ServerSocket(0);
+        mServerEnv.acceptAll(mServerSocket);
 
         mClientEnv = Environment.create();
-        mSession = mClientEnv.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        mSession = mClientEnv.connect(R1.class, "main", "localhost", mServerSocket.getLocalPort());
     }
 
     @After
@@ -155,6 +156,22 @@ public class RemoteObjectTest {
 
         R1 root = mSession.root();
         assertTrue(root.c4().contains("ServerSession"));
+    }
+
+    @Test
+    public void connectFail() throws Exception {
+        try {
+            mClientEnv.connect(R1.class, "xxx", "localhost", mServerSocket.getLocalPort());
+            fail();
+        } catch (RemoteException e) {
+            assertTrue(e.getMessage().contains("Unable to find"));
+        }
+        try {
+            mClientEnv.connect(R2.class, "main", "localhost", mServerSocket.getLocalPort());
+            fail();
+        } catch (RemoteException e) {
+            assertTrue(e.getMessage().contains("Mismatched"));
+        }
     }
 
     public static interface R1 extends Remote {
