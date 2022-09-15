@@ -163,7 +163,7 @@ public final class Engine implements Environment {
             mMainLock.unlock();
         }
 
-        execute(acceptor);
+        executeTask(acceptor);
 
         return acceptor;
     }
@@ -333,7 +333,7 @@ public final class Engine implements Environment {
         try {
             Objects.requireNonNull(c);
             Connector old = checkClosed();
-            cConnectorHandle.setRelease(this, Connector.direct());
+            cConnectorHandle.setRelease(this, c);
             return old;
         } finally {
             mMainLock.unlock();
@@ -410,11 +410,16 @@ public final class Engine implements Environment {
         }
     }
 
+    @Override
+    public void execute(Runnable command) {
+        mExecutor.execute(command);
+    }
+
     /**
      * Attempt to execute the task in a separate thread. If an exception is thrown from this
      * method and the task also implements Closeable, then the task is closed.
      */
-    void execute(Runnable task) throws IOException {
+    void executeTask(Runnable task) throws IOException {
         try {
             mExecutor.execute(task);
         } catch (Throwable e) {
@@ -430,7 +435,7 @@ public final class Engine implements Environment {
      * Attempt to execute the task in a separate thread. If unable and the task also implements
      * Closeable, then the task is closed.
      */
-    boolean tryExecute(Runnable task) {
+    boolean tryExecuteTask(Runnable task) {
         try {
             mExecutor.execute(task);
             return true;
@@ -458,7 +463,7 @@ public final class Engine implements Environment {
             mScheduledQueue.add(task);
             
             if (!mSchedulerRunning) {
-                execute(this::runScheduledTasks);
+                executeTask(this::runScheduledTasks);
                 mSchedulerRunning = true;
             } else if (mScheduledQueue.peek() == task) {
                 mSchedulerCondition.signal();
@@ -629,12 +634,11 @@ public final class Engine implements Environment {
             }
 
             while (!isClosed()) {
-                Socket s = null;
                 try {
-                    s = mSocket.accept();
-                    accepted(s);
+                    Socket s = mSocket.accept();
+                    acceptedTask(s);
+                    s = null;
                 } catch (Throwable e) {
-                    CoreUtils.closeQuietly(s);
                     if (isClosed()) {
                         return;
                     }
@@ -646,6 +650,16 @@ public final class Engine implements Environment {
                     Thread.yield();
                 }
             }
+        }
+
+        private void acceptedTask(Socket s) throws IOException {
+            executeTask(() -> {
+                try {
+                    accepted(s);
+                } catch (Throwable e) {
+                    CoreUtils.closeQuietly(s);
+                }
+            });
         }
 
         @Override
@@ -669,12 +683,11 @@ public final class Engine implements Environment {
             }
 
             while (!isClosed()) {
-                SocketChannel s = null;
                 try {
-                    s = mChannel.accept();
-                    accepted(s);
+                    SocketChannel s = mChannel.accept();
+                    acceptedTask(s);
+                    s = null;
                 } catch (Throwable e) {
-                    CoreUtils.closeQuietly(s);
                     if (isClosed()) {
                         return;
                     }
@@ -686,6 +699,16 @@ public final class Engine implements Environment {
                     Thread.yield();
                 }
             }
+        }
+
+        private void acceptedTask(SocketChannel s) throws IOException {
+            executeTask(() -> {
+                try {
+                    accepted(s);
+                } catch (Throwable e) {
+                    CoreUtils.closeQuietly(s);
+                }
+            });
         }
 
         @Override

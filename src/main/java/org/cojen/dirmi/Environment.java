@@ -42,7 +42,7 @@ import org.cojen.dirmi.core.Engine;
  *
  * @author Brian S O'Neill
  */
-public interface Environment extends Closeable {
+public interface Environment extends Closeable, Executor {
     /**
      * Returns a new {@code Environment} instance which uses a default {@link Executor}.
      */

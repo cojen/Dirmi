@@ -383,7 +383,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mControlPipe = pipe;
         mControlLock.unlock();
 
-        mEngine.execute(() -> {
+        mEngine.executeTask(() -> {
             try {
                 while (true) {
                     int command = pipe.readUnsignedByte();
@@ -393,7 +393,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         break;
                     case C_REQUEST_CONNECTION:
                         long id = pipe.readLong();
-                        mEngine.execute(() -> reverseConnect(id));
+                        mEngine.executeTask(() -> reverseConnect(id));
                         break;
                     case C_MESSAGE:
                         Object message = pipe.readObject();
@@ -446,7 +446,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         factory = mStubFactories.putIfAbsent(factory);
 
         // Notify the other side that it can stop sending type info.
-        mEngine.tryExecute(() -> notifyKnownType(typeId));
+        mEngine.tryExecuteTask(() -> notifyKnownType(typeId));
 
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
@@ -508,7 +508,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      */
     void startRequestProcessor(CorePipe pipe) throws IOException {
         try {
-            mEngine.execute(new Processor(pipe));
+            mEngine.executeTask(new Processor(pipe));
         } catch (IOException e) {
             closeConnection(pipe);
             throw e;

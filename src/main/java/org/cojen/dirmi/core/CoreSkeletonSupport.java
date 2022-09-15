@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.IOException;
+
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -32,9 +34,18 @@ final class CoreSkeletonSupport implements SkeletonSupport {
 
     @Override
     public Object handleException(Pipe pipe, Throwable ex) {
-        // FIXME: handleException
-        CoreUtils.uncaughtException(ex);
-        throw null;
+        if (ex instanceof UncaughtException) {
+            // FIXME: log it?
+            CoreUtils.uncaughtException(ex.getCause());
+            return null;
+        } else {
+            CoreUtils.closeQuietly(pipe);
+            if (!(ex instanceof IOException)) {
+                // FIXME: log it?
+                CoreUtils.uncaughtException(ex);
+            }
+            return BatchedContext.STOP_READING;
+        }
     }
 
     @Override

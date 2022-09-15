@@ -165,7 +165,7 @@
           <notimestamp>true</notimestamp>
           <reportOutputDirectory>${basedir}/docs</reportOutputDirectory>
           <destDir>javadoc</destDir>
-          <excludePackageNames>org.cojen.dirmi.core</excludePackageNames>
+          <excludePackageNames>org.cojen.dirmi.core:org.cojen.dirmi.io</excludePackageNames>
         </configuration>
         <executions>
           <execution>
@@ -176,6 +176,20 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.0.0-M4</version>
+        <configuration>
+          <trimStackTrace>false</trimStackTrace>
+          <useFile>false</useFile>
+          <runOrder>random</runOrder>
+          <parallel>classes</parallel>
+          <perCoreThreadCount>false</perCoreThreadCount>
+          <threadCount>2</threadCount>
+        </configuration>
       </plugin>
 
       <plugin>
