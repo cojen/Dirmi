@@ -187,6 +187,8 @@ public final class Engine implements Environment {
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
 
         long clientSessionId = 0;
+        ServerSession session;
+        RemoteInfo serverInfo;
 
         try {
             long version = pipe.readLong();
@@ -198,7 +200,6 @@ public final class Engine implements Environment {
 
             if (serverSessionId != 0) {
                 ItemMap<ServerSession> sessions = mServerSessions;
-                ServerSession session;
                 if (sessions == null || (session = sessions.get(serverSessionId)) == null) {
                     checkClosed();
                     throw new RemoteException("Unable to find existing session");
@@ -224,31 +225,10 @@ public final class Engine implements Environment {
                 throw new RemoteException("Mismatched root object type");
             }
 
-            RemoteInfo serverInfo = RemoteInfo.examine(rootType);
+            serverInfo = RemoteInfo.examine(rootType);
 
-            var session = new ServerSession<Object>(this, root, clientInfo);
+            session = new ServerSession<Object>(this, root, clientInfo);
             session.registerNewConnection(pipe);
-
-            session.writeHeader(pipe, clientSessionId);
-            serverInfo.writeTo(pipe);
-            pipe.writeObject((Object) null); // optional metadata
-            pipe.flush();
-
-            session.processControlConnection(pipe);
-
-            mMainLock.lock();
-            try {
-                checkClosed();
-                ItemMap<ServerSession> sessions = mServerSessions;
-                if (sessions == null) {
-                    mServerSessions = sessions = new ItemMap<>();
-                }
-                sessions.put(session);
-            } finally {
-                mMainLock.unlock();
-            }
-
-            return session;
         } catch (RemoteException e) {
             if (clientSessionId != 0) {
                 // FIXME: launch a task to force close after a timeout elapses
@@ -262,6 +242,32 @@ public final class Engine implements Environment {
             throw e;
         } catch (Throwable e) {
             CoreUtils.closeQuietly(pipe);
+            throw e;
+        }
+
+        try {
+            mMainLock.lock();
+            try {
+                checkClosed();
+                ItemMap<ServerSession> sessions = mServerSessions;
+                if (sessions == null) {
+                    mServerSessions = sessions = new ItemMap<>();
+                }
+                sessions.put(session);
+            } finally {
+                mMainLock.unlock();
+            }
+
+            session.writeHeader(pipe, clientSessionId);
+            serverInfo.writeTo(pipe);
+            pipe.writeObject((Object) null); // optional metadata
+            pipe.flush();
+
+            session.processControlConnection(pipe);
+
+            return session;
+        } catch (Throwable e) {
+            CoreUtils.closeQuietly(session);
             throw e;
         }
     }
