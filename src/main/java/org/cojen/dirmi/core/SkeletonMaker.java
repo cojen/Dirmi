@@ -145,8 +145,6 @@ final class SkeletonMaker<R> {
         final var pipeVar = mm.param(0);
         final var contextVar = mm.param(1);
 
-        Label tryStart = mm.label().here();
-
         var methodIdVar = mm.var(int.class);
 
         if (serverMethods.size() < 256) {
@@ -208,10 +206,6 @@ final class SkeletonMaker<R> {
         var typeNameVar = mm.var(Class.class).set(mType).invoke("getName");
         var messageVar = mm.concat(typeNameVar, '#', methodIdVar);
         mm.new_(NoSuchMethodError.class, messageVar).throw_();
-
-        Label tryEnd = mm.label().here();
-        var exVar = mm.catch_(tryStart, tryEnd, Throwable.class);
-        mm.return_(supportVar.invoke("handleException", pipeVar, exVar));
 
         return mSkeletonMaker.finishLookup();
     }

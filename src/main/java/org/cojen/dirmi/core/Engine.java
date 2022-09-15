@@ -619,8 +619,8 @@ public final class Engine implements Environment {
 
         final void doClose(Closeable ss) {
             mState = -1;
-            CoreUtils.closeQuietly(ss);
             unregister(ss, this);
+            CoreUtils.closeQuietly(ss);
         }
     }
 

@@ -44,18 +44,6 @@ public interface SkeletonSupport {
     */
 
     /**
-     * Called when invocation catches an exception which cannot be passed to the remote
-     * caller. If the exception is UncaughtException, then it came from a piped method and it
-     * should be logged accordingly. Any other exception is likely a communication failure and
-     * the pipe should be closed.
-     *
-     * <p>This method itself should not throw any exceptions.
-     *
-     * @return null or BatchedContext.STOP_READING
-     */
-    Object handleException(Pipe pipe, Throwable ex);
-
-    /**
      * Called by a disposer method when finished executing. This method itself should not throw
      * any exceptions.
      */

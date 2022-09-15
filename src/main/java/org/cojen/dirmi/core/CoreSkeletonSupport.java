@@ -33,22 +33,6 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
-    public Object handleException(Pipe pipe, Throwable ex) {
-        if (ex instanceof UncaughtException) {
-            // FIXME: log it?
-            CoreUtils.uncaughtException(ex.getCause());
-            return null;
-        } else {
-            CoreUtils.closeQuietly(pipe);
-            if (!(ex instanceof IOException)) {
-                // FIXME: log it?
-                CoreUtils.uncaughtException(ex);
-            }
-            return BatchedContext.STOP_READING;
-        }
-    }
-
-    @Override
     public void dispose(Skeleton<?> skeleton) {
         mSession.mSkeletons.remove(skeleton);
     }

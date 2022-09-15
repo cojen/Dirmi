@@ -36,9 +36,7 @@ import org.cojen.dirmi.Pipe;
  *
  *    static <context> <name>(RemoteObject, Pipe, <context>)
  *
- * Other than UncaughtException, any exception thrown by the method indicates a communication
- * failure. UncaughtException is only expected to be thrown from a piped method, and the caller
- * should close the pipe after reporting it.
+ * See {@link Skeleton#invoke} regarding how exceptioons should be handled.
  *
  * @author Brian S O'Neill
  * @see BatchedContext
@@ -115,7 +113,7 @@ final class InvokerMaker {
 
             if (rm.isBatched()) {
                 // Check if an exception was encountered and stop calling any more batched
-                // exceptions if so.
+                // methods if so.
                 Label skip = mm.label();
                 contextClassVar.invoke("hasException", contextVar).ifTrue(skip);
 

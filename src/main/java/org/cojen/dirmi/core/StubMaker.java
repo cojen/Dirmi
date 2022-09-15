@@ -310,8 +310,6 @@ final class StubMaker {
             if (thrownVar != null) {
                 throwException.here();
                 supportVar.invoke("finished", pipeVar);
-                // FIXME: Should handle case where thrown exception is checked but not declared
-                // by the client-side interface. (?)
                 thrownVar.throw_();
             }
 

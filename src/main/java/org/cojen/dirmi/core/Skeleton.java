@@ -43,12 +43,14 @@ public abstract class Skeleton<R> extends Item {
 
     /**
      * Invoke a remote method on the server. Any exception thrown from the invoked method is
-     * written to the pipe, unless the method is asynchronous. Any other exception thrown from
-     * this method indicates a communication failure, and so the pipe should be closed.
+     * written to the pipe, unless the method is asynchronous. If an exception is thrown from
+     * this method, then the pipe must be closed. If the exception type is UncaughtException,
+     * then it should be logged. Any type of IOException should be treated as a communication
+     * failure and need not be logged.
      *
      * @param pipe pipe for reading method arguments and for writing response.
      * @return the original or modified context; caller should stop reading if is STOP_READING
      * @see BatchedContext
      */
-    public abstract Object invoke(Pipe pipe, Object context) throws IOException;
+    public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
 }

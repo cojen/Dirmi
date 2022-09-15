@@ -527,33 +527,20 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 CoreUtils.CURRENT_SESSION.set(CoreSession.this);
                 Object context = null;
-
-                while (true) {
-                    long id = mPipe.readLong();
-
-                    Skeleton skeleton;
-                    try {
-                        skeleton = mSkeletons.get(id);
-                    } catch (NoSuchObjectException e) {
-                        // FIXME: Try to write back to the client, but all input must be
-                        // drained first to avoid deadlocks. Launch a thread to drain input and
-                        // let the client close the connection. Launch another task to force
-                        // close after a timeout.
-                        throw e;
-                    }
-
+                do {
+                    Skeleton skeleton = mSkeletons.get(mPipe.readLong());
                     context = skeleton.invoke(mPipe, context);
-
-                    if (context == BatchedContext.STOP_READING) {
-                        return;
-                    }
-                }
+                    skeleton = null;
+                } while (context != BatchedContext.STOP_READING);
             } catch (Throwable e) {
-                CoreUtils.closeQuietly(this);
-                if (!(e instanceof IOException)) {
+                if (e instanceof UncaughtException) {
+                    // FIXME: log it?
+                    CoreUtils.uncaughtException(e.getCause());
+                } else if (!(e instanceof IOException)) {
                     // FIXME: log it?
                     CoreUtils.uncaughtException(e);
                 }
+                CoreUtils.closeQuietly(this);
             } finally {
                 CoreUtils.CURRENT_SESSION.remove();
             }
