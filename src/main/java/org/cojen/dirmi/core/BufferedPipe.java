@@ -1836,9 +1836,7 @@ class BufferedPipe implements Pipe {
         // Discard the buffer contents to prevent it from being read again.
         mInPos = 0;
         mInEnd = 0;
-        if (!(ex instanceof EOFException)) {
-            close(ex); // always throws the exception
-        }
+        close(ex); // always throws the exception
         throw ex;
     }
 

@@ -255,10 +255,10 @@ final class StubMaker {
                         CoreUtils.writeParam(pipeVar, mm.param(i));
                     }
                 } else {
-                    String pipeName = Pipe.class.getName();
+                    String pipeDesc = Pipe.class.descriptorString();
                     for (int i=0; i<ptypes.length; i++) {
                         Object ptype = ptypes[i];
-                        if (ptype != Pipe.class && !ptype.equals(pipeName)) {
+                        if (ptype != Pipe.class && !ptype.equals(pipeDesc)) {
                             CoreUtils.writeParam(pipeVar, mm.param(i));
                         }
                     }
