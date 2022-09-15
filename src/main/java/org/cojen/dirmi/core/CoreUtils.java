@@ -139,7 +139,11 @@ public final class CoreUtils {
         Class<?> type = paramVar.classType();
 
         if (!type.isPrimitive()) {
-            pipeVar.invoke("writeObject", paramVar);
+            if (!type.isEnum()) {
+                pipeVar.invoke("writeObject", paramVar);
+            } else {
+                pipeVar.invoke("writeObject", paramVar.invoke("name"));
+            }
         } else {
             String m;
             if (type == int.class) {
@@ -167,10 +171,17 @@ public final class CoreUtils {
 
     static void readParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
+        Variable resultVar;
 
         if (!type.isPrimitive()) {
             var objectVar = pipeVar.invoke("readObject");
-            paramVar.set(type == Object.class ? objectVar : objectVar.cast(type));
+            if (!type.isEnum()) {
+                resultVar = type == Object.class ? objectVar : objectVar.cast(type);
+            } else {
+                var nameVar = objectVar.cast(String.class);
+                var enumVar = paramVar.methodMaker().var(Enum.class);
+                resultVar = enumVar.invoke("valueOf", type, nameVar).cast(type);
+            }
         } else {
             String m;
             if (type == int.class) {
@@ -192,7 +203,9 @@ public final class CoreUtils {
             } else {
                 throw new AssertionError();
             }
-            paramVar.set(pipeVar.invoke(m));
+            resultVar = pipeVar.invoke(m);
         }
+
+        paramVar.set(resultVar);
     }
 }
