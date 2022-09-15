@@ -126,16 +126,6 @@ public class PipedOutputStream extends OutputStream {
         }
     }
 
-    public boolean isReady() throws IOException {
-        mLock.lock();
-        try {
-            checkConnected();
-            return mData == null;
-        } finally {
-            mLock.unlock();
-        }
-    }
-
     public boolean isClosed() {
         mLock.lock();
         try {

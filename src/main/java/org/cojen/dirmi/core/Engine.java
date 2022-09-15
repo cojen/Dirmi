@@ -198,11 +198,9 @@ public final class Engine implements Environment {
 
             if (serverSessionId != 0) {
                 ItemMap<ServerSession> sessions = mServerSessions;
-                if (sessions == null) {
+                ServerSession session;
+                if (sessions == null || (session = sessions.get(serverSessionId)) == null) {
                     checkClosed();
-                }
-                ServerSession session = sessions.get(serverSessionId);
-                if (session == null) {
                     throw new RemoteException("Unable to find existing session");
                 }
                 session.accepted(pipe);

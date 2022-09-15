@@ -23,6 +23,8 @@ import java.util.Random;
 import org.junit.*;
 import static org.junit.Assert.*;
 
+import org.cojen.dirmi.ClosedException;
+
 /**
  * 
  *
@@ -41,20 +43,121 @@ public class PipedStreamsTest {
     @Before
     public void setUp() throws Exception {
         mIn = new PipedInputStream();
+        assertTrue(mIn.toString().contains("unconnected"));
         mOut = new PipedOutputStream(mIn);
+        assertTrue(mIn.toString().contains("connected to"));
+        assertTrue(mOut.toString().contains("connected to"));
+        assertFalse(mIn.isClosed());
+        assertFalse(mOut.isClosed());
     }
 
     @After
     public void tearDown() throws Exception {
         mIn.close();
         mOut.close();
+        assertTrue(mIn.isClosed());
+        assertTrue(mOut.isClosed());
     }
 
     @Test
-    public void testStream() throws Exception {
+    public void halfClosed() throws Exception {
+        mOut.close();
+        assertEquals(-1, mIn.read());
+        assertEquals(-1, mIn.read(new byte[10]));
+        assertEquals(0, mIn.skip(10));
+        assertEquals(0, mIn.available());
+        mIn.close();
+        try {
+            mIn.read();
+            fail();
+        } catch (ClosedException e) {
+        }
+        try {
+            mIn.read(new byte[10]);
+            fail();
+        } catch (ClosedException e) {
+        }
+        try {
+            mIn.skip(10);
+            fail();
+        } catch (ClosedException e) {
+        }
+        try {
+            mIn.available();
+            fail();
+        } catch (ClosedException e) {
+        }
+    }
+
+    @Test
+    public void doubleConnect() throws Exception {
+        try {
+            new PipedInputStream(mOut);
+            fail();
+        } catch (Exception e) {
+        }
+        try {
+            new PipedOutputStream(mIn);
+            fail();
+        } catch (Exception e) {
+        }
+    }
+
+    @Test
+    public void skip() throws Exception {
+        assertEquals(0, mIn.skip(0));
+
+        var writer = new Thread() {
+            public void run() {
+                try {
+                    mOut.write(new byte[10]);
+                    mOut.write(new byte[100]);
+                } catch (Exception e) {
+                }
+            }
+        };
+
+        writer.start();
+
+        for (int i=0; i<10; i++) {
+            if (mIn.available() != 0) {
+                break;
+            }
+            Thread.sleep(500);
+        }
+
+        assertEquals(10, mIn.available());
+        assertEquals(5, mIn.skip(5));
+        assertEquals(10, mIn.skip(10));
+        assertEquals(95, mIn.skip(95));
+        assertEquals(0, mIn.available());
+
+        writer.join();
+    }
+
+    @Test
+    public void interruptWriter() throws Exception {
+        Thread t = Thread.currentThread();
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (Exception e) {
+            }
+            t.interrupt();
+        }).start();
+
+        try {
+            mOut.write(1);
+        } catch (InterruptedIOException e) {
+        }
+    }
+
+    @Test
+    public void fuzz() throws Exception {
         final long seed = 342487102938L;
 
-        Thread reader = new Thread() {
+        var reader = new Thread() {
             {
                 setName("Reader");
             }

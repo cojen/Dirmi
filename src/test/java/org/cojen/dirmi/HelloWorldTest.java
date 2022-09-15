@@ -138,8 +138,8 @@ public class HelloWorldTest {
             var clientIn = new PipedInputStream();
             var serverOut = new PipedOutputStream(clientIn);
 
-            var serverIn = new PipedInputStream();
-            var clientOut = new PipedOutputStream(serverIn);
+            var clientOut = new PipedOutputStream();
+            var serverIn = new PipedInputStream(clientOut);
 
             env.execute(() -> {
                 try {

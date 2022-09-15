@@ -105,10 +105,6 @@ public class PipedInputStream extends InputStream {
         }
     }
 
-    public boolean isReady() throws IOException {
-        return available() > 0;
-    }
-
     public boolean isClosed() {
         mLock.lock();
         try {
