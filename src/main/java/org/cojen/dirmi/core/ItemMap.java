@@ -44,11 +44,7 @@ class ItemMap<I extends Item> {
     }
 
     synchronized void clear() {
-        if (mItems.length == INITIAL_CAPACITY) {
-            Arrays.fill(mItems, null);
-        } else {
-            mItems = new Item[INITIAL_CAPACITY];
-        }
+        Arrays.fill(mItems, null);
         mSize = 0;
     }
 

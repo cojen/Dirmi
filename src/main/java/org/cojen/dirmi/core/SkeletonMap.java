@@ -53,11 +53,8 @@ final class SkeletonMap extends ItemMap<Skeleton> {
             }
         }
 
-        if (entries.length == INITIAL_CAPACITY) {
-            Arrays.fill(entries, null);
-        } else {
-            mEntries = new Entry[INITIAL_CAPACITY];
-        }
+        Arrays.fill(entries, null);
+        mSize = 0;
     }
 
     @Override
