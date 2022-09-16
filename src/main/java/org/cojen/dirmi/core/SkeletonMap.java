@@ -69,12 +69,6 @@ final class SkeletonMap extends ItemMap<Skeleton> {
         return skeleton;
     }
 
-    @Override
-    synchronized void remove(Skeleton skeleton) {
-        super.remove(skeleton.id);
-        removeServer(skeleton.server());
-    }
-
     /**
      * Returns the skeleton instance for the given server object, making it if necessary.
      */
@@ -134,13 +128,15 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                     super.put(skeleton);
 
                     entry.mSkeletonOrLatch = skeleton;
-                    latch.countDown();
 
                     return skeleton;
                 } catch (Throwable e) {
-                    // Calls countDown if necessary.
-                    removeServer(server);
+                    synchronized (this) {
+                        removeServer(server);
+                    }
                     throw e;
+                } finally {
+                    latch.countDown();
                 }
             }
 
@@ -158,38 +154,28 @@ final class SkeletonMap extends ItemMap<Skeleton> {
         }
     }
 
-    private synchronized void removeServer(Object server) {
-        Entry found;
-        find: {
-            Entry[] entries = mEntries;
-            int slot = System.identityHashCode(server) & (entries.length - 1);
+    /**
+     * Removes the server entry, but doesn't remove the superclass entry. Caller must be
+     * synchronized.
+     */
+    private void removeServer(Object server) {
+        Entry[] entries = mEntries;
+        int slot = System.identityHashCode(server) & (entries.length - 1);
 
-            for (Entry e = entries[slot], prev = null; e != null; ) {
-                Entry next = e.mNext;
-                if (e.mServer == server) {
-                    if (prev == null) {
-                        entries[slot] = next;
-                    } else {
-                        prev.mNext = next;
-                    }
-                    mSize--;
-                    e.mNext = null;
-                    found = e;
-                    break find;
+        for (Entry e = entries[slot], prev = null; e != null; ) {
+            Entry next = e.mNext;
+            if (e.mServer == server) {
+                if (prev == null) {
+                    entries[slot] = next;
+                } else {
+                    prev.mNext = next;
                 }
-                prev = e;
-                e = next;
+                mSize--;
+                e.mNext = null;
+                return;
             }
-
-            return;
-        }
-
-        Object skeletonOrLatch = found.mSkeletonOrLatch;
-        
-        if (skeletonOrLatch instanceof Skeleton) {
-            super.remove((Skeleton) skeletonOrLatch);
-        } else {
-            ((CountDownLatch) skeletonOrLatch).countDown();
+            prev = e;
+            e = next;
         }
     }
 

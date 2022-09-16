@@ -193,7 +193,7 @@ class ItemMap<I extends Item> {
     /**
      * Remove an item from the map.
      */
-    void remove(I item) {
+    final void remove(I item) {
         remove(item.id);
     }
 
