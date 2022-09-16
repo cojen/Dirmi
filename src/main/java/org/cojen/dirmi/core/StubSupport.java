@@ -64,6 +64,14 @@ public interface StubSupport {
                                                    Pipe pipe, Class<R> type) throws T;
 
     /**
+     * Called by non-batched methods after being invoked. If true is returned, then
+     * readResponse must be called to detect if there was any exception from the batch
+     * sequence. If so, then it should be thrown instead of reading the response from the
+     * non-batched method.
+     */
+    boolean finishBatch(Pipe pipe);
+
+    /**
      * Called by synchronous methods after all parameters have been written and flushed. If the
      * remote endpoint threw an exception, then a non-null Throwable is returned.
      */

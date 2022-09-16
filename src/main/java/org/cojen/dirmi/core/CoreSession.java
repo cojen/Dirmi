@@ -531,7 +531,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     Skeleton skeleton = mSkeletons.get(mPipe.readLong());
                     context = skeleton.invoke(mPipe, context);
                     skeleton = null;
-                } while (context != BatchedContext.STOP_READING);
+                } while (context != Skeleton.STOP_READING);
             } catch (Throwable e) {
                 if (e instanceof UncaughtException) {
                     // FIXME: log it?

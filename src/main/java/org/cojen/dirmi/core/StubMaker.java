@@ -269,6 +269,11 @@ final class StubMaker {
             Label throwException = null;
 
             if (serverMethod.isPiped()) {
+                supportVar.invoke("finishBatch", pipeVar).ifFalse(invokeEnd);
+                pipeVar.invoke("flush");
+                thrownVar = supportVar.invoke("readResponse", pipeVar);
+                throwException = mm.label();
+                thrownVar.ifNe(null, throwException);
                 invokeEnd.here();
                 mm.return_(pipeVar);
             } else if (serverMethod.isBatched()) {
@@ -283,8 +288,15 @@ final class StubMaker {
                 }
             } else {
                 pipeVar.invoke("flush");
+
+                Label noBatch = mm.label();
+                supportVar.invoke("finishBatch", pipeVar).ifFalse(noBatch);
                 thrownVar = supportVar.invoke("readResponse", pipeVar);
                 throwException = mm.label();
+                thrownVar.ifNe(null, throwException);
+                noBatch.here();
+
+                thrownVar.set(supportVar.invoke("readResponse", pipeVar));
                 thrownVar.ifNe(null, throwException);
 
                 if (returnType == void.class || returnType.equals("V")) {

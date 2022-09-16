@@ -28,6 +28,10 @@ import org.cojen.dirmi.Pipe;
  * @see SkeletonFactory
  */
 public abstract class Skeleton<R> extends Item {
+    public static final Object STOP_READING = new Object();
+
+    private static final Object IN_BATCH = new Object();
+
     public Skeleton(long id) {
         super(id);
     }
@@ -48,9 +52,50 @@ public abstract class Skeleton<R> extends Item {
      * then it should be logged. Any type of IOException should be treated as a communication
      * failure and need not be logged.
      *
-     * @param pipe pipe for reading method arguments and for writing response.
+     * @param pipe pipe for reading method arguments and for writing any response
      * @return the original or modified context; caller should stop reading if is STOP_READING
-     * @see BatchedContext
      */
     public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
+
+    /**
+     * @return the original or modified context
+     */
+    public static boolean batchHasException(Object context) {
+        return context instanceof Throwable;
+    }
+
+    /**
+     * @return the original or modified context
+     */
+    public static Object batchInvokeSuccess(Object context) {
+        return context == null ? IN_BATCH : context;
+    }
+
+    /**
+     * @return the original or modified context
+     */
+    public static Object batchInvokeFailure(Object context, Throwable exception) {
+        return exception;
+    }
+
+    /**
+     * If in a batch, writes the batch responses.
+     *
+     * @return -1 if no batch, 0 if the batch finished normally, or 1 if the batch sequence
+     * finished with an exception
+     */
+    public static int batchFinish(Pipe pipe, Object context) throws IOException {
+        if (context == null) {
+            return -1;
+        }
+        int result;
+        if (context instanceof Throwable) {
+            result = 1;
+        } else {
+            context = null;
+            result = 0;
+        }
+        pipe.writeObject(context);
+        return result;
+    }
 }

@@ -29,9 +29,11 @@ import org.cojen.dirmi.Pipe;
  */
 final class CoreStubSupport implements StubSupport {
     private final CoreSession<?> mSession;
+    private final ThreadLocal<Pipe> mLocalPipe;
 
     CoreStubSupport(CoreSession<?> session) {
         mSession = session;
+        mLocalPipe = new ThreadLocal<>();
     }
 
     @Override
@@ -41,18 +43,26 @@ final class CoreStubSupport implements StubSupport {
 
     @Override
     public Pipe unbatch() {
-        // FIXME: unbatch
-        throw null;
+        Pipe pipe = mLocalPipe.get();
+        if (pipe != null) {
+            mLocalPipe.remove();
+        }
+        return pipe;
     }
 
     @Override
     public void rebatch(Pipe pipe) {
-        // FIXME: rebatch
-        throw null;
+        if (pipe != null) {
+            mLocalPipe.set(pipe);
+        }
     }
 
     @Override
     public <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T {
+        Pipe pipe = mLocalPipe.get();
+        if (pipe != null) {
+            return pipe;
+        }
         try {
             return mSession.connect();
         } catch (Throwable e) {
@@ -67,6 +77,16 @@ final class CoreStubSupport implements StubSupport {
     {
         // FIXME: createBatchedRemote
         throw null;
+    }
+
+    @Override
+    public boolean finishBatch(Pipe pipe) {
+        if (mLocalPipe.get() != pipe) {
+            return false;
+        } else {
+            mLocalPipe.remove();
+            return true;
+        }
     }
 
     @Override
@@ -131,14 +151,15 @@ final class CoreStubSupport implements StubSupport {
 
     @Override
     public void batched(Pipe pipe) {
-        // FIXME: batched
-        throw null;
+        mLocalPipe.set(pipe);
     }
 
     @Override
     public <T extends Throwable> T failed(Class<T> remoteFailureException,
                                           Pipe pipe, Throwable cause)
     {
+        mLocalPipe.remove();
+        CoreUtils.closeQuietly(pipe);
         return CoreUtils.remoteException(remoteFailureException, cause);
     }
 

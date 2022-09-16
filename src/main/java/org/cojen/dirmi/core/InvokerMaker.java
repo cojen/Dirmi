@@ -39,7 +39,6 @@ import org.cojen.dirmi.Pipe;
  * See {@link Skeleton#invoke} regarding how exceptioons should be handled.
  *
  * @author Brian S O'Neill
- * @see BatchedContext
  */
 final class InvokerMaker {
     private static final SoftCache<Class<?>, Class<?>> cCache = new SoftCache<>();
@@ -109,47 +108,49 @@ final class InvokerMaker {
                 paramVars[i] = paramVar;
             }
 
-            final var contextClassVar = mm.var(BatchedContext.class);
+            final var skeletonClassVar = mm.var(Skeleton.class);
 
             if (rm.isBatched()) {
                 // Check if an exception was encountered and stop calling any more batched
                 // methods if so.
                 Label skip = mm.label();
-                contextClassVar.invoke("hasException", contextVar).ifTrue(skip);
-
-                Label invokeStart = mm.label().here();
-                var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
-                Label invokeEnd = mm.label().here();
-
-                if (resultVar != null) {
-                    contextVar.set(contextClassVar.invoke("addResponse", contextVar, resultVar));
-                }
-
-                skip.here();
-                mm.return_(contextVar);
-
-                var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                mm.return_(contextClassVar.invoke("addException", contextVar, exVar));
-            } else if (isPiped) {
-                Label hasNoContext = mm.label();
-                contextVar.ifEq(null, hasNoContext);
-                contextClassVar.invoke("writeResponses", contextVar, pipeVar);
-                pipeVar.invoke("flush");
-                hasNoContext.here();
+                skeletonClassVar.invoke("batchHasException", contextVar).ifTrue(skip);
 
                 Label invokeStart = mm.label().here();
                 remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
-                mm.return_(contextClassVar.field("STOP_READING"));
+                contextVar.set(skeletonClassVar.invoke("batchInvokeSuccess", contextVar));
+
+                skip.here();
+                mm.return_(contextVar);
+
+                var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+                mm.return_(skeletonClassVar.invoke("batchInvokeFailure", contextVar, exVar));
+            } else if (isPiped) {
+                var resultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                Label doInvoke = mm.label();
+                resultVar.ifLt(0, doInvoke);
+                pipeVar.invoke("flush");
+                // If result is less than or equal to 0, then the batch finished without an
+                // exception. Otherwise, this method should be skipped.
+                resultVar.ifLe(0, doInvoke);
+                mm.return_(null);
+                doInvoke.here();
+
+                Label invokeStart = mm.label().here();
+                remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                Label invokeEnd = mm.label().here();
+
+                mm.return_(skeletonClassVar.field("STOP_READING"));
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
-                Label hasNoContext = mm.label();
-                contextVar.ifEq(null, hasNoContext);
-                contextClassVar.invoke("writeResponses", contextVar, pipeVar);
-                hasNoContext.here();
+                Label finished = mm.label();
+                // If result is greater than 0, then the batch finished with an exception and
+                // so this method should be skipped.
+                skeletonClassVar.invoke("batchFinish", pipeVar, contextVar).ifGt(0, finished);
 
                 Label invokeStart = mm.label().here();
                 var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
@@ -162,6 +163,7 @@ final class InvokerMaker {
                     CoreUtils.writeParam(pipeVar, resultVar);
                 }
 
+                finished.here();
                 pipeVar.invoke("flush");
                 mm.return_(null);
 

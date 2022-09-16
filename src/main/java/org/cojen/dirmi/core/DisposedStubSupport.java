@@ -58,7 +58,12 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public Throwable readResponse(Pipe pipe) throws IOException {
+    public boolean finishBatch(Pipe pipe) {
+        return false;
+    }
+
+    @Override
+    public Throwable readResponse(Pipe pipe) {
         return null;
     }
 

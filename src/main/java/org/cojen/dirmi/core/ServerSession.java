@@ -235,7 +235,7 @@ final class ServerSession<R> extends CoreSession<R> {
             var cp = (CorePipe) pipe;
             cp.mMode = CorePipe.M_CLIENT;
             recycleConnection(cp);
-            return BatchedContext.STOP_READING;
+            return Skeleton.STOP_READING;
         }
     }
 
