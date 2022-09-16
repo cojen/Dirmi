@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -90,21 +91,19 @@ public final class Engine implements Environment {
     }
 
     public Engine() {
-        this(null, true);
+        this(null);
     }
 
     public Engine(Executor executor) {
-        this(executor, false);
-    }
-
-    private Engine(Executor executor, boolean ownsExecutor) {
         mMainLock = new ReentrantLock();
 
         if (executor == null) {
-            executor = Executors.newCachedThreadPool();
+            mExecutor = Executors.newCachedThreadPool(TFactory.THE);
+            mOwnsExecutor = true;
+        } else {
+            mExecutor = executor;
+            mOwnsExecutor = false;
         }
-        mExecutor = executor;
-        mOwnsExecutor = ownsExecutor;
 
         mSchedulerLock = new ReentrantLock();
         mSchedulerCondition = mSchedulerLock.newCondition();
@@ -163,7 +162,14 @@ public final class Engine implements Environment {
             mMainLock.unlock();
         }
 
-        executeTask(acceptor);
+        try {
+            Thread t = new Thread(acceptor);
+            t.setName("DirmiAcceptor-" + t.getId());
+            t.start();
+        } catch (Throwable e) {
+            acceptor.close();
+            throw e;
+        }
 
         return acceptor;
     }
@@ -184,6 +190,8 @@ public final class Engine implements Environment {
                                InputStream in, OutputStream out)
         throws IOException
     {
+        checkClosed();
+
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
 
         long clientSessionId = 0;
@@ -276,6 +284,8 @@ public final class Engine implements Environment {
     public <R> Session<R> connect(Class<R> type, Object name, SocketAddress addr)
         throws IOException
     {
+        checkClosed();
+
         RemoteInfo info = RemoteInfo.examine(type);
         byte[] bname = binaryName(name);
 
@@ -596,6 +606,19 @@ public final class Engine implements Environment {
             cStateHandle = lookup.findVarHandle(Acceptor.class, "mState", int.class);
         } catch (Throwable e) {
             throw new Error(e);
+        }
+    }
+
+    private static final class TFactory implements ThreadFactory {
+        static final TFactory THE = new TFactory();
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            t.setName("Dirmi-" + t.getId());
+            return t;
         }
     }
 

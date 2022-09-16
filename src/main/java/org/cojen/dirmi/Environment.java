@@ -73,7 +73,8 @@ public interface Environment extends Closeable, Executor {
     Object export(Object name, Object obj) throws IOException;
 
     /**
-     * Accept all server-side connections from the given {@code ServerSocket}.
+     * Accept all server-side connections from the given {@code ServerSocket}. As long as the
+     * acceptor is still running, the JVM won't exit.
      *
      * @return an object which can be closed to stop accepting
      * @throws IllegalStateException if already accepting connections from the socket
@@ -81,7 +82,8 @@ public interface Environment extends Closeable, Executor {
     Closeable acceptAll(ServerSocket ss) throws IOException;
 
     /**
-     * Accept all server-side connections from the given {@code ServerSocketChannel}.
+     * Accept all server-side connections from the given {@code ServerSocketChannel}. As long
+     * as the acceptor is still running, the JVM won't exit.
      *
      * @return an object which can be closed to stop accepting
      * @throws IllegalStateException if already accepting connections from the socket channel
@@ -172,8 +174,8 @@ public interface Environment extends Closeable, Executor {
     Connector connector(Connector c) throws IOException;
 
     /**
-     * Stops accepting new sessions, closes all existing sessions, and disposes of all exported
-     * objects.
+     * Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of
+     * all exported objects.
      */
     @Override
     void close();

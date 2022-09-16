@@ -145,8 +145,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Stops accepting new sessions, closes all existing sessions, and disposes of all exported
- objects.</div>
+<div class="block">Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of
+ all exported objects.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default &lt;R&gt;&nbsp;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;R&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#connect(java.lang.Class,java.lang.Object,java.lang.String,int)" class="member-name-link">connect</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;R&gt;&nbsp;type,
@@ -243,7 +243,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <h3>acceptAll</h3>
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></span>&nbsp;<span class="element-name">acceptAll</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/net/ServerSocket.html" title="class or interface in java.net" class="external-link">ServerSocket</a>&nbsp;ss)</span>
              throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Accept all server-side connections from the given <code>ServerSocket</code>.</div>
+<div class="block">Accept all server-side connections from the given <code>ServerSocket</code>. As long as the
+ acceptor is still running, the JVM won't exit.</div>
 <dl class="notes">
 <dt>Returns:</dt>
 <dd>an object which can be closed to stop accepting</dd>
@@ -258,7 +259,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <h3>acceptAll</h3>
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></span>&nbsp;<span class="element-name">acceptAll</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/nio/channels/ServerSocketChannel.html" title="class or interface in java.nio.channels" class="external-link">ServerSocketChannel</a>&nbsp;ss)</span>
              throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Accept all server-side connections from the given <code>ServerSocketChannel</code>.</div>
+<div class="block">Accept all server-side connections from the given <code>ServerSocketChannel</code>. As long
+ as the acceptor is still running, the JVM won't exit.</div>
 <dl class="notes">
 <dt>Returns:</dt>
 <dd>an object which can be closed to stop accepting</dd>
@@ -389,8 +391,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <section class="detail" id="close()">
 <h3>close</h3>
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
-<div class="block">Stops accepting new sessions, closes all existing sessions, and disposes of all exported
- objects.</div>
+<div class="block">Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of
+ all exported objects.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>
