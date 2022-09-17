@@ -446,7 +446,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
         Class<?> type;
         try {
-            type = Class.forName(info.name(), false, root().getClass().getClassLoader());
+            type = loadClass(info.name());
         } catch (ClassNotFoundException e) {
             // The remote methods will only be available via reflection.
             type = Remote.class;
@@ -463,6 +463,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
 
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
+    }
+
+    Class<?> loadClass(String name) throws ClassNotFoundException {
+        return Class.forName(name, false, root().getClass().getClassLoader());
     }
 
     private void notifyKnownType(long typeId) {

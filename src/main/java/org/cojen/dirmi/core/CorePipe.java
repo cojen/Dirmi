@@ -63,6 +63,11 @@ final class CorePipe extends BufferedPipe {
     }
 
     @Override
+    Class<?> loadClass(String name) throws ClassNotFoundException {
+        return mSession.loadClass(name);
+    }
+
+    @Override
     void writeSkeleton(Object server) throws IOException {
         mSession.writeSkeleton(this, server);
     }

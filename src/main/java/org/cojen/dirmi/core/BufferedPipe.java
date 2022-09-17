@@ -816,7 +816,8 @@ class BufferedPipe implements Pipe {
 
         try {
             reconstruct: {
-                Class<?> exClass = Class.forName(className);
+                // FIXME: Load class via method which CorePipe overrides to use root ClassLoader.
+                Class<?> exClass = loadClass(className);
                 if (message == null) {
                     try {
                         t = (Throwable) exClass.getConstructor().newInstance();
@@ -882,6 +883,10 @@ class BufferedPipe implements Pipe {
         stashReference(identifier, trace);
 
         return trace;
+    }
+
+    Class<?> loadClass(String name) throws ClassNotFoundException {
+        return Class.forName(name);
     }
 
     private void requireInput(int required) throws IOException {
