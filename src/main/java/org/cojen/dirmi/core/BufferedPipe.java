@@ -816,7 +816,6 @@ class BufferedPipe implements Pipe {
 
         try {
             reconstruct: {
-                // FIXME: Load class via method which CorePipe overrides to use root ClassLoader.
                 Class<?> exClass = loadClass(className);
                 if (message == null) {
                     try {
