@@ -147,6 +147,13 @@ public class RemoteObjectTest {
     }
 
     @Test
+    public void passbackRoot() throws Exception {
+        R1 root = mSession.root();
+        Object result = root.c5(root);
+        assertTrue(result == root);
+    }
+
+    @Test
     public void currentSession() throws Exception {
         try {
             Session.current();
@@ -182,6 +189,8 @@ public class RemoteObjectTest {
         Object[] c3(R2 r2) throws RemoteException;
 
         String c4() throws RemoteException;
+
+        Object c5(Object obj) throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -210,6 +219,12 @@ public class RemoteObjectTest {
         @Override
         public String c4() {
             return Session.current().toString();
+        }
+
+        @Override
+        public Object c5(Object obj) {
+            assertTrue(this == obj);
+            return this;
         }
     }
 
