@@ -71,12 +71,25 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable, R> R createBatchedRemote(Class<T> remoteFailureException,
-                                                          Pipe pipe, Class<R> type)
+    public long remoteTypeId(Class<?> type) {
+        return mSession.remoteTypeId(type);
+    }
+
+    @Override
+    public <T extends Throwable> Object newAliasStub(Class<T> remoteFailureException,
+                                                     long aliasId, long typeId)
         throws T
     {
-        // FIXME: createBatchedRemote
-        throw null;
+        try {
+            return mSession.objectFor(aliasId, typeId);
+        } catch (Throwable e) {
+            throw CoreUtils.remoteException(remoteFailureException, e);
+        }
+    }
+
+    @Override
+    public boolean isBatching(Pipe pipe) {
+        return mLocalPipe.get() == pipe;
     }
 
     @Override

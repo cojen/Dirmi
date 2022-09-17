@@ -24,6 +24,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -247,6 +248,16 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * Returns a new instance which is designated as batched immediate.
+     *
+     * @see #isBatchedImmediate
+     */
+    RemoteMethod asBatchedImmediate() {
+        return new RemoteMethod(mFlags | (F_BATCHED | F_UNBATCHED), mName, mRemoteFailureException,
+                                mReturnType, mParameterTypes, mExceptionTypes);
+    }
+
+    /**
      * @see RemoteFailure
      */
     boolean isRemoteFailureExceptionUndeclared() {
@@ -268,10 +279,18 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * Is true to designate a batched method variant which runs immediately and returns a
+     * remote object. This variant is used when the client doesn't know the remote typeId yet.
+     */
+    boolean isBatchedImmediate() {
+        return (mFlags & (F_BATCHED | F_UNBATCHED)) == (F_BATCHED | F_UNBATCHED);
+    }
+
+    /**
      * @see Unbatched
      */
     boolean isUnbatched() {
-        return (mFlags & F_UNBATCHED) != 0;
+        return (mFlags & (F_BATCHED | F_UNBATCHED)) == F_UNBATCHED;
     }
 
     /**
@@ -373,7 +392,30 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (cmp != 0) {
             return cmp;
         }
-        return compare(mParameterTypes, other.mParameterTypes);
+        cmp = compare(mParameterTypes, other.mParameterTypes);
+        if (cmp != 0) {
+            return cmp;
+        }
+        // Flipping the sign causes a batched immediate variant to come before the normal
+        // batched variant. This makes things easier for StubMaker.
+        return -Integer.compare(mFlags, other.mFlags);
+    }
+
+    /**
+     * Returns a comparator that only checks name, return type, parameter types, and flags.
+     */
+    static Comparator<RemoteMethod> strictComparator() {
+        return (a, b) -> {
+            int cmp = a.mName.compareTo(b.mName);
+            if (cmp != 0) {
+                return cmp;
+            }
+            cmp = a.mReturnType.compareTo(b.mReturnType);
+            if (cmp != 0) {
+                return cmp;
+            }
+            return compare(a.mParameterTypes, b.mParameterTypes);
+        };
     }
 
     static <E extends Comparable<E>> int compare(Collection<E> a, Collection<E> b) {

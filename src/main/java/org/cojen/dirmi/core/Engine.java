@@ -551,8 +551,10 @@ public final class Engine implements Environment {
      * Called by Acceptor.
      */
     private void acceptFailed(Throwable e) {
-        // FIXME: log it?
-        CoreUtils.uncaughtException(e);
+        if (!isClosed() && !(e instanceof RemoteException)) {
+            // FIXME: log it?
+            CoreUtils.uncaughtException(e);
+        }
     }
 
     private static byte[] binaryName(Object name) {
@@ -684,6 +686,7 @@ public final class Engine implements Environment {
                 try {
                     accepted(s);
                 } catch (Throwable e) {
+                    acceptFailed(e);
                     CoreUtils.closeQuietly(s);
                 }
             });
@@ -733,6 +736,7 @@ public final class Engine implements Environment {
                 try {
                     accepted(s);
                 } catch (Throwable e) {
+                    acceptFailed(e);
                     CoreUtils.closeQuietly(s);
                 }
             });

@@ -32,11 +32,15 @@ import org.cojen.dirmi.Pipe;
  * Makes classes which contain static methods which are responsible for reading parameters,
  * invoking a server-side method, and writing a response. Is used by Skeleton instances.
  *
- * Each method looks like so:
+ * Each method assumes one of these forms:
  *
  *    static <context> <name>(RemoteObject, Pipe, <context>)
  *
- * See {@link Skeleton#invoke} regarding how exceptioons should be handled.
+ *    static <context> <name>(RemoteObject, Pipe, <context>, SkeletonSupport support)
+ *
+ * The latter form is used by batched methods which return an object.
+ *
+ * See {@link Skeleton#invoke} regarding how exceptions should be handled.
  *
  * @author Brian S O'Neill
  */
@@ -85,7 +89,15 @@ final class InvokerMaker {
 
         for (RemoteMethod rm : methods) {
             String name = generateMethodName(methodNames, rm);
-            MethodMaker mm = cm.addMethod(Object.class, name, mType, Pipe.class, Object.class);
+
+            MethodMaker mm;
+            if (!rm.isBatched() || rm.returnType().equals("V")) {
+                mm = cm.addMethod(Object.class, name, mType, Pipe.class, Object.class);
+            } else {
+                mm = cm.addMethod(Object.class, name, mType, Pipe.class, Object.class,
+                                  SkeletonSupport.class);
+            }
+
             mm.static_();
 
             final var remoteVar = mm.param(0);
@@ -108,17 +120,27 @@ final class InvokerMaker {
                 paramVars[i] = paramVar;
             }
 
+            Variable aliasIdVar = null;
+            if (rm.isBatched() && !rm.returnType().equals("V")) {
+                aliasIdVar = pipeVar.invoke("readLong");
+            }
+
             final var skeletonClassVar = mm.var(Skeleton.class);
 
-            if (rm.isBatched()) {
+            if (rm.isBatched() && !rm.isBatchedImmediate()) {
                 // Check if an exception was encountered and stop calling any more batched
                 // methods if so.
                 Label skip = mm.label();
                 skeletonClassVar.invoke("batchHasException", contextVar).ifTrue(skip);
 
                 Label invokeStart = mm.label().here();
-                remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                var serverVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
+
+                if (serverVar != null) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("createSkeletonAlias", serverVar, aliasIdVar);
+                }
 
                 contextVar.set(skeletonClassVar.invoke("batchInvokeSuccess", contextVar));
 
@@ -159,13 +181,22 @@ final class InvokerMaker {
                 // Write a null Throwable to indicate success.
                 pipeVar.invoke(null, "writeObject", new Object[] {Throwable.class}, new Object[1]);
 
-                if (resultVar != null) {
+                if (rm.isBatchedImmediate()) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
+                } else if (resultVar != null) {
                     CoreUtils.writeParam(pipeVar, resultVar);
                 }
 
                 finished.here();
                 pipeVar.invoke("flush");
-                mm.return_(null);
+
+                if (!rm.isBatchedImmediate()) {
+                    mm.return_(null);
+                } else {
+                    // Need to keep the batch going, but with a fresh context.
+                    mm.return_(skeletonClassVar.invoke("batchInvokeSuccess", (Object) null));
+                }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
                 pipeVar.invoke("writeObject", exVar);

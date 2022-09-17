@@ -24,6 +24,7 @@ import java.util.SortedSet;
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
+import org.cojen.maker.Variable;
 
 import org.cojen.dirmi.Pipe;
 
@@ -192,10 +193,10 @@ final class SkeletonMaker<R> {
             CaseInfo ci = caseMap.get(cases[i]);
 
             if (!ci.serverMethod.isDisposer()) {
-                mm.return_(invokerVar.invoke(ci.serverMethodName, serverVar, pipeVar, contextVar));
+                mm.return_(ci.invoke(pipeVar, contextVar, invokerVar, supportVar, serverVar));
             } else {
                 Label invokeStart = mm.label().here();
-                mm.return_(invokerVar.invoke(ci.serverMethodName, serverVar, pipeVar, contextVar));
+                mm.return_(ci.invoke(pipeVar, contextVar, invokerVar, supportVar, serverVar));
                 mm.finally_(invokeStart, () -> supportVar.invoke("dispose", mm.this_()));
             }
         }
@@ -217,6 +218,15 @@ final class SkeletonMaker<R> {
         CaseInfo(RemoteMethod serverMethod, String serverMethodName) {
             this.serverMethod = serverMethod;
             this.serverMethodName = serverMethodName;
+        }
+
+        Variable invoke(Variable pipeVar, Variable contextVar,
+                        Variable invokerVar, Variable supportVar, Variable serverVar)
+        {
+            if (!serverMethod.isBatched() || serverMethod.returnType().equals("V")) {
+                return invokerVar.invoke(serverMethodName, serverVar, pipeVar, contextVar);
+            }
+            return invokerVar.invoke(serverMethodName, serverVar, pipeVar, contextVar, supportVar);
         }
     }
 }

@@ -24,6 +24,8 @@ import java.lang.invoke.VarHandle;
 
 import java.net.SocketAddress;
 
+import java.util.WeakHashMap; // FIXME: use something custom
+
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -61,7 +63,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final ItemMap<Stub> mStubs;
     final ItemMap<StubFactory> mStubFactories;
     final SkeletonMap mSkeletons;
-    final ItemMap<Item> mKnownTypes; // tracks types known by the client-side
+    final ItemMap<Item> mKnownTypes; // tracks types known by the remote client
 
     final CoreStubSupport mStubSupport;
     final CoreSkeletonSupport mSkeletonSupport;
@@ -74,6 +76,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // Linked list of connections. Connections which range from first to before avail are
     // currently being used. Connections which range from avail to last are waiting to be used.
     private CorePipe mConFirst, mConAvail, mConLast;
+
+    private final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
 
     private boolean mClosed;
 
@@ -92,6 +96,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mSkeletonSupport = new CoreSkeletonSupport(this);
 
         mControlLock = new ReentrantLock();
+
+        mStubFactoriesByClass = new WeakHashMap<>(4);
     }
 
     /**
@@ -366,6 +372,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mStubFactories.clear();
         mSkeletons.clear();
         mKnownTypes.clear();
+
+        synchronized (mStubFactoriesByClass) {
+            mStubFactoriesByClass.clear();
+        }
     }
 
     @Override
@@ -448,6 +458,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         // Notify the other side that it can stop sending type info.
         mEngine.tryExecuteTask(() -> notifyKnownType(typeId));
 
+        synchronized (mStubFactoriesByClass) {
+            mStubFactoriesByClass.putIfAbsent(type, factory);
+        }
+
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
@@ -466,9 +480,38 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    void writeSkeleton(CorePipe pipe, Object server) throws IOException {
-        Skeleton<?> skeleton = mSkeletons.skeletonFor(server);
+    long remoteTypeId(Class<?> type) {
+        StubFactory factory;
+        synchronized (mStubFactoriesByClass) {
+            factory = mStubFactoriesByClass.get(type);
+        }
+        return factory == null ? 0 : factory.id;
+    }
 
+    void writeSkeleton(CorePipe pipe, Object server) throws IOException {
+        writeSkeleton(pipe, mSkeletons.skeletonFor(server));
+    }
+
+    @SuppressWarnings("unchecked")
+    Skeleton createSkeletonAlias(Object server, long aliasId) {
+        var type = RemoteExaminer.remoteType(server);
+        SkeletonFactory factory = SkeletonMaker.factoryFor(type);
+        var skeleton = factory.newSkeleton(aliasId, mSkeletonSupport, server);
+        mSkeletons.putIfAbsent(skeleton);
+        return skeleton;
+    }
+
+    void writeSkeletonAlias(CorePipe pipe, Object server, long aliasId) throws IOException {
+        Skeleton skeleton = createSkeletonAlias(server, aliasId);
+        try {
+            writeSkeleton(pipe, skeleton);
+        } catch (Throwable e) {
+            mSkeletons.remove(skeleton);
+            throw e;
+        }
+    }
+
+    private void writeSkeleton(CorePipe pipe, Skeleton skeleton) throws IOException {
         if (mKnownTypes.tryGet(skeleton.typeId()) != null) {
             // Write the remote identifier and the remote type.
             pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_T, skeleton);
@@ -536,8 +579,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (e instanceof UncaughtException) {
                     // FIXME: log it?
                     CoreUtils.uncaughtException(e.getCause());
-                } else if (!(e instanceof IOException)) {
+                } else if (e instanceof NoSuchObjectException || !(e instanceof IOException)) {
                     // FIXME: log it?
+                    // FIXME: If NoSuchObjectException, try to write the error over the control
+                    //        connection, to be picked by the client when it sees the
+                    //        connection is closed.
                     CoreUtils.uncaughtException(e);
                 }
                 CoreUtils.closeQuietly(this);

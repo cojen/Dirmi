@@ -51,10 +51,21 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable, R> R createBatchedRemote(Class<T> remoteFailureException,
-                                                          Pipe pipe, Class<R> type) throws T
+    public long remoteTypeId(Class<?> type) {
+        throw new IllegalStateException();
+    }
+
+    @Override
+    public <T extends Throwable> Object newAliasStub(Class<T> remoteFailureException,
+                                                     long aliasId, long typeId)
+        throws T
     {
         throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean isBatching(Pipe pipe) {
+        return false;
     }
 
     @Override

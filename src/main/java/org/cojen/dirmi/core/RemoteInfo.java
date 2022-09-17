@@ -96,7 +96,10 @@ final class RemoteInfo {
                 }
             }
 
-            Map<RemoteMethod, RemoteMethod> methodMap = new TreeMap<>();
+            Map<RemoteMethod, RemoteMethod> methodMap;
+            methodMap = new TreeMap<>(RemoteMethod.strictComparator());
+
+            SortedSet<RemoteMethod> methodSet = null;
 
             for (Method m : type.getMethods()) {
                 if (m.getDeclaringClass().isInterface() && !isObjectMethod(m)) {
@@ -115,15 +118,22 @@ final class RemoteInfo {
                     if (existing != null) {
                         // The same method is inherited from multiple parent interfaces.
                         existing.conflictCheck(m, candidate);
+                    } else if (candidate.isBatched() && CoreUtils.isRemote(m.getReturnType())) {
+                        // Define a companion method for batched immediate calls.
+                        if (methodSet == null) {
+                            methodSet = new TreeSet<>();
+                        }
+                        methodSet.add(candidate.asBatchedImmediate());
                     }
                 }
             }
 
-            SortedSet<RemoteMethod> methods;
             if (methodMap.isEmpty()) {
-                methods = Collections.emptySortedSet();
+                methodSet = Collections.emptySortedSet();
+            } else if (methodSet == null) {
+                methodSet = new TreeSet<>(methodMap.keySet());
             } else {
-                methods = new TreeSet<>(methodMap.keySet());
+                methodSet.addAll(methodMap.keySet());
             }
 
             // Gather all of the additional implemented interfaces which implement Remote.
@@ -138,7 +148,7 @@ final class RemoteInfo {
             String name = type.getName().intern();
             String remoteFailureString = remoteFailureException.getName().intern();
 
-            info = new RemoteInfo(flags, name, remoteFailureString, interfaces, methods);
+            info = new RemoteInfo(flags, name, remoteFailureString, interfaces, methodSet);
             info = cCanonical.add(info);
 
             cCache.put(type, info);

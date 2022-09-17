@@ -30,7 +30,7 @@ import org.cojen.dirmi.Pipe;
 public abstract class Skeleton<R> extends Item {
     public static final Object STOP_READING = new Object();
 
-    private static final Object IN_BATCH = new Object();
+    private static final Object BATCHING = new Object();
 
     public Skeleton(long id) {
         super(id);
@@ -68,7 +68,7 @@ public abstract class Skeleton<R> extends Item {
      * @return the original or modified context
      */
     public static Object batchInvokeSuccess(Object context) {
-        return context == null ? IN_BATCH : context;
+        return context == null ? BATCHING : context;
     }
 
     /**

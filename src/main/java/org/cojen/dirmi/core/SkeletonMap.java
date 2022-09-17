@@ -23,7 +23,7 @@ import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Specialized ItemMap for tracking Skeleton instances. Never put ordinary skeletons directly
+ * Specialized ItemMap for tracking Skeleton instances. Never put canonical skeletons directly
  * into the map -- always call the skeletonFor method instead.
  *
  * @author Brian S O'Neill
@@ -60,7 +60,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
     @Override
     synchronized Skeleton remove(long id) {
         Skeleton skeleton = super.remove(id);
-        if (skeleton != null) {
+        if (id >= 0 && skeleton != null) { // only remove server if id isn't an alias
             removeServer(skeleton.server());
         }
         return skeleton;

@@ -136,6 +136,8 @@ final class StubMaker {
         RemoteMethod serverMethod = null;
         int serverMethodId = -1;
 
+        int batchedImmediateMethodId = -1;
+
         while (true) {
             if (clientMethod == null) {
                 if (!it1.hasNext()) {
@@ -180,6 +182,16 @@ final class StubMaker {
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
             }
 
+            if (clientMethod.isBatchedImmediate() && cmp >= 0) {
+                // No stub method is actually generated for this variant. The skeleton variant
+                // is invoked when the remote typeId isn't known yet. RemoteMethod instances are
+                // compared such that this variant comes immediately before the normal one.
+                batchedImmediateMethodId = serverMethodId;
+                clientMethod = null;
+                serverMethod = null;
+                continue;
+            }
+
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
 
             if (cmp < 0) {
@@ -194,10 +206,10 @@ final class StubMaker {
             if (cmp > 0) {
                 // Use the default failure exception for a method that only exists on the
                 // server-side.
-                remoteFailureClass = classFor(mClientInfo.remoteFailureException());
+                remoteFailureClass = classFor(mm, mClientInfo.remoteFailureException());
             } else {
                 String remoteFailureName = clientMethod.remoteFailureException();
-                remoteFailureClass = classFor(remoteFailureName);
+                remoteFailureClass = classFor(mm, remoteFailureName);
 
                 for (String ex : clientMethod.exceptionTypes()) {
                     if (!ex.equals(remoteFailureName)) {
@@ -239,34 +251,53 @@ final class StubMaker {
 
             pipeVar.invoke("writeLong", mm.field("id"));
 
-            if (numMethods < 256) {
-                pipeVar.invoke("writeByte", serverMethodId);
-            } else if (numMethods < 65536) {
-                pipeVar.invoke("writeShort", serverMethodId);
-            } else {
-                // Impossible case.
-                pipeVar.invoke("writeInt", serverMethodId);
-            }
+            Variable thrownVar = null;
+            Label throwException = null;
 
-            if (ptypes.length > 0) {
-                // Write all of the non-pipe parameters.
-                if (!serverMethod.isPiped()) {
-                    for (int i=0; i<ptypes.length; i++) {
-                        CoreUtils.writeParam(pipeVar, mm.param(i));
-                    }
-                } else {
-                    String pipeDesc = Pipe.class.descriptorString();
-                    for (int i=0; i<ptypes.length; i++) {
-                        Object ptype = ptypes[i];
-                        if (ptype != Pipe.class && !ptype.equals(pipeDesc)) {
-                            CoreUtils.writeParam(pipeVar, mm.param(i));
-                        }
-                    }
+            Class<?> returnClass = null;
+            Variable typeIdVar = null;
+            Variable aliasIdVar = null;
+
+            if (serverMethod.isBatched() && !isVoid(returnType)) {
+                returnClass = classFor(mm, returnType);
+                typeIdVar = supportVar.invoke("remoteTypeId", returnClass);
+                aliasIdVar = supportVar.invoke("newAliasId");
+
+                if (batchedImmediateMethodId >= 0) {
+                    Label hasType = mm.label();
+                    typeIdVar.ifNe(0, hasType);
+
+                    // Must call the immediate variant.
+
+                    writeParams(pipeVar, numMethods,
+                                serverMethod, batchedImmediateMethodId, ptypes);
+                    pipeVar.invoke("writeLong", aliasIdVar);
+                    pipeVar.invoke("flush");
+
+                    Label noBatch = mm.label();
+                    var isBatchingVar = supportVar.invoke("isBatching", pipeVar);
+                    isBatchingVar.ifFalse(noBatch);
+                    thrownVar = supportVar.invoke("readResponse", pipeVar);
+                    throwException = mm.label();
+                    thrownVar.ifNe(null, throwException);
+                    noBatch.here();
+
+                    thrownVar.set(supportVar.invoke("readResponse", pipeVar));
+                    thrownVar.ifNe(null, throwException);
+
+                    var returnVar = mm.var(returnType);
+                    CoreUtils.readParam(pipeVar, returnVar);
+                    Label done = mm.label();
+                    isBatchingVar.ifTrue(done);
+                    supportVar.invoke("batched", pipeVar);
+                    done.here();
+                    mm.return_(returnVar);
+
+                    hasType.here();
                 }
             }
 
-            Variable thrownVar = null;
-            Label throwException = null;
+            writeParams(pipeVar, numMethods, serverMethod, serverMethodId, ptypes);
 
             if (serverMethod.isPiped()) {
                 supportVar.invoke("finishBatch", pipeVar).ifFalse(invokeEnd);
@@ -279,12 +310,13 @@ final class StubMaker {
             } else if (serverMethod.isBatched()) {
                 invokeEnd.here();
                 supportVar.invoke("batched", pipeVar);
-                if (returnType == void.class || returnType.equals("V")) {
+                if (isVoid(returnType)) {
                     mm.return_();
                 } else {
-                    Class<?> returnClass = classFor(returnType);
-                    mm.return_(supportVar.invoke
-                               ("createBatchedRemote", remoteFailureClass, pipeVar, returnClass));
+                    pipeVar.invoke("writeLong", aliasIdVar);
+                    var stubVar = supportVar.invoke
+                        ("newAliasStub", remoteFailureClass, aliasIdVar, typeIdVar);
+                    mm.return_(stubVar.cast(returnType));
                 }
             } else {
                 pipeVar.invoke("flush");
@@ -299,7 +331,7 @@ final class StubMaker {
                 thrownVar.set(supportVar.invoke("readResponse", pipeVar));
                 thrownVar.ifNe(null, throwException);
 
-                if (returnType == void.class || returnType.equals("V")) {
+                if (isVoid(returnType)) {
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
                     mm.return_();
@@ -327,16 +359,60 @@ final class StubMaker {
 
             clientMethod = null;
             serverMethod = null;
+            batchedImmediateMethodId = -1;
         }
 
         return mStubMaker.finish();
     }
 
-    private Class<?> classFor(Object obj) throws NoClassDefFoundError {
-        return obj instanceof Class ? ((Class<?>) obj) : classFor((String) obj);
+    private static boolean isVoid(Object returnType) {
+        return returnType == void.class || returnType.equals("V");
     }
 
-    private Class<?> classFor(String name) throws NoClassDefFoundError {
+    private static void writeParams(Variable pipeVar, int numMethods,
+                                    RemoteMethod method, int methodId, Object[] ptypes)
+    {
+        if (numMethods < 256) {
+            pipeVar.invoke("writeByte", methodId);
+        } else if (numMethods < 65536) {
+            pipeVar.invoke("writeShort", methodId);
+        } else {
+            // Impossible case.
+            pipeVar.invoke("writeInt", methodId);
+        }
+
+        if (ptypes.length <= 0) {
+            return;
+        }
+
+        // Write all of the non-pipe parameters.
+
+        MethodMaker mm = pipeVar.methodMaker();
+
+        if (!method.isPiped()) {
+            for (int i=0; i<ptypes.length; i++) {
+                CoreUtils.writeParam(pipeVar, mm.param(i));
+            }
+        } else {
+            String pipeDesc = Pipe.class.descriptorString();
+            for (int i=0; i<ptypes.length; i++) {
+                Object ptype = ptypes[i];
+                if (ptype != Pipe.class && !ptype.equals(pipeDesc)) {
+                    CoreUtils.writeParam(pipeVar, mm.param(i));
+                }
+            }
+        }
+    }
+
+    private Class<?> classFor(MethodMaker mm, Object obj) throws NoClassDefFoundError {
+        return obj instanceof Class ? ((Class<?>) obj) : classFor(mm, (String) obj);
+    }
+
+    private Class<?> classFor(MethodMaker mm, String name) throws NoClassDefFoundError {
+        Class<?> clazz = mm.var(name).classType();
+        if (clazz != null) {
+            return clazz;
+        }
         try {
             return loadClass(name);
         } catch (ClassNotFoundException e) {

@@ -33,6 +33,16 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
+    public void createSkeletonAlias(Object server, long aliasId) {
+        mSession.createSkeletonAlias(server, aliasId);
+    }
+
+    @Override
+    public void writeSkeletonAlias(Pipe pipe, Object server, long aliasId) throws IOException {
+        mSession.writeSkeletonAlias((CorePipe) pipe, server, aliasId);
+    }
+
+    @Override
     public void dispose(Skeleton<?> skeleton) {
         mSession.mSkeletons.remove(skeleton);
     }

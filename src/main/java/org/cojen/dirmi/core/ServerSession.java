@@ -52,12 +52,10 @@ final class ServerSession<R> extends CoreSession<R> {
     ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
         super(engine);
 
-        // FIXME: stash rootInfo in a string to info map
-
         mRoot = mSkeletons.skeletonFor(root);
         mKnownTypes.put(new Item(mRoot.typeId()));
 
-        // For accepting reverse connections.
+        // Define a special skeleton for accepting reverse connections.
         mSkeletons.put(new Connector(mReverseId));
     }
 

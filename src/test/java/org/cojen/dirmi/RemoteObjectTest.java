@@ -181,6 +181,23 @@ public class RemoteObjectTest {
         }
     }
 
+    @Test
+    public void batchedRemote() throws Exception {
+        R1 root = mSession.root();
+        R2 r2 = root.c6(9);
+        assertEquals("hello 9", r2.c2());
+
+        R2 r2x = root.c6(19);
+        assertFalse(r2 == r2x);
+        assertEquals(9, R2Server.cParam);
+
+        // This forces the batch to finish as a side-effect.
+        r2.dispose();
+
+        assertEquals("hello 19", r2x.c2());
+        assertEquals(19, R2Server.cParam);
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 
@@ -191,6 +208,9 @@ public class RemoteObjectTest {
         String c4() throws RemoteException;
 
         Object c5(Object obj) throws RemoteException;
+
+        @Batched
+        R2 c6(int param) throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -226,6 +246,11 @@ public class RemoteObjectTest {
             assertTrue(this == obj);
             return this;
         }
+
+        @Override
+        public R2 c6(int param) {
+            return new R2Server(param);
+        }
     }
 
     public static interface R2 extends Remote {
@@ -237,10 +262,13 @@ public class RemoteObjectTest {
     }
 
     private static class R2Server implements R2 {
+        static volatile int cParam;
+
         private final int mParam;
 
         R2Server(int param) {
             mParam = param;
+            cParam = param;
         }
 
         @Override

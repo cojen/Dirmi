@@ -53,15 +53,36 @@ public interface StubSupport {
      */
     <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T;
 
+
     /**
-     * Used by batched methods which return a Remote object. This method writes an identifier
-     * to the pipe, and returns a remote object of the requested type.
+     * Used by batched methods which return a Remote object. If the remote typeId is currently
+     * unknown, then zero is returned.
      *
      * @param type type of remote object returned by batched method
+     */
+    long remoteTypeId(Class<?> type);
+
+    /**
+     * Used by batched methods which return a Remote object.
+     */
+    default long newAliasId() {
+        return IdGenerator.nextNegative();
+    }
+
+    /**
+     * Used by batched methods which return a Remote object.
+     *
+     * @param aliasId alias identifier as returned by the newAliasId method
+     * @param typeId non-zero typeId as provided by the remoteTypeId method
      * @return stub for remote object
      */
-    <T extends Throwable, R> R createBatchedRemote(Class<T> remoteFailureException,
-                                                   Pipe pipe, Class<R> type) throws T;
+    <T extends Throwable> Object newAliasStub(Class<T> remoteFailureException,
+                                              long aliasId, long typeId) throws T;
+
+    /**
+     * Returns true if a batch sequence is in progress.
+     */
+    boolean isBatching(Pipe pipe);
 
     /**
      * Called by non-batched methods after being invoked. If true is returned, then

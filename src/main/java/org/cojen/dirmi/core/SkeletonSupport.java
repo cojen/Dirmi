@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.IOException;
+
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -25,23 +27,19 @@ import org.cojen.dirmi.Pipe;
  */
 public interface SkeletonSupport {
     /**
-     * Used by batched methods which return a Remote object. This method creates a skeleton for
-     * the given remote object and registers it.
+     * Used by matched methods for creating a skeleton that can be found by the given alias
+     * identifier.
      *
-     * @param skeleton skeleton which was invoked
-     * @param skeletonMethodName name of skeleton method which was invoked
-     * @param typeId type ID assigned by client
-     * @param remoteId object ID assigned by client
-     * @param type type of remote object
-     * @param remote remote object returned by server method
+     * @param aliasId negative identifier provided by the client
      */
-    /* FIXME: linkBatchedRemote
-    <R extends Remote> void linkBatchedRemote(Skeleton skeleton,
-                                              String skeletonMethodName,
-                                              Identifier typeId, VersionedIdentifier remoteId,
-                                              Class<R> type, R remote)
-        throws RemoteException;
-    */
+    void createSkeletonAlias(Object server, long aliasId);
+
+    /**
+     * Used by batched immediate methods for writing a Remote object.
+     *
+     * @param aliasId negative identifier provided by the client
+     */
+    void writeSkeletonAlias(Pipe pipe, Object server, long aliasId) throws IOException;
 
     /**
      * Called by a disposer method when finished executing. This method itself should not throw
