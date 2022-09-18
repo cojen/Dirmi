@@ -19,7 +19,6 @@ package org.cojen.dirmi.core;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.invoke.VarHandle;
 
 import java.util.Iterator;
 import java.util.List;
@@ -254,12 +253,11 @@ final class StubMaker {
             Variable thrownVar = null;
             Label throwException = null;
 
-            Class<?> returnClass = null;
             Variable typeIdVar = null;
             Variable aliasIdVar = null;
 
             if (serverMethod.isBatched() && !isVoid(returnType)) {
-                returnClass = classFor(mm, returnType);
+                var returnClass = classFor(mm, returnType);
                 typeIdVar = supportVar.invoke("remoteTypeId", returnClass);
                 aliasIdVar = supportVar.invoke("newAliasId");
 

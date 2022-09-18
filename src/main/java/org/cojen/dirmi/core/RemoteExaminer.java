@@ -27,7 +27,7 @@ final class RemoteExaminer {
     private static final SoftCache<Class<?>, Class<?>> cCache = new SoftCache<>();
 
     /**
-     * Returns the remote interface implemented by the the given remote object.
+     * Returns the remote interface implemented by the given remote object.
      *
      * @throws IllegalArgumentException if object is null or malformed
      */

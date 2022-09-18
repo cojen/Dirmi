@@ -235,7 +235,7 @@ public final class Engine implements Environment {
 
             serverInfo = RemoteInfo.examine(rootType);
 
-            session = new ServerSession<Object>(this, root, clientInfo);
+            session = new ServerSession<Object>(this, root);
             session.registerNewConnection(pipe);
         } catch (RemoteException e) {
             if (clientSessionId != 0) {
@@ -289,7 +289,7 @@ public final class Engine implements Environment {
         RemoteInfo info = RemoteInfo.examine(type);
         byte[] bname = binaryName(name);
 
-        var session = new ClientSession<R>(this, addr);
+        var session = new ClientSession<R>(this, null, addr);
         CorePipe pipe = session.connect();
 
         try {

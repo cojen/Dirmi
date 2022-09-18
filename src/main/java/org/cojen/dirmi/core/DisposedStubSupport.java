@@ -16,8 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.IOException;
-
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
@@ -58,7 +56,6 @@ final class DisposedStubSupport implements StubSupport {
     @Override
     public <T extends Throwable> Object newAliasStub(Class<T> remoteFailureException,
                                                      long aliasId, long typeId)
-        throws T
     {
         throw new IllegalStateException();
     }

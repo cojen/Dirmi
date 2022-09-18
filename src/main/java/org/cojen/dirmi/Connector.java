@@ -18,8 +18,6 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
-import java.net.SocketAddress;
-
 import org.cojen.dirmi.core.DirectConnector;
 
 /**
@@ -39,8 +37,9 @@ public interface Connector {
     }
 
     /**
-     * Called to establish a new socket connection, which is then passed to one of the
+     * Called to establish a new socket connection using the session's {@link
+     * Session#remoteAddress remote address}. Once established, pass the socket to one of the
      * session's {@code connected} methods.
      */
-    void connect(Session<?> s, SocketAddress address) throws IOException;
+    void connect(Session<?> s) throws IOException;
 }

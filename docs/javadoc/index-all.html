@@ -116,10 +116,9 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Call to establish a new client-side session.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html#connect(org.cojen.dirmi.Session,java.net.SocketAddress)" class="member-name-link">connect(Session&lt;?&gt;, SocketAddress)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html" title="interface in org.cojen.dirmi">Connector</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html#connect(org.cojen.dirmi.Session)" class="member-name-link">connect(Session&lt;?&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html" title="interface in org.cojen.dirmi">Connector</a></dt>
 <dd>
-<div class="block">Called to establish a new socket connection, which is then passed to one of the
- session's <code>connected</code> methods.</div>
+<div class="block">Called to establish a new socket connection using the session's <a href="org.cojen.dirmi/org/cojen/dirmi/Link.html#remoteAddress()"><code>remote address</code></a>.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.net.Socket)" class="member-name-link">connected(Socket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>

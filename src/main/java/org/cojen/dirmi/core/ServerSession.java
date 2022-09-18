@@ -46,10 +46,7 @@ final class ServerSession<R> extends CoreSession<R> {
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
 
-    /**
-     * @param rootInfo client-side root info
-     */
-    ServerSession(Engine engine, R root, RemoteInfo rootInfo) {
+    ServerSession(Engine engine, R root) {
         super(engine);
 
         mRoot = mSkeletons.skeletonFor(root);
@@ -229,7 +226,7 @@ final class ServerSession<R> extends CoreSession<R> {
         }
 
         @Override
-        public Object invoke(Pipe pipe, Object context) throws IOException {
+        public Object invoke(Pipe pipe, Object context) {
             var cp = (CorePipe) pipe;
             cp.mMode = CorePipe.M_CLIENT;
             recycleConnection(cp);
@@ -237,7 +234,7 @@ final class ServerSession<R> extends CoreSession<R> {
         }
     }
 
-    private final class ConnectWaiter {
+    private static final class ConnectWaiter {
         final Thread mThread;
         ConnectWaiter mNext;
         volatile boolean mUnparked;

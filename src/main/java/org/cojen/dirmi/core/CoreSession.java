@@ -46,14 +46,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private static final int SPIN_LIMIT;
 
-    private static final VarHandle cConLockHandle;
+    private static final VarHandle cControlPipeHandle, cConLockHandle;
 
     static {
         SPIN_LIMIT = Runtime.getRuntime().availableProcessors() > 1 ? 1 << 10 : 1;
 
         try {
             var lookup = MethodHandles.lookup();
-            cConLockHandle = lookup.findVarHandle(CoreSession.class, "mConLock", int.class);
+            cControlPipeHandle = lookup.findVarHandle
+                (CoreSession.class, "mControlPipe", CorePipe.class);
+            cConLockHandle = lookup.findVarHandle
+                (CoreSession.class, "mConLock", int.class);
         } catch (Throwable e) {
             throw new Error(e);
         }
@@ -81,9 +84,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private boolean mClosed;
 
-    /**
-     * @param idType type of skeleton ids to generate; see IdGenerator
-     */
     CoreSession(Engine engine) {
         super(IdGenerator.next());
         mEngine = engine;
@@ -335,13 +335,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     @Override
     public SocketAddress localAddress() {
-        CorePipe pipe = mControlPipe;
+        var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
         return pipe == null ? null : pipe.localAddress();
     }
 
     @Override
     public SocketAddress remoteAddress() {
-        CorePipe pipe = mControlPipe;
+        var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
         return pipe == null ? null : pipe.remoteAddress();
     }
 
@@ -385,13 +385,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
+    final void setControlConnection(CorePipe pipe) {
+        cControlPipeHandle.setRelease(this, pipe);
+    }
+
     /**
      * Starts a task to read and process commands over the control connection.
      */
     final void processControlConnection(CorePipe pipe) throws IOException {
-        mControlLock.lock();
-        mControlPipe = pipe;
-        mControlLock.unlock();
+        setControlConnection(pipe);
 
         mEngine.executeTask(() -> {
             try {
@@ -443,7 +445,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
-    Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Object objectFor(long id, long typeId, RemoteInfo info) {
         Class<?> type;
         try {
             type = loadClass(info.name());
@@ -473,9 +475,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         try {
             mControlLock.lock();
             try {
-                mControlPipe.write(C_KNOWN_TYPE);
-                mControlPipe.writeLong(typeId);
-                mControlPipe.flush();
+                CorePipe pipe = mControlPipe;
+                pipe.write(C_KNOWN_TYPE);
+                pipe.writeLong(typeId);
+                pipe.flush();
             } finally {
                 mControlLock.unlock();
             }

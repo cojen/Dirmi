@@ -31,6 +31,15 @@ final class CorePipe extends BufferedPipe {
     // Values for mMode.
     static final int M_CLIENT = 1, M_SERVER = 2, M_CLOSED = 3;
 
+    /**
+     * Returns a pipe which is connected to null I/O streams.
+     */
+    static CorePipe newNullPipe(SocketAddress localAddr, SocketAddress remoteAttr) {
+        return new CorePipe(localAddr, remoteAttr,
+                            InputStream.nullInputStream(), OutputStream.nullOutputStream(),
+                            M_CLOSED);
+    }
+
     // Accessed by CoreSession.
     CoreSession<?> mSession;
 

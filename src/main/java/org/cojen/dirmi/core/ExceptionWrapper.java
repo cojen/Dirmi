@@ -57,7 +57,7 @@ abstract class ExceptionWrapper {
     abstract <T extends Throwable> T wrap(Throwable cause);
 
     private static ExceptionWrapper makeWrapper(Class<?> exceptionType) {
-        int style = 0;
+        int style;
 
         findCtor: {
             if (Modifier.isPublic(exceptionType.getModifiers())) {

@@ -134,7 +134,7 @@ public class HelloWorldTest {
         var env = Environment.create();
         env.export("main", new ControlServer());
 
-        env.connector((session, address) -> {
+        env.connector(session -> {
             var clientIn = new PipedInputStream();
             var serverOut = new PipedOutputStream(clientIn);
 

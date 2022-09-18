@@ -36,7 +36,9 @@ public final class DirectConnector implements Connector {
     public static final DirectConnector THE = new DirectConnector();
 
     @Override
-    public void connect(Session session, SocketAddress address) throws IOException {
+    public void connect(Session session) throws IOException {
+        SocketAddress address = session.remoteAddress();
+
         if (address instanceof InetSocketAddress) {
             /*
               Favor the Socket class, due to a 20 year old SocketChannel design flaw which

@@ -30,16 +30,16 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class ClientSession<R> extends CoreSession<R> {
-    private final SocketAddress mRemoteAddress;
-
     // FIXME: Stale connections need to be removed from the pool.
 
     private long mServerSessionId;
     private R mRoot;
 
-    ClientSession(Engine engine, SocketAddress remoteAddr) {
+    ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr) {
         super(engine);
-        mRemoteAddress = remoteAddr;
+        // Start with a fake control connection in order for the addresses to be available to
+        // the Connector.
+        setControlConnection(CorePipe.newNullPipe(localAddr, remoteAttr));
     }
 
     /**
@@ -106,7 +106,7 @@ final class ClientSession<R> extends CoreSession<R> {
             if (pipe != null) {
                 return pipe;
             }
-            mEngine.checkClosed().connect(this, mRemoteAddress);
+            mEngine.checkClosed().connect(this);
         }
     }
 
