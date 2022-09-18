@@ -29,6 +29,8 @@ import java.util.WeakHashMap; // FIXME: use something custom
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import java.util.function.BiConsumer;
+
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Remote;
@@ -81,6 +83,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     private CorePipe mConFirst, mConAvail, mConLast;
 
     private final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
+
+    private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
 
     private boolean mClosed;
 
@@ -220,8 +224,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 startRequestProcessor(pipe);
             } catch (IOException e) {
-                // FIXME: log it?
-                CoreUtils.uncaughtException(e);
+                uncaughtException(e);
             }
 
             return false;
@@ -346,6 +349,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
+    public void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
+        mUncaughtExceptionHandler = h;
+    }
+
+    @Override
     public void close() {
         CorePipe pipe;
 
@@ -385,6 +393,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
+    final void uncaughtException(Throwable e) {
+        if (!CoreUtils.acceptException(mUncaughtExceptionHandler, this, e)) {
+            mEngine.uncaughtException(this, e);
+        }
+    }
+
     final void setControlConnection(CorePipe pipe) {
         cControlPipeHandle.setRelease(this, pipe);
     }
@@ -412,11 +426,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         // Ignore for now.
                         break;
                     default:
-                        throw new RemoteException("Unknown command: " + command);
+                        throw new IllegalStateException("Unknown command: " + command);
                     }
                 }
             } catch (Throwable e) {
-                // FIXME: pass the exception so that it can be logged
+                if (!(e instanceof IOException)) {
+                    uncaughtException(e);
+                }
                 close();
             }
         });
@@ -584,14 +600,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 } while (context != Skeleton.STOP_READING);
             } catch (Throwable e) {
                 if (e instanceof UncaughtException) {
-                    // FIXME: log it?
-                    CoreUtils.uncaughtException(e.getCause());
+                    uncaughtException(e.getCause());
                 } else if (e instanceof NoSuchObjectException || !(e instanceof IOException)) {
-                    // FIXME: log it?
                     // FIXME: If NoSuchObjectException, try to write the error over the control
                     //        connection, to be picked by the client when it sees the
                     //        connection is closed.
-                    CoreUtils.uncaughtException(e);
+                    uncaughtException(e);
                 }
                 CoreUtils.closeQuietly(this);
             } finally {

@@ -16,9 +16,12 @@
 
 package org.cojen.dirmi;
 
+import java.io.EOFException;
 import java.io.IOException;
 
 import java.net.ServerSocket;
+
+import java.util.function.BiConsumer;
 
 import org.junit.*;
 import static org.junit.Assert.*;
@@ -137,10 +140,51 @@ public class RemotePipeTest {
         p2.recycle();
     }
 
+    @Test
+    public void uncaughtException() throws Exception {
+        R1 root = mSession.root();
+
+        var handler = new BiConsumer<Session, Throwable>() {
+            Session session;
+            Throwable exception;
+
+            @Override
+            public synchronized void accept(Session s, Throwable e) {
+                session = s;
+                exception = e;
+                notify();
+            }
+
+            synchronized void await() throws InterruptedException {
+                while (exception == null) {
+                    wait();
+                }
+            }
+        };
+
+        mEnv.uncaughtExceptionHandler(handler);
+
+        Pipe p1 = root.exception(null);
+        p1.flush();
+        try {
+            p1.readInt();
+            fail();
+        } catch (EOFException e) {
+        }
+
+        handler.await();
+
+        assertEquals("foo", handler.exception.getMessage());
+        assertNotNull(handler.session);
+        assertNotSame(mSession, handler.session);
+    }
+
     public static interface R1 extends Remote {
         Pipe echo(int a, Pipe pipe, String b) throws IOException;
 
         Pipe failedRecycle(int a, Pipe pipe) throws IOException;
+
+        Pipe exception(Pipe pipe) throws IOException;
     }
 
     private static class R1Server implements R1 {
@@ -162,6 +206,11 @@ public class RemotePipeTest {
             pipe.writeInt(a);
             pipe.recycle();
             return null;
+        }
+
+        @Override
+        public Pipe exception(Pipe pipe) {
+            throw new IllegalStateException("foo");
         }
     }
 }

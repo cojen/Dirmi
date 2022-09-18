@@ -25,6 +25,8 @@ import java.net.StandardSocketOptions;
 
 import java.nio.channels.SocketChannel;
 
+import java.util.function.BiConsumer;
+
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
@@ -100,9 +102,23 @@ public final class CoreUtils {
             || Error.class.isAssignableFrom(clazz);
     }
 
-    static void uncaughtException(Throwable e) {
-        Thread t = Thread.currentThread();
-        t.getThreadGroup().uncaughtException(t, e);
+    /**
+     * @return false if handler was null or if it threw an exception itself
+     */
+    static boolean acceptException(BiConsumer<Session, Throwable> h, Session s, Throwable e) {
+        if (h != null) {
+            try {
+                h.accept(s, e);
+                return true;
+            } catch (Throwable e2) {
+                try {
+                    e.addSuppressed(e2);
+                } catch (Throwable e3) {
+                }
+            }
+        }
+
+        return false;
     }
 
     static void closeQuietly(Closeable c) {

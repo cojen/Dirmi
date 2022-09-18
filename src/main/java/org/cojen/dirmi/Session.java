@@ -27,6 +27,8 @@ import java.net.SocketAddress;
 import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 
+import java.util.function.BiConsumer;
+
 import org.cojen.dirmi.core.CoreUtils;
 
 /**
@@ -93,6 +95,15 @@ public interface Session<R> extends Closeable, Link {
     void connected(SocketAddress localAddr, SocketAddress remoteAttr,
                    InputStream in, OutputStream out)
         throws IOException;
+
+    /**
+     * Set the handler which is invoked for any uncaught exceptions within this session
+     * instance. By default, uncaught exceptions are passed to the environment instance.
+     *
+     * @param h handler to use; pass null to use the default handler
+     * @see Environment#uncaughtExceptionHandler
+     */
+    void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h);
 
     /**
      * Closes all connections and immediately closes any future connections. All remote objects

@@ -116,8 +116,7 @@ final class CoreStubSupport implements StubSupport {
         try {
             pipe.recycle();
         } catch (IOException e) {
-            // FIXME: log it
-            CoreUtils.uncaughtException(e);
+            mSession.uncaughtException(e);
         }
     }
 

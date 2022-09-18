@@ -119,8 +119,7 @@ final class ClientSession<R> extends CoreSession<R> {
             pipe.mMode = CorePipe.M_SERVER;
             recycleConnection(pipe);
         } catch (IOException e) {
-            // FIXME: log and close session?
-            CoreUtils.uncaughtException(e);
+            uncaughtException(e);
         }
     }
 }

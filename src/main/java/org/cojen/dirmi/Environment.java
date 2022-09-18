@@ -34,6 +34,8 @@ import java.util.Objects;
 
 import java.util.concurrent.Executor;
 
+import java.util.function.BiConsumer;
+
 import org.cojen.dirmi.core.CoreUtils;
 import org.cojen.dirmi.core.Engine;
 
@@ -172,6 +174,17 @@ public interface Environment extends Closeable, Executor {
      * @return the previously assigned connector
      */
     Connector connector(Connector c) throws IOException;
+
+    /**
+     * Set the handler which is invoked for any uncaught exceptions within this environment
+     * instance. The session instance passed to the handler is null when not applicable. By
+     * default, uncaught exceptions are passed to the current thread's uncaught exception
+     * handler.
+     *
+     * @param h handler to use; pass null to use the default handler
+     * @see Session#uncaughtExceptionHandler
+     */
+    void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h);
 
     /**
      * Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of

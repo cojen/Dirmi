@@ -48,6 +48,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import java.util.function.BiConsumer;
+
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Connector;
 import org.cojen.dirmi.Environment;
@@ -76,6 +78,8 @@ public final class Engine implements Environment {
     private volatile ConcurrentSkipListMap<byte[], Object> mExports;
 
     private Map<Object, Acceptor> mAcceptors;
+
+    private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
 
     private Connector mConnector;
 
@@ -355,6 +359,11 @@ public final class Engine implements Environment {
     }
 
     @Override
+    public void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
+        mUncaughtExceptionHandler = h;
+    }
+
+    @Override
     public void close() {
         ItemMap<ServerSession> serverSessions;
         ItemMap<ClientSession> clientSessions;
@@ -528,8 +537,7 @@ public final class Engine implements Environment {
                 if (task instanceof Closeable) {
                     CoreUtils.closeQuietly((Closeable) task);
                 }
-                // FIXME: log it?
-                CoreUtils.uncaughtException(e);
+                uncaughtException(null, e);
                 return;
             }
         }
@@ -547,13 +555,23 @@ public final class Engine implements Environment {
         return cConnectorHandle.getAcquire(this) == null;
     }
 
+    final void uncaughtException(Session s, Throwable e) {
+        if (!CoreUtils.acceptException(mUncaughtExceptionHandler, s, e)) {
+            try {
+                Thread t = Thread.currentThread();
+                t.getUncaughtExceptionHandler().uncaughtException(t, e);
+            } catch (Throwable e2) {
+                // Ignore.
+            }
+        }
+    }
+
     /**
      * Called by Acceptor.
      */
     private void acceptFailed(Throwable e) {
         if (!isClosed()) {
-            // FIXME: log it?
-            CoreUtils.uncaughtException(e);
+            uncaughtException(null, e);
         }
     }
 
