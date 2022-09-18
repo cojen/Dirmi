@@ -241,19 +241,21 @@ public final class Engine implements Environment {
 
             session = new ServerSession<Object>(this, root);
             session.registerNewConnection(pipe);
-        } catch (RemoteException e) {
-            if (clientSessionId != 0) {
-                // FIXME: launch a task to force close after a timeout elapses
-                pipe.writeLong(CoreUtils.PROTOCOL_V2);
-                pipe.writeLong(clientSessionId);
-                pipe.writeLong(0); // server session id of zero indicates an error
-                pipe.writeObject(e.getMessage());
-                pipe.flush();
-            }
-            CoreUtils.closeQuietly(pipe);
-            throw e;
         } catch (Throwable e) {
-            CoreUtils.closeQuietly(pipe);
+            try {
+                if (e instanceof RemoteException && clientSessionId != 0) {
+                    pipe.writeLong(CoreUtils.PROTOCOL_V2);
+                    pipe.writeLong(clientSessionId);
+                    pipe.writeLong(0); // server session id of zero indicates an error
+                    pipe.writeObject(e.getMessage());
+                    pipe.flush();
+                }
+
+                pipe.close();
+            } catch (Throwable e2) {
+                // Ignore.
+            }
+
             throw e;
         }
 
