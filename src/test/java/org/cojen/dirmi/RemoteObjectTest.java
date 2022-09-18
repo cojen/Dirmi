@@ -150,7 +150,7 @@ public class RemoteObjectTest {
     public void passbackRoot() throws Exception {
         R1 root = mSession.root();
         Object result = root.c5(root);
-        assertTrue(result == root);
+        assertSame(result, root);
     }
 
     @Test
@@ -188,7 +188,7 @@ public class RemoteObjectTest {
         assertEquals("hello 9", r2.c2());
 
         R2 r2x = root.c6(19);
-        assertFalse(r2 == r2x);
+        assertNotSame(r2, r2x);
         assertEquals(9, R2Server.cParam);
 
         // This forces the batch to finish as a side-effect.
@@ -196,6 +196,58 @@ public class RemoteObjectTest {
 
         assertEquals("hello 19", r2x.c2());
         assertEquals(19, R2Server.cParam);
+    }
+
+    @Test
+    public void batchedChain() throws Exception {
+        R1 root = mSession.root();
+        R2 a = root.c6(1);
+        R2 b = a.next(2);
+        R2 c = b.next(3);
+        R2 d = c.next(4);
+        R2 e = d.next(5);
+
+        assertEquals(1, R2Server.cParam);
+
+        assertEquals("hello 5", e.c2());
+        assertEquals("hello 4", d.c2());
+        assertEquals("hello 3", c.c2());
+        assertEquals("hello 2", b.c2());
+        assertEquals("hello 1", a.c2());
+
+        assertEquals(5, R2Server.cParam);
+
+        e.dispose();
+
+        try {
+            e.c2();
+            fail();
+        } catch (ClosedException ex) {
+            assertTrue(ex.getMessage().contains("disposed"));
+        }
+    }
+
+    @Test
+    public void aliasDispose() throws Exception {
+        // Test that disposing a batched remote object doesn't dispose the canonical one.
+
+        R1 root = mSession.root();
+        R1 self = root.self();
+        assertNotSame(root, self);
+
+        String str = root.selfString();
+        assertEquals(str, self.selfString());
+
+        self.dispose();
+
+        try {
+            self.selfString();
+            fail();
+        } catch (ClosedException ex) {
+            assertTrue(ex.getMessage().contains("disposed"));
+        }
+
+        assertEquals(str, root.selfString());
     }
 
     public static interface R1 extends Remote {
@@ -211,6 +263,14 @@ public class RemoteObjectTest {
 
         @Batched
         R2 c6(int param) throws RemoteException;
+
+        @Batched
+        R1 self() throws RemoteException;
+
+        String selfString() throws RemoteException;
+
+        @Disposer
+        void dispose() throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -243,7 +303,7 @@ public class RemoteObjectTest {
 
         @Override
         public Object c5(Object obj) {
-            assertTrue(this == obj);
+            assertSame(this, obj);
             return this;
         }
 
@@ -251,10 +311,27 @@ public class RemoteObjectTest {
         public R2 c6(int param) {
             return new R2Server(param);
         }
+
+        @Override
+        public R1 self() {
+            return this;
+        }
+
+        @Override
+        public String selfString() {
+            return toString();
+        }
+
+        @Override
+        public void dispose() {
+        }
     }
 
     public static interface R2 extends Remote {
         String c2() throws RemoteException;
+
+        @Batched
+        R2 next(int param) throws RemoteException;
 
         @Disposer
         @RemoteFailure(declared=false)
@@ -274,6 +351,11 @@ public class RemoteObjectTest {
         @Override
         public String c2() {
             return "hello " + mParam;
+        }
+
+        @Override
+        public R2 next(int param) {
+            return new R2Server(param);
         }
 
         @Disposer

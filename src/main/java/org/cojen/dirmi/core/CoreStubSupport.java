@@ -111,6 +111,36 @@ final class CoreStubSupport implements StubSupport {
         return ex;
     }
 
+    @Override
+    public void finished(Pipe pipe) {
+        try {
+            pipe.recycle();
+        } catch (IOException e) {
+            // FIXME: log it
+            CoreUtils.uncaughtException(e);
+        }
+    }
+
+    @Override
+    public void batched(Pipe pipe) {
+        mLocalPipe.set(pipe);
+    }
+
+    @Override
+    public <T extends Throwable> T failed(Class<T> remoteFailureException,
+                                          Pipe pipe, Throwable cause)
+    {
+        mLocalPipe.remove();
+        CoreUtils.closeQuietly(pipe);
+        return CoreUtils.remoteException(remoteFailureException, cause);
+    }
+
+    @Override
+    public StubSupport dispose(Stub stub) {
+        mSession.mStubs.remove(stub);
+        return DisposedStubSupport.THE;
+    }
+
     private void assignTrace(Pipe pipe, Throwable ex) {
         // Augment the stack trace with a local trace.
 
@@ -150,36 +180,6 @@ final class CoreStubSupport implements StubSupport {
         System.arraycopy(local, localStart, combined, traceLength + stitch.length, localLength);
 
         ex.setStackTrace(combined);
-    }
-
-    @Override
-    public void finished(Pipe pipe) {
-        try {
-            pipe.recycle();
-        } catch (IOException e) {
-            // FIXME: log it
-            CoreUtils.uncaughtException(e);
-        }
-    }
-
-    @Override
-    public void batched(Pipe pipe) {
-        mLocalPipe.set(pipe);
-    }
-
-    @Override
-    public <T extends Throwable> T failed(Class<T> remoteFailureException,
-                                          Pipe pipe, Throwable cause)
-    {
-        mLocalPipe.remove();
-        CoreUtils.closeQuietly(pipe);
-        return CoreUtils.remoteException(remoteFailureException, cause);
-    }
-
-    @Override
-    public StubSupport dispose(Stub stub) {
-        mSession.mStubs.remove(stub);
-        return DisposedStubSupport.THE;
     }
 
     /**

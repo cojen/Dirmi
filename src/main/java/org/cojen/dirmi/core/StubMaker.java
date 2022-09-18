@@ -263,7 +263,7 @@ final class StubMaker {
 
                 if (batchedImmediateMethodId >= 0) {
                     Label hasType = mm.label();
-                    typeIdVar.ifNe(0, hasType);
+                    typeIdVar.ifNe(0L, hasType);
 
                     // Must call the immediate variant.
 
