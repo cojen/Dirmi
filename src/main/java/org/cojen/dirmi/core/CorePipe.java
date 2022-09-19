@@ -40,13 +40,14 @@ final class CorePipe extends BufferedPipe {
                             M_CLOSED);
     }
 
-    // Accessed by CoreSession.
+    // The following fields are accessed by CoreSession.
+
     CoreSession<?> mSession;
 
-    // Accessed by CoreSession.
     CorePipe mConPrev, mConNext;
 
-    // Accessed by CoreSession.
+    int mClock;
+
     int mMode;
 
     CorePipe(SocketAddress localAddr, SocketAddress remoteAttr,

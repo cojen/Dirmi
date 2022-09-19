@@ -62,6 +62,8 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
+    private static final int IDLE_CONNECTION_AGE_MILLIS = 60_000;
+
     private final Lock mMainLock;
 
     private final Executor mExecutor;
@@ -152,6 +154,7 @@ public final class Engine implements Environment {
         return acceptAll(ss, new ChannelAcceptor(ss));
     }
 
+    @SuppressWarnings("deprecation")
     private Closeable acceptAll(Object ss, Acceptor acceptor) throws IOException {
         mMainLock.lock();
         try {
@@ -276,6 +279,7 @@ public final class Engine implements Environment {
             pipe.flush();
 
             session.processControlConnection(pipe);
+            session.startCloseIdleConnections(IDLE_CONNECTION_AGE_MILLIS);
 
             return session;
         } catch (Throwable e) {
@@ -324,6 +328,7 @@ public final class Engine implements Environment {
             session.init(serverSessionId, type, rootTypeId, serverInfo, rootId);
 
             session.processControlConnection(pipe);
+            session.startCloseIdleConnections(IDLE_CONNECTION_AGE_MILLIS);
 
             mMainLock.lock();
             try {

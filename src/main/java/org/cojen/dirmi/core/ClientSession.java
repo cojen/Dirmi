@@ -30,8 +30,6 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class ClientSession<R> extends CoreSession<R> {
-    // FIXME: Stale connections need to be removed from the pool.
-
     private long mServerSessionId;
     private R mRoot;
 

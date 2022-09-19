@@ -82,6 +82,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // currently being used. Connections which range from avail to last are waiting to be used.
     private CorePipe mConFirst, mConAvail, mConLast;
 
+    private int mConClock;
+
     private final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
 
     private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
@@ -139,6 +141,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         try {
             checkClosed();
             pipe.mSession = this;
+            pipe.mClock = mConClock;
 
             CorePipe last = mConLast;
             if (last == null) {
@@ -176,6 +179,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     pipe.mMode = CorePipe.M_CLOSED;
                     break recycle;
                 }
+
+                pipe.mClock = mConClock;
 
                 if (mode == CorePipe.M_SERVER) {
                     break client;
@@ -336,6 +341,62 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         pipe.mConPrev = null;
         pipe.mConNext = null;
+    }
+
+    /**
+     * Starts a task to close idle available connections.
+     *
+     * @param ageMillis average age of idle connection before being closed
+     */
+    void startCloseIdleConnections(int ageMillis) throws IOException {
+        // If ageMillis is 60_000, then the delay is 40 seconds. Connections are then closed
+        // after their idle age reaches 40 to 80 seconds, or 60 seconds on average.
+        long delayNanos = (long) ((ageMillis * 1_000_000L) / 1.5);
+
+        var task = new Scheduled() {
+            @Override
+            public void run() {
+                if (closeIdleConnections()) {
+                    try {
+                        mEngine.scheduleNanos(this, delayNanos);
+                    } catch (IOException e) {
+                        uncaughtException(e);
+                    }
+                }
+            }
+        };
+
+        mEngine.scheduleNanos(task, delayNanos);
+    }
+
+    /**
+     * @return false if closed
+     */
+    private boolean closeIdleConnections() {
+        conLockAcquire();
+
+        doClose: if (!mClosed) {
+            int clock = mConClock;
+
+            CorePipe pipe;
+            while ((pipe = mConAvail) != null && (pipe.mClock - clock) < 0) {
+                doRemoveConnection(pipe);
+                pipe.mMode = CorePipe.M_CLOSED;
+                conLockRelease();
+                pipe.doClose();
+                conLockAcquire();
+                if (mClosed) {
+                    break doClose;
+                }
+            }
+
+            mConClock = clock + 1;
+            conLockRelease();
+            return true;
+        }
+
+        conLockRelease();
+        return false;
     }
 
     @Override
