@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import java.lang.ref.WeakReference;
+
 import java.net.SocketAddress;
 
 import java.util.WeakHashMap; // FIXME: use something custom
@@ -353,20 +355,29 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         // after their idle age reaches 40 to 80 seconds, or 60 seconds on average.
         long delayNanos = (long) ((ageMillis * 1_000_000L) / 1.5);
 
-        var task = new Scheduled() {
-            @Override
-            public void run() {
-                if (closeIdleConnections()) {
-                    try {
-                        mEngine.scheduleNanos(this, delayNanos);
-                    } catch (IOException e) {
-                        uncaughtException(e);
-                    }
+        mEngine.scheduleNanos(new Closer(this, delayNanos), delayNanos);
+    }
+
+    private static class Closer extends Scheduled {
+        private final WeakReference<CoreSession> mSessionRef;
+        private final long mDelayNanos;
+
+        Closer(CoreSession session, long delayNanos) {
+            mSessionRef = new WeakReference<>(session);
+            mDelayNanos = delayNanos;
+        }
+
+        @Override
+        public void run() {
+            CoreSession session = mSessionRef.get();
+            if (session != null && session.closeIdleConnections()) {
+                try {
+                    session.mEngine.scheduleNanos(this, mDelayNanos);
+                } catch (IOException e) {
+                    session.uncaughtException(e);
                 }
             }
-        };
-
-        mEngine.scheduleNanos(task, delayNanos);
+        }
     }
 
     /**
