@@ -46,11 +46,14 @@ import org.cojen.dirmi.Session;
  */
 abstract class CoreSession<R> extends Item implements Session<R> {
     // Control commands.
-    static final int C_KNOWN_TYPE = 2, C_REQUEST_CONNECTION = 3, C_MESSAGE = 4;
+    static final int C_PING = 1, C_PONG = 2,
+        C_KNOWN_TYPE = 3, C_REQUEST_CONNECTION = 4, C_MESSAGE = 5;
+
+    private static final int CLOSED = 1, CLOSED_PING_FAILURE = 2, CLOSED_CONTROL_FAILURE = 3;
 
     private static final int SPIN_LIMIT;
 
-    private static final VarHandle cControlPipeHandle, cConLockHandle;
+    private static final VarHandle cControlPipeHandle, cConLockHandle, cPipeClockHandle;
 
     static {
         SPIN_LIMIT = Runtime.getRuntime().availableProcessors() > 1 ? 1 << 10 : 1;
@@ -59,8 +62,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             var lookup = MethodHandles.lookup();
             cControlPipeHandle = lookup.findVarHandle
                 (CoreSession.class, "mControlPipe", CorePipe.class);
-            cConLockHandle = lookup.findVarHandle
-                (CoreSession.class, "mConLock", int.class);
+            cConLockHandle = lookup.findVarHandle(CoreSession.class, "mConLock", int.class);
+            cPipeClockHandle = lookup.findVarHandle(CorePipe.class, "mClock", int.class);
         } catch (Throwable e) {
             throw new Error(e);
         }
@@ -90,7 +93,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
 
-    private boolean mClosed;
+    private int mClosed;
 
     CoreSession(Engine engine) {
         super(IdGenerator.next());
@@ -176,7 +179,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             conLockAcquire();
             client: try {
                 int mode;
-                if (mClosed || (mode = pipe.mMode) == CorePipe.M_CLOSED) {
+                if (mClosed != 0 || (mode = pipe.mMode) == CorePipe.M_CLOSED) {
                     doRemoveConnection(pipe);
                     pipe.mMode = CorePipe.M_CLOSED;
                     break recycle;
@@ -345,71 +348,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         pipe.mConNext = null;
     }
 
-    /**
-     * Starts a task to close idle available connections.
-     *
-     * @param ageMillis average age of idle connection before being closed
-     */
-    void startCloseIdleConnections(int ageMillis) throws IOException {
-        // If ageMillis is 60_000, then the delay is 40 seconds. Connections are then closed
-        // after their idle age reaches 40 to 80 seconds, or 60 seconds on average.
-        long delayNanos = (long) ((ageMillis * 1_000_000L) / 1.5);
-
-        mEngine.scheduleNanos(new Closer(this, delayNanos), delayNanos);
-    }
-
-    private static class Closer extends Scheduled {
-        private final WeakReference<CoreSession> mSessionRef;
-        private final long mDelayNanos;
-
-        Closer(CoreSession session, long delayNanos) {
-            mSessionRef = new WeakReference<>(session);
-            mDelayNanos = delayNanos;
-        }
-
-        @Override
-        public void run() {
-            CoreSession session = mSessionRef.get();
-            if (session != null && session.closeIdleConnections()) {
-                try {
-                    session.mEngine.scheduleNanos(this, mDelayNanos);
-                } catch (IOException e) {
-                    session.uncaughtException(e);
-                }
-            }
-        }
-    }
-
-    /**
-     * @return false if closed
-     */
-    private boolean closeIdleConnections() {
-        conLockAcquire();
-
-        doClose: if (!mClosed) {
-            int clock = mConClock;
-
-            CorePipe pipe;
-            while ((pipe = mConAvail) != null && (pipe.mClock - clock) < 0) {
-                doRemoveConnection(pipe);
-                pipe.mMode = CorePipe.M_CLOSED;
-                conLockRelease();
-                pipe.doClose();
-                conLockAcquire();
-                if (mClosed) {
-                    break doClose;
-                }
-            }
-
-            mConClock = clock + 1;
-            conLockRelease();
-            return true;
-        }
-
-        conLockRelease();
-        return false;
-    }
-
     @Override
     public SocketAddress localAddress() {
         var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
@@ -428,12 +366,18 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public void close() {
+    public final void close() {
+        close(CLOSED);
+    }
+
+    void close(int reason) {
         CorePipe pipe;
 
         conLockAcquire();
         try {
-            mClosed = true;
+            if (mClosed == 0) {
+                mClosed = reason;
+            }
             pipe = mConFirst;
             mConFirst = null;
             mConAvail = null;
@@ -478,9 +422,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     /**
-     * Starts a task to read and process commands over the control connection.
+     * Start a tasks to read and process commands over the control connection, to close the
+     * session if ping requests don't get responses, and to close idle available connections.
+     *
+     * @param pipe control pipe
+     * @param ageMillis average age of idle connection before being closed
      */
-    final void processControlConnection(CorePipe pipe) throws IOException {
+    final void startTasks(CorePipe pipe, long pingTimeoutMillis, long ageMillis)
+        throws IOException
+    {
         setControlConnection(pipe);
 
         mEngine.executeTask(() -> {
@@ -488,6 +438,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 while (true) {
                     int command = pipe.readUnsignedByte();
                     switch (command) {
+                    case C_PING:
+                        sendByte(C_PONG);
+                        break;
+                    case C_PONG:
+                        cPipeClockHandle.setVolatile(pipe, 0);
+                        break;
                     case C_KNOWN_TYPE:
                         mKnownTypes.putIfAbsent(new Item(pipe.readLong()));
                         break;
@@ -507,9 +463,132 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (!(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                close();
+                close(CLOSED_CONTROL_FAILURE);
             }
         });
+
+        long pingDelayNanos = taskDelayNanos(pingTimeoutMillis);
+        mEngine.scheduleNanos(new Pinger(this, pingDelayNanos), pingDelayNanos);
+
+        long ageDelayNanos = taskDelayNanos(ageMillis);
+        mEngine.scheduleNanos(new Closer(this, ageDelayNanos), ageDelayNanos);
+    }
+
+    private static long taskDelayNanos(long timeoutMillis) {
+        // If timeoutMillis is 60_000, then the delay is 40 seconds. Effective timeout is thus
+        // 40 to 80 seconds, or 60 seconds on average.
+        return (long) ((timeoutMillis * 1_000_000L) / 1.5);
+    }
+
+    /**
+     * @param which C_PING or C_PONG
+     */
+    private void sendByte(int which) throws IOException {
+        mControlLock.lock();
+        try {
+            CorePipe pipe = mControlPipe;
+            pipe.write(which);
+            pipe.flush();
+        } finally {
+            mControlLock.unlock();
+        }
+    }
+
+    private static abstract class WeakScheduled extends Scheduled {
+        final WeakReference<CoreSession> mSessionRef;
+        final long mDelayNanos;
+
+        WeakScheduled(CoreSession session, long delayNanos) {
+            mSessionRef = new WeakReference<>(session);
+            mDelayNanos = delayNanos;
+        }
+
+        @Override
+        public final void run() {
+            CoreSession session = mSessionRef.get();
+            if (session != null && doRun(session)) {
+                try {
+                    session.mEngine.scheduleNanos(this, mDelayNanos);
+                } catch (IOException e) {
+                    session.uncaughtException(e);
+                }
+            }
+        }
+
+        abstract boolean doRun(CoreSession session);
+    }
+
+    private static class Pinger extends WeakScheduled {
+        Pinger(CoreSession session, long delayNanos) {
+            super(session, delayNanos);
+        }
+
+        @Override
+        boolean doRun(CoreSession session) {
+            if (session.isClosed()) {
+                return false;
+            }
+
+            var pipe = (CorePipe) cControlPipeHandle.getAcquire(session);
+            int clock = (int) cPipeClockHandle.getVolatile(pipe);
+
+            if (clock == 1) {
+                session.close(CLOSED_PING_FAILURE);
+                return false;
+            }
+
+            cPipeClockHandle.setVolatile(pipe, 1);
+
+            try{
+                session.sendByte(C_PING);
+            } catch (IOException e) {
+                session.close(CLOSED_CONTROL_FAILURE);
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    private static class Closer extends WeakScheduled {
+        Closer(CoreSession session, long delayNanos) {
+            super(session, delayNanos);
+        }
+
+        @Override
+        boolean doRun(CoreSession session) {
+            return session.closeIdleConnections();
+        }
+    }
+
+    /**
+     * @return false if closed
+     */
+    private boolean closeIdleConnections() {
+        conLockAcquire();
+
+        doClose: if (mClosed == 0) {
+            int clock = mConClock;
+
+            CorePipe pipe;
+            while ((pipe = mConAvail) != null && (pipe.mClock - clock) < 0) {
+                doRemoveConnection(pipe);
+                pipe.mMode = CorePipe.M_CLOSED;
+                conLockRelease();
+                pipe.doClose();
+                conLockAcquire();
+                if (mClosed != 0) {
+                    break doClose;
+                }
+            }
+
+            mConClock = clock + 1;
+            conLockRelease();
+            return true;
+        }
+
+        conLockRelease();
+        return false;
     }
 
     /**
@@ -622,14 +701,23 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     boolean isClosed() {
         conLockAcquire();
-        boolean closed = mClosed;
+        int closed = mClosed;
         conLockRelease();
-        return closed;
+        return closed != 0;
     }
 
     private void checkClosed() throws ClosedException {
-        if (mClosed) {
-            throw new ClosedException("Session is closed");
+        int closed = mClosed;
+        if (closed != 0) {
+            String message = "Session is closed";
+
+            if (closed == CLOSED_PING_FAILURE) {
+                message += " (ping response timeout)";
+            } else if (closed == CLOSED_CONTROL_FAILURE) {
+                message += " (control connection failure)";
+            }
+
+            throw new ClosedException(message);
         }
     }
 

@@ -62,7 +62,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
-    private static final int IDLE_CONNECTION_AGE_MILLIS = 60_000;
+    private static final int PING_TIMEOUT_MILLIS = 2_000, IDLE_CONNECTION_AGE_MILLIS = 60_000;
 
     private final Lock mMainLock;
 
@@ -278,8 +278,7 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
-            session.processControlConnection(pipe);
-            session.startCloseIdleConnections(IDLE_CONNECTION_AGE_MILLIS);
+            session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
 
             return session;
         } catch (Throwable e) {
@@ -327,8 +326,7 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, rootTypeId, serverInfo, rootId);
 
-            session.processControlConnection(pipe);
-            session.startCloseIdleConnections(IDLE_CONNECTION_AGE_MILLIS);
+            session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
 
             mMainLock.lock();
             try {

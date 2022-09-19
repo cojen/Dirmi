@@ -66,8 +66,8 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    public void close() {
-        super.close();
+    void close(int reason) {
+        super.close(reason);
         mEngine.removeSession(this);
     }
 
