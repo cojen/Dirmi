@@ -102,6 +102,34 @@ public final class CoreUtils {
             || Error.class.isAssignableFrom(clazz);
     }
 
+    static Class<?> loadClassByNameOrDescriptor(String name, ClassLoader loader)
+        throws ClassNotFoundException
+    {
+        char first = name.charAt(0);
+
+        if (first == '[') {
+            // Name is an array descriptor.
+            return loadClassByNameOrDescriptor(name.substring(1), loader).arrayType();
+        }
+
+        if (first == 'L' && name.endsWith(";")) {
+            name = name.substring(1, name.length() - 1).replace('/', '.');
+        } else {
+            switch (name) {
+            case "Z": return boolean.class;
+            case "C": return char.class;
+            case "F": return float.class;
+            case "D": return double.class;
+            case "B": return byte.class;
+            case "S": return short.class;
+            case "I": return int.class;
+            case "J": return long.class;
+            }
+        }
+
+        return Class.forName(name, false, loader);
+    }
+
     /**
      * @return false if handler was null or if it threw an exception itself
      */
@@ -154,7 +182,9 @@ public final class CoreUtils {
     static void writeParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
 
-        if (!type.isPrimitive()) {
+        if (type == null) {
+            pipeVar.invoke("writeObject", paramVar);
+        } else if (!type.isPrimitive()) {
             if (!type.isEnum()) {
                 pipeVar.invoke("writeObject", paramVar);
             } else {
@@ -195,7 +225,9 @@ public final class CoreUtils {
     static void readParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
 
-        if (!type.isPrimitive()) {
+        if (type == null) {
+            paramVar.set(pipeVar.invoke("readObject").cast(paramVar));
+        } else if (!type.isPrimitive()) {
             var objectVar = pipeVar.invoke("readObject");
             if (!type.isEnum()) {
                 paramVar.set(type == Object.class ? objectVar : objectVar.cast(type));

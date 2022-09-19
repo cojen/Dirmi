@@ -100,7 +100,7 @@ final class SkeletonMaker<R> {
         // Need to finish this now because the call to get the skeleton lookup forces it to be
         // initialized. This in turn runs the static initializer (see below) which needs to be
         // able to see the factory class.
-        Class<?> factoryClass = mFactoryMaker.finish();
+        mFactoryMaker.finish();
 
         // Because the cache maintains a soft reference to the factory, maintain a strong
         // static reference to the singleton factory instance from the skeleton, to prevent the

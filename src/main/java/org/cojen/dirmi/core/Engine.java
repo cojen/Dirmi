@@ -231,13 +231,11 @@ public final class Engine implements Environment {
             }
 
             Class<?> rootType = RemoteExaminer.remoteType(root);
-            String rootTypeName = rootType.getName();
+            serverInfo = RemoteInfo.examine(rootType);
 
-            if (!clientInfo.name().equals(rootTypeName)) {
+            if (!clientInfo.isAssignableFrom(serverInfo)) {
                 throw new RemoteException("Mismatched root object type");
             }
-
-            serverInfo = RemoteInfo.examine(rootType);
 
             session = new ServerSession<Object>(this, root);
             session.registerNewConnection(pipe);

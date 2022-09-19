@@ -119,7 +119,9 @@ final class ClientSession<R> extends CoreSession<R> {
             pipe.mMode = CorePipe.M_SERVER;
             recycleConnection(pipe);
         } catch (IOException e) {
-            uncaughtException(e);
+            if (!isClosed()) {
+                uncaughtException(e);
+            }
         }
     }
 }

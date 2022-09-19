@@ -233,6 +233,31 @@ final class RemoteInfo {
         return mRemoteMethods;
     }
 
+    /**
+     * Returns true if this type is likely assignable by the other type.
+     */
+    boolean isAssignableFrom(RemoteInfo other) {
+        String name = name();
+
+        if (name.equals(other.name()) || other.interfaceNames().contains(name)) {
+            return true;
+        }
+
+        if (name.equals(Remote.class.getName())) {
+            return true;
+        }
+
+        try {
+            if (name.equals(java.rmi.Remote.class.getName())) {
+                return true;
+            }
+        } catch (Throwable e) {
+            // The java.rmi module might not be found.
+        }
+
+        return false;
+    }
+
     @Override
     public int hashCode() {
         int hash = mHashCode;

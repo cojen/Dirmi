@@ -40,6 +40,24 @@ public class CoreUtilsTest {
     }
 
     @Test
+    public void loadClass() throws Exception {
+        ClassLoader loader = getClass().getClassLoader();
+
+        assertEquals(boolean.class, loadClassByNameOrDescriptor("Z", loader));
+        assertEquals(char.class, loadClassByNameOrDescriptor("C", loader));
+        assertEquals(float.class, loadClassByNameOrDescriptor("F", loader));
+        assertEquals(double.class, loadClassByNameOrDescriptor("D", loader));
+        assertEquals(byte.class, loadClassByNameOrDescriptor("B", loader));
+        assertEquals(short.class, loadClassByNameOrDescriptor("S", loader));
+        assertEquals(int.class, loadClassByNameOrDescriptor("I", loader));
+        assertEquals(long.class, loadClassByNameOrDescriptor("J", loader));
+
+        assertEquals(String[].class, loadClassByNameOrDescriptor("[Ljava/lang/String;", loader));
+        assertEquals(int[][].class, loadClassByNameOrDescriptor("[[I", loader));
+        assertEquals(String.class, loadClassByNameOrDescriptor("java.lang.String", loader));
+    }
+
+    @Test
     public void remoteEx() throws Exception {
         Throwable e = remoteException(RemoteException.class, null);
         assertTrue(e instanceof RemoteException);

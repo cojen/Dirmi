@@ -83,7 +83,7 @@ final class StubMaker {
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
-            .extend(Stub.class).implement(type).final_().sourceFile(sourceFile);
+            .public_().extend(Stub.class).implement(type).final_().sourceFile(sourceFile);
     }
 
     /**
@@ -92,13 +92,13 @@ final class StubMaker {
      * remote object class isn't found
      */
     private MethodHandle finishFactory() {
-        Class<?> stubClass = finishStub();
+        finishStub();
 
         MethodMaker mm = mFactoryMaker.addConstructor(long.class);
         mm.invokeSuperConstructor(mm.param(0));
 
         mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
-        mm.public_().return_(mm.new_(stubClass, mm.param(0), mm.param(1)));
+        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1)));
 
         MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
 
@@ -138,37 +138,44 @@ final class StubMaker {
         int batchedImmediateMethodId = -1;
 
         while (true) {
-            if (clientMethod == null) {
-                if (!it1.hasNext()) {
-                    break;
-                }
+            if (clientMethod == null && it1.hasNext()) {
                 clientMethod = it1.next();
             }
 
-            if (serverMethod == null) {
-                if (!it2.hasNext()) {
-                    break;
-                }
+            if (serverMethod == null &&  it2.hasNext()) {
                 serverMethod = it2.next();
                 serverMethodId++;
+            }
+
+            if (clientMethod == null && serverMethod == null) {
+                break;
             }
 
             Object returnType;
             String methodName;
             Object[] ptypes;
 
-            int cmp = clientMethod.compareTo(serverMethod);
+            int cmp;
+            if (clientMethod == null) {
+                // Only server-side methods remain.
+                cmp = 1;
+            } else if (serverMethod == null) {
+                // Only client-side methods remain.
+                cmp = -1;
+            } else {
+                cmp = clientMethod.compareTo(serverMethod);
+            }
 
             if (cmp > 0) {
                 // Attempt to implement a method that only exists on the server-side.
                 try {
-                    returnType = loadClass(serverMethod.returnType());
+                    returnType = classForEx(serverMethod.returnType());
                     methodName = serverMethod.name();
                     List<String> pnames = serverMethod.parameterTypes();
                     ptypes = new Object[pnames.size()];
                     int i = 0;
                     for (String pname : pnames) {
-                        ptypes[i++] = loadClass(pname);
+                        ptypes[i++] = classForEx(pname);
                     }
                 } catch (ClassNotFoundException e) {
                     // Can't be implemented, so skip it.
@@ -181,7 +188,7 @@ final class StubMaker {
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
             }
 
-            if (clientMethod.isBatchedImmediate() && cmp >= 0) {
+            if (clientMethod != null && clientMethod.isBatchedImmediate() && cmp >= 0) {
                 // No stub method is actually generated for this variant. The skeleton variant
                 // is invoked when the remote typeId isn't known yet. RemoteMethod instances are
                 // compared such that this variant comes immediately before the normal one.
@@ -195,7 +202,7 @@ final class StubMaker {
 
             if (cmp < 0) {
                 // The server doesn't implement the method.
-                mm.new_(NoSuchMethodError.class).throw_();
+                mm.new_(NoSuchMethodError.class, "Unimplemented on remote side").throw_();
                 clientMethod = null;
                 continue;
             }
@@ -205,10 +212,10 @@ final class StubMaker {
             if (cmp > 0) {
                 // Use the default failure exception for a method that only exists on the
                 // server-side.
-                remoteFailureClass = classFor(mm, mClientInfo.remoteFailureException());
+                remoteFailureClass = classFor(mClientInfo.remoteFailureException());
             } else {
                 String remoteFailureName = clientMethod.remoteFailureException();
-                remoteFailureClass = classFor(mm, remoteFailureName);
+                remoteFailureClass = classFor(remoteFailureName);
 
                 for (String ex : clientMethod.exceptionTypes()) {
                     if (!ex.equals(remoteFailureName)) {
@@ -219,7 +226,7 @@ final class StubMaker {
 
             mm.throws_(remoteFailureClass);
 
-            if (clientMethod.isPiped() != serverMethod.isPiped()) {
+            if (clientMethod != null && clientMethod.isPiped() != serverMethod.isPiped()) {
                 // Not expected.
                 mm.new_(IncompatibleClassChangeError.class).throw_();
                 clientMethod = null;
@@ -257,7 +264,7 @@ final class StubMaker {
             Variable aliasIdVar = null;
 
             if (serverMethod.isBatched() && !isVoid(returnType)) {
-                var returnClass = classFor(mm, returnType);
+                var returnClass = classFor(returnType);
                 typeIdVar = supportVar.invoke("remoteTypeId", returnClass);
                 aliasIdVar = supportVar.invoke("newAliasId");
 
@@ -355,7 +362,9 @@ final class StubMaker {
                 thrownVar.throw_();
             }
 
-            clientMethod = null;
+            if (cmp == 0) {
+                clientMethod = null;
+            }
             serverMethod = null;
             batchedImmediateMethodId = -1;
         }
@@ -402,17 +411,13 @@ final class StubMaker {
         }
     }
 
-    private Class<?> classFor(MethodMaker mm, Object obj) throws NoClassDefFoundError {
-        return obj instanceof Class ? ((Class<?>) obj) : classFor(mm, (String) obj);
+    private Class<?> classFor(Object obj) throws NoClassDefFoundError {
+        return obj instanceof Class ? ((Class<?>) obj) : classFor((String) obj);
     }
 
-    private Class<?> classFor(MethodMaker mm, String name) throws NoClassDefFoundError {
-        Class<?> clazz = mm.var(name).classType();
-        if (clazz != null) {
-            return clazz;
-        }
+    private Class<?> classFor(String name) throws NoClassDefFoundError {
         try {
-            return loadClass(name);
+            return classForEx(name);
         } catch (ClassNotFoundException e) {
             var error = new NoClassDefFoundError(name);
             error.initCause(e);
@@ -420,7 +425,7 @@ final class StubMaker {
         }
     }
 
-    private Class<?> loadClass(String name) throws ClassNotFoundException {
-        return Class.forName(name, false, mStubMaker.classLoader());
+    private Class<?> classForEx(String name) throws ClassNotFoundException {
+        return CoreUtils.loadClassByNameOrDescriptor(name, mStubMaker.classLoader());
     }
 }

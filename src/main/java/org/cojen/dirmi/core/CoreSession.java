@@ -224,7 +224,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 startRequestProcessor(pipe);
             } catch (IOException e) {
-                uncaughtException(e);
+                if (!isClosed()) {
+                    uncaughtException(e);
+                }
             }
 
             return false;
@@ -544,6 +546,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_TI, skeleton);
             info.writeTo(pipe);
         }
+    }
+
+    boolean isClosed() {
+        conLockAcquire();
+        boolean closed = mClosed;
+        conLockRelease();
+        return closed;
     }
 
     private void checkClosed() throws ClosedException {
