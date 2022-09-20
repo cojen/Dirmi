@@ -20,6 +20,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.Session;
 
 /**
  * Base class for remote stubs.
@@ -44,5 +45,23 @@ public class Stub extends Item implements Remote {
         super(id);
         this.support = support;
         VarHandle.storeStoreFence();
+    }
+
+    @Override
+    public String toString() {
+        String name = getClass().getName();
+
+        // Prune off the generated suffix.
+        int ix = name.lastIndexOf('-');
+        if (ix > 0) {
+            name = name.substring(0, ix);
+        }
+
+        Session session = support.session();
+
+        return name + '@' +
+            Integer.toHexString(System.identityHashCode(this)) + "{id=" + id +
+            ", localAddress=" + session.localAddress() +
+            ", remoteAddress=" + session.remoteAddress() + '}';
     }
 }
