@@ -57,11 +57,17 @@ public class Stub extends Item implements Remote {
             name = name.substring(0, ix);
         }
 
-        Session session = support.session();
+        var b = new StringBuilder();
 
-        return name + '@' +
-            Integer.toHexString(System.identityHashCode(this)) + "{id=" + id +
-            ", localAddress=" + session.localAddress() +
-            ", remoteAddress=" + session.remoteAddress() + '}';
+        b.append(name).append('@').append(Integer.toHexString(System.identityHashCode(this)))
+            .append("{id=").append(id);
+
+        if (!(support instanceof DisposedStubSupport)) {
+            Session session = support.session();
+            b.append(", localAddress=").append(session.localAddress())
+                .append(", remoteAddress=").append(session.remoteAddress());
+        }
+
+        return b.append('}').toString();
     }
 }
