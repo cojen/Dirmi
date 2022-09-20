@@ -188,7 +188,7 @@
           <runOrder>random</runOrder>
           <parallel>classes</parallel>
           <perCoreThreadCount>false</perCoreThreadCount>
-          <threadCount>2</threadCount>
+          <threadCount>4</threadCount>
         </configuration>
       </plugin>
 
