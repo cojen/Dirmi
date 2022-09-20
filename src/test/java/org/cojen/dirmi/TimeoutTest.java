@@ -113,7 +113,7 @@ public class TimeoutTest {
         Echo echo = mClientSession.root();
 
         // Test without locking, to allow some pings to be sent and received initially. This
-        // isn't necessary for the test, but it ensure that the ping handling code is run.
+        // isn't necessary for the test, but it ensures that the ping handling code is run.
         for (int i=0; i<5; i++) {
             String msg = "hello-" + i;
             assertEquals(msg, echo.echo(msg));

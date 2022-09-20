@@ -433,13 +433,24 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     {
         setControlConnection(pipe);
 
+        var pongTask = (Runnable) () -> {
+            try {
+                sendByte(C_PONG);
+            } catch (Throwable e) {
+                if (!(e instanceof IOException)) {
+                    uncaughtException(e);
+                }
+                close(CLOSED_CONTROL_FAILURE);
+            }
+        };
+
         mEngine.executeTask(() -> {
             try {
                 while (true) {
                     int command = pipe.readUnsignedByte();
                     switch (command) {
                     case C_PING:
-                        sendByte(C_PONG);
+                        mEngine.execute(pongTask);
                         break;
                     case C_PONG:
                         cPipeClockHandle.setVolatile(pipe, 0);
