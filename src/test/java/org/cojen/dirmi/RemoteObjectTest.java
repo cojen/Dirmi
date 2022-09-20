@@ -187,12 +187,22 @@ public class RemoteObjectTest {
         R2 r2 = root.c6(9);
         assertEquals("hello 9", r2.c2());
 
+        // Batched remote object id is an aliases.
+        assertTrue(r2.toString().contains("id=-"));
+        assertTrue(r2.toString().contains("remoteAddress"));
+
         R2 r2x = root.c6(19);
         assertNotSame(r2, r2x);
         assertEquals(9, R2Server.cParam);
 
+        // Batched remote object id is an aliases.
+        assertTrue(r2x.toString().contains("id=-"));
+
         // This forces the batch to finish as a side-effect.
         r2.dispose();
+
+        // No address when disposed.
+        assertFalse(r2.toString().contains("remoteAddress"));
 
         assertEquals("hello 19", r2x.c2());
         assertEquals(19, R2Server.cParam);
@@ -206,6 +216,16 @@ public class RemoteObjectTest {
         R2 c = b.next(3);
         R2 d = c.next(4);
         R2 e = d.next(5);
+
+        // Root id isn't an alias.
+        assertFalse(root.toString().contains("id=-"));
+
+        // Batched remote object ids are all aliases.
+        assertTrue(a.toString().contains("id=-"));
+        assertTrue(b.toString().contains("id=-"));
+        assertTrue(c.toString().contains("id=-"));
+        assertTrue(d.toString().contains("id=-"));
+        assertTrue(e.toString().contains("id=-"));
 
         assertEquals(1, R2Server.cParam);
 
