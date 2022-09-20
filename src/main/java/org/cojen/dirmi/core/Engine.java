@@ -200,12 +200,15 @@ public final class Engine implements Environment {
         checkClosed();
 
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
+        var timeout = new CloseTimeout(pipe);
 
         long clientSessionId = 0;
         ServerSession session;
         RemoteInfo serverInfo;
 
         try {
+            scheduleMillis(timeout, PING_TIMEOUT_MILLIS);
+
             long version = pipe.readLong();
             if (version != CoreUtils.PROTOCOL_V2 || (clientSessionId = pipe.readLong()) == 0) {
                 throw new RemoteException("Unsupported protocol");
@@ -214,6 +217,9 @@ public final class Engine implements Environment {
             long serverSessionId = pipe.readLong();
 
             if (serverSessionId != 0) {
+                if (!timeout.cancel()) {
+                    throw new RemoteException("Timed out");
+                }
                 ItemMap<ServerSession> sessions = mServerSessions;
                 if (sessions == null || (session = sessions.get(serverSessionId)) == null) {
                     checkClosed();
@@ -243,6 +249,8 @@ public final class Engine implements Environment {
             session = new ServerSession<Object>(this, root);
             session.registerNewConnection(pipe);
         } catch (Throwable e) {
+            timeout.cancel();
+
             try {
                 if (e instanceof RemoteException && clientSessionId != 0) {
                     pipe.writeLong(CoreUtils.PROTOCOL_V2);
@@ -278,10 +286,15 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
+            if (!timeout.cancel()) {
+                throw new RemoteException("Timed out");
+            }
+
             session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
 
             return session;
         } catch (Throwable e) {
+            timeout.cancel();
             CoreUtils.closeQuietly(session);
             throw e;
         }
@@ -298,8 +311,11 @@ public final class Engine implements Environment {
 
         var session = new ClientSession<R>(this, null, addr);
         CorePipe pipe = session.connect();
+        var timeout = new CloseTimeout(pipe);
 
         try {
+            scheduleMillis(timeout, PING_TIMEOUT_MILLIS);
+
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
             info.writeTo(pipe);  // root object type
@@ -324,6 +340,10 @@ public final class Engine implements Environment {
             RemoteInfo serverInfo = RemoteInfo.readFrom(pipe);
             Object metadata = pipe.readObject();
 
+            if (!timeout.cancel()) {
+                throw new RemoteException("Timed out");
+            }
+
             session.init(serverSessionId, type, rootTypeId, serverInfo, rootId);
 
             session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
@@ -342,6 +362,7 @@ public final class Engine implements Environment {
 
             return session;
         } catch (Throwable e) {
+            timeout.cancel();
             session.close();
             CoreUtils.closeQuietly(pipe);
             throw e;

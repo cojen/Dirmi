@@ -42,8 +42,7 @@ public class TimeoutTest {
     private Session<Echo> mClientSession;
     private Session<Echo> mServerSession;
 
-    @Before
-    public void setup() throws Exception {
+    private void setup(boolean lockEarly) throws Exception {
         mEnv = Environment.create();
         mEnv.export("main", new EchoServer());
 
@@ -52,7 +51,7 @@ public class TimeoutTest {
 
             @Override
             public void connect(Session session) throws IOException {
-                // Connect with a local pipe and simulate slow writes a lock.
+                // Connect with a local pipe and simulate slow writes with a lock.
 
                 var clientIn = new PipedInputStream();
                 OutputStream serverOut = new PipedOutputStream(clientIn);
@@ -66,6 +65,10 @@ public class TimeoutTest {
                         mServerOut = new LockedOutputStream(serverOut);
                         clientOut = mClientOut;
                         serverOut = mServerOut;
+
+                        if (lockEarly) {
+                            mServerOut.lock();
+                        }
                     }
                 }
 
@@ -105,11 +108,15 @@ public class TimeoutTest {
 
     @After
     public void teardown() throws Exception {
-        mEnv.close();
+        if (mEnv != null) {
+            mEnv.close();
+        }
     }
 
     @Test
     public void serverStall() throws Exception {
+        setup(false);
+
         Echo echo = mClientSession.root();
 
         // Test without locking, to allow some pings to be sent and received initially. This
@@ -136,6 +143,16 @@ public class TimeoutTest {
         }
 
         fail("session wasn't closed");
+    }
+
+    @Test
+    public void setupStall() throws Exception {
+        // The session cannot be established, and CloseTimeout closes the connection.
+        try {
+            setup(true);
+            fail();
+        } catch (ClosedException e) {
+        }
     }
 
     public static interface Echo extends Remote {
