@@ -989,7 +989,11 @@ class BufferedPipe implements Pipe {
                 System.arraycopy(b, off, buf, end, avail);
                 off += avail;
                 len -= avail;
-                mSourceOut.write(buf, 0, buf.length);
+                try {
+                    mSourceOut.write(buf, 0, buf.length);
+                } catch (IOException e) {
+                    throw outputException(e);
+                }
                 mOutEnd = end = 0;
             }
 
@@ -997,8 +1001,12 @@ class BufferedPipe implements Pipe {
 
             if (len >= MAX_BUFFER_SIZE) {
                 // Bypass the buffer entirely.
-                mSourceOut.write(b, off, len);
-                return;
+                try {
+                    mSourceOut.write(b, off, len);
+                    return;
+                } catch (IOException e) {
+                    throw outputException(e);
+                }
             }
 
             if (len > buf.length) {
@@ -1117,7 +1125,11 @@ class BufferedPipe implements Pipe {
             if (avail < 100) {
                 // Flush to make room. Do it before no space is available, so as not to make a
                 // bunch of tiny calls to the encodeUTF method.
-                mSourceOut.write(buf, 0, end);
+                try {
+                    mSourceOut.write(buf, 0, end);
+                } catch (IOException e) {
+                    throw outputException(e);
+                }
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
@@ -1364,7 +1376,11 @@ class BufferedPipe implements Pipe {
             if (avail < 100) {
                 // Flush to make room. Do it before no space is available, so as not to make a
                 // bunch of tiny calls to the encodeUTF method.
-                mSourceOut.write(buf, 0, end);
+                try {
+                    mSourceOut.write(buf, 0, end);
+                } catch (IOException e) {
+                    throw outputException(e);
+                }
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
@@ -1752,7 +1768,11 @@ class BufferedPipe implements Pipe {
     @Override
     public final void flush() throws IOException {
         if (mOutEnd != 0) {
-            mSourceOut.write(mOutBuffer, 0, mOutEnd);
+            try {
+                mSourceOut.write(mOutBuffer, 0, mOutEnd);
+            } catch (IOException e) {
+                throw outputException(e);
+            }
             mOutEnd = 0;
         }
     }
@@ -1770,7 +1790,11 @@ class BufferedPipe implements Pipe {
         if ((end + required) <= MAX_BUFFER_SIZE) {
             expand(end, required);
         } else {
-            mSourceOut.write(buf, 0, end);
+            try {
+                mSourceOut.write(buf, 0, end);
+            } catch (IOException e) {
+                throw outputException(e);
+            }
             mOutEnd = 0;
         }
     }
@@ -1840,6 +1864,11 @@ class BufferedPipe implements Pipe {
         // Discard the buffer contents to prevent it from being read again.
         mInPos = 0;
         mInEnd = 0;
+        close(ex); // always throws the exception
+        throw ex;
+    }
+
+    private IOException outputException(IOException ex) throws IOException {
         close(ex); // always throws the exception
         throw ex;
     }

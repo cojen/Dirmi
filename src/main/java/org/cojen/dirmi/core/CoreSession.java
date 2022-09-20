@@ -349,19 +349,19 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public SocketAddress localAddress() {
+    public final SocketAddress localAddress() {
         var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
         return pipe == null ? null : pipe.localAddress();
     }
 
     @Override
-    public SocketAddress remoteAddress() {
+    public final SocketAddress remoteAddress() {
         var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
         return pipe == null ? null : pipe.remoteAddress();
     }
 
     @Override
-    public void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
+    public final void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
         mUncaughtExceptionHandler = h;
     }
 
@@ -405,7 +405,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         return getClass().getSimpleName() + '@' +
             Integer.toHexString(System.identityHashCode(this)) +
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
@@ -605,16 +605,16 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     void reverseConnect(long id) {
     }
 
-    Object objectFor(long id) throws IOException {
+    final Object objectFor(long id) throws IOException {
         return mSkeletons.get(id).server();
     }
 
-    Object objectFor(long id, long typeId) throws IOException {
+    final Object objectFor(long id, long typeId) throws IOException {
         StubFactory factory = mStubFactories.get(typeId);
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
-    Object objectFor(long id, long typeId, RemoteInfo info) {
+    final Object objectFor(long id, long typeId, RemoteInfo info) {
         Class<?> type;
         try {
             type = loadClass(info.name());
@@ -636,7 +636,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
-    Class<?> loadClass(String name) throws ClassNotFoundException {
+    final Class<?> loadClass(String name) throws ClassNotFoundException {
         return Class.forName(name, false, root().getClass().getClassLoader());
     }
 
@@ -656,7 +656,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    long remoteTypeId(Class<?> type) {
+    final long remoteTypeId(Class<?> type) {
         StubFactory factory;
         synchronized (mStubFactoriesByClass) {
             factory = mStubFactoriesByClass.get(type);
@@ -664,12 +664,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return factory == null ? 0 : factory.id;
     }
 
-    void writeSkeleton(CorePipe pipe, Object server) throws IOException {
+    final void writeSkeleton(CorePipe pipe, Object server) throws IOException {
         writeSkeleton(pipe, mSkeletons.skeletonFor(server));
     }
 
     @SuppressWarnings("unchecked")
-    Skeleton createSkeletonAlias(Object server, long aliasId) {
+    final Skeleton createSkeletonAlias(Object server, long aliasId) {
         var type = RemoteExaminer.remoteType(server);
         SkeletonFactory factory = SkeletonMaker.factoryFor(type);
         var skeleton = factory.newSkeleton(aliasId, mSkeletonSupport, server);
@@ -677,7 +677,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return skeleton;
     }
 
-    void writeSkeletonAlias(CorePipe pipe, Object server, long aliasId) throws IOException {
+    final void writeSkeletonAlias(CorePipe pipe, Object server, long aliasId) throws IOException {
         Skeleton skeleton = createSkeletonAlias(server, aliasId);
         try {
             writeSkeleton(pipe, skeleton);
@@ -699,14 +699,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    boolean isClosed() {
+    final boolean isClosed() {
         conLockAcquire();
         int closed = mClosed;
         conLockRelease();
         return closed != 0;
     }
 
-    private void checkClosed() throws ClosedException {
+    final void checkClosed() throws ClosedException {
         int closed = mClosed;
         if (closed != 0) {
             String message = "Session is closed";
@@ -721,7 +721,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    void conLockAcquire() {
+    final void conLockAcquire() {
         int trials = 0;
         while (mConLock != 0 || !cConLockHandle.compareAndSet(this, 0, 1)) {
             if (++trials >= SPIN_LIMIT) {
@@ -733,7 +733,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    void conLockRelease() {
+    final void conLockRelease() {
         mConLock = 0;
     }
 
@@ -741,7 +741,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * Start processing incoming remote requests over the given pipe. If an exception is
      * thrown, the pipe is closed.
      */
-    void startRequestProcessor(CorePipe pipe) throws IOException {
+    final void startRequestProcessor(CorePipe pipe) throws IOException {
         try {
             mEngine.executeTask(new Processor(pipe));
         } catch (IOException e) {
