@@ -102,13 +102,13 @@ final class CorePipe extends BufferedPipe {
             super.close(ex);
         } else {
             session.closeConnection(this);
-            try {
-                session.checkClosed();
-            } catch (IOException e2) {
-                if (ex != null) {
+            if (ex != null) {
+                try {
+                    session.checkClosed();
+                } catch (IOException e2) {
                     e2.addSuppressed(ex);
+                    throw e2;
                 }
-                throw e2;
             }
         }
     }
