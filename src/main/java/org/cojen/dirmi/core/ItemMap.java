@@ -52,7 +52,7 @@ class ItemMap<I extends Item> {
      * @return old item
      */
     @SuppressWarnings("unchecked")
-    synchronized I put(I item) {
+    final synchronized I put(I item) {
         Item[] items = mItems;
         int slot = ((int) item.id) & (items.length - 1);
 
@@ -86,7 +86,7 @@ class ItemMap<I extends Item> {
      * @return existing item or the given item
      */
     @SuppressWarnings("unchecked")
-    synchronized I putIfAbsent(I item) {
+    final synchronized I putIfAbsent(I item) {
         Item[] items = mItems;
         int slot = ((int) item.id) & (items.length - 1);
 
@@ -105,7 +105,7 @@ class ItemMap<I extends Item> {
     }
 
     // Caller must be synchronized.
-    protected void doPut(Item[] items, I item, int slot) {
+    protected final void doPut(Item[] items, I item, int slot) {
         int size = mSize;
         if ((size + (size >> 1)) >= items.length && grow()) {
             items = mItems;
@@ -124,7 +124,7 @@ class ItemMap<I extends Item> {
      * any synchronization and so it can yield false negatives.
      */
     @SuppressWarnings("unchecked")
-    I tryGet(long id) {
+    final I tryGet(long id) {
         Item[] items = mItems;
         for (Item it = items[((int) id) & (items.length - 1)]; it != null; it = it.mNext) {
             if (it.id == id) {
@@ -138,7 +138,7 @@ class ItemMap<I extends Item> {
      * Get an item by its identifier.
      */
     @SuppressWarnings("unchecked")
-    I get(long id) throws NoSuchObjectException {
+    final I get(long id) throws NoSuchObjectException {
         // Quick find without synchronization.
         Item[] items = mItems;
         for (Item it = items[((int) id) & (items.length - 1)]; it != null; it = it.mNext) {
@@ -189,12 +189,12 @@ class ItemMap<I extends Item> {
     /**
      * Remove an item from the map.
      */
-    final void remove(I item) {
-        remove(item.id);
+    final I remove(I item) {
+        return remove(item.id);
     }
 
     @SuppressWarnings("unchecked")
-    synchronized void forEach(Consumer<I> action) {
+    final synchronized void forEach(Consumer<I> action) {
         Item[] items = mItems;
         for (int i=0; i<items.length; i++) {
             for (Item it = items[i]; it != null; it = it.mNext) {

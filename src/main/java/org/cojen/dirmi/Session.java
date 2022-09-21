@@ -38,6 +38,7 @@ import org.cojen.dirmi.core.CoreUtils;
  *
  * @author Brian S O'Neill
  * @see Environment#connect Environment.connect
+ * @see SessionAware
  */
 public interface Session<R> extends Closeable, Link {
     /**

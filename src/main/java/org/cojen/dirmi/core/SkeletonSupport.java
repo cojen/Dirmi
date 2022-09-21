@@ -27,7 +27,7 @@ import org.cojen.dirmi.Pipe;
  */
 public interface SkeletonSupport {
     /**
-     * Used by matched methods for creating a skeleton that can be found by the given alias
+     * Used by batched methods for creating a skeleton that can be found by the given alias
      * identifier.
      *
      * @param aliasId negative identifier provided by the client

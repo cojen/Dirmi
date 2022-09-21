@@ -46,14 +46,19 @@ final class ServerSession<R> extends CoreSession<R> {
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
 
-    ServerSession(Engine engine, R root) {
+    ServerSession(Engine engine, R root, CorePipe pipe) throws ClosedException {
         super(engine);
 
-        mRoot = mSkeletons.skeletonFor(root);
-        mKnownTypes.put(new Item(mRoot.typeId()));
+        // Store the pipe before calling skeletonFor, in case the root is SessionAware. The
+        // address fields should be available to it.
+        registerNewConnection(pipe);
+        setControlConnection(pipe);
 
         // Define a special skeleton for accepting reverse connections.
         mSkeletons.put(new Connector(mReverseId));
+
+        mRoot = mSkeletons.skeletonFor(root);
+        mKnownTypes.put(new Item(mRoot.typeId()));
     }
 
     /**

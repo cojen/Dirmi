@@ -246,8 +246,7 @@ public final class Engine implements Environment {
                 throw new RemoteException("Mismatched root object type");
             }
 
-            session = new ServerSession<Object>(this, root);
-            session.registerNewConnection(pipe);
+            session = new ServerSession<Object>(this, root, pipe);
         } catch (Throwable e) {
             timeout.cancel();
 

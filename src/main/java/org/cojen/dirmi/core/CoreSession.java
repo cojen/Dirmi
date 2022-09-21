@@ -38,6 +38,7 @@ import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.SessionAware;
 
 /**
  * Base class for ClientSession and ServerSession.
@@ -396,11 +397,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         mStubs.clear();
         mStubFactories.clear();
-        mSkeletons.clear();
         mKnownTypes.clear();
 
         synchronized (mStubFactoriesByClass) {
             mStubFactoriesByClass.clear();
+        }
+
+        synchronized (mSkeletons) {
+            mSkeletons.forEach(this::detached);
+            mSkeletons.clear();
         }
     }
 
@@ -684,8 +689,29 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         var type = RemoteExaminer.remoteType(server);
         SkeletonFactory factory = SkeletonMaker.factoryFor(type);
         var skeleton = factory.newSkeleton(aliasId, mSkeletonSupport, server);
-        mSkeletons.putIfAbsent(skeleton);
-        return skeleton;
+
+        if (server instanceof SessionAware) {
+            // Must call attached now, because as soon as the skeleton is put into the map, it
+            // becomes available to other threads.
+            try {
+                ((SessionAware) server).attached(this);
+            } catch (Throwable e) {
+                uncaughtException(e);
+            }
+        }
+
+        Skeleton existing = mSkeletons.putIfAbsent(skeleton);
+
+        if (existing != skeleton && server instanceof SessionAware) {
+            // The aliasId should be unique, and so this case shouldn't happen.
+            try {
+                ((SessionAware) server).detached(this);
+            } catch (Throwable e) {
+                uncaughtException(e);
+            }
+        }
+
+        return existing;
     }
 
     final void writeSkeletonAlias(CorePipe pipe, Object server, long aliasId) throws IOException {
@@ -693,7 +719,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         try {
             writeSkeleton(pipe, skeleton);
         } catch (Throwable e) {
-            mSkeletons.remove(skeleton);
+            removeSkeleton(skeleton);
             throw e;
         }
     }
@@ -707,6 +733,23 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             RemoteInfo info = RemoteInfo.examine(skeleton.type());
             pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_TI, skeleton);
             info.writeTo(pipe);
+        }
+    }
+
+    final void removeSkeleton(Skeleton<?> skeleton) {
+        if (mSkeletons.remove(skeleton) != null) {
+            detached(skeleton);
+        }
+    }
+
+    private void detached(Skeleton<?> skeleton) {
+        Object server = skeleton.server();
+        if (server instanceof SessionAware) {
+            try {
+                ((SessionAware) server).detached(this);
+            } catch (Throwable e) {
+                uncaughtException(e);
+            }
         }
     }
 

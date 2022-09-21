@@ -22,6 +22,8 @@ import java.util.Arrays;
 
 import java.util.concurrent.CountDownLatch;
 
+import org.cojen.dirmi.SessionAware;
+
 /**
  * Specialized ItemMap for tracking Skeleton instances. Never put canonical skeletons directly
  * into the map -- always call the skeletonFor method instead.
@@ -120,6 +122,15 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                     long id = IdGenerator.nextPositive();
                     Skeleton<R> skeleton = factory.newSkeleton
                         (id, mSession.mSkeletonSupport, server);
+
+                    if (server instanceof SessionAware) {
+                        try {
+                            ((SessionAware) server).attached(mSession);
+                        } catch (Throwable e) {
+                            mSession.uncaughtException(e);
+                        }
+                    }
+
                     VarHandle.storeStoreFence();
 
                     super.put(skeleton);
