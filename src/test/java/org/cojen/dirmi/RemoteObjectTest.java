@@ -270,6 +270,23 @@ public class RemoteObjectTest {
         assertEquals(str, root.selfString());
     }
 
+    @Test
+    public void bogusExport() throws Exception {
+        try {
+            mClientEnv.export(mSession.root(), new R1Server());
+            fail();
+        } catch (IllegalArgumentException ex) {
+            assertTrue(ex.getMessage().contains("Unsupported object"));
+        }
+
+        try {
+            mClientEnv.export(new R1Server(), new R1Server());
+            fail();
+        } catch (IllegalArgumentException ex) {
+            assertTrue(ex.getMessage().contains("Unsupported object"));
+        }
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 

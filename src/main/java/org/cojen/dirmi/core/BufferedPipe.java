@@ -60,9 +60,9 @@ import static org.cojen.dirmi.core.TypeCodes.*;
 class BufferedPipe implements Pipe {
     private static final int MAX_BUFFER_SIZE = 8192; // must be a power of 2
 
-    private static final VarHandle cShortArrayBEHandle;
-    private static final VarHandle cIntArrayBEHandle;
-    private static final VarHandle cLongArrayBEHandle;
+    static final VarHandle cShortArrayBEHandle;
+    static final VarHandle cIntArrayBEHandle;
+    static final VarHandle cLongArrayBEHandle;
 
     static {
         try {
@@ -87,8 +87,8 @@ class BufferedPipe implements Pipe {
 
     private ReferenceLookup mInRefLookup;
 
-    private byte[] mOutBuffer;
-    private int mOutEnd;
+    protected byte[] mOutBuffer;
+    protected int mOutEnd;
 
     private ReferenceMap mOutRefMap;
 
@@ -1198,7 +1198,7 @@ class BufferedPipe implements Pipe {
         case T_BIG_DECIMAL: writeObject((BigDecimal) v); break;
         case T_THROWABLE: writeObject((Throwable) v); break;
         case T_STACK_TRACE: writeObject((StackTraceElement) v); break;
-        case T_REMOTE: writeObject((Stub) v); break;
+        case T_REMOTE: writeStub((Stub) v); break;
         case T_REMOTE_T: writeSkeleton(v); break;
         default: throw unsupported(v);
         }
@@ -1209,23 +1209,17 @@ class BufferedPipe implements Pipe {
     }
 
     /**
+     * @param stub non-null stub
+     */
+    void writeStub(Stub stub) throws IOException {
+        throw unsupported(stub);
+    }
+
+    /**
      * @param server non-null server side object
      */
     void writeSkeleton(Object server) throws IOException {
         throw unsupported(server);
-    }
-
-    /**
-     * @param typeCode T_REMOTE_T or T_REMOTE_TI
-     */
-    void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
-        requireOutput(17);
-        int end = mOutEnd;
-        byte[] buf = mOutBuffer;
-        buf[end++] = typeCode;
-        cLongArrayBEHandle.set(buf, end, skeleton.id);
-        cLongArrayBEHandle.set(buf, end + 8, skeleton.typeId());
-        mOutEnd = end + 16;
     }
 
     @Override
@@ -1604,17 +1598,6 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    void writeObject(Stub v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
-            requireOutput(9);
-            int end = mOutEnd;
-            byte[] buf = mOutBuffer;
-            buf[end++] = T_REMOTE; // remote id
-            cLongArrayBEHandle.set(buf, end, v.id);
-            mOutEnd = end + 8;
-        }
-    }
-
     /**
      * Writes a small or large type code, depending on the size of the given unsigned value
      * which is written immediately after the type code.
@@ -1757,7 +1740,7 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    private void requireOutput(int required) throws IOException {
+    void requireOutput(int required) throws IOException {
         int avail = mOutBuffer.length - mOutEnd;
         if (avail < required) {
             expandOrFlush(required);

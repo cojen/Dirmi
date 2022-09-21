@@ -78,8 +78,31 @@ final class CorePipe extends BufferedPipe {
     }
 
     @Override
+    void writeStub(Stub stub) throws IOException {
+        requireOutput(9);
+        int end = mOutEnd;
+        byte[] buf = mOutBuffer;
+        buf[end++] = TypeCodes.T_REMOTE; // remote id
+        cLongArrayBEHandle.set(buf, end, stub.id);
+        mOutEnd = end + 8;
+    }
+
+    @Override
     void writeSkeleton(Object server) throws IOException {
         mSession.writeSkeleton(this, server);
+    }
+
+    /**
+     * @param typeCode T_REMOTE_T or T_REMOTE_TI
+     */
+    void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
+        requireOutput(17);
+        int end = mOutEnd;
+        byte[] buf = mOutBuffer;
+        buf[end++] = typeCode;
+        cLongArrayBEHandle.set(buf, end, skeleton.id);
+        cLongArrayBEHandle.set(buf, end + 8, skeleton.typeId());
+        mOutEnd = end + 16;
     }
 
     @Override
