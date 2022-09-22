@@ -18,19 +18,24 @@ package org.cojen.dirmi;
 
 /**
  * Remote objects implementing this interface are notified when they are attached and detached
- * from sessions.
+ * from sessions. Attachment occurs when a remote object is transported over a session for the
+ * first time. Detachment occurs when an object is explicitly {@link Disposer disposed} of, or
+ * when a session it's attached to is closed. An object can become re-attached to a session, if
+ * it's transported over it again.
  *
  * @author Brian S O'Neill
  */
 public interface SessionAware {
     /**
-     * Called when this object has been attached to a session and can be accessed remotely.
+     * Called when this object has been attached to a session and can be accessed remotely. An
+     * object can be attached to multiple sessions, and this method can be called by multiple
+     * threads concurrently.
      */
     void attached(Session s);
 
     /**
      * Called when this object has been detached from a session which it was previously
-     * attached to.
+     * attached to. This method can be called by multiple threads concurrently.
      */
     void detached(Session s);
 }

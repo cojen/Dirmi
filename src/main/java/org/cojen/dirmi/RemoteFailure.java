@@ -23,6 +23,16 @@ import java.lang.annotation.*;
  * a remote call failure. By default, that exception is {@link RemoteException}, and it (or a
  * superclass) must be declared to be thrown.
  *
+ * {@snippet lang="java" :
+ * @RemoteFailure(declared=false)
+ * void applyOptions(String opts);
+ * }
+ *
+ * {@snippet lang="java" :
+ * @RemoteFailure(exception=SQLException.class)
+ * int executeUpdate(String sql) throws SQLException;
+ * }
+ *
  * @author Brian S O'Neill
  */
 @Documented

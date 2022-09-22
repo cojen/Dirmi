@@ -39,7 +39,8 @@ public interface Connector {
     /**
      * Called to establish a new socket connection using the session's {@link
      * Session#remoteAddress remote address}. Once established, pass the socket to one of the
-     * session's {@code connected} methods.
+     * session's {@code connected} methods. This method can be called by multiple threads
+     * concurrently.
      */
     void connect(Session<?> s) throws IOException;
 }

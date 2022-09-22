@@ -90,11 +90,11 @@ loadScripts(document, 'script');</script>
 <section class="class-description" id="class-description">
 <dl class="notes">
 <dt>All Superinterfaces:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html" title="class or interface in java.io" class="external-link">DataInput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html" title="class or interface in java.io" class="external-link">DataOutput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a></code>, <code><a href="Link.html" title="interface in org.cojen.dirmi">Link</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a></code></dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html" title="class or interface in java.io" class="external-link">DataInput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html" title="class or interface in java.io" class="external-link">DataOutput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a></code>, <code><a href="Link.html" title="interface in org.cojen.dirmi">Link</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></code>, <code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a></code></dd>
 </dl>
 <hr>
 <div class="type-signature"><span class="modifiers">public interface </span><span class="element-name type-name-label">Pipe</span><span class="extends-implements">
-extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a>, <a href="Link.html" title="interface in org.cojen.dirmi">Link</a></span></div>
+extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a>, <a href="Link.html" title="interface in org.cojen.dirmi">Link</a></span></div>
 <div class="block">A pipe is a bidirectional stream which supports basic object serialization. Only simple
  types and collections can be serialized, and the original classes aren't necessarily
  preserved. Graph structure isn't preserved unless reference tracking is <a href="#enableReferences()"><code>enabled</code></a>.
@@ -105,7 +105,58 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
  <p>Pipes are fully buffered, and closing the pipe directly discards any buffered
  writes. Closing the <code>OutputStream</code> will attempt to flush the buffer first, although it
  can only be called from the thread which is allowed to perform writes. Closing either stream
- has the side effect of also fully closing the pipe.</div>
+ has the side effect of also fully closing the pipe.
+
+ <p>Here's an example remote method declaration which uses a pipe:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">Pipe uploadFile(String name, Pipe pipe) throws RemoteException;
+</code></pre>
+</div>
+
+
+ The remote method declaration requires the return type to be a pipe, and one parameter must
+ also be a pipe. The client-side invocation of the remote method simply passes null for the
+ pipe parameter, and the server-side implementation returns null instead of a pipe. Example
+ client call:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">    Pipe pipe = server.uploadFile("notes.txt", null);
+    byte[] notes = ...
+    pipe.writeInt(notes.length);
+    pipe.write(notes);
+    pipe.flush();
+    pipe.readByte(); // read ack
+    pipe.recycle();
+</code></pre>
+</div>
+
+
+ The remote method implementation might look like this:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">@Override
+public Pipe uploadFile(String name, Pipe pipe) {
+    byte[] notes = new byte[pipe.readInt()];
+    pipe.readFully(notes);
+    pipe.writeByte(1); // ack
+    pipe.flush();
+    pipe.recycle();
+    ...
+    return null;
+}
+</code></pre>
+</div>
+
+
+ When using a pipe, writes must be explicitly flushed. When a client calls a piped method,
+ the flush method must be called to ensure that the method name and parameters are actually
+ sent to the remote endpoint. Care must be taken when recycling pipes. There must not be any
+ pending input or unflushed output, and the pipe must not be used again directly. Closing the
+ pipe is safer, although it might force a new pipe connection to be established.</div>
 </section>
 <section class="summary">
 <ul class="summary-list">
@@ -131,19 +182,19 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <div class="block">Enables tracking of object references as they are written, for correctly serializing
  object graphs, and to potentially reduce the overall encoding size.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getInputStream()" class="member-name-link">getInputStream</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the pipe's <code>InputStream</code>, which also implements <code>
  ObjectInput</code>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getOutputStream()" class="member-name-link">getOutputStream</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the pipe's <code>OutputStream</code>, which also implements <code>
  ObjectOutput</code>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#readObject()" class="member-name-link">readObject</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Read and return an object.</div>
@@ -157,26 +208,26 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 </div>
 </div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.Closeable">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Closeable.html#close()" title="class or interface in java.io" class="external-link">close</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.Closeable">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link">Closeable</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Closeable.html#close()" title="class or interface in java.io" class="external-link">close</a></code></div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.DataInput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html" title="class or interface in java.io" class="external-link">DataInput</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readBoolean()" title="class or interface in java.io" class="external-link">readBoolean</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readByte()" title="class or interface in java.io" class="external-link">readByte</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readChar()" title="class or interface in java.io" class="external-link">readChar</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readDouble()" title="class or interface in java.io" class="external-link">readDouble</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readFloat()" title="class or interface in java.io" class="external-link">readFloat</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readFully(byte%5B%5D)" title="class or interface in java.io" class="external-link">readFully</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readFully(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">readFully</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readInt()" title="class or interface in java.io" class="external-link">readInt</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readLine()" title="class or interface in java.io" class="external-link">readLine</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readLong()" title="class or interface in java.io" class="external-link">readLong</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readShort()" title="class or interface in java.io" class="external-link">readShort</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readUnsignedByte()" title="class or interface in java.io" class="external-link">readUnsignedByte</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readUnsignedShort()" title="class or interface in java.io" class="external-link">readUnsignedShort</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#readUTF()" title="class or interface in java.io" class="external-link">readUTF</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataInput.html#skipBytes(int)" title="class or interface in java.io" class="external-link">skipBytes</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.DataInput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html" title="class or interface in java.io" class="external-link">DataInput</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readBoolean()" title="class or interface in java.io" class="external-link">readBoolean</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readByte()" title="class or interface in java.io" class="external-link">readByte</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readChar()" title="class or interface in java.io" class="external-link">readChar</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readDouble()" title="class or interface in java.io" class="external-link">readDouble</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readFloat()" title="class or interface in java.io" class="external-link">readFloat</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readFully(byte%5B%5D)" title="class or interface in java.io" class="external-link">readFully</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readFully(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">readFully</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readInt()" title="class or interface in java.io" class="external-link">readInt</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readLine()" title="class or interface in java.io" class="external-link">readLine</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readLong()" title="class or interface in java.io" class="external-link">readLong</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readShort()" title="class or interface in java.io" class="external-link">readShort</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readUnsignedByte()" title="class or interface in java.io" class="external-link">readUnsignedByte</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readUnsignedShort()" title="class or interface in java.io" class="external-link">readUnsignedShort</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#readUTF()" title="class or interface in java.io" class="external-link">readUTF</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataInput.html#skipBytes(int)" title="class or interface in java.io" class="external-link">skipBytes</a></code></div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.DataOutput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html" title="class or interface in java.io" class="external-link">DataOutput</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeBoolean(boolean)" title="class or interface in java.io" class="external-link">writeBoolean</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeByte(int)" title="class or interface in java.io" class="external-link">writeByte</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeBytes(java.lang.String)" title="class or interface in java.io" class="external-link">writeBytes</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeChar(int)" title="class or interface in java.io" class="external-link">writeChar</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeChars(java.lang.String)" title="class or interface in java.io" class="external-link">writeChars</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeDouble(double)" title="class or interface in java.io" class="external-link">writeDouble</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeFloat(float)" title="class or interface in java.io" class="external-link">writeFloat</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeInt(int)" title="class or interface in java.io" class="external-link">writeInt</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeLong(long)" title="class or interface in java.io" class="external-link">writeLong</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeShort(int)" title="class or interface in java.io" class="external-link">writeShort</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/DataOutput.html#writeUTF(java.lang.String)" title="class or interface in java.io" class="external-link">writeUTF</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.DataOutput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html" title="class or interface in java.io" class="external-link">DataOutput</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeBoolean(boolean)" title="class or interface in java.io" class="external-link">writeBoolean</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeByte(int)" title="class or interface in java.io" class="external-link">writeByte</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeBytes(java.lang.String)" title="class or interface in java.io" class="external-link">writeBytes</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeChar(int)" title="class or interface in java.io" class="external-link">writeChar</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeChars(java.lang.String)" title="class or interface in java.io" class="external-link">writeChars</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeDouble(double)" title="class or interface in java.io" class="external-link">writeDouble</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeFloat(float)" title="class or interface in java.io" class="external-link">writeFloat</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeInt(int)" title="class or interface in java.io" class="external-link">writeInt</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeLong(long)" title="class or interface in java.io" class="external-link">writeLong</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeShort(int)" title="class or interface in java.io" class="external-link">writeShort</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/DataOutput.html#writeUTF(java.lang.String)" title="class or interface in java.io" class="external-link">writeUTF</a></code></div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.Flushable">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/Flushable.html#flush()" title="class or interface in java.io" class="external-link">flush</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.Flushable">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Flushable.html" title="class or interface in java.io" class="external-link">Flushable</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/Flushable.html#flush()" title="class or interface in java.io" class="external-link">flush</a></code></div>
 <div class="inherited-list">
 <h3 id="methods-inherited-from-class-org.cojen.dirmi.Link">Methods inherited from interface&nbsp;org.cojen.dirmi.<a href="Link.html" title="interface in org.cojen.dirmi">Link</a></h3>
 <code><a href="Link.html#localAddress()">localAddress</a>, <a href="Link.html#remoteAddress()">remoteAddress</a></code></div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.ObjectInput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#available()" title="class or interface in java.io" class="external-link">available</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#close()" title="class or interface in java.io" class="external-link">close</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#read()" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#read(byte%5B%5D)" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#read(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#skip(long)" title="class or interface in java.io" class="external-link">skip</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.ObjectInput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#available()" title="class or interface in java.io" class="external-link">available</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#close()" title="class or interface in java.io" class="external-link">close</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#read()" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#read(byte%5B%5D)" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#read(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">read</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#skip(long)" title="class or interface in java.io" class="external-link">skip</a></code></div>
 <div class="inherited-list">
-<h3 id="methods-inherited-from-class-java.io.ObjectOutput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a></h3>
-<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#close()" title="class or interface in java.io" class="external-link">close</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#flush()" title="class or interface in java.io" class="external-link">flush</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#write(byte%5B%5D)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#write(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#write(int)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectOutput.html#writeObject(java.lang.Object)" title="class or interface in java.io" class="external-link">writeObject</a></code></div>
+<h3 id="methods-inherited-from-class-java.io.ObjectOutput">Methods inherited from interface&nbsp;java.io.<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html" title="class or interface in java.io" class="external-link">ObjectOutput</a></h3>
+<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#close()" title="class or interface in java.io" class="external-link">close</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#flush()" title="class or interface in java.io" class="external-link">flush</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#write(byte%5B%5D)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#write(byte%5B%5D,int,int)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#write(int)" title="class or interface in java.io" class="external-link">write</a>, <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectOutput.html#writeObject(java.lang.Object)" title="class or interface in java.io" class="external-link">writeObject</a></code></div>
 </section>
 </li>
 </ul>
@@ -211,14 +262,14 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <dt>Returns:</dt>
 <dd>true if fully disabled</dd>
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - if not currently enabled</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - if not currently enabled</dd>
 </dl>
 </section>
 </li>
 <li>
 <section class="detail" id="getInputStream()">
 <h3>getInputStream</h3>
-<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></span>&nbsp;<span class="element-name">getInputStream</span>()</div>
+<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a></span>&nbsp;<span class="element-name">getInputStream</span>()</div>
 <div class="block">Returns the pipe's <code>InputStream</code>, which also implements <code>
  ObjectInput</code>. Closing the stream is equivalent to closing the pipe.</div>
 </section>
@@ -226,7 +277,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <li>
 <section class="detail" id="getOutputStream()">
 <h3>getOutputStream</h3>
-<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></span>&nbsp;<span class="element-name">getOutputStream</span>()</div>
+<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a></span>&nbsp;<span class="element-name">getOutputStream</span>()</div>
 <div class="block">Returns the pipe's <code>OutputStream</code>, which also implements <code>
  ObjectOutput</code>. Closing the stream is equivalent to closing the pipe.</div>
 </section>
@@ -235,27 +286,27 @@ extends <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/ja
 <section class="detail" id="recycle()">
 <h3>recycle</h3>
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">recycle</span>()
-      throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+      throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Attempt to recycle the connection instead of closing it. The caller must ensure that the
  pipe has no pending input or unflushed output.</div>
 <dl class="notes">
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
 </dl>
 </section>
 </li>
 <li>
 <section class="detail" id="readObject()">
 <h3>readObject</h3>
-<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">readObject</span>()
-           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">readObject</span>()
+           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Read and return an object. Unlike the inherited method, reading from a pipe never throws
- a <a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/lang/ClassNotFoundException.html" title="class or interface in java.lang" class="external-link"><code>ClassNotFoundException</code></a>.</div>
+ a <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/ClassNotFoundException.html" title="class or interface in java.lang" class="external-link"><code>ClassNotFoundException</code></a>.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html#readObject()" title="class or interface in java.io" class="external-link">readObject</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></code></dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html#readObject()" title="class or interface in java.io" class="external-link">readObject</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/ObjectInput.html" title="class or interface in java.io" class="external-link">ObjectInput</a></code></dd>
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/18/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
 </dl>
 </section>
 </li>

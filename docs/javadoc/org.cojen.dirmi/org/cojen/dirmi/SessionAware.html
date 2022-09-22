@@ -91,7 +91,10 @@ loadScripts(document, 'script');</script>
 <hr>
 <div class="type-signature"><span class="modifiers">public interface </span><span class="element-name type-name-label">SessionAware</span></div>
 <div class="block">Remote objects implementing this interface are notified when they are attached and detached
- from sessions.</div>
+ from sessions. Attachment occurs when a remote object is transported over a session for the
+ first time. Detachment occurs when an object is explicitly <a href="Disposer.html" title="annotation interface in org.cojen.dirmi"><code>disposed</code></a> of, or
+ when a session it's attached to is closed. An object can become re-attached to a session, if
+ it's transported over it again.</div>
 </section>
 <section class="summary">
 <ul class="summary-list">
@@ -135,7 +138,9 @@ loadScripts(document, 'script');</script>
 <section class="detail" id="attached(org.cojen.dirmi.Session)">
 <h3>attached</h3>
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">attached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</span></div>
-<div class="block">Called when this object has been attached to a session and can be accessed remotely.</div>
+<div class="block">Called when this object has been attached to a session and can be accessed remotely. An
+ object can be attached to multiple sessions, and this method can be called by multiple
+ threads concurrently.</div>
 </section>
 </li>
 <li>
@@ -143,7 +148,7 @@ loadScripts(document, 'script');</script>
 <h3>detached</h3>
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">detached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</span></div>
 <div class="block">Called when this object has been detached from a session which it was previously
- attached to.</div>
+ attached to. This method can be called by multiple threads concurrently.</div>
 </section>
 </li>
 </ul>

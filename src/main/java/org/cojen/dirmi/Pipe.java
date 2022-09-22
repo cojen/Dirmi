@@ -45,6 +45,48 @@ import java.util.Set;
  * can only be called from the thread which is allowed to perform writes. Closing either stream
  * has the side effect of also fully closing the pipe.
  *
+ * <p>Here's an example remote method declaration which uses a pipe:
+ *
+ * {@snippet lang="java" :
+ * Pipe uploadFile(String name, Pipe pipe) throws RemoteException;
+ * }
+ *
+ * The remote method declaration requires the return type to be a pipe, and one parameter must
+ * also be a pipe. The client-side invocation of the remote method simply passes null for the
+ * pipe parameter, and the server-side implementation returns null instead of a pipe. Example
+ * client call:
+ *
+ * {@snippet lang="java" :
+ *     Pipe pipe = server.uploadFile("notes.txt", null);
+ *     byte[] notes = ...
+ *     pipe.writeInt(notes.length);
+ *     pipe.write(notes);
+ *     pipe.flush();
+ *     pipe.readByte(); // read ack
+ *     pipe.recycle();
+ * }
+ *
+ * The remote method implementation might look like this:
+ *
+ * {@snippet lang="java" :
+ * @Override
+ * public Pipe uploadFile(String name, Pipe pipe) {
+ *     byte[] notes = new byte[pipe.readInt()];
+ *     pipe.readFully(notes);
+ *     pipe.writeByte(1); // ack
+ *     pipe.flush();
+ *     pipe.recycle();
+ *     ...
+ *     return null;
+ * }
+ * }
+ *
+ * When using a pipe, writes must be explicitly flushed. When a client calls a piped method,
+ * the flush method must be called to ensure that the method name and parameters are actually
+ * sent to the remote endpoint. Care must be taken when recycling pipes. There must not be any
+ * pending input or unflushed output, and the pipe must not be used again directly. Closing the
+ * pipe is safer, although it might force a new pipe connection to be established.
+ *
  * @author Brian S O'Neill
  */
 public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, Link {

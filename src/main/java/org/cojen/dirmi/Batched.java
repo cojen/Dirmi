@@ -30,6 +30,14 @@ import java.lang.reflect.UndeclaredThrowableException;
  * <p>A batched method must declare returning {@code void} or a {@link Remote}
  * object. Returning a remote object allows batched calls to be chained together.
  *
+ * {@snippet lang="java" :
+ * @Batched
+ * void setOption(int option) throws RemoteException;
+ *
+ * @Batched
+ * RemoteAccess login(String user, String password) throws RemoteException, AuthFailure;
+ * }
+ *
  * <p>Batched methods can declare throwing any exception, and any exception thrown by the
  * remote endpoint aborts the batch operation. The exception is thrown to the caller of the
  * method that flushed the batch. If this method does not declare throwing the proper exception

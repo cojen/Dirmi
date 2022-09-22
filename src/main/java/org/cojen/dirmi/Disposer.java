@@ -27,7 +27,13 @@ import java.lang.annotation.*;
  * thrown. The actual disposer call is allowed to complete normally, but any other methods
  * running concurrently might fail.
  *
+ * {@snippet lang="java" :
+ * @Disposer
+ * void close() throws RemoteException;
+ * }
+ *
  * @author Brian S O'Neill
+ * @see SessionAware
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
