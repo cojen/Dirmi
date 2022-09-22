@@ -113,8 +113,8 @@ RemoteAccess login(String user, String password) throws RemoteException, AuthFai
  remote endpoint aborts the batch operation. The exception is thrown to the caller of the
  method that flushed the batch. If this method does not declare throwing the proper exception
  type, it's wrapped by <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/reflect/UndeclaredThrowableException.html" title="class or interface in java.lang.reflect" class="external-link"><code>UndeclaredThrowableException</code></a>. Any <code>Remote</code> objects
- returned from batched method calls at or after the exception point will be bogus. Attempts
- to invoke methods on these objects will also throw the original exception, possibly wrapped.</div>
+ returned from batched method calls at or after the exception point will be bogus and must not
+ be used.</div>
 <dl class="notes">
 <dt>See Also:</dt>
 <dd>
