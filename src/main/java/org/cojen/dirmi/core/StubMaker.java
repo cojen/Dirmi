@@ -25,7 +25,6 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.SortedSet;
 
 import org.cojen.maker.ClassMaker;
@@ -379,7 +378,7 @@ final class StubMaker {
 
             throwIt.here();
             Label reallyThrowIt = mm.label();
-            Set<Class<?>> toCheck = CoreUtils.reduceExceptions(remoteFailureClass, thrownClasses);
+            List<Class<?>> toCheck = CoreUtils.reduceExceptions(remoteFailureClass, thrownClasses);
             for (Class<?> type : toCheck) {
                 exVar.instanceOf(type).ifTrue(reallyThrowIt);
             }

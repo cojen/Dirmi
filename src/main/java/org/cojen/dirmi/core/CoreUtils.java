@@ -25,10 +25,10 @@ import java.net.StandardSocketOptions;
 
 import java.nio.channels.SocketChannel;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.List;
 
 import java.util.function.BiConsumer;
 
@@ -113,10 +113,10 @@ public final class CoreUtils {
      *
      * @param clazz non-null
      * @param others can be null or empty
-     * @return non-empty set
+     * @return non-empty list
      */
-    static Set<Class<?>> reduceExceptions(Class<?> clazz, Collection<Class<?>> others) {
-        var reduced = new LinkedHashSet<Class<?>>();
+    static List<Class<?>> reduceExceptions(Class<?> clazz, Collection<Class<?>> others) {
+        var reduced = new ArrayList<Class<?>>();
         reduced.add(clazz);
 
         if (others != null) {
@@ -131,7 +131,7 @@ public final class CoreUtils {
         return reduced;
     }
 
-    private static void reduceExceptions(Set<Class<?>> reduced, Class<?> clazz) {
+    private static void reduceExceptions(List<Class<?>> reduced, Class<?> clazz) {
         Iterator<Class<?>> it = reduced.iterator();
         while (it.hasNext()) {
             Class<?> ex = it.next();
