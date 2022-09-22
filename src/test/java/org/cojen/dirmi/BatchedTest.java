@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import java.lang.reflect.UndeclaredThrowableException;
+
 import java.net.ServerSocket;
 
 import org.junit.*;
@@ -150,6 +152,21 @@ public class BatchedTest {
         }
     }
 
+    @Test
+    public void undeclaredException() throws Exception {
+        R1 r1 = mSession.root();
+        r1.e();
+        try {
+            r1.f();
+            fail();
+        } catch (UndeclaredThrowableException e) {
+            assertEquals("foo", e.getMessage());
+            Throwable cause = e.getCause();
+            assertEquals(Exception.class, cause.getClass());
+            assertEquals("foo", cause.getMessage());
+        }
+    }
+
     public static interface R1 extends Remote {
         @Batched
         public void a(Object msg) throws RemoteException;
@@ -166,6 +183,11 @@ public class BatchedTest {
         public String c(Object msg) throws RemoteException;
 
         public Pipe d(Pipe pipe) throws IOException;
+
+        @Batched
+        public void e() throws Exception;
+
+        public void f() throws RemoteException;
 
         @Unbatched
         public String check() throws RemoteException;
@@ -211,6 +233,15 @@ public class BatchedTest {
             pipe.flush();
             pipe.recycle();
             return null;
+        }
+
+        @Override
+        public void e() throws Exception {
+            throw new Exception("foo");
+        }
+
+        @Override
+        public void f() {
         }
 
         @Override

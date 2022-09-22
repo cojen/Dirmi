@@ -25,6 +25,11 @@ import java.net.StandardSocketOptions;
 
 import java.nio.channels.SocketChannel;
 
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import java.util.function.BiConsumer;
 
 import org.cojen.maker.ClassMaker;
@@ -97,9 +102,48 @@ public final class CoreUtils {
         }
     }
 
-    static boolean isUnchecked(Class<? extends Throwable> clazz) {
+    static boolean isUnchecked(Class<?> clazz) {
         return RuntimeException.class.isAssignableFrom(clazz)
             || Error.class.isAssignableFrom(clazz);
+    }
+
+    /**
+     * Given one or more exceptions, returns a reduced set of exception types to check by
+     * examining the hierarchy. Unchecked exception types are implicitly considered.
+     *
+     * @param clazz non-null
+     * @param others can be null or empty
+     * @return non-empty set
+     */
+    static Set<Class<?>> reduceExceptions(Class<?> clazz, Collection<Class<?>> others) {
+        var reduced = new LinkedHashSet<Class<?>>();
+        reduced.add(clazz);
+
+        if (others != null) {
+            for (Class<?> other : others) {
+                reduceExceptions(reduced, other);
+            }
+        }
+
+        reduceExceptions(reduced, RuntimeException.class);
+        reduceExceptions(reduced, Error.class);
+
+        return reduced;
+    }
+
+    private static void reduceExceptions(Set<Class<?>> reduced, Class<?> clazz) {
+        Iterator<Class<?>> it = reduced.iterator();
+        while (it.hasNext()) {
+            Class<?> ex = it.next();
+            if (ex.isAssignableFrom(clazz)) {
+                return;
+            }
+            if (clazz.isAssignableFrom(ex)) {
+                it.remove();
+            }
+        }
+
+        reduced.add(clazz);
     }
 
     static Class<?> loadClassByNameOrDescriptor(String name, ClassLoader loader)

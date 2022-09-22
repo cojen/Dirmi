@@ -20,8 +20,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
+import java.lang.reflect.UndeclaredThrowableException;
+
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.SortedSet;
 
 import org.cojen.maker.ClassMaker;
@@ -208,6 +212,7 @@ final class StubMaker {
             }
 
             Class<?> remoteFailureClass;
+            List<Class<?>> thrownClasses = null;
 
             if (cmp > 0) {
                 // Use the default failure exception for a method that only exists on the
@@ -218,8 +223,15 @@ final class StubMaker {
                 remoteFailureClass = classFor(remoteFailureName);
 
                 for (String ex : clientMethod.exceptionTypes()) {
-                    if (!ex.equals(remoteFailureName)) {
-                        mm.throws_(ex);
+                    Class<?> exClass = classFor(ex);
+                    if (!CoreUtils.isUnchecked(exClass)) {
+                        if (!remoteFailureClass.isAssignableFrom(exClass)) {
+                            if (thrownClasses == null) {
+                                thrownClasses = new ArrayList<>();
+                            }
+                            thrownClasses.add(exClass);
+                            mm.throws_(exClass);
+                        }
                     }
                 }
             }
@@ -350,7 +362,8 @@ final class StubMaker {
             }
 
             var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-            supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar).throw_();
+            exVar.set(supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar));
+            Label throwIt = mm.label().goto_();
 
             if (batchedPipeVar != null) {
                 mm.finally_(unbatchedStart, () -> supportVar.invoke("rebatch", batchedPipeVar));
@@ -359,8 +372,21 @@ final class StubMaker {
             if (thrownVar != null) {
                 throwException.here();
                 supportVar.invoke("finished", pipeVar);
-                thrownVar.throw_();
+                exVar.set(thrownVar);
             }
+
+            // Throw the exception as-is if declared or unchecked. Otherwise, wrap it.
+
+            throwIt.here();
+            Label reallyThrowIt = mm.label();
+            Set<Class<?>> toCheck = CoreUtils.reduceExceptions(remoteFailureClass, thrownClasses);
+            for (Class<?> type : toCheck) {
+                exVar.instanceOf(type).ifTrue(reallyThrowIt);
+            }
+            var msgVar = exVar.invoke("getMessage");
+            exVar.set(mm.new_(UndeclaredThrowableException.class, exVar, msgVar));
+            reallyThrowIt.here();
+            exVar.throw_();
 
             if (cmp == 0) {
                 clientMethod = null;
