@@ -728,6 +728,9 @@ public final class Engine implements Environment {
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
+                    if (!(e instanceof IOException)) {
+                        acceptFailed(e);
+                    }
                 }
             });
         }
@@ -777,6 +780,9 @@ public final class Engine implements Environment {
                     accepted(s);
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
+                    if (!(e instanceof IOException)) {
+                        acceptFailed(e);
+                    }
                 }
             });
         }
