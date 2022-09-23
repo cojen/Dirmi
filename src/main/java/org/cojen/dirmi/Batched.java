@@ -42,8 +42,8 @@ import java.lang.reflect.UndeclaredThrowableException;
  * remote endpoint aborts the batch operation. The exception is thrown to the caller of the
  * method that flushed the batch. If this method does not declare throwing the proper exception
  * type, it's wrapped by {@link UndeclaredThrowableException}. Any {@code Remote} objects
- * returned from batched method calls at or after the exception point will be bogus and must not
- * be used.
+ * returned from batched method calls at or after the exception point will be disposed, and so
+ * they should not be used.
  *
  * @author Brian S O'Neill
  * @see Unbatched
