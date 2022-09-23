@@ -42,6 +42,12 @@ public interface SkeletonSupport {
     void writeSkeletonAlias(Pipe pipe, Object server, long aliasId) throws IOException;
 
     /**
+     * Used by batched methods which cannot call createSkeletonAlias because of a prior
+     * exception. The client must disposed of the stub because it's not linked to anything.
+     */
+    void writeDisposed(Pipe pipe, long id, Object reason) throws IOException;
+
+    /**
      * Called by a disposer method when finished executing. This method itself should not throw
      * any exceptions.
      */

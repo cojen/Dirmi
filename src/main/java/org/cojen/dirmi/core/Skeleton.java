@@ -58,10 +58,10 @@ public abstract class Skeleton<R> extends Item {
     public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
 
     /**
-     * @return the original or modified context
+     * @return null if no exception is present
      */
-    public static boolean batchHasException(Object context) {
-        return context instanceof Throwable;
+    public static Throwable batchException(Object context) {
+        return context instanceof Throwable ? (Throwable) context : null;
     }
 
     /**
@@ -74,7 +74,12 @@ public abstract class Skeleton<R> extends Item {
     /**
      * @return the original or modified context
      */
-    public static Object batchInvokeFailure(Object context, Throwable exception) {
+    public static Object batchInvokeFailure(Pipe pipe, Object context, Throwable exception) {
+        // If the batch contains remote objects which must be disposed of, then reason is
+        // written as the exception object itself. Enable reference tracking to avoid writing
+        // the same exception instance out multiple times. It's disabled when batchFinish is
+        // called, which writes the exception to the caller which caused the exception.
+        pipe.enableReferences();
         return exception;
     }
 
@@ -87,15 +92,13 @@ public abstract class Skeleton<R> extends Item {
     public static int batchFinish(Pipe pipe, Object context) throws IOException {
         if (context == null) {
             return -1;
-        }
-        int result;
-        if (context instanceof Throwable) {
-            result = 1;
+        } else if (context instanceof Throwable) {
+            pipe.writeObject(context);
+            pipe.disableReferences();
+            return 1;
         } else {
-            context = null;
-            result = 0;
+            pipe.writeObject((Object) null);
+            return 0;
         }
-        pipe.writeObject(context);
-        return result;
     }
 }

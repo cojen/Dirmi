@@ -43,6 +43,11 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
+    public void writeDisposed(Pipe pipe, long id, Object reason) throws IOException {
+        ((CorePipe) pipe).writeDisposed(id, reason);
+    }
+
+    @Override
     public void dispose(Skeleton<?> skeleton) {
         mSession.removeSkeleton(skeleton);
     }

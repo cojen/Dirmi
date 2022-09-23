@@ -90,7 +90,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private int mConClock;
 
-    private final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
+    final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
 
     private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
 

@@ -470,6 +470,8 @@ class BufferedPipe implements Pipe {
                 break loop;
             }
 
+            case T_DISPOSED: disposed(readLong(), readObject()); continue;
+
             default: throw inputException(new InvalidObjectException("Unknown type: " + typeCode));
             }
         }
@@ -479,16 +481,23 @@ class BufferedPipe implements Pipe {
         return simple;
     }
 
+    // CorePipe subclass must override this method.
     Object objectFor(long id) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
+    // CorePipe subclass must override this method.
     Object objectFor(long id, long typeId) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
+    // CorePipe subclass must override this method.
     Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
         throw new NoSuchObjectException(id);
+    }
+
+    // CorePipe subclass must override this method.
+    void disposed(long id, Object reason) {
     }
 
     private Object readReference(int identifier) throws IOException {
@@ -884,6 +893,7 @@ class BufferedPipe implements Pipe {
         return trace;
     }
 
+    // CorePipe subclass must override this method.
     Class<?> loadClass(String name) throws ClassNotFoundException {
         return Class.forName(name);
     }
@@ -1211,6 +1221,7 @@ class BufferedPipe implements Pipe {
     /**
      * @param stub non-null stub
      */
+    // CorePipe subclass must override this method.
     void writeStub(Stub stub) throws IOException {
         throw unsupported(stub);
     }
@@ -1218,6 +1229,7 @@ class BufferedPipe implements Pipe {
     /**
      * @param server non-null server side object
      */
+    // CorePipe subclass must override this method.
     void writeSkeleton(Object server) throws IOException {
         throw unsupported(server);
     }
@@ -1793,6 +1805,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
+    // CorePipe subclass must override this method.
     public void recycle() throws IOException {
         close();
     }
@@ -1802,6 +1815,7 @@ class BufferedPipe implements Pipe {
         close(null);
     }
 
+    // CorePipe subclass must override this method.
     void close(IOException ex) throws IOException {
         try {
             mSourceOut.close();

@@ -26,11 +26,21 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class DisposedStubSupport implements StubSupport {
-    static final DisposedStubSupport THE = new DisposedStubSupport();
+    static final DisposedStubSupport THE = new DisposedStubSupport(null);
+
+    private final Throwable mCause;
+
+    DisposedStubSupport(Throwable cause) {
+        mCause = cause;
+    }
 
     @Override
     public Session session() {
-        throw new IllegalStateException("Object is disposed");
+        Throwable ex = new IllegalStateException("Object is disposed");
+        if (mCause != null) {
+            ex.initCause(mCause);
+        }
+        throw new IllegalStateException(ex);
     }
 
     @Override
@@ -43,9 +53,13 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T {
-        throw CoreUtils.remoteException
-            (remoteFailureException, new ClosedException("Object is disposed"));
+        Throwable ex = new ClosedException("Object is disposed");
+        if (mCause != null) {
+            ex.initCause(mCause);
+        }
+        throw CoreUtils.remoteException(remoteFailureException, ex);
     }
 
     @Override

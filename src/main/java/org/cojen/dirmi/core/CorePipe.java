@@ -73,6 +73,21 @@ final class CorePipe extends BufferedPipe {
     }
 
     @Override
+    void disposed(long id, Object reason) {
+        Stub removed = mSession.mStubs.remove(id);
+
+        if (removed != null) {
+            StubSupport disposed;
+            if (reason instanceof Throwable) {
+                disposed = new DisposedStubSupport((Throwable) reason);
+            } else {
+                disposed = DisposedStubSupport.THE;
+            }
+            Stub.SUPPORT_HANDLE.setOpaque(removed, disposed);
+        }
+    }
+
+    @Override
     Class<?> loadClass(String name) throws ClassNotFoundException {
         return mSession.loadClass(name);
     }
@@ -82,7 +97,7 @@ final class CorePipe extends BufferedPipe {
         requireOutput(9);
         int end = mOutEnd;
         byte[] buf = mOutBuffer;
-        buf[end++] = TypeCodes.T_REMOTE; // remote id
+        buf[end++] = TypeCodes.T_REMOTE;
         cLongArrayBEHandle.set(buf, end, stub.id);
         mOutEnd = end + 8;
     }
@@ -103,6 +118,16 @@ final class CorePipe extends BufferedPipe {
         cLongArrayBEHandle.set(buf, end, skeleton.id);
         cLongArrayBEHandle.set(buf, end + 8, skeleton.typeId());
         mOutEnd = end + 16;
+    }
+
+    void writeDisposed(long id, Object reason) throws IOException {
+        requireOutput(9);
+        int end = mOutEnd;
+        byte[] buf = mOutBuffer;
+        buf[end++] = TypeCodes.T_DISPOSED;
+        cLongArrayBEHandle.set(buf, end, id);
+        mOutEnd = end + 8;
+        writeObject(reason);
     }
 
     @Override

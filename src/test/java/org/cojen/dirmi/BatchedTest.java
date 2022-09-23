@@ -167,6 +167,48 @@ public class BatchedTest {
         }
     }
 
+    @Test
+    public void brokenRemoteObjects() throws Exception {
+        // Test handling of remote objects returned after the exception point. They'll be
+        // disposed and should have the original exception as the cause.
+
+        R1 r1 = mSession.root();
+        R1 r1a = r1.g();
+        r1.e();
+        R1 r1b = r1.g();
+        R1 r1c = r1.g();
+
+        Throwable cause = null;
+
+        try {
+            r1.f();
+            fail();
+        } catch (UndeclaredThrowableException e) {
+            assertEquals("foo", e.getMessage());
+            cause = e.getCause();
+            assertEquals(Exception.class, cause.getClass());
+            assertEquals("foo", cause.getMessage());
+        }
+
+        r1a.f();
+
+        try {
+            r1b.f();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+            assertSame(cause, e.getCause());
+        }
+
+        try {
+            r1c.f();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+            assertSame(cause, e.getCause());
+        }
+    }
+
     public static interface R1 extends Remote {
         @Batched
         public void a(Object msg) throws RemoteException;
@@ -188,6 +230,9 @@ public class BatchedTest {
         public void e() throws Exception;
 
         public void f() throws RemoteException;
+
+        @Batched
+        public R1 g() throws RemoteException;
 
         @Unbatched
         public String check() throws RemoteException;
@@ -242,6 +287,11 @@ public class BatchedTest {
 
         @Override
         public void f() {
+        }
+
+        @Override
+        public R1 g() {
+            return new R1Server();
         }
 
         @Override

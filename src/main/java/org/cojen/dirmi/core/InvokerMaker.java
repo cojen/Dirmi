@@ -130,10 +130,23 @@ final class InvokerMaker {
             if (rm.isBatched() && !rm.isBatchedImmediate()) {
                 // Check if an exception was encountered and stop calling any more batched
                 // methods if so.
-                Label skip = mm.label();
-                skeletonClassVar.invoke("batchHasException", contextVar).ifTrue(skip);
+                var exceptionVar = skeletonClassVar.invoke("batchException", contextVar);
 
-                Label invokeStart = mm.label().here();
+                Label invokeStart = mm.label();
+                Label skip = mm.label();
+
+                if (aliasIdVar == null) {
+                    skip = mm.label();
+                    exceptionVar.ifNe(null, skip);
+                } else {
+                    exceptionVar.ifEq(null, invokeStart);
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exceptionVar);
+                    pipeVar.invoke("flush");
+                    mm.goto_(skip);
+                }
+
+                invokeStart.here();
                 var serverVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
@@ -148,19 +161,19 @@ final class InvokerMaker {
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                mm.return_(skeletonClassVar.invoke("batchInvokeFailure", contextVar, exVar));
+                mm.return_(skeletonClassVar.invoke("batchInvokeFailure",
+                                                   pipeVar, contextVar, exVar));
             } else if (isPiped) {
                 var resultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
-                Label doInvoke = mm.label();
-                resultVar.ifLt(0, doInvoke);
+                Label invokeStart = mm.label();
+                resultVar.ifLt(0, invokeStart);
                 pipeVar.invoke("flush");
                 // If result is less than or equal to 0, then the batch finished without an
                 // exception. Otherwise, this method should be skipped.
-                resultVar.ifLe(0, doInvoke);
+                resultVar.ifLe(0, invokeStart);
                 mm.return_(null);
-                doInvoke.here();
 
-                Label invokeStart = mm.label().here();
+                invokeStart.here();
                 remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 

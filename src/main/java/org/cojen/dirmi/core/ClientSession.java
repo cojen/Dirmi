@@ -60,6 +60,11 @@ final class ClientSession<R> extends CoreSession<R> {
 
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
         factory = mStubFactories.putIfAbsent(factory);
+
+        synchronized (mStubFactoriesByClass) {
+            mStubFactoriesByClass.putIfAbsent(rootType, factory);
+        }
+
         Stub root = factory.newStub(rootId, mStubSupport);
         mStubs.put(root);
         mRoot = (R) root;
