@@ -631,12 +631,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final Object objectFor(long id, long typeId, RemoteInfo info) {
+        boolean found = true;
+
         Class<?> type;
         try {
             type = loadClass(info.name());
         } catch (ClassNotFoundException e) {
             // The remote methods will only be available via reflection.
             type = Remote.class;
+            found = false;
         }
 
         StubFactory factory = StubMaker.factoryFor(type, typeId, info);
@@ -645,8 +648,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         // Notify the other side that it can stop sending type info.
         mEngine.tryExecuteTask(() -> notifyKnownType(typeId));
 
-        synchronized (mStubFactoriesByClass) {
-            mStubFactoriesByClass.putIfAbsent(type, factory);
+        if (found) {
+            synchronized (mStubFactoriesByClass) {
+                mStubFactoriesByClass.putIfAbsent(type, factory);
+            }
         }
 
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
