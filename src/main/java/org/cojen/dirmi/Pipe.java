@@ -103,7 +103,7 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
 
     /**
      * Disables tracking of object references. Memory isn't freed on the remote side until
-     * another it reads another object.
+     * it reads another object.
      *
      * @return true if fully disabled
      * @throws IllegalStateException if not currently enabled
