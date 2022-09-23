@@ -136,8 +136,7 @@ final class CoreStubSupport implements StubSupport {
 
     @Override
     public StubSupport dispose(Stub stub) {
-        mSession.mStubs.remove(stub);
-        return DisposedStubSupport.THE;
+        return mSession.stubDispose(stub);
     }
 
     private void assignTrace(Pipe pipe, Throwable ex) {

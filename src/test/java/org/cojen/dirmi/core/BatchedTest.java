@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi;
+package org.cojen.dirmi.core;
 
 import java.io.IOException;
 
@@ -24,6 +24,16 @@ import java.net.ServerSocket;
 
 import org.junit.*;
 import static org.junit.Assert.*;
+
+import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.Disposer;
+import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.Session;
+import org.cojen.dirmi.Unbatched;
 
 /**
  * 
@@ -207,6 +217,66 @@ public class BatchedTest {
             assertTrue(e.getMessage().contains("disposed"));
             assertSame(cause, e.getCause());
         }
+
+        var cs = (CoreSession) mSession;
+        assertEquals(2, cs.mStubs.size()); // only the root object and r1a
+
+        r1.dispose();
+        r1a.dispose();
+
+        assertEquals(0, cs.mStubs.size());
+    }
+
+    @Test
+    public void brokenRemoteObjects2() throws Exception {
+        R1 r1 = mSession.root();
+        R1 r1a = r1.h();
+
+        Throwable cause = null;
+
+        try {
+            r1.f();
+            fail();
+        } catch (IllegalStateException e) {
+            assertEquals("h", e.getMessage());
+            cause = e;
+        }
+
+        try {
+            r1a.f();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+            assertSame(cause, e.getCause());
+        }
+
+        var cs = (CoreSession) mSession;
+        assertEquals(1, cs.mStubs.size()); // only the root object
+
+        r1.dispose();
+
+        assertEquals(0, cs.mStubs.size());
+    }
+
+    @Test
+    public void brokenRemoteObjects3() throws Exception {
+        R1 r1 = mSession.root();
+
+        // First use of the type, and so this call is immediately flushed. The alias id is
+        // generated before the call, and it must be removed because of the exception.
+        try {
+            R2 r2 = r1.i();
+            fail();
+        } catch (IllegalStateException e) {
+            assertEquals("i", e.getMessage());
+        }
+
+        var cs = (CoreSession) mSession;
+        assertEquals(1, cs.mStubs.size()); // only the root object
+
+        r1.dispose();
+
+        assertEquals(0, cs.mStubs.size());
     }
 
     public static interface R1 extends Remote {
@@ -234,8 +304,21 @@ public class BatchedTest {
         @Batched
         public R1 g() throws RemoteException;
 
+        @Batched
+        public R1 h() throws RemoteException;
+
+        @Batched
+        public R2 i() throws RemoteException;
+
         @Unbatched
         public String check() throws RemoteException;
+
+        @Disposer
+        public void dispose() throws RemoteException;
+    }
+
+    public static interface R2 extends Remote {
+        public void a() throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -295,8 +378,22 @@ public class BatchedTest {
         }
 
         @Override
+        public R1 h() {
+            throw new IllegalStateException("h");
+        }
+
+        @Override
+        public R2 i() {
+            throw new IllegalStateException("i");
+        }
+
+        @Override
         public String check() {
             return mBuilder == null ? null : mBuilder.toString();
+        }
+
+        @Override
+        public void dispose() {
         }
 
         private void append(Object msg) {

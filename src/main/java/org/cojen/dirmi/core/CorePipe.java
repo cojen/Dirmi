@@ -74,17 +74,7 @@ final class CorePipe extends BufferedPipe {
 
     @Override
     void disposed(long id, Object reason) {
-        Stub removed = mSession.mStubs.remove(id);
-
-        if (removed != null) {
-            StubSupport disposed;
-            if (reason instanceof Throwable) {
-                disposed = new DisposedStubSupport((Throwable) reason);
-            } else {
-                disposed = DisposedStubSupport.THE;
-            }
-            Stub.SUPPORT_HANDLE.setOpaque(removed, disposed);
-        }
+        mSession.stubDisposed(id, reason);
     }
 
     @Override

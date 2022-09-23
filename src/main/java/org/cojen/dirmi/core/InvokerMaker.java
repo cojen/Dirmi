@@ -142,7 +142,6 @@ final class InvokerMaker {
                     exceptionVar.ifEq(null, invokeStart);
                     var supportVar = mm.param(3);
                     supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exceptionVar);
-                    pipeVar.invoke("flush");
                     mm.goto_(skip);
                 }
 
@@ -161,8 +160,15 @@ final class InvokerMaker {
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                mm.return_(skeletonClassVar.invoke("batchInvokeFailure",
-                                                   pipeVar, contextVar, exVar));
+                contextVar.set(skeletonClassVar.invoke("batchInvokeFailure",
+                                                       pipeVar, contextVar, exVar));
+
+                if (aliasIdVar != null) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                }
+
+                mm.return_(contextVar);
             } else if (isPiped) {
                 var resultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
                 Label invokeStart = mm.label();
@@ -212,6 +218,12 @@ final class InvokerMaker {
                 }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+
+                if (rm.isBatchedImmediate()) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                }
+
                 pipeVar.invoke("writeObject", exVar);
                 pipeVar.invoke("flush");
                 mm.return_(null);

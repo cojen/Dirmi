@@ -43,7 +43,7 @@ public interface SkeletonSupport {
 
     /**
      * Used by batched methods which cannot call createSkeletonAlias because of a prior
-     * exception. The client must disposed of the stub because it's not linked to anything.
+     * exception. The client must dispose of the stub because it's not linked to anything.
      */
     void writeDisposed(Pipe pipe, long id, Object reason) throws IOException;
 

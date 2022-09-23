@@ -652,6 +652,25 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
     }
 
+    final StubSupport stubDispose(Stub stub) {
+        mStubs.remove(stub);
+        return DisposedStubSupport.THE;
+    }
+
+    final void stubDisposed(long id, Object reason) {
+        Stub removed = mStubs.remove(id);
+
+        if (removed != null) {
+            StubSupport disposed;
+            if (reason instanceof Throwable) {
+                disposed = new DisposedStubSupport((Throwable) reason);
+            } else {
+                disposed = DisposedStubSupport.THE;
+            }
+            Stub.SUPPORT_HANDLE.setOpaque(removed, disposed);
+        }
+    }
+
     final Class<?> loadClass(String name) throws ClassNotFoundException {
         return Class.forName(name, false, root().getClass().getClassLoader());
     }
