@@ -825,9 +825,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (e instanceof UncaughtException) {
                     uncaughtException(e.getCause());
                 } else if (e instanceof NoSuchObjectException || !(e instanceof IOException)) {
-                    // FIXME: If NoSuchObjectException, try to write the error over the control
-                    //        connection, to be picked by the client when it sees the
-                    //        connection is closed.
                     uncaughtException(e);
                 }
                 CoreUtils.closeQuietly(this);
