@@ -27,6 +27,8 @@ import java.net.SocketAddress;
 import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 
+import java.util.concurrent.Executor;
+
 import java.util.function.BiConsumer;
 
 import org.cojen.dirmi.core.CoreUtils;
@@ -40,7 +42,7 @@ import org.cojen.dirmi.core.CoreUtils;
  * @see Environment#connect Environment.connect
  * @see SessionAware
  */
-public interface Session<R> extends Closeable, Link {
+public interface Session<R> extends Closeable, Link, Executor {
     /**
      * Access the session that the given remote object is bound to.
      *

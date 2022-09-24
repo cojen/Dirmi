@@ -366,6 +366,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
+    public void execute(Runnable command) {
+        mEngine.execute(command);
+    }
+
+    @Override
     public final void close() {
         close(CLOSED);
     }
