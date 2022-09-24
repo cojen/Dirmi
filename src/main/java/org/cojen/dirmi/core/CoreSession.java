@@ -26,7 +26,7 @@ import java.lang.ref.WeakReference;
 
 import java.net.SocketAddress;
 
-import java.util.WeakHashMap; // FIXME: use something custom
+import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -73,6 +73,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final Engine mEngine;
     final ItemMap<Stub> mStubs;
     final ItemMap<StubFactory> mStubFactories;
+    final ConcurrentHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
     final SkeletonMap mSkeletons;
     final ItemMap<Item> mKnownTypes; // tracks types known by the remote client
 
@@ -90,8 +91,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private int mConClock;
 
-    final WeakHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
-
     private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
 
     private int mClosed;
@@ -101,6 +100,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mEngine = engine;
         mStubs = new ItemMap<Stub>();
         mStubFactories = new ItemMap<StubFactory>();
+        mStubFactoriesByClass = new ConcurrentHashMap<>();
         mSkeletons = new SkeletonMap(this);
         mKnownTypes = new ItemMap<>();
 
@@ -109,7 +109,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         mControlLock = new ReentrantLock();
 
-        mStubFactoriesByClass = new WeakHashMap<>(4);
     }
 
     /**
@@ -397,11 +396,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         mStubs.clear();
         mStubFactories.clear();
+        mStubFactoriesByClass.clear();
         mKnownTypes.clear();
-
-        synchronized (mStubFactoriesByClass) {
-            mStubFactoriesByClass.clear();
-        }
 
         synchronized (mSkeletons) {
             mSkeletons.forEach(this::detached);
@@ -649,9 +645,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mEngine.tryExecuteTask(() -> notifyKnownType(typeId));
 
         if (found) {
-            synchronized (mStubFactoriesByClass) {
-                mStubFactoriesByClass.putIfAbsent(type, factory);
-            }
+            mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
         return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
@@ -697,10 +691,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final long remoteTypeId(Class<?> type) {
-        StubFactory factory;
-        synchronized (mStubFactoriesByClass) {
-            factory = mStubFactoriesByClass.get(type);
-        }
+        StubFactory factory = mStubFactoriesByClass.get(type);
         return factory == null ? 0 : factory.id;
     }
 
