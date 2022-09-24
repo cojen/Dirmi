@@ -39,7 +39,7 @@ loadScripts(document, 'script');</script>
 <li>
 <p>Package:</p>
 <ul>
-<li>Description</li>
+<li><a href="#package-description">Description</a></li>
 <li>Related Packages</li>
 <li><a href="#class-summary">Classes and Interfaces</a></li>
 </ul>
@@ -50,7 +50,7 @@ loadScripts(document, 'script');</script>
 <div id="navbar-sub-list">
 <ul class="sub-nav-list">
 <li>Package:&nbsp;</li>
-<li>Description&nbsp;|&nbsp;</li>
+<li><a href="#package-description">Description</a>&nbsp;|&nbsp;</li>
 <li>Related Packages&nbsp;|&nbsp;</li>
 <li><a href="#class-summary">Classes and Interfaces</a></li>
 </ul>
@@ -71,6 +71,81 @@ loadScripts(document, 'script');</script>
 </div>
 <hr>
 <div class="package-signature">package <span class="element-name">org.cojen.dirmi</span></div>
+<section class="package-description" id="package-description">
+<div class="block">Bidirectional remote method invocation. For launching a server, <a href="Environment.html#create()"><code>create</code></a> an <code>Environment</code>, <a href="Environment.html#export(java.lang.Object,java.lang.Object)"><code>export</code></a> a remote object, and start
+ <a href="Environment.html#acceptAll(java.net.ServerSocket)"><code>accepting</code></a> connections. For connecting a client, create an
+ <code>Environment</code>, <a href="Environment.html#connect(java.lang.Class,java.lang.Object,java.net.SocketAddress)"><code>connect</code></a> to the server, and obtain the
+ <a href="Session.html#root()"><code>root</code></a> object. Here is a very simple example, starting with the remote
+ interface:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
+
+public interface HelloDirmi extends Remote {
+    void greetings(String name) throws RemoteException;
+}
+</code></pre>
+</div>
+
+
+ The server-side implementation looks like this:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">import java.net.ServerSocket;
+
+import org.cojen.dirmi.Environment;
+
+public class HelloDirmiServer implements HelloDirmi {
+    public static void main(String[] args) throws Exception {
+        Environment env = Environment.create();
+        env.export("main", new HelloDirmiServer());
+        env.acceptAll(new ServerSocket(1234));
+    }
+
+    @Override
+    public void greetings(String name) {
+        System.out.println("Hello " + name);
+    }
+}
+</code></pre>
+</div>
+
+
+ And here is the client-side implementation:
+
+ 
+<div class="snippet-container"><button class="copy snippet-copy" onclick="copySnippet(this)"><span data-copied="Copied!">Copy</span><img src="../../../../copy.svg" alt="Copy"></button>
+<pre class="snippet"><code class="language-java">import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.Session;
+
+public class HelloDirmiClient {
+    public static void main(String[] args) throws Exception {
+        Environment env = Environment.create();
+        String host = args[0];
+        int port = 1234;
+        Session&lt;HelloDirmi&gt; session = env.connect(HelloDirmi.class, "main", host, port);
+        HelloDirmi client = session.root();
+
+        client.greetings("Dirmi");
+
+        env.close();
+    }
+}
+</code></pre>
+</div>
+</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="see-list">
+<li><a href="Environment.html" title="interface in org.cojen.dirmi"><code>Environment</code></a></li>
+</ul>
+</dd>
+</dl>
+</section>
 <section class="summary">
 <ul class="summary-list">
 <li>
