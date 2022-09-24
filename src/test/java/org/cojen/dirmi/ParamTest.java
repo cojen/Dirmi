@@ -52,8 +52,6 @@ public class ParamTest {
         assertEquals(Long.MIN_VALUE, r1.echo(Long.MIN_VALUE));
         assertEquals("hello", r1.echo("hello"));
         assertEquals(null, r1.echo((Object) null));
-        assertEquals(Thread.State.BLOCKED, r1.echo(Thread.State.BLOCKED));
-        assertEquals(null, r1.echo((Thread.State) null));
 
         env.close();
     }
@@ -77,8 +75,6 @@ public class ParamTest {
         long echo(long v);
 
         Object echo(Object v);
-
-        Thread.State echo(Thread.State v);
     }
 
     private static class R1Server implements R1 {
@@ -124,11 +120,6 @@ public class ParamTest {
 
         @Override
         public Object echo(Object v) {
-            return v;
-        }
-
-        @Override
-        public Thread.State echo(Thread.State v) {
             return v;
         }
     }

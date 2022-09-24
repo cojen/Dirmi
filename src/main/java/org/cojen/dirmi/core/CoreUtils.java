@@ -229,18 +229,7 @@ public final class CoreUtils {
         if (type == null) {
             pipeVar.invoke("writeObject", paramVar);
         } else if (!type.isPrimitive()) {
-            if (!type.isEnum()) {
-                pipeVar.invoke("writeObject", paramVar);
-            } else {
-                MethodMaker mm = paramVar.methodMaker();
-                Label notNull = mm.label();
-                paramVar.ifNe(null, notNull);
-                pipeVar.invoke(void.class, "writeObject", new Object[]{Object.class}, (Object)null);
-                Label done = mm.label().goto_();
-                notNull.here();
-                pipeVar.invoke("writeObject", paramVar.invoke("name"));
-                done.here();
-            }
+            pipeVar.invoke("writeObject", paramVar);
         } else {
             String m;
             if (type == int.class) {
@@ -273,20 +262,7 @@ public final class CoreUtils {
             paramVar.set(pipeVar.invoke("readObject").cast(paramVar));
         } else if (!type.isPrimitive()) {
             var objectVar = pipeVar.invoke("readObject");
-            if (!type.isEnum()) {
-                paramVar.set(type == Object.class ? objectVar : objectVar.cast(type));
-            } else {
-                MethodMaker mm = paramVar.methodMaker();
-                var nameVar = objectVar.cast(String.class);
-                Label notNull = mm.label();
-                nameVar.ifNe(null, notNull);
-                paramVar.set(null);
-                Label done = mm.label().goto_();
-                notNull.here();
-                var enumVar = mm.var(Enum.class);
-                paramVar.set(enumVar.invoke("valueOf", type, nameVar).cast(type));
-                done.here();
-            }
+            paramVar.set(type == Object.class ? objectVar : objectVar.cast(type));
         } else {
             String m;
             if (type == int.class) {

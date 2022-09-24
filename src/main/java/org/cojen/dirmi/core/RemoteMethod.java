@@ -150,7 +150,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             if ((flags & F_BATCHED) == 0) {
                 if (returnType == Pipe.class) {
                     flags |= F_PIPED;
-                } else if (!TypeCodeMap.isDeclarable(returnType) && !returnType.isEnum()) {
+                } else if (!TypeCodeMap.isDeclarable(returnType)) {
                     throw new IllegalArgumentException
                         ("Remote method return type isn't supported: " + returnType.getName());
                 }
@@ -182,7 +182,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             for (Class<?> paramType : paramTypes) {
                 if (paramType == Pipe.class) {
                     numPipes++;
-                } else if (!TypeCodeMap.isDeclarable(paramType) && !paramType.isEnum()) {
+                } else if (!TypeCodeMap.isDeclarable(paramType)) {
                     throw new IllegalArgumentException
                         ("Remote method parameter type isn't supported: " + paramType.getName());
                 }
