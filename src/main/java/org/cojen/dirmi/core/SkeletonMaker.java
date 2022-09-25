@@ -65,7 +65,7 @@ final class SkeletonMaker<R> {
         mType = type;
         mServerInfo = RemoteInfo.examine(type);
 
-        mInvokerClass = InvokerMaker.invokerFor(type);
+        mInvokerClass = SkeletonInvokerMaker.invokerFor(type);
 
         String sourceFile = SkeletonMaker.class.getSimpleName();
 
@@ -163,7 +163,7 @@ final class SkeletonMaker<R> {
             var methodNames = new HashMap<String, Integer>();
 
             for (RemoteMethod serverMethod : serverMethods) {
-                String name = InvokerMaker.generateMethodName(methodNames, serverMethod);
+                String name = SkeletonInvokerMaker.generateMethodName(methodNames, serverMethod);
                 caseMap.put(methodId++, new CaseInfo(serverMethod, name));
             }
         }

@@ -44,7 +44,7 @@ import org.cojen.dirmi.Pipe;
  *
  * @author Brian S O'Neill
  */
-final class InvokerMaker {
+final class SkeletonInvokerMaker {
     private static final SoftCache<Class<?>, Class<?>> cCache = new SoftCache<>();
 
     /**
@@ -58,7 +58,7 @@ final class InvokerMaker {
         if (invoker == null) synchronized (cCache) {
             invoker = cCache.get(type);
             if (invoker == null) {
-                invoker = new InvokerMaker(type).finish();
+                invoker = new SkeletonInvokerMaker(type).finish();
                 cCache.put(type, invoker);
             }
         }
@@ -68,7 +68,7 @@ final class InvokerMaker {
     private final Class<?> mType;
     private final RemoteInfo mInfo;
 
-    private InvokerMaker(Class<?> type) {
+    private SkeletonInvokerMaker(Class<?> type) {
         mType = type;
         mInfo = RemoteInfo.examine(type);
     }
@@ -82,7 +82,7 @@ final class InvokerMaker {
 
         ClassMaker cm = ClassMaker.begin
             (mType.getName(), mType.getClassLoader(), CoreUtils.MAKER_KEY)
-            .final_().sourceFile(InvokerMaker.class.getSimpleName());
+            .final_().sourceFile(SkeletonInvokerMaker.class.getSimpleName());
         CoreUtils.allowAccess(cm);
 
         var methodNames = new HashMap<String, Integer>();

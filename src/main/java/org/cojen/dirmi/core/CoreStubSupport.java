@@ -146,7 +146,7 @@ final class CoreStubSupport implements StubSupport {
         int traceLength = trace.length;
 
         // Prune the local trace for all calls that occur before (and including) the invoker.
-        String fileName = InvokerMaker.class.getSimpleName();
+        String fileName = SkeletonInvokerMaker.class.getSimpleName();
         for (int i=trace.length; --i>=0; ) {
             StackTraceElement element = trace[i];
             if (fileName.equals(element.getFileName())) {
