@@ -36,7 +36,6 @@ import java.util.function.BiConsumer;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Remote;
-import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAware;
 
@@ -91,7 +90,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private int mConClock;
 
-    private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
+    private volatile BiConsumer<Session<?>, Throwable> mUncaughtExceptionHandler;
 
     private int mClosed;
 
@@ -361,7 +360,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public final void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
+    public final void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h) {
         mUncaughtExceptionHandler = h;
     }
 

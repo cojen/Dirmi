@@ -112,7 +112,7 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">SessionAware.</span><code><a href="../SessionAware.html#attached(org.cojen.dirmi.Session)" class="member-name-link">attached</a><wbr>(<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SessionAware.</span><code><a href="../SessionAware.html#attached(org.cojen.dirmi.Session)" class="member-name-link">attached</a><wbr>(<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Called when this object has been attached to a session and can be accessed remotely.</div>
 </div>
@@ -122,7 +122,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Called to establish a new socket connection using the session's <a href="../Link.html#remoteAddress()"><code>remote address</code></a>.</div>
 </div>
 <div class="col-first even-row-color"><code>void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">SessionAware.</span><code><a href="../SessionAware.html#detached(org.cojen.dirmi.Session)" class="member-name-link">detached</a><wbr>(<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SessionAware.</span><code><a href="../SessionAware.html#detached(org.cojen.dirmi.Session)" class="member-name-link">detached</a><wbr>(<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Called when this object has been detached from a session which it was previously
  attached to.</div>
@@ -134,13 +134,13 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">Environment.</span><code><a href="../Environment.html#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Environment.</span><code><a href="../Environment.html#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this environment
  instance.</div>
 </div>
 <div class="col-first odd-row-color"><code>void</code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">Session.</span><code><a href="../Session.html#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">Session.</span><code><a href="../Session.html#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
 <div class="col-last odd-row-color">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this session
  instance.</div>

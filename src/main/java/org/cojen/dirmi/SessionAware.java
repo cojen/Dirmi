@@ -31,11 +31,11 @@ public interface SessionAware {
      * object can be attached to multiple sessions, and this method can be called by multiple
      * threads concurrently.
      */
-    void attached(Session s);
+    void attached(Session<?> s);
 
     /**
      * Called when this object has been detached from a session which it was previously
      * attached to. This method can be called by multiple threads concurrently.
      */
-    void detached(Session s);
+    void detached(Session<?> s);
 }

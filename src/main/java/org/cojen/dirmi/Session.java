@@ -106,7 +106,7 @@ public interface Session<R> extends Closeable, Link, Executor {
      * @param h handler to use; pass null to use the default handler
      * @see Environment#uncaughtExceptionHandler
      */
-    void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h);
+    void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h);
 
     /**
      * Closes all connections and immediately closes any future connections. All remote objects

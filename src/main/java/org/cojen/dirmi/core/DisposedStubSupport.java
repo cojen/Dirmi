@@ -53,7 +53,6 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T {
         Throwable ex = new ClosedException("Object is disposed");
         if (mCause != null) {

@@ -110,12 +110,12 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#attached(org.cojen.dirmi.Session)" class="member-name-link">attached</a><wbr>(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#attached(org.cojen.dirmi.Session)" class="member-name-link">attached</a><wbr>(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Called when this object has been attached to a session and can be accessed remotely.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#detached(org.cojen.dirmi.Session)" class="member-name-link">detached</a><wbr>(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#detached(org.cojen.dirmi.Session)" class="member-name-link">detached</a><wbr>(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Called when this object has been detached from a session which it was previously
  attached to.</div>
@@ -137,7 +137,7 @@ loadScripts(document, 'script');</script>
 <li>
 <section class="detail" id="attached(org.cojen.dirmi.Session)">
 <h3>attached</h3>
-<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">attached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</span></div>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">attached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</span></div>
 <div class="block">Called when this object has been attached to a session and can be accessed remotely. An
  object can be attached to multiple sessions, and this method can be called by multiple
  threads concurrently.</div>
@@ -146,7 +146,7 @@ loadScripts(document, 'script');</script>
 <li>
 <section class="detail" id="detached(org.cojen.dirmi.Session)">
 <h3>detached</h3>
-<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">detached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&nbsp;s)</span></div>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">detached</span><wbr><span class="parameters">(<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&nbsp;s)</span></div>
 <div class="block">Called when this object has been detached from a session which it was previously
  attached to. This method can be called by multiple threads concurrently.</div>
 </section>

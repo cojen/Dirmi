@@ -184,7 +184,7 @@ public interface Environment extends Closeable, Executor {
      * @param h handler to use; pass null to use the default handler
      * @see Session#uncaughtExceptionHandler
      */
-    void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h);
+    void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h);
 
     /**
      * Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of

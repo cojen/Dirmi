@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 import org.cojen.maker.ClassMaker;
-import org.cojen.maker.Label;
-import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
 import org.cojen.dirmi.ClosedException;
@@ -177,7 +175,7 @@ public final class CoreUtils {
     /**
      * @return false if handler was null or if it threw an exception itself
      */
-    static boolean acceptException(BiConsumer<Session, Throwable> h, Session s, Throwable e) {
+    static boolean acceptException(BiConsumer<Session<?>, Throwable> h, Session<?> s, Throwable e) {
         if (h != null) {
             try {
                 h.accept(s, e);

@@ -81,7 +81,7 @@ public final class Engine implements Environment {
 
     private Map<Object, Acceptor> mAcceptors;
 
-    private volatile BiConsumer<Session, Throwable> mUncaughtExceptionHandler;
+    private volatile BiConsumer<Session<?>, Throwable> mUncaughtExceptionHandler;
 
     private Connector mConnector;
 
@@ -382,7 +382,7 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public void uncaughtExceptionHandler(BiConsumer<Session, Throwable> h) {
+    public void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h) {
         mUncaughtExceptionHandler = h;
     }
 
@@ -578,7 +578,7 @@ public final class Engine implements Environment {
         return cConnectorHandle.getAcquire(this) == null;
     }
 
-    final void uncaughtException(Session s, Throwable e) {
+    final void uncaughtException(Session<?> s, Throwable e) {
         if (!CoreUtils.acceptException(mUncaughtExceptionHandler, s, e)) {
             try {
                 Thread t = Thread.currentThread();

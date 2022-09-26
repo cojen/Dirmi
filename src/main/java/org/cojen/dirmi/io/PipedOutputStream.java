@@ -250,7 +250,7 @@ public class PipedOutputStream extends OutputStream {
     }
 
     // Caller must hold mLock.
-    int inputAvailable() throws IOException {
+    int inputAvailable() {
         return (mData == null) ? 0 : mLength;
     }
 

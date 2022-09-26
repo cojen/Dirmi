@@ -144,7 +144,7 @@ public class RemotePipeTest {
     public void uncaughtException() throws Exception {
         R1 root = mSession.root();
 
-        var handler = new BiConsumer<Session, Throwable>() {
+        var handler = new BiConsumer<Session<?>, Throwable>() {
             Session session;
             Throwable exception;
 
