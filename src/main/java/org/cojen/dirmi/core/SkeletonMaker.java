@@ -18,7 +18,10 @@ package org.cojen.dirmi.core;
 
 import java.lang.invoke.MethodHandles;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.SortedSet;
 
 import org.cojen.maker.ClassMaker;
@@ -57,15 +60,12 @@ final class SkeletonMaker<R> {
 
     private final Class<R> mType;
     private final RemoteInfo mServerInfo;
-    private final Class<?> mInvokerClass;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mSkeletonMaker;
 
     private SkeletonMaker(Class<R> type) {
         mType = type;
         mServerInfo = RemoteInfo.examine(type);
-
-        mInvokerClass = SkeletonInvokerMaker.invokerFor(type);
 
         String sourceFile = SkeletonMaker.class.getSimpleName();
 
@@ -138,7 +138,7 @@ final class SkeletonMaker<R> {
             mm.return_(mm.this_().invoke(mType, "server", null));
         }
 
-        SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
+        Map<Integer, CaseInfo> caseMap = defineInvokers();
 
         MethodMaker mm = mSkeletonMaker.addMethod
             (Object.class, "invoke", Pipe.class, Object.class).public_();
@@ -148,24 +148,13 @@ final class SkeletonMaker<R> {
 
         var methodIdVar = mm.var(int.class);
 
-        if (serverMethods.size() < 256) {
+        if (caseMap.size() < 256) {
             methodIdVar.set(pipeVar.invoke("readUnsignedByte"));
-        } else if (serverMethods.size() < 65536) {
+        } else if (caseMap.size() < 65536) {
             methodIdVar.set(pipeVar.invoke("readUnsignedShort"));
         } else {
             // Impossible case.
             methodIdVar.set(pipeVar.invoke("readInt"));
-        }
-
-        var caseMap = new HashMap<Integer, CaseInfo>();
-        {
-            int methodId = 0;
-            var methodNames = new HashMap<String, Integer>();
-
-            for (RemoteMethod serverMethod : serverMethods) {
-                String name = SkeletonInvokerMaker.generateMethodName(methodNames, serverMethod);
-                caseMap.put(methodId++, new CaseInfo(serverMethod, name));
-            }
         }
 
         var cases = new int[caseMap.size()];
@@ -180,7 +169,6 @@ final class SkeletonMaker<R> {
             }
         }
 
-        var invokerVar = mm.var(mInvokerClass);
         var supportVar = mm.field("support");
         var serverVar = mm.field("server").get();
 
@@ -193,10 +181,10 @@ final class SkeletonMaker<R> {
             CaseInfo ci = caseMap.get(cases[i]);
 
             if (!ci.serverMethod.isDisposer()) {
-                mm.return_(ci.invoke(pipeVar, contextVar, invokerVar, supportVar, serverVar));
+                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar, serverVar));
             } else {
                 Label invokeStart = mm.label().here();
-                mm.return_(ci.invoke(pipeVar, contextVar, invokerVar, supportVar, serverVar));
+                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar, serverVar));
                 mm.finally_(invokeStart, () -> supportVar.invoke("dispose", mm.this_()));
             }
         }
@@ -211,6 +199,193 @@ final class SkeletonMaker<R> {
         return mSkeletonMaker.finishLookup();
     }
 
+    /**
+     * Makes private static methods which are responsible for reading parameters, invoking a
+     * server-side method, and writing a response.
+     *
+     * Each method assumes one of these forms:
+     *
+     *    static <context> <name>(RemoteObject, Pipe, <context>)
+     *
+     *    static <context> <name>(RemoteObject, Pipe, <context>, SkeletonSupport support)
+     *
+     * The latter form is used by batched methods which return an object.
+     *
+     * See {@link Skeleton#invoke} regarding exception handling
+     */
+    private Map<Integer, CaseInfo> defineInvokers() {
+        SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
+
+        if (serverMethods.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        var methodNames = new HashMap<String, Integer>();
+        var caseMap = new HashMap<Integer, CaseInfo>();
+
+        int methodId = 0;
+
+        for (RemoteMethod rm : serverMethods) {
+            String name = generateMethodName(methodNames, rm);
+
+            caseMap.put(methodId++, new CaseInfo(rm, name));
+
+            MethodMaker mm;
+            if (!rm.isBatched() || rm.returnType().equals("V")) {
+                mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class);
+            } else {
+                mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class,
+                                              SkeletonSupport.class);
+            }
+
+            mm.private_().static_();
+
+            final var remoteVar = mm.param(0);
+            final var pipeVar = mm.param(1);
+            final var contextVar = mm.param(2);
+
+            List<String> paramTypes = rm.parameterTypes();
+            var paramVars = new Variable[paramTypes.size()];
+            boolean isPiped = rm.isPiped();
+            boolean findPipe = isPiped;
+
+            for (int i=0; i<paramVars.length; i++) {
+                var paramVar = mm.var(paramTypes.get(i));
+                if (findPipe && paramVar.classType() == Pipe.class) {
+                    paramVar = pipeVar;
+                    findPipe = false;
+                } else {
+                    CoreUtils.readParam(pipeVar, paramVar);
+                }
+                paramVars[i] = paramVar;
+            }
+
+            Variable aliasIdVar = null;
+            if (rm.isBatched() && !rm.returnType().equals("V")) {
+                aliasIdVar = pipeVar.invoke("readLong");
+            }
+
+            final var skeletonClassVar = mm.var(Skeleton.class);
+
+            if (rm.isBatched() && !rm.isBatchedImmediate()) {
+                // Check if an exception was encountered and stop calling any more batched
+                // methods if so.
+                var exceptionVar = skeletonClassVar.invoke("batchException", contextVar);
+
+                Label invokeStart = mm.label();
+                Label skip = mm.label();
+
+                if (aliasIdVar == null) {
+                    skip = mm.label();
+                    exceptionVar.ifNe(null, skip);
+                } else {
+                    exceptionVar.ifEq(null, invokeStart);
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exceptionVar);
+                    mm.goto_(skip);
+                }
+
+                invokeStart.here();
+                var serverVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                Label invokeEnd = mm.label().here();
+
+                if (serverVar != null) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("createSkeletonAlias", serverVar, aliasIdVar);
+                }
+
+                contextVar.set(skeletonClassVar.invoke("batchInvokeSuccess", contextVar));
+
+                skip.here();
+                mm.return_(contextVar);
+
+                var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+                contextVar.set(skeletonClassVar.invoke("batchInvokeFailure",
+                                                       pipeVar, contextVar, exVar));
+
+                if (aliasIdVar != null) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                }
+
+                mm.return_(contextVar);
+            } else if (isPiped) {
+                var resultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                Label invokeStart = mm.label();
+                resultVar.ifLt(0, invokeStart);
+                pipeVar.invoke("flush");
+                // If result is less than or equal to 0, then the batch finished without an
+                // exception. Otherwise, this method should be skipped.
+                resultVar.ifLe(0, invokeStart);
+                mm.return_(null);
+
+                invokeStart.here();
+                remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                Label invokeEnd = mm.label().here();
+
+                mm.return_(skeletonClassVar.field("STOP_READING"));
+
+                var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+                mm.new_(UncaughtException.class, exVar).throw_();
+            } else {
+                Label finished = mm.label();
+                // If result is greater than 0, then the batch finished with an exception and
+                // so this method should be skipped.
+                skeletonClassVar.invoke("batchFinish", pipeVar, contextVar).ifGt(0, finished);
+
+                Label invokeStart = mm.label().here();
+                var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                Label invokeEnd = mm.label().here();
+
+                // Write a null Throwable to indicate success.
+                pipeVar.invoke(null, "writeObject", new Object[] {Throwable.class}, new Object[1]);
+
+                if (rm.isBatchedImmediate()) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
+                } else if (resultVar != null) {
+                    CoreUtils.writeParam(pipeVar, resultVar);
+                }
+
+                finished.here();
+                pipeVar.invoke("flush");
+
+                if (!rm.isBatchedImmediate()) {
+                    mm.return_(null);
+                } else {
+                    // Need to keep the batch going, but with a fresh context.
+                    mm.return_(skeletonClassVar.invoke("batchInvokeSuccess", (Object) null));
+                }
+
+                var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+
+                if (rm.isBatchedImmediate()) {
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                }
+
+                pipeVar.invoke("writeObject", exVar);
+                pipeVar.invoke("flush");
+                mm.return_(null);
+            }
+        }
+
+        return caseMap;
+    }
+
+    private static String generateMethodName(Map<String, Integer> methodNames, RemoteMethod rm) {
+        String name = rm.name();
+        while (true) {
+            Integer count = methodNames.get(name);
+            if (count == null) {
+                methodNames.put(name, 1);
+                return name;
+            }
+            methodNames.put(name, count + 1);
+            name = name + '$' + count;
+        }
+    }
+
     private static class CaseInfo {
         final RemoteMethod serverMethod;
         final String serverMethodName;
@@ -220,13 +395,13 @@ final class SkeletonMaker<R> {
             this.serverMethodName = serverMethodName;
         }
 
-        Variable invoke(Variable pipeVar, Variable contextVar,
-                        Variable invokerVar, Variable supportVar, Variable serverVar)
+        Variable invoke(MethodMaker mm, Variable pipeVar, Variable contextVar,
+                        Variable supportVar, Variable serverVar)
         {
             if (!serverMethod.isBatched() || serverMethod.returnType().equals("V")) {
-                return invokerVar.invoke(serverMethodName, serverVar, pipeVar, contextVar);
+                return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar);
             }
-            return invokerVar.invoke(serverMethodName, serverVar, pipeVar, contextVar, supportVar);
+            return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar, supportVar);
         }
     }
 }
