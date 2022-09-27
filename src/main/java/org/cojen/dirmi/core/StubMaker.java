@@ -213,7 +213,7 @@ final class StubMaker {
 
             if (cmp < 0) {
                 // The server doesn't implement the method.
-                mm.new_(NoSuchMethodError.class, "Unimplemented on remote side").throw_();
+                mm.new_(NoSuchMethodError.class, "Unimplemented on the remote side").throw_();
                 clientMethod = null;
                 continue;
             }

@@ -24,6 +24,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -256,6 +257,59 @@ final class RemoteInfo {
         }
 
         return false;
+    }
+
+    /**
+     * Returns a method id mapping from this RemoteInfo to another one. The array index is the
+     * method id from this RemoteInfo, and the array value is the method id of the "to"
+     * RemoteInfo. An array value of MIN_VALUE indicates that the "to" RemoteInfo doesn't mave
+     * a corresponding method.
+     */
+    int[] methodIdMap(RemoteInfo to) {
+        int[] mapping = new int[mRemoteMethods.size()];
+
+        Iterator<RemoteMethod> itFrom = mRemoteMethods.iterator();
+        Iterator<RemoteMethod> itTo = to.mRemoteMethods.iterator();
+
+        RemoteMethod methodTo = null;
+        int idTo = -1;
+
+        outer: for (int i=0; i<mapping.length; i++) {
+            RemoteMethod methodFrom = itFrom.next();
+
+            while (true) {
+                if (methodTo == null) {
+                    if (!itTo.hasNext()) {
+                        for (; i<mapping.length; i++) {
+                            mapping[i] = Integer.MIN_VALUE;
+                        }
+                        break outer;
+                    }
+                    methodTo = itTo.next();
+                    idTo++;
+                }
+
+                int cmp = methodFrom.compareTo(methodTo);
+
+                if (cmp == 0) {
+                    // Matched mapping.
+                    mapping[i] = idTo;
+                    methodTo = null;
+                    continue outer;
+                }
+
+                if (cmp < 0) {
+                    // Method on the "from" side doesn't exist on the "to" side.
+                    mapping[i] = Integer.MIN_VALUE;
+                    continue outer;
+                }
+
+                // Method on the "to" side doesn't exist on the "from" side, so skip it.
+                methodTo = null;
+            }
+        }
+
+        return mapping;
     }
 
     @Override

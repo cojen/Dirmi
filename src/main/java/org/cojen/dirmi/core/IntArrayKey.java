@@ -16,19 +16,35 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.IOException;
-
-import org.cojen.dirmi.Pipe;
+import java.util.Arrays;
 
 /**
- * Writes a method id as a byte or an int, possibly with a mapping step beforehand if the
- * remote skeleton has changed following a session reconnect.
+ * Cache key over an int array.
  *
  * @author Brian S O'Neill
  */
-public interface MethodIdWriter {
-    /**
-     * @throws NoSuchMethodError if the remote side doesn't implement the method
-     */
-    void writeMethodId(Pipe pipe, int id) throws IOException;
+final class IntArrayKey {
+    private final int[] mArray;
+    private final int mHash;
+
+    IntArrayKey(int[] array) {
+        mArray = array;
+        mHash = Arrays.hashCode(array);
+    }
+
+    @Override
+    public int hashCode() {
+        return mHash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof IntArrayKey) {
+            return Arrays.equals(mArray, ((IntArrayKey) obj).mArray);
+        }
+        return false;
+    }
 }
