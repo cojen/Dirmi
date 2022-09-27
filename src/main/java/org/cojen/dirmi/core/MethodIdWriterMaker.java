@@ -54,7 +54,8 @@ final class MethodIdWriterMaker {
     }
 
     private static MethodIdWriter makeWriter(int[] mapping) {
-        ClassMaker cm = ClassMaker.begin().implement(MethodIdWriter.class).final_();
+        ClassMaker cm = ClassMaker.begin(null, MethodHandles.lookup())
+            .implement(MethodIdWriter.class).final_();
         cm.addConstructor();
         
         MethodMaker mm = cm.addMethod(null, "writeMethodId", Pipe.class, int.class).public_();
