@@ -80,9 +80,21 @@ final class StubMaker {
 
         String sourceFile = StubMaker.class.getSimpleName();
 
+        Class<?> superClass;
+        {
+            int numMethods = mServerInfo.remoteMethods().size();
+            if (numMethods < 256) {
+                superClass = StubFactory.BW.class;
+            } else if (numMethods < 65536) {
+                superClass = StubFactory.SW.class;
+            } else {
+                // Impossible case.
+                superClass = StubFactory.IW.class;
+            }
+        }
+
         mFactoryMaker = ClassMaker.begin(type.getName(), type.getClassLoader(), CoreUtils.MAKER_KEY)
-            .extend(StubFactory.class).implement(MethodIdWriter.class)
-            .final_().sourceFile(sourceFile);
+            .extend(superClass).final_().sourceFile(sourceFile);
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
@@ -102,19 +114,6 @@ final class StubMaker {
 
         mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
         mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1), mm.this_()));
-
-        mm = mFactoryMaker.addMethod(null, "writeMethodId", Pipe.class, int.class).public_();
-        var pipeVar = mm.param(0);
-        var methodIdVar = mm.param(1);
-        int numMethods = mServerInfo.remoteMethods().size();
-        if (numMethods < 256) {
-            pipeVar.invoke("writeByte", methodIdVar);
-        } else if (numMethods < 65536) {
-            pipeVar.invoke("writeShort", methodIdVar);
-        } else {
-            // Impossible case.
-            pipeVar.invoke("writeInt", methodIdVar);
-        }
 
         MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
 

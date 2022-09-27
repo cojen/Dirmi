@@ -16,6 +16,10 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.IOException;
+
+import org.cojen.dirmi.Pipe;
+
 /**
  * Produces new Stub instances for client-side Remote objects. A Stub instance marshals
  * requests to a remote {@link Skeleton} which in turn calls the real method. Any response is
@@ -36,4 +40,37 @@ public abstract class StubFactory extends Item {
      * @param support for invoking remote methods
      */
     protected abstract Stub newStub(long id, StubSupport support);
+
+    public static abstract class BW extends StubFactory implements MethodIdWriter {
+        protected BW(long typeId) {
+            super(typeId);
+        }
+
+        @Override
+        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+            pipe.writeByte(methodId);
+        }
+    }
+
+    public static abstract class SW extends StubFactory implements MethodIdWriter {
+        protected SW(long typeId) {
+            super(typeId);
+        }
+
+        @Override
+        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+            pipe.writeShort(methodId);
+        }
+    }
+
+    public static abstract class IW extends StubFactory implements MethodIdWriter {
+        protected IW(long typeId) {
+            super(typeId);
+        }
+
+        @Override
+        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+            pipe.writeInt(methodId);
+        }
+    }
 }
