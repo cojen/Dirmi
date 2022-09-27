@@ -670,7 +670,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             } else {
                 disposed = DisposedStubSupport.THE;
             }
-            Stub.SUPPORT_HANDLE.setOpaque(removed, disposed);
+            Stub.SUPPORT_HANDLE.setRelease(removed, disposed);
         }
     }
 

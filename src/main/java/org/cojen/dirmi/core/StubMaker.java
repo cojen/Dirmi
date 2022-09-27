@@ -145,7 +145,7 @@ final class StubMaker {
                 clientMethod = it1.next();
             }
 
-            if (serverMethod == null &&  it2.hasNext()) {
+            if (serverMethod == null && it2.hasNext()) {
                 serverMethod = it2.next();
                 serverMethodId++;
             }
@@ -245,10 +245,10 @@ final class StubMaker {
                 continue;
             }
 
-            var supportVar = mm.field("support").getOpaque();
+            var supportVar = mm.field("support").getAcquire();
 
             if (serverMethod.isDisposer()) {
-                mm.field("support").setOpaque(supportVar.invoke("dispose", mm.this_()));
+                mm.field("support").setRelease(supportVar.invoke("dispose", mm.this_()));
             }
 
             Variable batchedPipeVar;
@@ -387,7 +387,7 @@ final class StubMaker {
             reallyThrowIt.here();
             exVar.throw_();
 
-            if (cmp == 0) {
+            if (cmp <= 0) {
                 clientMethod = null;
             }
             serverMethod = null;

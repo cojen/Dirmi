@@ -69,7 +69,7 @@ public final class CoreUtils {
         if (!(obj instanceof Stub)) {
             throw new IllegalArgumentException();
         }
-        return ((StubSupport) Stub.SUPPORT_HANDLE.getOpaque((Stub) obj)).session();
+        return ((StubSupport) Stub.SUPPORT_HANDLE.getAcquire((Stub) obj)).session();
     }
 
     public static Session currentSession() {
