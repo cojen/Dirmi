@@ -40,10 +40,12 @@ public class Stub extends Item implements Remote {
     }
 
     protected StubSupport support;
+    protected MethodIdWriter miw;
 
-    public Stub(long id, StubSupport support) {
+    public Stub(long id, StubSupport support, MethodIdWriter miw) {
         super(id);
         this.support = support;
+        this.miw = miw;
         VarHandle.storeStoreFence();
     }
 

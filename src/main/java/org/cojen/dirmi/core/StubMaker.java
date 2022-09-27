@@ -25,7 +25,6 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.SortedSet;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
@@ -82,7 +81,8 @@ final class StubMaker {
         String sourceFile = StubMaker.class.getSimpleName();
 
         mFactoryMaker = ClassMaker.begin(type.getName(), type.getClassLoader(), CoreUtils.MAKER_KEY)
-            .extend(StubFactory.class).final_().sourceFile(sourceFile);
+            .extend(StubFactory.class).implement(MethodIdWriter.class)
+            .final_().sourceFile(sourceFile);
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
@@ -101,7 +101,20 @@ final class StubMaker {
         mm.invokeSuperConstructor(mm.param(0));
 
         mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
-        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1)));
+        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1), mm.this_()));
+
+        mm = mFactoryMaker.addMethod(null, "writeMethodId", Pipe.class, int.class).public_();
+        var pipeVar = mm.param(0);
+        var methodIdVar = mm.param(1);
+        int numMethods = mServerInfo.remoteMethods().size();
+        if (numMethods < 256) {
+            pipeVar.invoke("writeByte", methodIdVar);
+        } else if (numMethods < 65536) {
+            pipeVar.invoke("writeShort", methodIdVar);
+        } else {
+            // Impossible case.
+            pipeVar.invoke("writeInt", methodIdVar);
+        }
 
         MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
 
@@ -121,17 +134,13 @@ final class StubMaker {
      */
     private Class<?> finishStub() {
         {
-            MethodMaker mm = mStubMaker.addConstructor(long.class, StubSupport.class);
-            mm.invokeSuperConstructor(mm.param(0), mm.param(1));
+            MethodMaker mm = mStubMaker.addConstructor
+                (long.class, StubSupport.class, MethodIdWriter.class);
+            mm.invokeSuperConstructor(mm.param(0), mm.param(1), mm.param(2));
         }
 
-        SortedSet<RemoteMethod> clientMethods = mClientInfo.remoteMethods();
-        SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
-
-        int numMethods = serverMethods.size();
-
-        Iterator<RemoteMethod> it1 = clientMethods.iterator();
-        Iterator<RemoteMethod> it2 = serverMethods.iterator();
+        Iterator<RemoteMethod> it1 = mClientInfo.remoteMethods().iterator();
+        Iterator<RemoteMethod> it2 = mServerInfo.remoteMethods().iterator();
 
         RemoteMethod clientMethod = null;
 
@@ -285,8 +294,7 @@ final class StubMaker {
 
                     // Must call the immediate variant.
 
-                    writeParams(pipeVar, numMethods,
-                                serverMethod, batchedImmediateMethodId, ptypes);
+                    writeParams(mm, pipeVar, serverMethod, batchedImmediateMethodId, ptypes);
                     pipeVar.invoke("writeLong", aliasIdVar);
                     pipeVar.invoke("flush");
 
@@ -313,7 +321,7 @@ final class StubMaker {
                 }
             }
 
-            writeParams(pipeVar, numMethods, serverMethod, serverMethodId, ptypes);
+            writeParams(mm, pipeVar, serverMethod, serverMethodId, ptypes);
 
             if (serverMethod.isPiped()) {
                 supportVar.invoke("finishBatch", pipeVar).ifFalse(invokeEnd);
@@ -401,25 +409,16 @@ final class StubMaker {
         return returnType == void.class || returnType.equals("V");
     }
 
-    private static void writeParams(Variable pipeVar, int numMethods,
+    private static void writeParams(MethodMaker mm, Variable pipeVar,
                                     RemoteMethod method, int methodId, Object[] ptypes)
     {
-        if (numMethods < 256) {
-            pipeVar.invoke("writeByte", methodId);
-        } else if (numMethods < 65536) {
-            pipeVar.invoke("writeShort", methodId);
-        } else {
-            // Impossible case.
-            pipeVar.invoke("writeInt", methodId);
-        }
+        mm.field("miw").getAcquire().invoke("writeMethodId", pipeVar, methodId);
 
         if (ptypes.length <= 0) {
             return;
         }
 
         // Write all of the non-pipe parameters.
-
-        MethodMaker mm = pipeVar.methodMaker();
 
         if (!method.isPiped()) {
             for (int i=0; i<ptypes.length; i++) {
