@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.cojen.maker.ClassMaker;
+import org.cojen.maker.Field;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
@@ -69,12 +70,14 @@ final class StubMaker {
         }
     }
 
+    private final Class<?> mType;
     private final RemoteInfo mClientInfo;
     private final RemoteInfo mServerInfo;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mStubMaker;
 
     private StubMaker(Class<?> type, RemoteInfo info) {
+        mType = type;
         mClientInfo = RemoteInfo.examine(type);
         mServerInfo = info;
 
@@ -314,7 +317,7 @@ final class StubMaker {
                     isBatchingVar.ifTrue(done);
                     supportVar.invoke("batched", pipeVar);
                     done.here();
-                    mm.return_(returnVar);
+                    returnResult(mm, clientMethod,returnVar);
 
                     hasType.here();
                 }
@@ -339,7 +342,7 @@ final class StubMaker {
                     pipeVar.invoke("writeLong", aliasIdVar);
                     var stubVar = supportVar.invoke
                         ("newAliasStub", remoteFailureClass, aliasIdVar, typeIdVar);
-                    mm.return_(stubVar.cast(returnType));
+                    returnResult(mm, clientMethod, stubVar.cast(returnType));
                 }
             } else {
                 pipeVar.invoke("flush");
@@ -363,7 +366,7 @@ final class StubMaker {
                     CoreUtils.readParam(pipeVar, returnVar);
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
-                    mm.return_(returnVar);
+                    returnResult(mm, clientMethod, returnVar);
                 }
             }
 
@@ -434,10 +437,61 @@ final class StubMaker {
         }
     }
 
+    private void returnResult(MethodMaker mm, RemoteMethod method, Variable resultVar) {
+        if (method != null && method.isRestorable()) {
+            // Unless already set, assign a fully bound MethodHandle instance to the inherited
+            // origin field. No attempt is made to prevent multiple threads from assigning it,
+            // because it won't affect the outcome.
+
+            try {
+                Class<?> returnType = classFor(method.returnType());
+
+                List<String> pnames = method.parameterTypes();
+                var ptypes = new Class[pnames.size()];
+                int i = 0;
+                for (String pname : pnames) {
+                    ptypes[i++] = classFor(pname);
+                }
+
+                MethodType mt = MethodType.methodType(returnType, ptypes);
+
+                MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+                MethodHandle mh = lookup.findVirtual(mType, method.name(), mt);
+
+                Label alreadySet = mm.label();
+                Field originField = mm.access(Stub.ORIGIN_HANDLE, resultVar.cast(Stub.class));
+                originField.getAcquire().ifNe(null, alreadySet);
+
+                var mhVar = mm.var(MethodHandle.class).setExact(mh);
+
+                var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
+                paramVars.aset(0, mm.this_());
+                for (i=0; i<ptypes.length; i++) {
+                    paramVars.aset(i + 1, mm.param(i));
+                }
+
+                var methodHandlesVar = mm.var(MethodHandles.class);
+                mhVar.set(methodHandlesVar.invoke("insertArguments", mhVar, 0, paramVars));
+
+                originField.setRelease(mhVar);
+
+                alreadySet.here();
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                // Not expected.
+                throw new IllegalStateException(e);
+            }
+        }
+
+        mm.return_(resultVar);
+    }
+
     private Class<?> classFor(Object obj) throws NoClassDefFoundError {
         return obj instanceof Class ? ((Class<?>) obj) : classFor((String) obj);
     }
 
+    /**
+     * @param name class name or descriptor
+     */
     private Class<?> classFor(String name) throws NoClassDefFoundError {
         try {
             return classForEx(name);
@@ -448,6 +502,9 @@ final class StubMaker {
         }
     }
 
+    /**
+     * @param name class name or descriptor
+     */
     private Class<?> classForEx(String name) throws ClassNotFoundException {
         return CoreUtils.loadClassByNameOrDescriptor(name, mStubMaker.classLoader());
     }

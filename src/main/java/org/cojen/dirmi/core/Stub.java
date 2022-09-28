@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
@@ -28,12 +29,13 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public class Stub extends Item implements Remote {
-    static final VarHandle SUPPORT_HANDLE;
+    static final VarHandle SUPPORT_HANDLE, ORIGIN_HANDLE;
 
     static {
         try {
             var lookup = MethodHandles.lookup();
             SUPPORT_HANDLE = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
+            ORIGIN_HANDLE = lookup.findVarHandle(Stub.class, "origin", MethodHandle.class);
         } catch (Throwable e) {
             throw new Error(e);
         }
@@ -41,6 +43,9 @@ public class Stub extends Item implements Remote {
 
     protected StubSupport support;
     protected MethodIdWriter miw;
+
+    // Is set when this stub has become restorable.
+    protected MethodHandle origin;
 
     public Stub(long id, StubSupport support, MethodIdWriter miw) {
         super(id);
