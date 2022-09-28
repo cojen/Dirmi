@@ -166,6 +166,7 @@
           <reportOutputDirectory>${basedir}/docs</reportOutputDirectory>
           <destDir>javadoc</destDir>
           <excludePackageNames>org.cojen.dirmi.core:org.cojen.dirmi.io</excludePackageNames>
+          <!-- <additionalOptions>-Xdoclint:none</additionalOptions> -->
         </configuration>
         <executions>
           <execution>
