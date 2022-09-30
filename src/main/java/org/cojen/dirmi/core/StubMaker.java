@@ -141,46 +141,27 @@ final class StubMaker {
             mm.invokeSuperConstructor(mm.param(0), mm.param(1), mm.param(2));
         }
 
-        Iterator<RemoteMethod> it1 = mClientInfo.remoteMethods().iterator();
-        Iterator<RemoteMethod> it2 = mServerInfo.remoteMethods().iterator();
+        var it = new JoinedIterator<>(mClientInfo.remoteMethods(), mServerInfo.remoteMethods());
 
-        RemoteMethod clientMethod = null;
-
-        RemoteMethod serverMethod = null;
+        RemoteMethod lastServerMethod = null;
         int serverMethodId = -1;
-
         int batchedImmediateMethodId = -1;
 
-        while (true) {
-            if (clientMethod == null && it1.hasNext()) {
-                clientMethod = it1.next();
-            }
+        while (it.hasNext()) {
+            JoinedIterator.Pair<RemoteMethod> pair = it.next();
+            RemoteMethod clientMethod = pair.a;
+            RemoteMethod serverMethod = pair.b;
 
-            if (serverMethod == null && it2.hasNext()) {
-                serverMethod = it2.next();
+            if (serverMethod != lastServerMethod) {
                 serverMethodId++;
-            }
-
-            if (clientMethod == null && serverMethod == null) {
-                break;
+                lastServerMethod = serverMethod;
             }
 
             Object returnType;
             String methodName;
             Object[] ptypes;
 
-            int cmp;
             if (clientMethod == null) {
-                // Only server-side methods remain.
-                cmp = 1;
-            } else if (serverMethod == null) {
-                // Only client-side methods remain.
-                cmp = -1;
-            } else {
-                cmp = clientMethod.compareTo(serverMethod);
-            }
-
-            if (cmp > 0) {
                 // Attempt to implement a method that only exists on the server-side.
                 try {
                     returnType = classForEx(serverMethod.returnType());
@@ -193,38 +174,35 @@ final class StubMaker {
                     }
                 } catch (ClassNotFoundException e) {
                     // Can't be implemented, so skip it.
-                    serverMethod = null;
                     continue;
                 }
             } else {
+                if (clientMethod.isBatchedImmediate()) {
+                    // No stub method is actually generated for this variant. The skeleton
+                    // variant is invoked when the remote typeId isn't known yet. RemoteMethod
+                    // instances are compared such that this variant comes immediately before
+                    // the normal one.
+                    batchedImmediateMethodId = serverMethodId;
+                    continue;
+                }
+
                 returnType = clientMethod.returnType();
                 methodName = clientMethod.name();
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
             }
 
-            if (clientMethod != null && clientMethod.isBatchedImmediate() && cmp >= 0) {
-                // No stub method is actually generated for this variant. The skeleton variant
-                // is invoked when the remote typeId isn't known yet. RemoteMethod instances are
-                // compared such that this variant comes immediately before the normal one.
-                batchedImmediateMethodId = serverMethodId;
-                clientMethod = null;
-                serverMethod = null;
-                continue;
-            }
-
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
 
-            if (cmp < 0) {
+            if (serverMethod == null) {
                 // The server doesn't implement the method.
                 mm.new_(NoSuchMethodError.class, "Unimplemented on the remote side").throw_();
-                clientMethod = null;
                 continue;
             }
 
             Class<?> remoteFailureClass;
             List<Class<?>> thrownClasses = null;
 
-            if (cmp > 0) {
+            if (clientMethod == null) {
                 // Use the default failure exception for a method that only exists on the
                 // server-side.
                 remoteFailureClass = classFor(mClientInfo.remoteFailureException());
@@ -251,8 +229,6 @@ final class StubMaker {
             if (clientMethod != null && clientMethod.isPiped() != serverMethod.isPiped()) {
                 // Not expected.
                 mm.new_(IncompatibleClassChangeError.class).throw_();
-                clientMethod = null;
-                serverMethod = null;
                 continue;
             }
 
@@ -397,10 +373,6 @@ final class StubMaker {
             reallyThrowIt.here();
             exVar.throw_();
 
-            if (cmp <= 0) {
-                clientMethod = null;
-            }
-            serverMethod = null;
             batchedImmediateMethodId = -1;
         }
 
