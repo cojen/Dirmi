@@ -203,27 +203,6 @@ public class RemoteInfoTest {
         }
     }
 
-    public static interface R14 extends Remote {
-        void foo(String x) throws RemoteException;
-    }
-
-    public static interface R15 extends Remote {
-        void foo(String x) throws IOException;
-    }
-
-    public static interface R16 extends R14, R15 {
-    }
-
-    @Test
-    public void exceptionConflict() {
-        try {
-            RemoteInfo.examine(R16.class);
-            fail();
-        } catch (IllegalArgumentException e) {
-            confirm(e, "conflicting declared exceptions");
-        }
-    }
-
     public static interface R17 extends Remote {
         @RemoteFailure(exception=RuntimeException.class)
         void foo(String x);

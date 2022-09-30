@@ -361,10 +361,6 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (!mRemoteFailureException.equals(other.mRemoteFailureException)) {
             throw new IllegalArgumentException(prefix + "remote failure exceptions: " + m);
         }
-
-        if (!mExceptionTypes.equals(other.mExceptionTypes)) {
-            throw new IllegalArgumentException(prefix + "declared exceptions: " + m);
-        }
     }
 
     @Override

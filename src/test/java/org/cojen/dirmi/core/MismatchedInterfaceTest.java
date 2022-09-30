@@ -14,18 +14,27 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi;
+package org.cojen.dirmi.core;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import java.net.ServerSocket;
 
+import java.util.Iterator;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.MethodMaker;
+
+import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -243,6 +252,20 @@ public class MismatchedInterfaceTest {
         assertEquals("extra", extra.invoke(remote, 123));
 
         assertEquals("bob", ((Parent) remote).name());
+
+        RemoteInfo info1 = RemoteInfo.examine(iface);
+        RemoteInfo info2 = RemoteInfo.examineStub(remote);
+
+        Iterator<RemoteMethod> it1 = info1.remoteMethods().iterator();
+        Iterator<RemoteMethod> it2 = info2.remoteMethods().iterator();
+
+        while (it1.hasNext()) {
+            RemoteMethod rm1 = it1.next();
+            RemoteMethod rm2 = it2.next();
+            assertEquals(0, rm1.compareTo(rm2));
+        }
+
+        assertFalse(it2.hasNext());
     }
 
     @Test
