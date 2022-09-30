@@ -41,7 +41,10 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
      */
     protected abstract Stub newStub(long id, StubSupport support);
 
-    public static abstract class BW extends StubFactory implements MethodIdWriter {
+    /**
+     * Writes byte methodIds.
+     */
+    public static abstract class BW extends StubFactory {
         protected BW(long typeId) {
             super(typeId);
         }
@@ -52,7 +55,10 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
         }
     }
 
-    public static abstract class SW extends StubFactory implements MethodIdWriter {
+    /**
+     * Writes short methodIds.
+     */
+    public static abstract class SW extends StubFactory {
         protected SW(long typeId) {
             super(typeId);
         }
@@ -63,7 +69,10 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
         }
     }
 
-    public static abstract class IW extends StubFactory implements MethodIdWriter {
+    /**
+     * Writes int methodIds.
+     */
+    public static abstract class IW extends StubFactory {
         protected IW(long typeId) {
             super(typeId);
         }

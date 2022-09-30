@@ -50,7 +50,7 @@ public final class CoreUtils {
 
     static final Object MAKER_KEY = new Object();
 
-    static final ThreadLocal<Session> CURRENT_SESSION = new ThreadLocal<>();
+    static final ThreadLocal<Session> cCurrentSession = new ThreadLocal<>();
 
     public static void setOptions(Socket s) throws IOException {
         if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
@@ -73,7 +73,7 @@ public final class CoreUtils {
     }
 
     public static Session currentSession() {
-        Session session = CURRENT_SESSION.get();
+        Session session = cCurrentSession.get();
         if (session == null) {
             throw new IllegalStateException();
         }

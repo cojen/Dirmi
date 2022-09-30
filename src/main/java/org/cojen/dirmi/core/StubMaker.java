@@ -317,7 +317,7 @@ final class StubMaker {
                     isBatchingVar.ifTrue(done);
                     supportVar.invoke("batched", pipeVar);
                     done.here();
-                    returnResult(mm, clientMethod,returnVar);
+                    returnResult(mm, clientMethod, returnVar);
 
                     hasType.here();
                 }

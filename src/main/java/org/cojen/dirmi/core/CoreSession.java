@@ -939,7 +939,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         @Override
         public void run() {
             try {
-                CoreUtils.CURRENT_SESSION.set(CoreSession.this);
+                CoreUtils.cCurrentSession.set(CoreSession.this);
                 Object context = null;
                 do {
                     Skeleton skeleton = mSkeletons.get(mPipe.readLong());
@@ -954,7 +954,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 }
                 CoreUtils.closeQuietly(this);
             } finally {
-                CoreUtils.CURRENT_SESSION.remove();
+                CoreUtils.cCurrentSession.remove();
             }
         }
 
