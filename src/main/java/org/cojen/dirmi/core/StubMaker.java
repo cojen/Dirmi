@@ -26,13 +26,20 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.cojen.maker.AnnotationMaker;
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Field;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
+import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Restorable;
+import org.cojen.dirmi.Unbatched;
 
 /**
  * 
@@ -161,6 +168,14 @@ final class StubMaker {
             String methodName;
             Object[] ptypes;
 
+            if (serverMethod != null && serverMethod.isBatchedImmediate()) {
+                // No stub method is actually generated for this variant. The skeleton variant
+                // is invoked when the remote typeId isn't known yet. RemoteMethod instances
+                // are compared such that this variant comes immediately before the normal one.
+                batchedImmediateMethodId = serverMethodId;
+                continue;
+            }
+
             if (clientMethod == null) {
                 // Attempt to implement a method that only exists on the server-side.
                 try {
@@ -178,14 +193,9 @@ final class StubMaker {
                 }
             } else {
                 if (clientMethod.isBatchedImmediate()) {
-                    // No stub method is actually generated for this variant. The skeleton
-                    // variant is invoked when the remote typeId isn't known yet. RemoteMethod
-                    // instances are compared such that this variant comes immediately before
-                    // the normal one.
-                    batchedImmediateMethodId = serverMethodId;
+                    // No stub method is actually generated for this variant.
                     continue;
                 }
-
                 returnType = clientMethod.returnType();
                 methodName = clientMethod.name();
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
@@ -203,12 +213,14 @@ final class StubMaker {
             List<Class<?>> thrownClasses = null;
 
             if (clientMethod == null) {
-                // Use the default failure exception for a method that only exists on the
-                // server-side.
-                remoteFailureClass = classFor(mClientInfo.remoteFailureException());
+                try {
+                    remoteFailureClass = classForEx(serverMethod.remoteFailureException());
+                } catch (ClassNotFoundException e) {
+                    // Use the default failure exception instead.
+                    remoteFailureClass = classFor(mClientInfo.remoteFailureException());
+                }
             } else {
-                String remoteFailureName = clientMethod.remoteFailureException();
-                remoteFailureClass = classFor(remoteFailureName);
+                remoteFailureClass = classFor(clientMethod.remoteFailureException());
 
                 for (String ex : clientMethod.exceptionTypes()) {
                     Class<?> exClass = classFor(ex);
@@ -225,6 +237,37 @@ final class StubMaker {
             }
 
             mm.throws_(remoteFailureClass);
+
+            if (clientMethod == null) {
+                // Add annotations for methods which only exist on the server-side. This allows
+                // a RemoteInfo instance to be created later without the server interface.
+
+                if (serverMethod.isDisposer()) {
+                    mm.addAnnotation(Disposer.class, true);
+                }
+
+                if (serverMethod.isBatched()) {
+                    mm.addAnnotation(Batched.class, true);
+                } else if (serverMethod.isUnbatched()) {
+                    mm.addAnnotation(Unbatched.class, true);
+                }
+
+                if (serverMethod.isRestorable()) {
+                    mm.addAnnotation(Restorable.class, true);
+                }
+
+                if (remoteFailureClass == RemoteException.class) {
+                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                        mm.addAnnotation(RemoteFailure.class, true).put("declared", false);
+                    }
+                } else {
+                    AnnotationMaker am = mm.addAnnotation(RemoteFailure.class, true);
+                    am.put("exception", remoteFailureClass);
+                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                        am.put("declared", false);
+                    }
+                }
+            }
 
             if (clientMethod != null && clientMethod.isPiped() != serverMethod.isPiped()) {
                 // Not expected.

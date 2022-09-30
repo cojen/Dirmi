@@ -166,6 +166,7 @@ public final class CoreUtils {
             case "S": return short.class;
             case "I": return int.class;
             case "J": return long.class;
+            case "V": return void.class;
             }
         }
 

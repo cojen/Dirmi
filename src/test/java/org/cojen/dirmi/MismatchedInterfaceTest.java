@@ -203,6 +203,13 @@ public class MismatchedInterfaceTest {
         {
             ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT3", new Loader(), null)
                 .public_().interface_().implement(Parent.class);
+            MethodMaker mm = cm.addMethod(Parent.class, "option", int.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            mm.addAnnotation(Batched.class, true);
+            mm.addAnnotation(RemoteFailure.class, true).put("declared", false);
+            mm = cm.addMethod(null, "option2", int.class).public_().abstract_();
+            mm.addAnnotation(Batched.class, true);
+            mm.addAnnotation(RemoteFailure.class, true).put("exception", RuntimeException.class);
             cm.addMethod(String.class, "extraName", int.class)
                 .public_().abstract_().throws_(RemoteException.class);
             iface = cm.finish();
@@ -210,6 +217,9 @@ public class MismatchedInterfaceTest {
             cm = ClassMaker.begin(null, iface.getClassLoader()).implement(iface).public_();
             cm.addConstructor().public_();
             cm.addMethod(String.class, "name").public_().return_("bob");
+            mm = cm.addMethod(Parent.class, "option", int.class).public_();
+            mm.return_(mm.this_());
+            cm.addMethod(null, "option2").public_();
             cm.addMethod(String.class, "extraName", int.class).public_().return_("extra");
             server = cm.finish();
         }
