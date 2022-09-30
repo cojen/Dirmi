@@ -90,6 +90,8 @@ final class ClientSession<R> extends CoreSession<R> {
         Stub root = factory.newStub(rootId, stubSupport());
         mStubs.put(root);
         mRoot = (R) root;
+
+        Stub.setRootOrigin(root);
     }
 
     @Override
@@ -179,8 +181,7 @@ final class ClientSession<R> extends CoreSession<R> {
         var restorableSupport = new RestorableStubSupport(newSupport);
 
         mStubs.forEach(stub -> {
-            var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
-            if (origin != null) {
+            if (Stub.isRestorable(stub)) {
                 Stub.cSupportHandle.setRelease(stub, restorableSupport);
             }
         });

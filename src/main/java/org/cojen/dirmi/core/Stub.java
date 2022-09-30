@@ -31,6 +31,8 @@ import org.cojen.dirmi.Session;
 public class Stub extends Item implements Remote {
     static final VarHandle cSupportHandle, cOriginHandle;
 
+    private static final MethodHandle cRootOrigin;
+
     static {
         try {
             var lookup = MethodHandles.lookup();
@@ -39,6 +41,21 @@ public class Stub extends Item implements Remote {
         } catch (Throwable e) {
             throw new Error(e);
         }
+
+        cRootOrigin = MethodHandles.constant(Stub.class, null);
+    }
+
+    /**
+     * Set the root origin such that isRestorable(root) always returns false. The root must be
+     * restored specially.
+     */
+    static void setRootOrigin(Stub root) {
+        cOriginHandle.setRelease(root, cRootOrigin);
+    }
+
+    static boolean isRestorable(Stub stub) {
+        var origin = (MethodHandle) cOriginHandle.getAcquire(stub);
+        return origin != null && origin != cRootOrigin;
     }
 
     protected StubSupport support;

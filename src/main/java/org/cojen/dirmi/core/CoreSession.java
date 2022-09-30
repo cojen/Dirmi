@@ -430,9 +430,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
             R root = root();
             if (root instanceof Stub) {
-                // In case the origin is set for the root, clear it because the root is
-                // restored specially upon reconnect.
-                Stub.cOriginHandle.setRelease((Stub) root, null);
+                // In case the root origin has changed, replace it with the standard root
+                // origin. It needs to restored specially upon reconnect anyhow.
+                Stub.setRootOrigin((Stub) root);
             }
         }
 

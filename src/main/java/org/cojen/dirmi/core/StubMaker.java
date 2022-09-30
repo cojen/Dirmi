@@ -443,6 +443,17 @@ final class StubMaker {
             // origin field. No attempt is made to prevent multiple threads from assigning it,
             // because it won't affect the outcome.
 
+            Label finished = mm.label();
+            resultVar.ifEq(null, finished);
+
+            Object[] originStub = {mm.this_()};
+            Field originField = mm.access(Stub.cOriginHandle, originStub);
+            Label parentHasOrigin = mm.label();
+            originField.getAcquire().ifNe(null, parentHasOrigin);
+            mm.new_(IllegalStateException.class,
+                    "Cannot make a restorable object from a non-restorable parent").throw_();
+            parentHasOrigin.here();
+
             try {
                 Class<?> returnType = classFor(method.returnType());
 
@@ -458,9 +469,8 @@ final class StubMaker {
                 MethodHandles.Lookup lookup = MethodHandles.publicLookup();
                 MethodHandle mh = lookup.findVirtual(mType, method.name(), mt);
 
-                Label alreadySet = mm.label();
-                Field originField = mm.access(Stub.cOriginHandle, resultVar.cast(Stub.class));
-                originField.getAcquire().ifNe(null, alreadySet);
+                originStub[0] = resultVar.cast(Stub.class);
+                originField.getAcquire().ifNe(null, finished);
 
                 var mhVar = mm.var(MethodHandle.class).setExact(mh);
 
@@ -474,12 +484,12 @@ final class StubMaker {
                 mhVar.set(methodHandlesVar.invoke("insertArguments", mhVar, 0, paramVars));
 
                 originField.setRelease(mhVar);
-
-                alreadySet.here();
             } catch (NoSuchMethodException | IllegalAccessException e) {
                 // Not expected.
                 throw new IllegalStateException(e);
             }
+
+            finished.here();
         }
 
         mm.return_(resultVar);
