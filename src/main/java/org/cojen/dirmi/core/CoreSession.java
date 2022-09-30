@@ -34,8 +34,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.DisconnectedException;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAware;
 
@@ -49,17 +51,20 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     static final int C_PING = 1, C_PONG = 2,
         C_KNOWN_TYPE = 3, C_REQUEST_CONNECTION = 4, C_MESSAGE = 5;
 
-    private static final int CLOSED = 1, CLOSED_PING_FAILURE = 2, CLOSED_CONTROL_FAILURE = 3;
+    static final int CLOSED = 1, DISCONNECTED = 2, PING_FAILURE = 4, CONTROL_FAILURE = 8;
 
     private static final int SPIN_LIMIT;
 
-    private static final VarHandle cControlPipeHandle, cConLockHandle, cPipeClockHandle;
+    private static final VarHandle cStubSupportHandle,
+        cControlPipeHandle, cConLockHandle, cPipeClockHandle;
 
     static {
         SPIN_LIMIT = Runtime.getRuntime().availableProcessors() > 1 ? 1 << 10 : 1;
 
         try {
             var lookup = MethodHandles.lookup();
+            cStubSupportHandle = lookup.findVarHandle
+                (CoreSession.class, "mStubSupport", CoreStubSupport.class);
             cControlPipeHandle = lookup.findVarHandle
                 (CoreSession.class, "mControlPipe", CorePipe.class);
             cConLockHandle = lookup.findVarHandle(CoreSession.class, "mConLock", int.class);
@@ -76,9 +81,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final SkeletonMap mSkeletons;
     final ItemMap<Item> mKnownTypes; // tracks types known by the remote client
 
-    final CoreStubSupport mStubSupport;
+    private CoreStubSupport mStubSupport;
     final CoreSkeletonSupport mSkeletonSupport;
 
+    // Acquire this lock when writing commands over the control connection.
     final Lock mControlLock;
     CorePipe mControlPipe;
 
@@ -103,18 +109,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mSkeletons = new SkeletonMap(this);
         mKnownTypes = new ItemMap<>();
 
-        mStubSupport = new CoreStubSupport(this);
+        stubSupport(new CoreStubSupport(this));
         mSkeletonSupport = new CoreSkeletonSupport(this);
 
         mControlLock = new ReentrantLock();
-
     }
 
     /**
      * Track a new connection as being immediately used (not available for other uses).
      * If an exception is thrown, the pipe is closed as a side effect.
      */
-    final void registerNewConnection(CorePipe pipe) throws ClosedException {
+    final void registerNewConnection(CorePipe pipe) throws RemoteException {
         conLockAcquire();
         try {
             checkClosed();
@@ -140,7 +145,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * Track a new connection as being available from the tryObtainConnection method.
      * If an exception is thrown, the pipe is closed as a side effect.
      */
-    void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+    void registerNewAvailableConnection(CorePipe pipe) throws RemoteException {
         conLockAcquire();
         try {
             checkClosed();
@@ -233,7 +238,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 startRequestProcessor(pipe);
             } catch (IOException e) {
-                if (!isClosed()) {
+                if (!isClosedOrDisconnected()) {
                     uncaughtException(e);
                 }
             }
@@ -251,7 +256,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * connection is tracked as being used and not available for other uses. The connection
      * should be recycled or closed when not used anymore.
      */
-    final CorePipe tryObtainConnection() throws ClosedException {
+    final CorePipe tryObtainConnection() throws RemoteException {
         conLockAcquire();
         try {
             checkClosed();
@@ -375,14 +380,22 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     void close(int reason) {
-        CorePipe pipe;
+        if ((reason & (CLOSED | DISCONNECTED)) == 0) {
+            reason |= CLOSED;
+        }
+
+        CorePipe first;
 
         conLockAcquire();
         try {
-            if (mClosed == 0) {
+            int closed = mClosed;
+            if (closed == 0) {
                 mClosed = reason;
+            } else if ((closed & CLOSED) != 0) {
+                reason |= CLOSED;
+                reason &= ~DISCONNECTED;
             }
-            pipe = mConFirst;
+            first = mConFirst;
             mConFirst = null;
             mConAvail = null;
             mConLast = null;
@@ -390,6 +403,48 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             conLockRelease();
         }
 
+        closePipes(first);
+
+        mStubFactories.clear();
+        mStubFactoriesByClass.clear();
+
+        // Replace the StubSupport instance to drop any dangling thread-local pipe references
+        // from unfinished batched sequences.
+        var newSupport = new CoreStubSupport(this);
+        stubSupport(newSupport);
+
+        if ((reason & CLOSED) != 0) {
+            mStubs.clear();
+        } else {
+            assert (reason & DISCONNECTED) != 0;
+
+            mStubs.forEachToRemove(stub -> {
+                if (Stub.cOriginHandle.getAcquire(stub) != null || stub == root()) {
+                    // Keep the restorable stubs and tag them with the new StubSupport.
+                    Stub.cSupportHandle.setRelease(stub, newSupport);
+                    return false;
+                }
+                Stub.cSupportHandle.setRelease(stub, DisposedStubSupport.DISCONNECTED);
+                return true;
+            });
+
+            R root = root();
+            if (root instanceof Stub) {
+                // In case the origin is set for the root, clear it because the root is
+                // restored specially upon reconnect.
+                Stub.cOriginHandle.setRelease((Stub) root, null);
+            }
+        }
+
+        mKnownTypes.clear();
+
+        synchronized (mSkeletons) {
+            mSkeletons.forEach(this::detached);
+            mSkeletons.clear();
+        }
+    }
+
+    private static void closePipes(CorePipe pipe) {
         while (pipe != null) {
             CorePipe next = pipe.mConNext;
             pipe.mConPrev = null;
@@ -397,16 +452,39 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             pipe.doClose();
             pipe = next;
         }
+    }
 
-        mStubs.clear();
-        mStubFactories.clear();
-        mStubFactoriesByClass.clear();
-        mKnownTypes.clear();
+    /**
+     * Called after the session has been reconnected.
+     */
+    final void unclose() {
+        conLockAcquire();
+        mClosed = 0;
+        conLockRelease();
+    }
 
-        synchronized (mSkeletons) {
-            mSkeletons.forEach(this::detached);
-            mSkeletons.clear();
+    /**
+     * Move all the connections from a new unregistered session, following a reconnect. This
+     * session must not have any existing connections, but they are closed just in case.
+     *
+     * @param from a new unregistered session
+     */
+    final void moveConnectionsFrom(CoreSession from) {
+        CorePipe first;
+
+        conLockAcquire();
+        try {
+            first = mConFirst;
+            mConFirst = from.mConFirst;
+            mConAvail = from.mConAvail;
+            mConLast = from.mConLast;
+        } finally {
+            conLockRelease();
         }
+
+        setControlConnection(from.mControlPipe);
+
+        closePipes(first);
     }
 
     @Override
@@ -429,14 +507,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Start a tasks to read and process commands over the control connection, to close the
      * session if ping requests don't get responses, and to close idle available connections.
+     * A call to setControlConnection must be made before calling startTasks.
      *
-     * @param pipe control pipe
      * @param ageMillis average age of idle connection before being closed
      */
-    final void startTasks(CorePipe pipe, long pingTimeoutMillis, long ageMillis)
-        throws IOException
-    {
-        setControlConnection(pipe);
+    final void startTasks(long pingTimeoutMillis, long ageMillis) throws IOException {
+        var pipe = (CorePipe) cControlPipeHandle.getAcquire(this);
 
         var pongTask = (Runnable) () -> {
             try {
@@ -445,7 +521,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (!(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                close(CLOSED_CONTROL_FAILURE);
+                close(CONTROL_FAILURE);
             }
         };
 
@@ -479,7 +555,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (!(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                close(CLOSED_CONTROL_FAILURE);
+                close(CONTROL_FAILURE);
             }
         });
 
@@ -541,7 +617,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         @Override
         boolean doRun(CoreSession session) {
-            if (session.isClosed()) {
+            if (session.isClosedOrDisconnected()) {
                 return false;
             }
 
@@ -549,7 +625,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             int clock = (int) cPipeClockHandle.getVolatile(pipe);
 
             if (clock == 1) {
-                session.close(CLOSED_PING_FAILURE);
+                session.close(PING_FAILURE);
                 return false;
             }
 
@@ -558,7 +634,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try{
                 session.sendByte(C_PING);
             } catch (IOException e) {
-                session.close(CLOSED_CONTROL_FAILURE);
+                session.close(CONTROL_FAILURE);
                 return false;
             }
 
@@ -627,7 +703,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     final Object objectFor(long id, long typeId) throws IOException {
         StubFactory factory = mStubFactories.get(typeId);
-        return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
+        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
     }
 
     final Object objectFor(long id, long typeId, RemoteInfo info) {
@@ -652,12 +728,20 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
-        return mStubs.putIfAbsent(factory.newStub(id, mStubSupport));
+        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+    }
+
+    final CoreStubSupport stubSupport() {
+        return (CoreStubSupport) cStubSupportHandle.getAcquire(this);
+    }
+
+    final void stubSupport(CoreStubSupport support) {
+        cStubSupportHandle.setRelease(this, support);
     }
 
     final StubSupport stubDispose(Stub stub) {
         mStubs.remove(stub);
-        return DisposedStubSupport.THE;
+        return DisposedStubSupport.EXPLICIT;
     }
 
     final void stubDisposed(long id, Object reason) {
@@ -666,11 +750,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         if (removed != null) {
             StubSupport disposed;
             if (reason instanceof Throwable) {
-                disposed = new DisposedStubSupport((Throwable) reason);
+                disposed = new DisposedStubSupport(null, (Throwable) reason);
+            } else if (reason != null) {
+                disposed = new DisposedStubSupport(reason.toString(), null);
             } else {
-                disposed = DisposedStubSupport.THE;
+                disposed = DisposedStubSupport.EXPLICIT;
             }
-            Stub.SUPPORT_HANDLE.setRelease(removed, disposed);
+            Stub.cSupportHandle.setRelease(removed, disposed);
         }
     }
 
@@ -776,21 +862,41 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         conLockAcquire();
         int closed = mClosed;
         conLockRelease();
+        return (closed & CLOSED) != 0;
+    }
+
+    final boolean isClosedOrDisconnected() {
+        conLockAcquire();
+        int closed = mClosed;
+        conLockRelease();
         return closed != 0;
     }
 
-    final void checkClosed() throws ClosedException {
+    final void checkClosed() throws RemoteException {
         int closed = mClosed;
-        if (closed != 0) {
-            String message = "Session is closed";
 
-            if (closed == CLOSED_PING_FAILURE) {
-                message += " (ping response timeout)";
-            } else if (closed == CLOSED_CONTROL_FAILURE) {
-                message += " (control connection failure)";
+        if (closed != 0) {
+            StringBuilder b = new StringBuilder(80).append("Session is ");
+
+            b.append((closed & DISCONNECTED) == 0 ? "closed" : "disconnected");
+
+            if ((closed & PING_FAILURE) != 0) {
+                b.append(" (ping response timeout)");
+            } else if ((closed & CONTROL_FAILURE) != 0) {
+                b.append(" (control connection failure)");
             }
 
-            throw new ClosedException(message);
+            if ((closed & DISCONNECTED) != 0) {
+                b.append("; attempting to reconnect");
+            }
+
+            String message = b.toString();
+
+            if ((closed & DISCONNECTED) != 0) {
+                throw new DisconnectedException(message);
+            } else {
+                throw new ClosedException(message);
+            }
         }
     }
 

@@ -69,7 +69,7 @@ public final class CoreUtils {
         if (!(obj instanceof Stub)) {
             throw new IllegalArgumentException();
         }
-        return ((StubSupport) Stub.SUPPORT_HANDLE.getAcquire((Stub) obj)).session();
+        return ((StubSupport) Stub.cSupportHandle.getAcquire((Stub) obj)).session();
     }
 
     public static Session currentSession() {
@@ -191,7 +191,7 @@ public final class CoreUtils {
         return false;
     }
 
-    static void closeQuietly(Closeable c) {
+    public static void closeQuietly(Closeable c) {
         try {
             if (c != null) {
                 c.close();

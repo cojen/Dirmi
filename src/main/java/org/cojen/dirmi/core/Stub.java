@@ -29,13 +29,13 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public class Stub extends Item implements Remote {
-    static final VarHandle SUPPORT_HANDLE, ORIGIN_HANDLE;
+    static final VarHandle cSupportHandle, cOriginHandle;
 
     static {
         try {
             var lookup = MethodHandles.lookup();
-            SUPPORT_HANDLE = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
-            ORIGIN_HANDLE = lookup.findVarHandle(Stub.class, "origin", MethodHandle.class);
+            cSupportHandle = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
+            cOriginHandle = lookup.findVarHandle(Stub.class, "origin", MethodHandle.class);
         } catch (Throwable e) {
             throw new Error(e);
         }

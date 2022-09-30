@@ -37,6 +37,9 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Random;
+
+import java.util.function.Predicate;
 
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
@@ -289,7 +292,8 @@ public final class Engine implements Environment {
                 throw new RemoteException("Timed out");
             }
 
-            session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
+            session.setControlConnection(pipe);
+            startSessionTasks(session);
 
             return session;
         } catch (Throwable e) {
@@ -304,9 +308,19 @@ public final class Engine implements Environment {
         throws IOException
     {
         checkClosed();
+        return doConnect(type, binaryName(name), addr, true);
+    }
+
+    /**
+     * @return register when false, don't register the new session or start tasks
+     */
+    <R> ClientSession<R> doConnect(Class<R> type, byte[] bname, SocketAddress addr,
+                                   boolean register)
+        throws IOException
+    {
+        checkClosed();
 
         RemoteInfo info = RemoteInfo.examine(type);
-        byte[] bname = binaryName(name);
 
         var session = new ClientSession<R>(this, null, addr);
         CorePipe pipe = session.connect();
@@ -343,20 +357,24 @@ public final class Engine implements Environment {
                 throw new RemoteException("Timed out");
             }
 
-            session.init(serverSessionId, type, rootTypeId, serverInfo, rootId);
+            session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
-            session.startTasks(pipe, PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
+            session.setControlConnection(pipe);
 
-            mMainLock.lock();
-            try {
-                checkClosed();
-                ItemMap<ClientSession> sessions = mClientSessions;
-                if (sessions == null) {
-                    mClientSessions = sessions = new ItemMap<>();
+            if (register) {
+                startSessionTasks(session);
+
+                mMainLock.lock();
+                try {
+                    checkClosed();
+                    ItemMap<ClientSession> sessions = mClientSessions;
+                    if (sessions == null) {
+                        mClientSessions = sessions = new ItemMap<>();
+                    }
+                    sessions.put(session);
+                } finally {
+                    mMainLock.unlock();
                 }
-                sessions.put(session);
-            } finally {
-                mMainLock.unlock();
             }
 
             return session;
@@ -365,6 +383,88 @@ public final class Engine implements Environment {
             session.close();
             CoreUtils.closeQuietly(pipe);
             throw e;
+        }
+    }
+
+    /**
+     * Start a reconnect task. When reconnect succeeds, the given callback receives the
+     * ClientSession instance, which isn't registered and no tasks have started. When a
+     * reconnect attempt fails, the callback is given null and it can return false to stop the
+     * task. If reconnect cannot succeed, the callback is given an exception and no further
+     * attempts are made.
+     *
+     * @param reconnectDelayMillis delay between reconnect attempts
+     * @param callback receives a ClientSession instance, null, or a terminal exception
+     */
+    void reconnect(Class<?> type, byte[] bname, SocketAddress addr,
+                   long reconnectDelayMillis, Predicate<Object> callback)
+    {
+        var task = new Scheduled() {
+            private final Random mRnd = new Random();
+
+            @Override
+            public void run() {
+                ClientSession<?> session = null;
+                
+                try {
+                    session = doConnect(type, bname, addr, false);
+                } catch (Throwable e) {
+                    try {
+                        checkClosed();
+                    } catch (Throwable e2) {
+                        callback.test(e2);
+                        return;
+                    }
+
+                    if (!(e instanceof IOException)) {
+                        callback.test(e);
+                        return;
+                    }
+                }
+
+                try {
+                    if (!callback.test(session) || session != null) {
+                        return;
+                    }
+                } catch (Throwable e) {
+                    CoreUtils.closeQuietly(session);
+                    throw e;
+                }
+
+                try {
+                    // Adjust delay by +/- 10%.
+                    long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
+                    jitter -= reconnectDelayMillis / 10;
+                    long delay = reconnectDelayMillis + jitter;
+
+                    if (!scheduleMillis(this, delay)) {
+                        checkClosed();
+                        // Not expected.
+                        executeTask(this);
+                    }
+                } catch (Throwable e) {
+                    callback.test(e);
+                }
+            }
+
+            void schedule() throws IOException {
+                // Adjust delay by +/- 10%.
+                long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
+                jitter -= reconnectDelayMillis / 10;
+                long delay = reconnectDelayMillis + jitter;
+
+                if (!scheduleMillis(this, delay)) {
+                    checkClosed();
+                    // Not expected.
+                    executeTask(this);
+                }
+            }
+        };
+
+        try {
+            task.schedule();
+        } catch (Throwable e) {
+            callback.test(e);
         }
     }
 
@@ -454,6 +554,17 @@ public final class Engine implements Environment {
         if (sessions != null) {
             sessions.remove(session);
         }
+    }
+
+    void changeIdentity(ClientSession session, long newSessionId) {
+        ItemMap<ClientSession> sessions = mClientSessions;
+        if (sessions != null) {
+            sessions.changeIdentity(session, newSessionId);
+        }
+    }
+
+    void startSessionTasks(CoreSession session) throws IOException {
+        session.startTasks(PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
     }
 
     @Override

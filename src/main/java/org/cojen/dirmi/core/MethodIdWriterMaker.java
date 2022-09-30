@@ -36,9 +36,24 @@ final class MethodIdWriterMaker {
     /**
      * @param original server-side RemoteInfo that a Stub is coded to use
      * @param current server-side RemoteInfo provided by the remote side
+     * @param force when false, return null if no mapping is needed
      */
-    static MethodIdWriter writerFor(RemoteInfo original, RemoteInfo current) {
+    static MethodIdWriter writerFor(RemoteInfo original, RemoteInfo current, boolean force) {
+        if (original == current && !force) {
+            return null;
+        }
+
         int[] mapping = original.methodIdMap(current);
+
+        check: if (!force) {
+            // Check if the mapping actually does anything.
+            for (int i=0; i<mapping.length; i++) {
+                if (mapping[i] != i) {
+                    break check;
+                }
+            }
+            return null;
+        }
 
         var key = new IntArrayKey(mapping);
         var writer = cCache.get(key);

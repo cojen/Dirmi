@@ -27,7 +27,7 @@ import org.cojen.dirmi.Pipe;
  *
  * @author Brian S O'Neill
  */
-public abstract class StubFactory extends Item {
+public abstract class StubFactory extends Item implements MethodIdWriter {
     /**
      * @param typeId remote object type id
      */

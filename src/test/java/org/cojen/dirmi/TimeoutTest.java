@@ -135,7 +135,7 @@ public class TimeoutTest {
                 assertEquals(msg, echo.echo(msg));
                 Thread.sleep(1000);
             }
-        } catch (ClosedException e) {
+        } catch (ClosedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("ping"));
             return;
         } finally {

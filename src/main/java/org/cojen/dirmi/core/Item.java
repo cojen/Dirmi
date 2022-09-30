@@ -16,6 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 /**
  * Base class for objects which are associated with an identifier. They can be stored within a
  * single ItemMap instance.
@@ -25,12 +28,24 @@ package org.cojen.dirmi.core;
  * @see IdGenerator
  */
 public class Item {
-    protected final long id;
+    static final VarHandle cIdHandle;
+
+    static {
+        try {
+            var lookup = MethodHandles.lookup();
+            cIdHandle = lookup.findVarHandle(Item.class, "id", long.class);
+        } catch (Throwable e) {
+            throw new Error(e);
+        }
+    }
+
+    protected long id;
 
     // ItemMap collision chain.
     Item mNext;
 
     Item(long id) {
         this.id = id;
+        VarHandle.storeStoreFence();
     }
 }

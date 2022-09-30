@@ -262,7 +262,7 @@ final class RemoteInfo {
     /**
      * Returns a method id mapping from this RemoteInfo to another one. The array index is the
      * method id from this RemoteInfo, and the array value is the method id of the "to"
-     * RemoteInfo. An array value of MIN_VALUE indicates that the "to" RemoteInfo doesn't mave
+     * RemoteInfo. An array value of MIN_VALUE indicates that the "to" RemoteInfo doesn't have
      * a corresponding method.
      */
     int[] methodIdMap(RemoteInfo to) {

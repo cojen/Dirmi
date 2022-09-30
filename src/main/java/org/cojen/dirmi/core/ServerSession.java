@@ -24,8 +24,8 @@ import java.net.SocketAddress;
 
 import java.util.concurrent.locks.LockSupport;
 
-import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.RemoteException;
 
 /**
  * 
@@ -46,7 +46,7 @@ final class ServerSession<R> extends CoreSession<R> {
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
 
-    ServerSession(Engine engine, R root, CorePipe pipe) throws ClosedException {
+    ServerSession(Engine engine, R root, CorePipe pipe) throws RemoteException {
         super(engine);
 
         // Store the pipe before calling skeletonFor, in case the root is SessionAware. The
@@ -118,7 +118,7 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+    void registerNewAvailableConnection(CorePipe pipe) throws RemoteException {
         super.registerNewAvailableConnection(pipe);
         notifyConnectWaiter();
     }

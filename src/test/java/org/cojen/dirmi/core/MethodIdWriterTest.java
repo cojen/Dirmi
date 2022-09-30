@@ -43,7 +43,7 @@ public class MethodIdWriterTest {
         // same, but it should still work.
 
         RemoteInfo info = RemoteInfo.examine(Remote.class);
-        MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info);
+        MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info, true);
 
         try {
             writer.writeMethodId(null, 0);
@@ -59,7 +59,7 @@ public class MethodIdWriterTest {
         // same, but it should still work.
 
         RemoteInfo info = RemoteInfo.examine(A.class);
-        MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info);
+        MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info, true);
 
         var bout = new ByteArrayOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
@@ -92,7 +92,7 @@ public class MethodIdWriterTest {
     public void mismatch1() throws Exception {
         RemoteInfo original = RemoteInfo.examine(A.class);
         RemoteInfo current = RemoteInfo.examine(Remote.class);
-        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current);
+        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current, true);
 
         for (int i=0; i<3; i++) {
             try {
@@ -108,7 +108,7 @@ public class MethodIdWriterTest {
     public void mismatch2() throws Exception {
         RemoteInfo original = RemoteInfo.examine(A.class);
         RemoteInfo current = RemoteInfo.examine(B.class);
-        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current);
+        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current, true);
 
         var bout = new ByteArrayOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
@@ -139,7 +139,7 @@ public class MethodIdWriterTest {
     public void mismatch3() throws Exception {
         RemoteInfo original = RemoteInfo.examine(A.class);
         RemoteInfo current = RemoteInfo.examine(C.class);
-        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current);
+        MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current, true);
 
         var bout = new ByteArrayOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);

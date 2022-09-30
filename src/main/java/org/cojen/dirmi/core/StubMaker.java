@@ -272,7 +272,7 @@ final class StubMaker {
                 unbatchedStart = null;
             }
 
-            var pipeVar = supportVar.invoke("connect", remoteFailureClass);
+            var pipeVar = supportVar.invoke("connect", mm.this_(), remoteFailureClass);
 
             Label invokeStart = mm.label().here();
             Label invokeEnd = mm.label();
@@ -459,7 +459,7 @@ final class StubMaker {
                 MethodHandle mh = lookup.findVirtual(mType, method.name(), mt);
 
                 Label alreadySet = mm.label();
-                Field originField = mm.access(Stub.ORIGIN_HANDLE, resultVar.cast(Stub.class));
+                Field originField = mm.access(Stub.cOriginHandle, resultVar.cast(Stub.class));
                 originField.getAcquire().ifNe(null, alreadySet);
 
                 var mhVar = mm.var(MethodHandle.class).setExact(mh);
