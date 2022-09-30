@@ -83,9 +83,7 @@ final class ClientSession<R> extends CoreSession<R> {
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
         factory = mStubFactories.putIfAbsent(factory);
 
-        synchronized (mStubFactoriesByClass) {
-            mStubFactoriesByClass.putIfAbsent(rootType, factory);
-        }
+        mStubFactoriesByClass.putIfAbsent(rootType, factory);
 
         Stub root = factory.newStub(rootId, stubSupport());
         mStubs.put(root);
@@ -147,7 +145,7 @@ final class ClientSession<R> extends CoreSession<R> {
         mStubFactoriesByClass.putAll(newSession.mStubFactoriesByClass);
         newSession.mStubFactoriesByClass.clear();
 
-        CoreStubSupport newSupport = newSession.stubSupport();
+        CoreStubSupport newSupport = new CoreStubSupport(this);
         stubSupport(newSupport);
 
         cServerSessionIdHandle.setRelease(this, newSession.mServerSessionId);
