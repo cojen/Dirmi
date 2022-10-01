@@ -49,9 +49,10 @@ public interface StubSupport {
      * Returns a new or existing connection. Caller chooses to flush the output after arguments
      * are written and then reads from the pipe.
      *
+     * @param stub the stub requesting a connection
      * @return pipe for writing arguments and reading response
      */
-    <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T;
+    <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T;
 
 
     /**

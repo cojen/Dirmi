@@ -25,14 +25,22 @@ import java.lang.reflect.UndeclaredThrowableException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.SortedSet;
 
+import org.cojen.maker.AnnotationMaker;
 import org.cojen.maker.ClassMaker;
+import org.cojen.maker.Field;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
+import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Restorable;
+import org.cojen.dirmi.Unbatched;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -70,19 +78,34 @@ final class StubMaker {
         }
     }
 
+    private final Class<?> mType;
     private final RemoteInfo mClientInfo;
     private final RemoteInfo mServerInfo;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mStubMaker;
 
     private StubMaker(Class<?> type, RemoteInfo info) {
+        mType = type;
         mClientInfo = RemoteInfo.examine(type);
         mServerInfo = info;
 
         String sourceFile = StubMaker.class.getSimpleName();
 
+        Class<?> superClass;
+        {
+            int numMethods = mServerInfo.remoteMethods().size();
+            if (numMethods < 256) {
+                superClass = StubFactory.BW.class;
+            } else if (numMethods < 65536) {
+                superClass = StubFactory.SW.class;
+            } else {
+                // Impossible case.
+                superClass = StubFactory.IW.class;
+            }
+        }
+
         mFactoryMaker = ClassMaker.begin(type.getName(), type.getClassLoader(), CoreUtils.MAKER_KEY)
-            .extend(StubFactory.class).final_().sourceFile(sourceFile);
+            .extend(superClass).final_().sourceFile(sourceFile);
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
@@ -101,7 +124,7 @@ final class StubMaker {
         mm.invokeSuperConstructor(mm.param(0));
 
         mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
-        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1)));
+        mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1), mm.this_()));
 
         MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
 
@@ -121,55 +144,40 @@ final class StubMaker {
      */
     private Class<?> finishStub() {
         {
-            MethodMaker mm = mStubMaker.addConstructor(long.class, StubSupport.class);
-            mm.invokeSuperConstructor(mm.param(0), mm.param(1));
+            MethodMaker mm = mStubMaker.addConstructor
+                (long.class, StubSupport.class, MethodIdWriter.class);
+            mm.invokeSuperConstructor(mm.param(0), mm.param(1), mm.param(2));
         }
 
-        SortedSet<RemoteMethod> clientMethods = mClientInfo.remoteMethods();
-        SortedSet<RemoteMethod> serverMethods = mServerInfo.remoteMethods();
+        var it = new JoinedIterator<>(mClientInfo.remoteMethods(), mServerInfo.remoteMethods());
 
-        int numMethods = serverMethods.size();
-
-        Iterator<RemoteMethod> it1 = clientMethods.iterator();
-        Iterator<RemoteMethod> it2 = serverMethods.iterator();
-
-        RemoteMethod clientMethod = null;
-
-        RemoteMethod serverMethod = null;
+        RemoteMethod lastServerMethod = null;
         int serverMethodId = -1;
-
         int batchedImmediateMethodId = -1;
 
-        while (true) {
-            if (clientMethod == null && it1.hasNext()) {
-                clientMethod = it1.next();
-            }
+        while (it.hasNext()) {
+            JoinedIterator.Pair<RemoteMethod> pair = it.next();
+            RemoteMethod clientMethod = pair.a;
+            RemoteMethod serverMethod = pair.b;
 
-            if (serverMethod == null && it2.hasNext()) {
-                serverMethod = it2.next();
+            if (serverMethod != lastServerMethod && serverMethod != null) {
                 serverMethodId++;
-            }
-
-            if (clientMethod == null && serverMethod == null) {
-                break;
+                lastServerMethod = serverMethod;
             }
 
             Object returnType;
             String methodName;
             Object[] ptypes;
 
-            int cmp;
-            if (clientMethod == null) {
-                // Only server-side methods remain.
-                cmp = 1;
-            } else if (serverMethod == null) {
-                // Only client-side methods remain.
-                cmp = -1;
-            } else {
-                cmp = clientMethod.compareTo(serverMethod);
+            if (serverMethod != null && serverMethod.isBatchedImmediate()) {
+                // No stub method is actually generated for this variant. The skeleton variant
+                // is invoked when the remote typeId isn't known yet. RemoteMethod instances
+                // are compared such that this variant comes immediately before the normal one.
+                batchedImmediateMethodId = serverMethodId;
+                continue;
             }
 
-            if (cmp > 0) {
+            if (clientMethod == null) {
                 // Attempt to implement a method that only exists on the server-side.
                 try {
                     returnType = classForEx(serverMethod.returnType());
@@ -182,44 +190,38 @@ final class StubMaker {
                     }
                 } catch (ClassNotFoundException e) {
                     // Can't be implemented, so skip it.
-                    serverMethod = null;
                     continue;
                 }
             } else {
+                if (clientMethod.isBatchedImmediate()) {
+                    // No stub method is actually generated for this variant.
+                    continue;
+                }
                 returnType = clientMethod.returnType();
                 methodName = clientMethod.name();
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
             }
 
-            if (clientMethod != null && clientMethod.isBatchedImmediate() && cmp >= 0) {
-                // No stub method is actually generated for this variant. The skeleton variant
-                // is invoked when the remote typeId isn't known yet. RemoteMethod instances are
-                // compared such that this variant comes immediately before the normal one.
-                batchedImmediateMethodId = serverMethodId;
-                clientMethod = null;
-                serverMethod = null;
-                continue;
-            }
-
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
 
-            if (cmp < 0) {
+            if (serverMethod == null) {
                 // The server doesn't implement the method.
-                mm.new_(NoSuchMethodError.class, "Unimplemented on remote side").throw_();
-                clientMethod = null;
+                mm.new_(UnimplementedException.class, "Unimplemented on the remote side").throw_();
                 continue;
             }
 
             Class<?> remoteFailureClass;
             List<Class<?>> thrownClasses = null;
 
-            if (cmp > 0) {
-                // Use the default failure exception for a method that only exists on the
-                // server-side.
-                remoteFailureClass = classFor(mClientInfo.remoteFailureException());
+            if (clientMethod == null) {
+                try {
+                    remoteFailureClass = classForEx(serverMethod.remoteFailureException());
+                } catch (ClassNotFoundException e) {
+                    // Use the default failure exception instead.
+                    remoteFailureClass = classFor(mClientInfo.remoteFailureException());
+                }
             } else {
-                String remoteFailureName = clientMethod.remoteFailureException();
-                remoteFailureClass = classFor(remoteFailureName);
+                remoteFailureClass = classFor(clientMethod.remoteFailureException());
 
                 for (String ex : clientMethod.exceptionTypes()) {
                     Class<?> exClass = classFor(ex);
@@ -237,11 +239,40 @@ final class StubMaker {
 
             mm.throws_(remoteFailureClass);
 
+            if (clientMethod == null) {
+                // Add annotations for methods which only exist on the server-side. This allows
+                // a RemoteInfo instance to be created later without the server interface.
+
+                if (serverMethod.isDisposer()) {
+                    mm.addAnnotation(Disposer.class, true);
+                }
+
+                if (serverMethod.isBatched()) {
+                    mm.addAnnotation(Batched.class, true);
+                } else if (serverMethod.isUnbatched()) {
+                    mm.addAnnotation(Unbatched.class, true);
+                }
+
+                if (serverMethod.isRestorable()) {
+                    mm.addAnnotation(Restorable.class, true);
+                }
+
+                if (remoteFailureClass == RemoteException.class) {
+                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                        mm.addAnnotation(RemoteFailure.class, true).put("declared", false);
+                    }
+                } else {
+                    AnnotationMaker am = mm.addAnnotation(RemoteFailure.class, true);
+                    am.put("exception", remoteFailureClass);
+                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                        am.put("declared", false);
+                    }
+                }
+            }
+
             if (clientMethod != null && clientMethod.isPiped() != serverMethod.isPiped()) {
                 // Not expected.
                 mm.new_(IncompatibleClassChangeError.class).throw_();
-                clientMethod = null;
-                serverMethod = null;
                 continue;
             }
 
@@ -261,7 +292,7 @@ final class StubMaker {
                 unbatchedStart = null;
             }
 
-            var pipeVar = supportVar.invoke("connect", remoteFailureClass);
+            var pipeVar = supportVar.invoke("connect", mm.this_(), remoteFailureClass);
 
             Label invokeStart = mm.label().here();
             Label invokeEnd = mm.label();
@@ -285,8 +316,7 @@ final class StubMaker {
 
                     // Must call the immediate variant.
 
-                    writeParams(pipeVar, numMethods,
-                                serverMethod, batchedImmediateMethodId, ptypes);
+                    writeParams(mm, pipeVar, serverMethod, batchedImmediateMethodId, ptypes);
                     pipeVar.invoke("writeLong", aliasIdVar);
                     pipeVar.invoke("flush");
 
@@ -307,13 +337,13 @@ final class StubMaker {
                     isBatchingVar.ifTrue(done);
                     supportVar.invoke("batched", pipeVar);
                     done.here();
-                    mm.return_(returnVar);
+                    returnResult(mm, clientMethod, returnVar);
 
                     hasType.here();
                 }
             }
 
-            writeParams(pipeVar, numMethods, serverMethod, serverMethodId, ptypes);
+            writeParams(mm, pipeVar, serverMethod, serverMethodId, ptypes);
 
             if (serverMethod.isPiped()) {
                 supportVar.invoke("finishBatch", pipeVar).ifFalse(invokeEnd);
@@ -332,7 +362,7 @@ final class StubMaker {
                     pipeVar.invoke("writeLong", aliasIdVar);
                     var stubVar = supportVar.invoke
                         ("newAliasStub", remoteFailureClass, aliasIdVar, typeIdVar);
-                    mm.return_(stubVar.cast(returnType));
+                    returnResult(mm, clientMethod, stubVar.cast(returnType));
                 }
             } else {
                 pipeVar.invoke("flush");
@@ -356,7 +386,7 @@ final class StubMaker {
                     CoreUtils.readParam(pipeVar, returnVar);
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
-                    mm.return_(returnVar);
+                    returnResult(mm, clientMethod, returnVar);
                 }
             }
 
@@ -387,10 +417,6 @@ final class StubMaker {
             reallyThrowIt.here();
             exVar.throw_();
 
-            if (cmp <= 0) {
-                clientMethod = null;
-            }
-            serverMethod = null;
             batchedImmediateMethodId = -1;
         }
 
@@ -401,25 +427,16 @@ final class StubMaker {
         return returnType == void.class || returnType.equals("V");
     }
 
-    private static void writeParams(Variable pipeVar, int numMethods,
+    private static void writeParams(MethodMaker mm, Variable pipeVar,
                                     RemoteMethod method, int methodId, Object[] ptypes)
     {
-        if (numMethods < 256) {
-            pipeVar.invoke("writeByte", methodId);
-        } else if (numMethods < 65536) {
-            pipeVar.invoke("writeShort", methodId);
-        } else {
-            // Impossible case.
-            pipeVar.invoke("writeInt", methodId);
-        }
+        mm.field("miw").getAcquire().invoke("writeMethodId", pipeVar, methodId);
 
         if (ptypes.length <= 0) {
             return;
         }
 
         // Write all of the non-pipe parameters.
-
-        MethodMaker mm = pipeVar.methodMaker();
 
         if (!method.isPiped()) {
             for (int i=0; i<ptypes.length; i++) {
@@ -436,10 +453,71 @@ final class StubMaker {
         }
     }
 
+    private void returnResult(MethodMaker mm, RemoteMethod method, Variable resultVar) {
+        if (method != null && method.isRestorable()) {
+            // Unless already set, assign a fully bound MethodHandle instance to the inherited
+            // origin field. No attempt is made to prevent multiple threads from assigning it,
+            // because it won't affect the outcome.
+
+            Label finished = mm.label();
+            resultVar.ifEq(null, finished);
+
+            Object[] originStub = {mm.this_()};
+            Field originField = mm.access(Stub.cOriginHandle, originStub);
+            Label parentHasOrigin = mm.label();
+            originField.getAcquire().ifNe(null, parentHasOrigin);
+            mm.new_(IllegalStateException.class,
+                    "Cannot make a restorable object from a non-restorable parent").throw_();
+            parentHasOrigin.here();
+
+            try {
+                Class<?> returnType = classFor(method.returnType());
+
+                List<String> pnames = method.parameterTypes();
+                var ptypes = new Class[pnames.size()];
+                int i = 0;
+                for (String pname : pnames) {
+                    ptypes[i++] = classFor(pname);
+                }
+
+                MethodType mt = MethodType.methodType(returnType, ptypes);
+
+                MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+                MethodHandle mh = lookup.findVirtual(mType, method.name(), mt);
+
+                originStub[0] = resultVar.cast(Stub.class);
+                originField.getAcquire().ifNe(null, finished);
+
+                var mhVar = mm.var(MethodHandle.class).setExact(mh);
+
+                var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
+                paramVars.aset(0, mm.this_());
+                for (i=0; i<ptypes.length; i++) {
+                    paramVars.aset(i + 1, mm.param(i));
+                }
+
+                var methodHandlesVar = mm.var(MethodHandles.class);
+                mhVar.set(methodHandlesVar.invoke("insertArguments", mhVar, 0, paramVars));
+
+                originField.setRelease(mhVar);
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                // Not expected.
+                throw new IllegalStateException(e);
+            }
+
+            finished.here();
+        }
+
+        mm.return_(resultVar);
+    }
+
     private Class<?> classFor(Object obj) throws NoClassDefFoundError {
         return obj instanceof Class ? ((Class<?>) obj) : classFor((String) obj);
     }
 
+    /**
+     * @param name class name or descriptor
+     */
     private Class<?> classFor(String name) throws NoClassDefFoundError {
         try {
             return classForEx(name);
@@ -450,6 +528,9 @@ final class StubMaker {
         }
     }
 
+    /**
+     * @param name class name or descriptor
+     */
     private Class<?> classForEx(String name) throws ClassNotFoundException {
         return CoreUtils.loadClassByNameOrDescriptor(name, mStubMaker.classLoader());
     }

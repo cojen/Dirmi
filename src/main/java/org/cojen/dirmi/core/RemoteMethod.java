@@ -35,6 +35,7 @@ import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Unbatched;
 
 /**
@@ -44,7 +45,7 @@ import org.cojen.dirmi.Unbatched;
  */
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
-        F_BATCHED = 4, F_UNBATCHED = 8, F_PIPED = 16;
+        F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32;
 
     private final int mFlags;
     private final String mName;
@@ -86,6 +87,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         if (m.isAnnotationPresent(Unbatched.class)) {
             flags |= F_UNBATCHED;
+        }
+        if (m.isAnnotationPresent(Restorable.class)) {
+            flags |= F_RESTORABLE;
         }
 
         if ((flags & F_BATCHED) != 0 && (flags & F_UNBATCHED) != 0) {
@@ -157,6 +161,11 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             } else if (returnType != void.class && !CoreUtils.isRemote(returnType)) {
                 throw new IllegalArgumentException
                     ("Batched method must return void or a remote object: " + m);
+            }
+
+            if ((flags & F_RESTORABLE) != 0 && !CoreUtils.isRemote(returnType)) {
+                throw new IllegalArgumentException
+                    ("Restorable method must return a remote object: " + m);
             }
 
             mReturnType = returnType.descriptorString().intern();
@@ -294,6 +303,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * @see Restorable
+     */
+    boolean isRestorable() {
+        return (mFlags & F_RESTORABLE) != 0;
+    }
+
+    /**
      * @see Pipe
      */
     boolean isPiped() {
@@ -345,10 +361,6 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (!mRemoteFailureException.equals(other.mRemoteFailureException)) {
             throw new IllegalArgumentException(prefix + "remote failure exceptions: " + m);
         }
-
-        if (!mExceptionTypes.equals(other.mExceptionTypes)) {
-            throw new IllegalArgumentException(prefix + "declared exceptions: " + m);
-        }
     }
 
     @Override
@@ -382,6 +394,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         return false;
     }
 
+    /**
+     * Compares methods for client/server compatibility.
+     */
     @Override
     public int compareTo(RemoteMethod other) {
         int cmp = mName.compareTo(other.mName);
@@ -398,7 +413,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         // Flipping the sign causes a batched immediate variant to come before the normal
         // batched variant. This makes things easier for StubMaker.
-        return -Integer.compare(mFlags, other.mFlags);
+        return -Integer.compare(cflags(mFlags), cflags(other.mFlags));
+    }
+
+    private static int cflags(int flags) {
+        // Only consider these flags for compatibility.
+        // FIXME: pure unbatched should be compatible with pure batched
+        return flags & (F_DISPOSER | F_BATCHED | F_UNBATCHED | F_PIPED);
     }
 
     /**

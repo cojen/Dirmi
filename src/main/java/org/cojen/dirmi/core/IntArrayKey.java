@@ -16,36 +16,35 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
+import java.util.Arrays;
 
 /**
- * Base class for objects which are associated with an identifier. They can be stored within a
- * single ItemMap instance.
+ * Cache key over an int array.
  *
  * @author Brian S O'Neill
- * @see ItemMap
- * @see IdGenerator
  */
-public class Item {
-    static final VarHandle cIdHandle;
+final class IntArrayKey {
+    private final int[] mArray;
+    private final int mHash;
 
-    static {
-        try {
-            var lookup = MethodHandles.lookup();
-            cIdHandle = lookup.findVarHandle(Item.class, "id", long.class);
-        } catch (Throwable e) {
-            throw CoreUtils.rethrow(e);
-        }
+    IntArrayKey(int[] array) {
+        mArray = array;
+        mHash = Arrays.hashCode(array);
     }
 
-    protected long id;
+    @Override
+    public int hashCode() {
+        return mHash;
+    }
 
-    // ItemMap collision chain.
-    Item mNext;
-
-    Item(long id) {
-        this.id = id;
-        VarHandle.storeStoreFence();
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof IntArrayKey) {
+            return Arrays.equals(mArray, ((IntArrayKey) obj).mArray);
+        }
+        return false;
     }
 }

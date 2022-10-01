@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009-2022 Cojen.org
+ *  Copyright 2022 Cojen.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,25 +16,18 @@
 
 package org.cojen.dirmi;
 
+import java.lang.annotation.*;
+
 /**
- * Generic exception indicating that a resource is closed.
+ * Identify a method which returns a remote object which should be restored when a session
+ * reconnects. All of the parameters passed to the method are referenced internally by the
+ * returned remote object so that they can be used again. To ensure that the restoration works
+ * idempotently, the contents of any object parameters must not be modified.
  *
  * @author Brian S O'Neill
  */
-public class ClosedException extends RemoteException {
-    public ClosedException() {
-        super();
-    }
-
-    public ClosedException(String message) {
-        super(message);
-    }
-
-    public ClosedException(Throwable cause) {
-        super(cause.getMessage(), cause);
-    }
-
-    public ClosedException(String message, Throwable cause) {
-        super(message, cause);
-    }
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface Restorable {
 }

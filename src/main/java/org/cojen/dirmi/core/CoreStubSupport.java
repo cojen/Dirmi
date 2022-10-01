@@ -58,7 +58,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe connect(Class<T> remoteFailureException) throws T {
+    public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
         Pipe pipe = mLocalPipe.get();
         if (pipe != null) {
             return pipe;

@@ -50,7 +50,7 @@ public final class CoreUtils {
 
     static final Object MAKER_KEY = new Object();
 
-    static final ThreadLocal<Session> CURRENT_SESSION = new ThreadLocal<>();
+    static final ThreadLocal<Session> cCurrentSession = new ThreadLocal<>();
 
     public static void setOptions(Socket s) throws IOException {
         if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
@@ -69,11 +69,11 @@ public final class CoreUtils {
         if (!(obj instanceof Stub)) {
             throw new IllegalArgumentException();
         }
-        return ((StubSupport) Stub.SUPPORT_HANDLE.getAcquire((Stub) obj)).session();
+        return ((StubSupport) Stub.cSupportHandle.getAcquire((Stub) obj)).session();
     }
 
     public static Session currentSession() {
-        Session session = CURRENT_SESSION.get();
+        Session session = cCurrentSession.get();
         if (session == null) {
             throw new IllegalStateException();
         }
@@ -166,6 +166,7 @@ public final class CoreUtils {
             case "S": return short.class;
             case "I": return int.class;
             case "J": return long.class;
+            case "V": return void.class;
             }
         }
 
@@ -191,7 +192,7 @@ public final class CoreUtils {
         return false;
     }
 
-    static void closeQuietly(Closeable c) {
+    public static void closeQuietly(Closeable c) {
         try {
             if (c != null) {
                 c.close();
@@ -219,6 +220,20 @@ public final class CoreUtils {
         }
 
         return ExceptionWrapper.forClass(remoteFailureEx).wrap(cause);
+    }
+
+    /**
+     * Rethrows the given exception without the compiler complaining about it being checked or
+     * not. Use as follows: {@code throw rethrow(e)}
+     */
+    public static RuntimeException rethrow(Throwable e) {
+        CoreUtils.<RuntimeException>castAndThrow(e);
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void castAndThrow(Throwable e) throws T {
+        throw (T) e;
     }
 
     static void writeParam(Variable pipeVar, Variable paramVar) {

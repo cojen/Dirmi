@@ -1,5 +1,5 @@
 /*
- *  Copyright 2009-2022 Cojen.org
+ *  Copyright 2022 Cojen.org
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,24 +17,24 @@
 package org.cojen.dirmi;
 
 /**
- * Generic exception indicating that a resource is closed.
+ * Exception which indicates that a session is disconnected, but a reconnect is in progess.
  *
  * @author Brian S O'Neill
  */
-public class ClosedException extends RemoteException {
-    public ClosedException() {
+public class DisconnectedException extends RemoteException {
+    public DisconnectedException() {
         super();
     }
 
-    public ClosedException(String message) {
+    public DisconnectedException(String message) {
         super(message);
     }
 
-    public ClosedException(Throwable cause) {
+    public DisconnectedException(Throwable cause) {
         super(cause.getMessage(), cause);
     }
 
-    public ClosedException(String message, Throwable cause) {
+    public DisconnectedException(String message, Throwable cause) {
         super(message, cause);
     }
 }

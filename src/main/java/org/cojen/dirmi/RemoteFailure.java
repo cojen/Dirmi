@@ -46,7 +46,7 @@ public @interface RemoteFailure {
 
     /**
      * By default, if the exception is checked, it must be declared to be thrown. Set to false
-     * to allow checked exception to be thrown without being declared.
+     * to allow the exception to be thrown without being declared.
      */
     boolean declared() default true;
 }

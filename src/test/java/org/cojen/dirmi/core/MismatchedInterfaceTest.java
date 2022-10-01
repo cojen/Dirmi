@@ -14,18 +14,28 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi;
+package org.cojen.dirmi.core;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import java.net.ServerSocket;
 
+import java.util.Iterator;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.MethodMaker;
+
+import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.Remote;
+import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Session;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -108,8 +118,7 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            assertTrue(cause instanceof NoSuchMethodError);
-            assertTrue(cause.getMessage().contains("Unimplemented"));
+            assertTrue(cause instanceof UnimplementedException);
         }
 
         Method b0 = iface0.getMethod("b");
@@ -138,8 +147,7 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            assertTrue(cause instanceof NoSuchMethodError);
-            assertTrue(cause.getMessage().contains("Unimplemented"));
+            assertTrue(cause instanceof UnimplementedException);
         }
     }
 
@@ -203,6 +211,13 @@ public class MismatchedInterfaceTest {
         {
             ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT3", new Loader(), null)
                 .public_().interface_().implement(Parent.class);
+            MethodMaker mm = cm.addMethod(Parent.class, "option", int.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            mm.addAnnotation(Batched.class, true);
+            mm.addAnnotation(RemoteFailure.class, true).put("declared", false);
+            mm = cm.addMethod(null, "option2", int.class).public_().abstract_();
+            mm.addAnnotation(Batched.class, true);
+            mm.addAnnotation(RemoteFailure.class, true).put("exception", RuntimeException.class);
             cm.addMethod(String.class, "extraName", int.class)
                 .public_().abstract_().throws_(RemoteException.class);
             iface = cm.finish();
@@ -210,6 +225,9 @@ public class MismatchedInterfaceTest {
             cm = ClassMaker.begin(null, iface.getClassLoader()).implement(iface).public_();
             cm.addConstructor().public_();
             cm.addMethod(String.class, "name").public_().return_("bob");
+            mm = cm.addMethod(Parent.class, "option", int.class).public_();
+            mm.return_(mm.this_());
+            cm.addMethod(null, "option2").public_();
             cm.addMethod(String.class, "extraName", int.class).public_().return_("extra");
             server = cm.finish();
         }
@@ -233,6 +251,20 @@ public class MismatchedInterfaceTest {
         assertEquals("extra", extra.invoke(remote, 123));
 
         assertEquals("bob", ((Parent) remote).name());
+
+        RemoteInfo info1 = RemoteInfo.examine(iface);
+        RemoteInfo info2 = RemoteInfo.examineStub(remote);
+
+        Iterator<RemoteMethod> it1 = info1.remoteMethods().iterator();
+        Iterator<RemoteMethod> it2 = info2.remoteMethods().iterator();
+
+        while (it1.hasNext()) {
+            RemoteMethod rm1 = it1.next();
+            RemoteMethod rm2 = it2.next();
+            assertEquals(0, rm1.compareTo(rm2));
+        }
+
+        assertFalse(it2.hasNext());
     }
 
     @Test
@@ -296,8 +328,7 @@ public class MismatchedInterfaceTest {
             // Return type differs.
             assertEquals("bob", ((Parent) remote).name());
             fail();
-        } catch (NoSuchMethodError e) {
-            assertTrue(e.getMessage().contains("Unimplemented"));
+        } catch (UnimplementedException e) {
         }
     }
 

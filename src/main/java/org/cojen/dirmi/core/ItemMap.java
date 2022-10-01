@@ -21,6 +21,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.cojen.dirmi.NoSuchObjectException;
 
@@ -193,12 +194,64 @@ class ItemMap<I extends Item> {
         return remove(item.id);
     }
 
+    /**
+     * Change an item's identity by atomically removing it from the map, changing the id, and
+     * then adding the item back into the map.
+     */
+    final synchronized I changeIdentity(I item, long newId) {
+        remove(item);
+        Item.cIdHandle.setRelease(item, newId);
+        return putIfAbsent(item);
+    }
+
+    /**
+     * Atomically remove the "from" item from the map and change the "item" id.
+     */
+    final synchronized I stealIdentity(I item, I from) {
+        remove(from);
+        return changeIdentity(item, from.id);
+    }
+
+    /**
+     * Moves all items from this given map into this one.
+     */
+    final synchronized void moveAll(ItemMap<I> from) {
+        from.forEachToRemove(item -> {
+            this.putIfAbsent(item);
+            return true;
+        });
+    }
+
     @SuppressWarnings("unchecked")
     final synchronized void forEach(Consumer<I> action) {
         Item[] items = mItems;
         for (int i=0; i<items.length; i++) {
             for (Item it = items[i]; it != null; it = it.mNext) {
                 action.accept((I) it);
+            }
+        }
+    }
+
+    /**
+     * @param action when it returns true, the item should be removed
+     */
+    @SuppressWarnings("unchecked")
+    final synchronized void forEachToRemove(Predicate<I> action) {
+        Item[] items = mItems;
+        for (int i=0; i<items.length; i++) {
+            for (Item it = items[i], prev = null; it != null; ) {
+                Item next = it.mNext;
+                if (action.test((I) it)) {
+                    if (prev == null) {
+                        items[i] = next;
+                    } else {
+                        prev.mNext = next;
+                    }
+                    mSize--;
+                } else {
+                    prev = it;
+                }
+                it = next;
             }
         }
     }

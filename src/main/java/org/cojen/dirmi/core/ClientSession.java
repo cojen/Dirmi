@@ -16,11 +16,18 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
 import java.net.SocketAddress;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import org.cojen.dirmi.Pipe;
 
@@ -30,14 +37,30 @@ import org.cojen.dirmi.Pipe;
  * @author Brian S O'Neill
  */
 final class ClientSession<R> extends CoreSession<R> {
+    private static final VarHandle cServerSessionIdHandle;
+
+    static {
+        try {
+            var lookup = MethodHandles.lookup();
+            cServerSessionIdHandle = lookup.findVarHandle
+                (ClientSession.class, "mServerSessionId", long.class);
+        } catch (Throwable e) {
+            throw CoreUtils.rethrow(e);
+        }
+    }
+
     private long mServerSessionId;
+    private Class<R> mRootType;
+    private byte[] mRootName;
+    private long mRootTypeId;
+    private RemoteInfo mServerRootInfo;
     private R mRoot;
 
     ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr) {
         super(engine);
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
-        setControlConnection(CorePipe.newNullPipe(localAddr, remoteAttr));
+        controlPipe(CorePipe.newNullPipe(localAddr, remoteAttr));
     }
 
     /**
@@ -55,25 +78,169 @@ final class ClientSession<R> extends CoreSession<R> {
      * @param rootInfo server-side root info
      */
     @SuppressWarnings("unchecked")
-    void init(long serverId, Class<R> rootType, long rootTypeId, RemoteInfo rootInfo, long rootId) {
-        mServerSessionId = serverId;
+    void init(long serverId, Class<R> rootType, byte[] bname,
+              long rootTypeId, RemoteInfo rootInfo, long rootId)
+    {
+        cServerSessionIdHandle.setRelease(this, serverId);
+        mRootType = rootType;
+        mRootName = bname;
+        mRootTypeId = rootTypeId;
+        mServerRootInfo = rootInfo;
 
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
         factory = mStubFactories.putIfAbsent(factory);
 
-        synchronized (mStubFactoriesByClass) {
-            mStubFactoriesByClass.putIfAbsent(rootType, factory);
-        }
+        mStubFactoriesByClass.putIfAbsent(rootType, factory);
 
-        Stub root = factory.newStub(rootId, mStubSupport);
+        Stub root = factory.newStub(rootId, stubSupport());
         mStubs.put(root);
         mRoot = (R) root;
+
+        Stub.setRootOrigin(root);
     }
 
     @Override
-    void close(int reason) {
-        super.close(reason);
-        mEngine.removeSession(this);
+    void close(int reason, CorePipe controlPipe) {
+        if ((reason & CLOSED) != 0) {
+            super.close(reason, null); // pass null to force close
+            mEngine.removeSession(this);
+            return;
+        }
+
+        // FIXME: If reconnect is disabled, close as usual.
+
+        reason |= DISCONNECTED;
+        super.close(reason, controlPipe);
+
+        // FIXME: Configurable reconnect delay.
+        mEngine.reconnect(mRootType, mRootName, remoteAddress(), 1000, this::reconnectAttempt);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean reconnectAttempt(Object result) {
+        if (isClosed()) {
+            if (result instanceof ClientSession) {
+                ((ClientSession) result).close(CLOSED, null);
+            }
+            close(CLOSED, null);
+            return false;
+        }
+
+        if (result == null) {
+            // Keep trying to reconnect.
+            return true;
+        }
+
+        if (!(result instanceof ClientSession)) {
+            close(CLOSED, null);
+            return false;
+        }
+
+        var newSession = (ClientSession<R>) result;
+
+        moveConnectionsFrom(newSession);
+
+        mEngine.changeIdentity(this, newSession.id);
+
+        var newRoot = (Stub) newSession.mRoot;
+        Object removed = newSession.mStubs.remove(newRoot);
+        assert newRoot == removed;
+        assert newSession.mStubs.size() == 0;
+
+        mStubFactories.moveAll(newSession.mStubFactories);
+
+        mStubFactoriesByClass.putAll(newSession.mStubFactoriesByClass);
+        newSession.mStubFactoriesByClass.clear();
+
+        CoreStubSupport newSupport = new CoreStubSupport(this);
+        stubSupport(newSupport);
+
+        cServerSessionIdHandle.setRelease(this, newSession.mServerSessionId);
+
+        var root = (Stub) mRoot;
+        mStubs.changeIdentity(root, newRoot.id);
+
+        Map<String, RemoteInfo> typeMap;
+
+        try {
+            mEngine.startSessionTasks(this);
+
+            long newRootTypeId = newSession.mRootTypeId;
+            RemoteInfo newServerRootInfo = newSession.mServerRootInfo;
+
+            // Request server-side RemoteInfos for all restorable stubs. If any changes, then
+            // the MethodIdWriters for the affected stubs need to be updated.
+
+            var waitMap = new WaitMap<String, RemoteInfo>();
+            mTypeWaitMap = waitMap;
+
+            waitMap.put(RemoteExaminer.remoteType(root).getName(), newServerRootInfo);
+
+            mStubs.forEach(stub -> {
+                Class<?> type = RemoteExaminer.remoteType(stub);
+                if (waitMap.add(type.getName())) {
+                    try {
+                        sendInfoRequest(type);
+                    } catch (IOException e) {
+                        throw CoreUtils.rethrow(e);
+                    }
+                }
+            });
+
+            sendFlushRequest();
+
+            typeMap = waitMap.await();
+            mTypeWaitMap = null;
+
+            // Flush the control pipe to send any pending C_KNOWN_TYPE commands.
+            flushControlPipeEx();
+        } catch (IOException | InterruptedException e) {
+            close(DISCONNECTED, null);
+            return false;
+        }
+
+        // For all restorable stubs, update the MethodIdWriter and set a support object that
+        // allows them to restore on demand.
+
+        Map<RemoteInfo, MethodIdWriter> writers = new HashMap<>();
+
+        var restorableSupport = new RestorableStubSupport(newSupport);
+
+        mStubs.forEach(stub -> {
+            if (!Stub.isRestorable(stub)) {
+                return;
+            }
+
+            RemoteInfo original = RemoteInfo.examineStub(stub);
+            MethodIdWriter writer = writers.get(original);
+
+            Class<?> type = null;
+            if (writer == null && !writers.containsKey(original)) {
+                type = RemoteExaminer.remoteType(stub);
+                RemoteInfo current = typeMap.get(type.getName());
+                writer = MethodIdWriterMaker.writerFor(original, current, false);
+                writers.put(original, writer);
+            }
+
+            if (writer != null) {
+                Stub.cWriterHandle.setRelease(stub, writer);
+            } else {
+                // Although no remote methods changed, the current StubFactory is preferred.
+                if (type == null) {
+                    type = RemoteExaminer.remoteType(stub);
+                }
+                StubFactory factory = mStubFactoriesByClass.get(type);
+                if (factory != null) {
+                    Stub.cWriterHandle.setRelease(stub, factory);
+                }
+            }
+
+            Stub.cSupportHandle.setRelease(stub, restorableSupport);
+        });
+
+        unclose();
+
+        return false;
     }
 
     @Override
@@ -87,7 +254,8 @@ final class ClientSession<R> extends CoreSession<R> {
     {
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_CLIENT);
 
-        long serverSessionId = mServerSessionId;
+        long serverSessionId = (long) cServerSessionIdHandle.getAcquire(this);
+
         if (serverSessionId != 0) {
             // Established a new connection for an existing session.
             try {
@@ -100,6 +268,15 @@ final class ClientSession<R> extends CoreSession<R> {
         }
 
         registerNewAvailableConnection(pipe);
+    }
+
+    @Override
+    void startTasks(long pingTimeoutMillis, long ageMillis) throws IOException {
+        // These fields are only needed by a reconnect.
+        mRootTypeId = 0;
+        mServerRootInfo = null;
+
+        super.startTasks(pingTimeoutMillis, ageMillis);
     }
 
     @Override
@@ -122,7 +299,7 @@ final class ClientSession<R> extends CoreSession<R> {
             pipe.mMode = CorePipe.M_SERVER;
             recycleConnection(pipe);
         } catch (IOException e) {
-            if (!isClosed()) {
+            if (!isClosedOrDisconnected()) {
                 uncaughtException(e);
             }
         }

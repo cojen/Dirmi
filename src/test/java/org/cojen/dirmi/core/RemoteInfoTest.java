@@ -37,6 +37,7 @@ import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Unbatched;
 
 /**
@@ -199,27 +200,6 @@ public class RemoteInfoTest {
             fail();
         } catch (IllegalArgumentException e) {
             confirm(e, "conflicting annotations");
-        }
-    }
-
-    public static interface R14 extends Remote {
-        void foo(String x) throws RemoteException;
-    }
-
-    public static interface R15 extends Remote {
-        void foo(String x) throws IOException;
-    }
-
-    public static interface R16 extends R14, R15 {
-    }
-
-    @Test
-    public void exceptionConflict() {
-        try {
-            RemoteInfo.examine(R16.class);
-            fail();
-        } catch (IllegalArgumentException e) {
-            confirm(e, "conflicting declared exceptions");
         }
     }
 
@@ -746,6 +726,21 @@ public class RemoteInfoTest {
     @Test
     public void supportedExceptionType() {
         RemoteInfo.examine(R38.class);
+    }
+
+    public static interface R39 extends Remote {
+        @Restorable
+        String foo() throws RemoteException;
+    }
+
+    @Test
+    public void notRestorable() {
+        try {
+            RemoteInfo.examine(R39.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "must return a remote object");
+        }
     }
 
     private void confirm(IllegalArgumentException e, String substring) {

@@ -24,8 +24,8 @@ import java.net.SocketAddress;
 
 import java.util.concurrent.locks.LockSupport;
 
-import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.RemoteException;
 
 /**
  * 
@@ -46,13 +46,13 @@ final class ServerSession<R> extends CoreSession<R> {
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
 
-    ServerSession(Engine engine, R root, CorePipe pipe) throws ClosedException {
+    ServerSession(Engine engine, R root, CorePipe pipe) throws RemoteException {
         super(engine);
 
         // Store the pipe before calling skeletonFor, in case the root is SessionAware. The
         // address fields should be available to it.
         registerNewConnection(pipe);
-        setControlConnection(pipe);
+        controlPipe(pipe);
 
         // Define a special skeleton for accepting reverse connections.
         mSkeletons.put(new Connector(mReverseId));
@@ -73,8 +73,8 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void close(int reason) {
-        super.close(reason);
+    void close(int reason, CorePipe controlPipe) {
+        super.close(reason, null); // pass null to force close
 
         mEngine.removeSession(this);
 
@@ -118,7 +118,7 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void registerNewAvailableConnection(CorePipe pipe) throws ClosedException {
+    void registerNewAvailableConnection(CorePipe pipe) throws RemoteException {
         super.registerNewAvailableConnection(pipe);
         notifyConnectWaiter();
     }
@@ -173,9 +173,10 @@ final class ServerSession<R> extends CoreSession<R> {
 
             mControlLock.lock();
             try {
-                mControlPipe.write(C_REQUEST_CONNECTION);
-                mControlPipe.writeLong(mReverseId);
-                mControlPipe.flush();
+                CorePipe controlPipe = controlPipe();
+                controlPipe.write(C_REQUEST_CONNECTION);
+                controlPipe.writeLong(mReverseId);
+                controlPipe.flush();
             } finally {
                 mControlLock.unlock();
             }

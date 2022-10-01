@@ -24,6 +24,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,21 +50,38 @@ final class RemoteInfo {
 
     /**
      * @param type non-null remote interface to examine
-     * @throws IllegalArgumentException if remote is malformed
+     * @throws IllegalArgumentException if type is malformed
      */
     public static RemoteInfo examine(Class<?> type) {
+        return examine(type, true);
+    }
+
+    /**
+     * @param stub non-null stub to examine
+     * @throws IllegalArgumentException if stub type is malformed
+     */
+    public static RemoteInfo examineStub(Object stub) {
+        return examine(stub.getClass(), false);
+    }
+
+    private static RemoteInfo examine(Class<?> type, boolean strict) {
         RemoteInfo info = cCache.get(type);
 
-        if (info != null) {
-            return info;
+        if (info == null) {
+            synchronized (cCache) {
+                info = cCache.get(type);
+                if (info == null) {
+                    info = doExamine(type, strict);
+                    cCache.put(type, info);
+                }
+            }
         }
 
-        synchronized (cCache) {
-            info = cCache.get(type);
-            if (info != null) {
-                return info;
-            }
+        return info;
+    }
 
+    private static RemoteInfo doExamine(Class<?> type, boolean strict) {
+        if (strict) {
             if (!type.isInterface()) {
                 throw new IllegalArgumentException("Remote type must be an interface: " + type);
             }
@@ -78,83 +96,99 @@ final class RemoteInfo {
                     ("Remote interface must extend " + Remote.class.getName() + ": " +
                      type.getName());
             }
+        }
 
-            int flags = 0;
+        int flags = 0;
 
-            Class<? extends Throwable> remoteFailureException;
-            RemoteFailure ann = type.getAnnotation(RemoteFailure.class);
+        Class<? extends Throwable> remoteFailureException;
+        RemoteFailure ann = type.getAnnotation(RemoteFailure.class);
 
-            if (ann == null) {
+        if (ann == null) {
+            remoteFailureException = RemoteException.class;
+        } else {
+            remoteFailureException = ann.exception();
+            if (remoteFailureException == null) {
                 remoteFailureException = RemoteException.class;
+            }
+            if (!ann.declared() || CoreUtils.isUnchecked(remoteFailureException)) {
+                flags |= F_UNDECLARED_EX;
+            }
+        }
+
+        Map<RemoteMethod, RemoteMethod> methodMap;
+        methodMap = new TreeMap<>(RemoteMethod.strictComparator());
+
+        SortedSet<RemoteMethod> methodSet = null;
+
+        for (int phase = 1; phase <= 2 ; phase++) {
+            Method[] methods;
+
+            if (type.isInterface() || phase == 2) {
+                methods = type.getMethods();
+                phase = 2;
             } else {
-                remoteFailureException = ann.exception();
-                if (remoteFailureException == null) {
-                    remoteFailureException = RemoteException.class;
-                }
-                if (!ann.declared() || CoreUtils.isUnchecked(remoteFailureException)) {
-                    flags |= F_UNDECLARED_EX;
-                }
+                // Examine the methods inherited from the interface first.
+                methods = RemoteExaminer.remoteTypeForClass(type).getMethods();
             }
 
-            Map<RemoteMethod, RemoteMethod> methodMap;
-            methodMap = new TreeMap<>(RemoteMethod.strictComparator());
-
-            SortedSet<RemoteMethod> methodSet = null;
-
-            for (Method m : type.getMethods()) {
-                if (m.getDeclaringClass().isInterface() && !isObjectMethod(m)) {
-                    RemoteMethod candidate;
-                    try {
-                        candidate = new RemoteMethod(m, ann);
-                    } catch (IllegalArgumentException e) {
-                        if (m.isDefault()) {
-                            continue;
-                        }
-                        throw e;
+            for (Method m : methods) {
+                if (strict) {
+                    if (!m.getDeclaringClass().isInterface() || isObjectMethod(m)) {
+                        continue;
                     }
+                } else if (isObjectMethod(m)) {
+                    continue;
+                }
 
-                    RemoteMethod existing = methodMap.putIfAbsent(candidate, candidate);
+                RemoteMethod candidate;
+                try {
+                    candidate = new RemoteMethod(m, ann);
+                } catch (IllegalArgumentException e) {
+                    if (m.isDefault()) {
+                        continue;
+                    }
+                    throw e;
+                }
 
-                    if (existing != null) {
+                RemoteMethod existing = methodMap.putIfAbsent(candidate, candidate);
+
+                if (existing != null) {
+                    if (type.isInterface()) {
                         // The same method is inherited from multiple parent interfaces.
                         existing.conflictCheck(m, candidate);
-                    } else if (candidate.isBatched() && CoreUtils.isRemote(m.getReturnType())) {
-                        // Define a companion method for batched immediate calls.
-                        if (methodSet == null) {
-                            methodSet = new TreeSet<>();
-                        }
-                        methodSet.add(candidate.asBatchedImmediate());
                     }
+                } else if (candidate.isBatched() && CoreUtils.isRemote(m.getReturnType())) {
+                    // Define a companion method for batched immediate calls.
+                    if (methodSet == null) {
+                        methodSet = new TreeSet<>();
+                    }
+                    methodSet.add(candidate.asBatchedImmediate());
                 }
             }
-
-            if (methodMap.isEmpty()) {
-                methodSet = Collections.emptySortedSet();
-            } else if (methodSet == null) {
-                methodSet = new TreeSet<>(methodMap.keySet());
-            } else {
-                methodSet.addAll(methodMap.keySet());
-            }
-
-            // Gather all of the additional implemented interfaces which implement Remote.
-            Set<String> interfaces = new TreeSet<>();
-            gatherRemoteInterfaces(interfaces, type);
-            interfaces.remove(type.getName());
-
-            if (interfaces.isEmpty()) {
-                interfaces = Collections.emptySet();
-            }
-
-            String name = type.getName().intern();
-            String remoteFailureString = remoteFailureException.getName().intern();
-
-            info = new RemoteInfo(flags, name, remoteFailureString, interfaces, methodSet);
-            info = cCanonical.add(info);
-
-            cCache.put(type, info);
-
-            return info;
         }
+
+        if (methodMap.isEmpty()) {
+            methodSet = Collections.emptySortedSet();
+        } else if (methodSet == null) {
+            methodSet = new TreeSet<>(methodMap.keySet());
+        } else {
+            methodSet.addAll(methodMap.keySet());
+        }
+
+        // Gather all of the additional implemented interfaces which implement Remote.
+        Set<String> interfaces = new TreeSet<>();
+        gatherRemoteInterfaces(interfaces, type);
+        interfaces.remove(type.getName());
+
+        if (interfaces.isEmpty()) {
+            interfaces = Collections.emptySet();
+        }
+
+        String name = type.getName().intern();
+        String remoteFailureString = remoteFailureException.getName().intern();
+
+        var info = new RemoteInfo(flags, name, remoteFailureString, interfaces, methodSet);
+        return cCanonical.add(info);
     }
 
     private static void gatherRemoteInterfaces(Set<String> interfaces, Class<?> clazz) {
@@ -256,6 +290,59 @@ final class RemoteInfo {
         }
 
         return false;
+    }
+
+    /**
+     * Returns a method id mapping from this RemoteInfo to another one. The array index is the
+     * method id from this RemoteInfo, and the array value is the method id of the "to"
+     * RemoteInfo. An array value of MIN_VALUE indicates that the "to" RemoteInfo doesn't have
+     * a corresponding method.
+     */
+    int[] methodIdMap(RemoteInfo to) {
+        int[] mapping = new int[mRemoteMethods.size()];
+
+        Iterator<RemoteMethod> itFrom = mRemoteMethods.iterator();
+        Iterator<RemoteMethod> itTo = to.mRemoteMethods.iterator();
+
+        RemoteMethod methodTo = null;
+        int idTo = -1;
+
+        outer: for (int i=0; i<mapping.length; i++) {
+            RemoteMethod methodFrom = itFrom.next();
+
+            while (true) {
+                if (methodTo == null) {
+                    if (!itTo.hasNext()) {
+                        for (; i<mapping.length; i++) {
+                            mapping[i] = Integer.MIN_VALUE;
+                        }
+                        break outer;
+                    }
+                    methodTo = itTo.next();
+                    idTo++;
+                }
+
+                int cmp = methodFrom.compareTo(methodTo);
+
+                if (cmp == 0) {
+                    // Matched mapping.
+                    mapping[i] = idTo;
+                    methodTo = null;
+                    continue outer;
+                }
+
+                if (cmp < 0) {
+                    // Method on the "from" side doesn't exist on the "to" side.
+                    mapping[i] = Integer.MIN_VALUE;
+                    continue outer;
+                }
+
+                // Method on the "to" side doesn't exist on the "from" side, so skip it.
+                methodTo = null;
+            }
+        }
+
+        return mapping;
     }
 
     @Override
