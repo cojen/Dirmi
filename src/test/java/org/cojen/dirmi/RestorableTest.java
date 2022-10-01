@@ -79,6 +79,7 @@ public class RestorableTest {
         mAcceptor.closeLastAccepted();
 
         int reconnectAt = 5;
+        int disconnected = 0;
 
         for (int i=0; i<8; i++) {
             try {
@@ -87,6 +88,8 @@ public class RestorableTest {
                     fail();
                 }
             } catch (DisconnectedException e) {
+                disconnected++;
+            } catch (RemoteException e) {
             }
 
             try {
@@ -95,6 +98,8 @@ public class RestorableTest {
                     fail();
                 }
             } catch (DisconnectedException e) {
+                disconnected++;
+            } catch (RemoteException e) {
             }
 
             try {
@@ -103,6 +108,8 @@ public class RestorableTest {
                     fail();
                 }
             } catch (DisconnectedException e) {
+                disconnected++;
+            } catch (RemoteException e) {
             }
 
             Thread.sleep(1000);
@@ -111,6 +118,8 @@ public class RestorableTest {
                 mAcceptor.resume();
             }
         }
+
+        assertTrue(disconnected > 0);
     }
 
     private static class Acceptor implements Runnable {
@@ -156,6 +165,8 @@ public class RestorableTest {
                         mSession = session;
                     }
                 }
+            } catch (RemoteException e) {
+                // Ignore.
             } catch (IOException | InterruptedException e) {
                 if (!mClosed) {
                     e.printStackTrace();

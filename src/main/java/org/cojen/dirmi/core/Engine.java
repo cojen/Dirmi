@@ -56,6 +56,7 @@ import java.util.function.BiConsumer;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Connector;
 import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 
@@ -223,11 +224,20 @@ public final class Engine implements Environment {
                 if (!timeout.cancel()) {
                     throw new RemoteException("Timed out");
                 }
-                ItemMap<ServerSession> sessions = mServerSessions;
-                if (sessions == null || (session = sessions.get(serverSessionId)) == null) {
+
+                find: {
+                    ItemMap<ServerSession> sessions = mServerSessions;
+                    if (sessions != null) {
+                        try {
+                            session = sessions.get(serverSessionId);
+                            break find;
+                        } catch (NoSuchObjectException e) {
+                        }
+                    }
                     checkClosed();
                     throw new RemoteException("Unable to find existing session");
                 }
+
                 session.accepted(pipe);
                 return session;
             }
