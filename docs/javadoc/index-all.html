@@ -179,6 +179,18 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Disables tracking of object references.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" class="type-name-link" title="class in org.cojen.dirmi">DisconnectedException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>
+<div class="block">Exception which indicates that a session is disconnected, but a reconnect is in progess.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html#%3Cinit%3E()" class="member-name-link">DisconnectedException()</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html#%3Cinit%3E(java.lang.String)" class="member-name-link">DisconnectedException(String)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html#%3Cinit%3E(java.lang.String,java.lang.Throwable)" class="member-name-link">DisconnectedException(String, Throwable)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html#%3Cinit%3E(java.lang.Throwable)" class="member-name-link">DisconnectedException(Throwable)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></dt>
+<dd>&nbsp;</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Disposer.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Disposer</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Identify a method as being a <a href="org.cojen.dirmi/org/cojen/dirmi/Remote.html" title="interface in org.cojen.dirmi"><code>Remote</code></a> object disposer, allowing memory to be freed on
@@ -293,6 +305,11 @@ loadScripts(document, 'script');</script>
 <div class="block">Annotate a remote method or interface to specify what exception is to be used for indicating
  a remote call failure.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Restorable.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Restorable</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>
+<div class="block">Identify a method which returns a remote object which should be restored when a session
+ reconnects.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#root()" class="member-name-link">root()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
 <div class="block">Returns the root object which was exported or imported.</div>
@@ -327,6 +344,18 @@ loadScripts(document, 'script');</script>
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this session
  instance.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" class="type-name-link" title="class in org.cojen.dirmi">UnimplementedException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>
+<div class="block">Thrown when attempting to invoke a method which is unimplemented on the remote side.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html#%3Cinit%3E()" class="member-name-link">UnimplementedException()</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html#%3Cinit%3E(java.lang.String)" class="member-name-link">UnimplementedException(String)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html#%3Cinit%3E(java.lang.String,java.lang.Throwable)" class="member-name-link">UnimplementedException(String, Throwable)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html#%3Cinit%3E(java.lang.Throwable)" class="member-name-link">UnimplementedException(Throwable)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></dt>
+<dd>&nbsp;</dd>
 </dl>
 <a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
 <footer role="contentinfo">
