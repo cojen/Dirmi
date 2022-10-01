@@ -30,6 +30,7 @@ import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -59,6 +60,7 @@ final class SkeletonMaker<R> {
     }
 
     private final Class<R> mType;
+    private final long mTypeId;
     private final RemoteInfo mServerInfo;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mSkeletonMaker;
@@ -66,6 +68,7 @@ final class SkeletonMaker<R> {
     private SkeletonMaker(Class<R> type) {
         mType = type;
         mServerInfo = RemoteInfo.examine(type);
+        mTypeId = IdGenerator.next();
 
         String sourceFile = SkeletonMaker.class.getSimpleName();
 
@@ -91,6 +94,8 @@ final class SkeletonMaker<R> {
     private SkeletonFactory<R> finishFactory() {
         // Need to finish the factory before the skeleton because it's needed by the skeleton.
         mFactoryMaker.addConstructor();
+
+        mFactoryMaker.addMethod(long.class, "typeId").public_().return_(mTypeId);
 
         MethodMaker mm = mFactoryMaker.addMethod
             (Skeleton.class, "newSkeleton", long.class, SkeletonSupport.class, Object.class);
@@ -129,7 +134,7 @@ final class SkeletonMaker<R> {
     private MethodHandles.Lookup finishSkeleton() {
         mSkeletonMaker.addMethod(Class.class, "type").public_().return_(mType);
 
-        mSkeletonMaker.addMethod(long.class, "typeId").public_().return_(IdGenerator.next());
+        mSkeletonMaker.addMethod(long.class, "typeId").public_().return_(mTypeId);
 
         {
             MethodMaker mm = mSkeletonMaker.addMethod(mType, "server").public_();
@@ -194,7 +199,7 @@ final class SkeletonMaker<R> {
         noMethodLabel.here();
         var typeNameVar = mm.var(Class.class).set(mType).invoke("getName");
         var messageVar = mm.concat(typeNameVar, '#', methodIdVar);
-        mm.new_(NoSuchMethodError.class, messageVar).throw_();
+        mm.new_(UnimplementedException.class, messageVar).throw_();
 
         return mSkeletonMaker.finishLookup();
     }

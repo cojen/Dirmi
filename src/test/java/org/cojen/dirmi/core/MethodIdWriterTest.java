@@ -26,6 +26,7 @@ import static org.junit.Assert.*;
 
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -48,8 +49,7 @@ public class MethodIdWriterTest {
         try {
             writer.writeMethodId(null, 0);
             fail();
-        } catch (NoSuchMethodError e) {
-            assertTrue(e.getMessage().contains("Unimplemented"));
+        } catch (UnimplementedException e) {
         }
     }
 
@@ -71,8 +71,7 @@ public class MethodIdWriterTest {
         try {
             writer.writeMethodId(pipe, 4);
             fail();
-        } catch (NoSuchMethodError e) {
-            assertTrue(e.getMessage().contains("Unimplemented"));
+        } catch (UnimplementedException e) {
         }
 
         pipe.flush();
@@ -98,8 +97,7 @@ public class MethodIdWriterTest {
             try {
                 writer.writeMethodId(null, i);
                 fail();
-            } catch (NoSuchMethodError e) {
-                assertTrue(e.getMessage().contains("Unimplemented"));
+            } catch (UnimplementedException e) {
             }
         }
     }
@@ -119,8 +117,7 @@ public class MethodIdWriterTest {
         try {
             writer.writeMethodId(pipe, 2);
             fail();
-        } catch (NoSuchMethodError e) {
-            assertTrue(e.getMessage().contains("Unimplemented"));
+        } catch (UnimplementedException e) {
         }
 
         pipe.flush();
@@ -149,14 +146,14 @@ public class MethodIdWriterTest {
         try {
             writer.writeMethodId(pipe, 0);
             fail();
-        } catch (NoSuchMethodError e) {
+        } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("Unimplemented"));
         }
 
         try {
             writer.writeMethodId(pipe, 2);
             fail();
-        } catch (NoSuchMethodError e) {
+        } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("Unimplemented"));
         }
 

@@ -34,7 +34,7 @@ final class CloseTimeout extends Scheduled {
             var lookup = MethodHandles.lookup();
             cConHandle = lookup.findVarHandle(CloseTimeout.class, "mCon", Closeable.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 

@@ -222,6 +222,20 @@ public final class CoreUtils {
         return ExceptionWrapper.forClass(remoteFailureEx).wrap(cause);
     }
 
+    /**
+     * Rethrows the given exception without the compiler complaining about it being checked or
+     * not. Use as follows: {@code throw rethrow(e)}
+     */
+    public static RuntimeException rethrow(Throwable e) {
+        CoreUtils.<RuntimeException>castAndThrow(e);
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void castAndThrow(Throwable e) throws T {
+        throw (T) e;
+    }
+
     static void writeParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
 

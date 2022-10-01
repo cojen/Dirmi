@@ -35,7 +35,7 @@ public class Item {
             var lookup = MethodHandles.lookup();
             cIdHandle = lookup.findVarHandle(Item.class, "id", long.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 

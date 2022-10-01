@@ -95,7 +95,7 @@ public final class Engine implements Environment {
             var lookup = MethodHandles.lookup();
             cConnectorHandle = lookup.findVarHandle(Engine.class, "mConnector", Connector.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 
@@ -292,7 +292,7 @@ public final class Engine implements Environment {
                 throw new RemoteException("Timed out");
             }
 
-            session.setControlConnection(pipe);
+            session.controlPipe(pipe);
             startSessionTasks(session);
 
             return session;
@@ -359,7 +359,7 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
-            session.setControlConnection(pipe);
+            session.controlPipe(pipe);
 
             if (register) {
                 startSessionTasks(session);
@@ -759,7 +759,7 @@ public final class Engine implements Environment {
             var lookup = MethodHandles.lookup();
             cStateHandle = lookup.findVarHandle(Acceptor.class, "mState", int.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 

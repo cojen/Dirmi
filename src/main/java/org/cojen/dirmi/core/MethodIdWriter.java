@@ -19,6 +19,7 @@ package org.cojen.dirmi.core;
 import java.io.IOException;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * Writes a method id as a byte or an int, possibly with a mapping step beforehand if the
@@ -28,7 +29,19 @@ import org.cojen.dirmi.Pipe;
  */
 public interface MethodIdWriter {
     /**
-     * @throws NoSuchMethodError if the remote side doesn't implement the method
+     * @throws UnimplementedException if the remote side doesn't implement the method
      */
     void writeMethodId(Pipe pipe, int id) throws IOException;
+
+    static class Unimplemented implements MethodIdWriter {
+        static final Unimplemented THE = new Unimplemented();
+
+        private Unimplemented() {
+        }
+
+        @Override
+        public void writeMethodId(Pipe pipe, int id) throws IOException {
+            throw new UnimplementedException("Unimplemented on the remote side");
+        }
+    }
 }

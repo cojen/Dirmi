@@ -24,6 +24,7 @@ import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -45,14 +46,22 @@ final class MethodIdWriterMaker {
 
         int[] mapping = original.methodIdMap(current);
 
-        check: if (!force) {
-            // Check if the mapping actually does anything.
-            for (int i=0; i<mapping.length; i++) {
-                if (mapping[i] != i) {
-                    break check;
-                }
-            }
+        boolean diffs = false;
+        int max = Integer.MIN_VALUE;
+
+        for (int i=0; i<mapping.length; i++) {
+            diffs |= mapping[i] != i;
+            max = Math.max(max, mapping[i]);
+        }
+
+        if (!force && !diffs) {
+            // No mapping is needed.
             return null;
+        }
+
+        if (max == Integer.MIN_VALUE) {
+            // No methods are implemented.
+            return MethodIdWriter.Unimplemented.THE;
         }
 
         var key = new IntArrayKey(mapping);
@@ -141,7 +150,7 @@ final class MethodIdWriterMaker {
             }
         }
 
-        mm.new_(NoSuchMethodError.class, "Unimplemented on the remote side").throw_();
+        mm.new_(UnimplementedException.class, "Unimplemented on the remote side").throw_();
 
         MethodHandles.Lookup lookup = cm.finishHidden();
 

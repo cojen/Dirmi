@@ -120,36 +120,50 @@ final class RemoteInfo {
 
         SortedSet<RemoteMethod> methodSet = null;
 
-        for (Method m : type.getMethods()) {
-            if (strict) {
-                if (!m.getDeclaringClass().isInterface() || isObjectMethod(m)) {
-                    continue;
-                }
-            } else if (isObjectMethod(m)) {
-                continue;
+        for (int phase = 1; phase <= 2 ; phase++) {
+            Method[] methods;
+
+            if (type.isInterface() || phase == 2) {
+                methods = type.getMethods();
+                phase = 2;
+            } else {
+                // Examine the methods inherited from the interface first.
+                methods = RemoteExaminer.remoteTypeForClass(type).getMethods();
             }
 
-            RemoteMethod candidate;
-            try {
-                candidate = new RemoteMethod(m, ann);
-            } catch (IllegalArgumentException e) {
-                if (m.isDefault()) {
+            for (Method m : methods) {
+                if (strict) {
+                    if (!m.getDeclaringClass().isInterface() || isObjectMethod(m)) {
+                        continue;
+                    }
+                } else if (isObjectMethod(m)) {
                     continue;
                 }
-                throw e;
-            }
 
-            RemoteMethod existing = methodMap.putIfAbsent(candidate, candidate);
-
-            if (existing != null) {
-                // The same method is inherited from multiple parent interfaces.
-                existing.conflictCheck(m, candidate);
-            } else if (candidate.isBatched() && CoreUtils.isRemote(m.getReturnType())) {
-                // Define a companion method for batched immediate calls.
-                if (methodSet == null) {
-                    methodSet = new TreeSet<>();
+                RemoteMethod candidate;
+                try {
+                    candidate = new RemoteMethod(m, ann);
+                } catch (IllegalArgumentException e) {
+                    if (m.isDefault()) {
+                        continue;
+                    }
+                    throw e;
                 }
-                methodSet.add(candidate.asBatchedImmediate());
+
+                RemoteMethod existing = methodMap.putIfAbsent(candidate, candidate);
+
+                if (existing != null) {
+                    if (type.isInterface()) {
+                        // The same method is inherited from multiple parent interfaces.
+                        existing.conflictCheck(m, candidate);
+                    }
+                } else if (candidate.isBatched() && CoreUtils.isRemote(m.getReturnType())) {
+                    // Define a companion method for batched immediate calls.
+                    if (methodSet == null) {
+                        methodSet = new TreeSet<>();
+                    }
+                    methodSet.add(candidate.asBatchedImmediate());
+                }
             }
         }
 

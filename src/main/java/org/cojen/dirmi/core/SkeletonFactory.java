@@ -22,6 +22,8 @@ package org.cojen.dirmi.core;
  * @author Brian S O'Neill
  */
 public interface SkeletonFactory<R> {
+    long typeId();
+
     /**
      * @param id remote object identifier
      * @param support for reusing pipes

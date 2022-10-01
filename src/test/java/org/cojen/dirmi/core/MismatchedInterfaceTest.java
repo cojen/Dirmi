@@ -35,6 +35,7 @@ import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -117,8 +118,7 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            assertTrue(cause instanceof NoSuchMethodError);
-            assertTrue(cause.getMessage().contains("Unimplemented"));
+            assertTrue(cause instanceof UnimplementedException);
         }
 
         Method b0 = iface0.getMethod("b");
@@ -147,8 +147,7 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            assertTrue(cause instanceof NoSuchMethodError);
-            assertTrue(cause.getMessage().contains("Unimplemented"));
+            assertTrue(cause instanceof UnimplementedException);
         }
     }
 
@@ -329,8 +328,7 @@ public class MismatchedInterfaceTest {
             // Return type differs.
             assertEquals("bob", ((Parent) remote).name());
             fail();
-        } catch (NoSuchMethodError e) {
-            assertTrue(e.getMessage().contains("Unimplemented"));
+        } catch (UnimplementedException e) {
         }
     }
 

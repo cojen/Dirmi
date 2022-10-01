@@ -40,6 +40,7 @@ import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Unbatched;
+import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -159,7 +160,7 @@ final class StubMaker {
             RemoteMethod clientMethod = pair.a;
             RemoteMethod serverMethod = pair.b;
 
-            if (serverMethod != lastServerMethod) {
+            if (serverMethod != lastServerMethod && serverMethod != null) {
                 serverMethodId++;
                 lastServerMethod = serverMethod;
             }
@@ -205,7 +206,7 @@ final class StubMaker {
 
             if (serverMethod == null) {
                 // The server doesn't implement the method.
-                mm.new_(NoSuchMethodError.class, "Unimplemented on the remote side").throw_();
+                mm.new_(UnimplementedException.class, "Unimplemented on the remote side").throw_();
                 continue;
             }
 

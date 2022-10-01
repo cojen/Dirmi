@@ -73,7 +73,7 @@ class BufferedPipe implements Pipe {
             cLongArrayBEHandle = MethodHandles.byteArrayViewVarHandle
                 (long[].class, ByteOrder.BIG_ENDIAN);
         } catch (Exception e) {
-            throw new ExceptionInInitializerError(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 

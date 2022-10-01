@@ -29,7 +29,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public class Stub extends Item implements Remote {
-    static final VarHandle cSupportHandle, cOriginHandle;
+    static final VarHandle cSupportHandle, cWriterHandle, cOriginHandle;
 
     private static final MethodHandle cRootOrigin;
 
@@ -37,9 +37,10 @@ public class Stub extends Item implements Remote {
         try {
             var lookup = MethodHandles.lookup();
             cSupportHandle = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
+            cWriterHandle = lookup.findVarHandle(Stub.class, "miw", MethodIdWriter.class);
             cOriginHandle = lookup.findVarHandle(Stub.class, "origin", MethodHandle.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
 
         cRootOrigin = MethodHandles.constant(Stub.class, null);

@@ -35,9 +35,13 @@ final class RemoteExaminer {
         if (obj == null) {
             throw new IllegalArgumentException("Remote object must not be null");
         }
+        return remoteTypeForClass(obj.getClass());
+    }
 
-        Class<?> clazz = obj.getClass();
-
+    /**
+     * @throws IllegalArgumentException if object is null or malformed
+     */
+    static Class<?> remoteTypeForClass(Class<?> clazz) {
         Class<?> theOne = cCache.get(clazz);
         if (theOne != null) {
             return theOne;

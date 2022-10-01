@@ -26,6 +26,9 @@ import java.io.OutputStream;
 
 import java.net.SocketAddress;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.cojen.dirmi.Pipe;
 
 /**
@@ -42,20 +45,22 @@ final class ClientSession<R> extends CoreSession<R> {
             cServerSessionIdHandle = lookup.findVarHandle
                 (ClientSession.class, "mServerSessionId", long.class);
         } catch (Throwable e) {
-            throw new Error(e);
+            throw CoreUtils.rethrow(e);
         }
     }
 
     private long mServerSessionId;
     private Class<R> mRootType;
     private byte[] mRootName;
+    private long mRootTypeId;
+    private RemoteInfo mServerRootInfo;
     private R mRoot;
 
     ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr) {
         super(engine);
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
-        setControlConnection(CorePipe.newNullPipe(localAddr, remoteAttr));
+        controlPipe(CorePipe.newNullPipe(localAddr, remoteAttr));
     }
 
     /**
@@ -79,6 +84,8 @@ final class ClientSession<R> extends CoreSession<R> {
         cServerSessionIdHandle.setRelease(this, serverId);
         mRootType = rootType;
         mRootName = bname;
+        mRootTypeId = rootTypeId;
+        mServerRootInfo = rootInfo;
 
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
         factory = mStubFactories.putIfAbsent(factory);
@@ -93,9 +100,9 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void close(int reason) {
+    void close(int reason, CorePipe controlPipe) {
         if ((reason & CLOSED) != 0) {
-            super.close(reason);
+            super.close(reason, null); // pass null to force close
             mEngine.removeSession(this);
             return;
         }
@@ -103,7 +110,7 @@ final class ClientSession<R> extends CoreSession<R> {
         // FIXME: If reconnect is disabled, close as usual.
 
         reason |= DISCONNECTED;
-        super.close(reason);
+        super.close(reason, controlPipe);
 
         // FIXME: Configurable reconnect delay.
         mEngine.reconnect(mRootType, mRootName, remoteAddress(), 1000, this::reconnectAttempt);
@@ -113,9 +120,9 @@ final class ClientSession<R> extends CoreSession<R> {
     private boolean reconnectAttempt(Object result) {
         if (isClosed()) {
             if (result instanceof ClientSession) {
-                ((ClientSession) result).close(CLOSED);
+                ((ClientSession) result).close(CLOSED, null);
             }
-            close(CLOSED);
+            close(CLOSED, null);
             return false;
         }
 
@@ -125,7 +132,7 @@ final class ClientSession<R> extends CoreSession<R> {
         }
 
         if (!(result instanceof ClientSession)) {
-            close(CLOSED);
+            close(CLOSED, null);
             return false;
         }
 
@@ -153,35 +160,82 @@ final class ClientSession<R> extends CoreSession<R> {
         var root = (Stub) mRoot;
         mStubs.changeIdentity(root, newRoot.id);
 
+        Map<String, RemoteInfo> typeMap;
+
         try {
             mEngine.startSessionTasks(this);
-        } catch (IOException e) {
-            close(DISCONNECTED);
+
+            long newRootTypeId = newSession.mRootTypeId;
+            RemoteInfo newServerRootInfo = newSession.mServerRootInfo;
+
+            // Request server-side RemoteInfos for all restorable stubs. If any changes, then
+            // the MethodIdWriters for the affected stubs need to be updated.
+
+            var waitMap = new WaitMap<String, RemoteInfo>();
+            mTypeWaitMap = waitMap;
+
+            waitMap.put(RemoteExaminer.remoteType(root).getName(), newServerRootInfo);
+
+            mStubs.forEach(stub -> {
+                Class<?> type = RemoteExaminer.remoteType(stub);
+                if (waitMap.add(type.getName())) {
+                    try {
+                        sendInfoRequest(type);
+                    } catch (IOException e) {
+                        throw CoreUtils.rethrow(e);
+                    }
+                }
+            });
+
+            sendFlushRequest();
+
+            typeMap = waitMap.await();
+            mTypeWaitMap = null;
+
+            // Flush the control pipe to send any pending C_KNOWN_TYPE commands.
+            flushControlPipeEx();
+        } catch (IOException | InterruptedException e) {
+            close(DISCONNECTED, null);
             return false;
         }
 
-        /* FIXME: Fix MethodIdWriters for all stubs (including the root).
+        // For all restorable stubs, update the MethodIdWriter and set a support object that
+        // allows them to restore on demand.
 
-           Scan through the stubs and collect a set of RemoteInfos. To determine the RemoteInfo
-           for a stub, access the interfaces to obtain the type. Pick the interface which isn't
-           Remote, unless that's the only one.
+        Map<RemoteInfo, MethodIdWriter> writers = new HashMap<>();
 
-           Using the control connection, request the server-side type ids and RemoteInfos.
-           Update the stub factory maps as well. For any RemoteInfos that changed, update the
-           affected Stubs. If the remote side no longer has the RemoteInfo, then the affected
-           Stubs need a MethodIdWriter which always throws NoSuchMethodError. If no
-           MethodIdWriter change is required, replace the Stub.miw field with the current
-           StubFactory anyhow.
-
-         */
-
-        // Update the restorable stubs to restore on demand.
         var restorableSupport = new RestorableStubSupport(newSupport);
 
         mStubs.forEach(stub -> {
-            if (Stub.isRestorable(stub)) {
-                Stub.cSupportHandle.setRelease(stub, restorableSupport);
+            if (!Stub.isRestorable(stub)) {
+                return;
             }
+
+            RemoteInfo original = RemoteInfo.examineStub(stub);
+            MethodIdWriter writer = writers.get(original);
+
+            Class<?> type = null;
+            if (writer == null && !writers.containsKey(original)) {
+                type = RemoteExaminer.remoteType(stub);
+                RemoteInfo current = typeMap.get(type.getName());
+                writer = MethodIdWriterMaker.writerFor(original, current, false);
+                writers.put(original, writer);
+            }
+
+            if (writer != null) {
+                Stub.cWriterHandle.setRelease(stub, writer);
+            } else {
+                // Although no remote methods changed, the current StubFactory is preferred.
+                if (type == null) {
+                    type = RemoteExaminer.remoteType(stub);
+                }
+                StubFactory factory = mStubFactoriesByClass.get(type);
+                if (factory != null) {
+                    Stub.cWriterHandle.setRelease(stub, factory);
+                }
+            }
+
+            Stub.cSupportHandle.setRelease(stub, restorableSupport);
         });
 
         unclose();
@@ -214,6 +268,15 @@ final class ClientSession<R> extends CoreSession<R> {
         }
 
         registerNewAvailableConnection(pipe);
+    }
+
+    @Override
+    void startTasks(long pingTimeoutMillis, long ageMillis) throws IOException {
+        // These fields are only needed by a reconnect.
+        mRootTypeId = 0;
+        mServerRootInfo = null;
+
+        super.startTasks(pingTimeoutMillis, ageMillis);
     }
 
     @Override

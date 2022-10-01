@@ -52,7 +52,7 @@ final class ServerSession<R> extends CoreSession<R> {
         // Store the pipe before calling skeletonFor, in case the root is SessionAware. The
         // address fields should be available to it.
         registerNewConnection(pipe);
-        setControlConnection(pipe);
+        controlPipe(pipe);
 
         // Define a special skeleton for accepting reverse connections.
         mSkeletons.put(new Connector(mReverseId));
@@ -73,8 +73,8 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void close(int reason) {
-        super.close(reason);
+    void close(int reason, CorePipe controlPipe) {
+        super.close(reason, null); // pass null to force close
 
         mEngine.removeSession(this);
 
@@ -173,9 +173,10 @@ final class ServerSession<R> extends CoreSession<R> {
 
             mControlLock.lock();
             try {
-                mControlPipe.write(C_REQUEST_CONNECTION);
-                mControlPipe.writeLong(mReverseId);
-                mControlPipe.flush();
+                CorePipe controlPipe = controlPipe();
+                controlPipe.write(C_REQUEST_CONNECTION);
+                controlPipe.writeLong(mReverseId);
+                controlPipe.flush();
             } finally {
                 mControlLock.unlock();
             }

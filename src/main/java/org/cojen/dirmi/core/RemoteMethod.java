@@ -394,6 +394,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         return false;
     }
 
+    /**
+     * Compares methods for client/server compatibility.
+     */
     @Override
     public int compareTo(RemoteMethod other) {
         int cmp = mName.compareTo(other.mName);
@@ -410,7 +413,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         // Flipping the sign causes a batched immediate variant to come before the normal
         // batched variant. This makes things easier for StubMaker.
-        return -Integer.compare(mFlags, other.mFlags);
+        return -Integer.compare(cflags(mFlags), cflags(other.mFlags));
+    }
+
+    private static int cflags(int flags) {
+        // Only consider these flags for compatibility.
+        // FIXME: pure unbatched should be compatible with pure batched
+        return flags & (F_DISPOSER | F_BATCHED | F_UNBATCHED | F_PIPED);
     }
 
     /**
