@@ -303,18 +303,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     /**
-     * Remove the connection from the tracked set without closing it.
-     */
-    final void removeConnection(CorePipe pipe) {
-        conLockAcquire();
-        try {
-            doRemoveConnection(pipe);
-        } finally {
-            conLockRelease();
-        }
-    }
-
-    /**
      * Remove the connection from the tracked set and close it.
      */
     final void closeConnection(CorePipe pipe) {
