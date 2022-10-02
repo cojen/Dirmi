@@ -78,48 +78,52 @@ public class RestorableTest {
         mAcceptor.suspend();
         mAcceptor.closeLastAccepted();
 
-        int reconnectAt = 5;
         int disconnected = 0;
+        boolean resumed = false;
 
-        for (int i=0; i<8; i++) {
+        while (true) {
+            boolean anyFailures = false;
+
             try {
                 root.a(123);
-                if (i <= reconnectAt) {
-                    fail();
-                }
             } catch (DisconnectedException e) {
                 disconnected++;
+                anyFailures = true;
             } catch (RemoteException e) {
+                anyFailures = true;
             }
 
             try {
                 assertEquals("123:789", r2.b(789));
-                if (i <= reconnectAt) {
-                    fail();
-                }
             } catch (DisconnectedException e) {
                 disconnected++;
+                anyFailures = true;
             } catch (RemoteException e) {
+                anyFailures = true;
             }
 
             try {
                 assertEquals(111, r1x.b(111).c());
-                if (i <= reconnectAt) {
-                    fail();
-                }
             } catch (DisconnectedException e) {
                 disconnected++;
+                anyFailures = true;
             } catch (RemoteException e) {
+                anyFailures = true;
             }
 
             Thread.sleep(1000);
 
-            if (i == reconnectAt) {
-                mAcceptor.resume();
+            if (!resumed) {
+                if (disconnected > 0) {
+                    mAcceptor.resume();
+                    resumed = true;
+                }
+            } else {
+                if (!anyFailures) {
+                    break;
+                }
             }
         }
-
-        assertTrue(disconnected > 0);
     }
 
     private static class Acceptor implements Runnable {
@@ -159,14 +163,16 @@ public class RestorableTest {
                         }
                     }
 
-                    Session session = mEnv.accepted(s);
+                    try {
+                        Session session = mEnv.accepted(s);
 
-                    synchronized (this) {
-                        mSession = session;
+                        synchronized (this) {
+                            mSession = session;
+                        }
+                    } catch (RemoteException e) {
+                        CoreUtils.closeQuietly(s);
                     }
                 }
-            } catch (RemoteException e) {
-                // Ignore.
             } catch (IOException | InterruptedException e) {
                 if (!mClosed) {
                     e.printStackTrace();

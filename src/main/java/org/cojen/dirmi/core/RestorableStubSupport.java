@@ -20,6 +20,9 @@ import java.io.IOException;
 
 import java.lang.invoke.MethodHandle;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 
@@ -29,7 +32,9 @@ import org.cojen.dirmi.Session;
  *
  * @author Brian S O'Neill
  */
-final class RestorableStubSupport implements StubSupport {
+final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch>
+    implements StubSupport
+{
     private final CoreStubSupport mSupport;
 
     RestorableStubSupport(CoreStubSupport support) {
@@ -54,20 +59,47 @@ final class RestorableStubSupport implements StubSupport {
     @Override
     @SuppressWarnings("unchecked")
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
+        // Use a latch in order for only one thread to attempt the stub restore. Other threads
+        // that come along must wait for the restore to complete.
+        var latch = new CountDownLatch(1);
 
         StubSupport newSupport;
 
-        try {
-            // FIXME: Use a CountDownLatch to only perform one restore.
-            var newStub = (Stub) origin.invoke();
-            mSupport.session().mStubs.stealIdentity(stub, newStub);
-            newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
-            Stub.cSupportHandle.setRelease(stub, newSupport);
-        } catch (RuntimeException | Error e) {
-            throw e;
-        } catch (Throwable e) {
-            throw CoreUtils.remoteException(remoteFailureException, e);
+        while (true) {
+            CountDownLatch existing = putIfAbsent(stub, latch);
+
+            if (existing != null) {
+                try {
+                    existing.await();
+                } catch (InterruptedException e) {
+                    throw CoreUtils.remoteException(remoteFailureException, e);
+                }
+                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
+                if (newSupport == this) {
+                    // The restore by another thread was aborted, so try again.
+                    continue;
+                }
+                break;
+            }
+
+            var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
+
+            try {
+                var newStub = (Stub) origin.invoke();
+                mSupport.session().mStubs.stealIdentity(stub, newStub);
+                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
+                // Use CAS in case the stub has called dispose.
+                Stub.cSupportHandle.compareAndSet(stub, this, newSupport);
+            } catch (RuntimeException | Error e) {
+                throw e;
+            } catch (Throwable e) {
+                throw CoreUtils.remoteException(remoteFailureException, e);
+            } finally {
+                latch.countDown();
+                remove(stub, latch);
+            }
+
+            break;
         }
 
         return newSupport.connect(stub, remoteFailureException);
