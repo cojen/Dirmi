@@ -24,7 +24,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -411,32 +410,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (cmp != 0) {
             return cmp;
         }
-        // Flipping the sign causes a batched immediate variant to come before the normal
+        // Flipping the order causes a batched immediate variant to come before the normal
         // batched variant. This makes things easier for StubMaker.
-        return -Integer.compare(cflags(mFlags), cflags(other.mFlags));
-    }
-
-    private static int cflags(int flags) {
-        // Only consider these flags for compatibility.
-        // FIXME: pure unbatched should be compatible with pure batched
-        return flags & (F_DISPOSER | F_BATCHED | F_UNBATCHED | F_PIPED);
-    }
-
-    /**
-     * Returns a comparator that only checks name, return type, parameter types, and flags.
-     */
-    static Comparator<RemoteMethod> strictComparator() {
-        return (a, b) -> {
-            int cmp = a.mName.compareTo(b.mName);
-            if (cmp != 0) {
-                return cmp;
-            }
-            cmp = a.mReturnType.compareTo(b.mReturnType);
-            if (cmp != 0) {
-                return cmp;
-            }
-            return compare(a.mParameterTypes, b.mParameterTypes);
-        };
+        return Boolean.compare(other.isBatchedImmediate(), isBatchedImmediate());
     }
 
     static <E extends Comparable<E>> int compare(Collection<E> a, Collection<E> b) {

@@ -115,8 +115,7 @@ final class RemoteInfo {
             }
         }
 
-        Map<RemoteMethod, RemoteMethod> methodMap;
-        methodMap = new TreeMap<>(RemoteMethod.strictComparator());
+        Map<RemoteMethod, RemoteMethod> methodMap = new TreeMap<>();
 
         SortedSet<RemoteMethod> methodSet = null;
 
