@@ -460,16 +460,7 @@ public final class Engine implements Environment {
                 }
 
                 try {
-                    // Adjust delay by ±10%.
-                    long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
-                    jitter -= reconnectDelayMillis / 10;
-                    long delay = reconnectDelayMillis + jitter;
-
-                    if (!scheduleMillis(this, delay)) {
-                        checkClosed();
-                        // Not expected.
-                        executeTask(this);
-                    }
+                    schedule();
                 } catch (Throwable e) {
                     callback.test(e);
                 }
