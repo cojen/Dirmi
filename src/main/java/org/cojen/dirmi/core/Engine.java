@@ -66,7 +66,7 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
-    private static final int PING_TIMEOUT_MILLIS = 2_000, IDLE_CONNECTION_AGE_MILLIS = 60_000;
+    private volatile int mReconnectDelayMillis, mPingTimeoutMillis, mIdleConnectionMillis;
 
     private final Lock mMainLock;
 
@@ -105,6 +105,10 @@ public final class Engine implements Environment {
     }
 
     public Engine(Executor executor) {
+        mReconnectDelayMillis =  1_000;
+        mPingTimeoutMillis    =  2_000;
+        mIdleConnectionMillis = 60_000;
+
         mMainLock = new ReentrantLock();
 
         if (executor == null) {
@@ -204,14 +208,18 @@ public final class Engine implements Environment {
         checkClosed();
 
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
-        var timeout = new CloseTimeout(pipe);
+
+        int timeoutMillis = mPingTimeoutMillis;
+        CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
         long clientSessionId = 0;
         ServerSession session;
         RemoteInfo serverInfo;
 
         try {
-            scheduleMillis(timeout, PING_TIMEOUT_MILLIS);
+            if (timeoutTask != null) {
+                scheduleMillis(timeoutTask, timeoutMillis);
+            }
 
             long version = pipe.readLong();
             if (version != CoreUtils.PROTOCOL_V2 || (clientSessionId = pipe.readLong()) == 0) {
@@ -221,7 +229,7 @@ public final class Engine implements Environment {
             long serverSessionId = pipe.readLong();
 
             if (serverSessionId != 0) {
-                if (!timeout.cancel()) {
+                if (timeoutTask != null && !timeoutTask.cancel()) {
                     throw new RemoteException("Timed out");
                 }
 
@@ -261,7 +269,9 @@ public final class Engine implements Environment {
 
             session = new ServerSession<Object>(this, root, pipe);
         } catch (Throwable e) {
-            timeout.cancel();
+            if (timeoutTask != null) {
+                timeoutTask.cancel();
+            }
 
             try {
                 if (e instanceof RemoteException && clientSessionId != 0) {
@@ -298,7 +308,7 @@ public final class Engine implements Environment {
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
-            if (!timeout.cancel()) {
+            if (timeoutTask != null && !timeoutTask.cancel()) {
                 throw new RemoteException("Timed out");
             }
 
@@ -307,7 +317,9 @@ public final class Engine implements Environment {
 
             return session;
         } catch (Throwable e) {
-            timeout.cancel();
+            if (timeoutTask != null) {
+                timeoutTask.cancel();
+            }
             CoreUtils.closeQuietly(session);
             throw e;
         }
@@ -332,12 +344,16 @@ public final class Engine implements Environment {
 
         RemoteInfo info = RemoteInfo.examine(type);
 
-        var session = new ClientSession<R>(this, null, addr);
+        var session = new ClientSession<R>(this, null, addr, mReconnectDelayMillis);
         CorePipe pipe = session.connect();
-        var timeout = new CloseTimeout(pipe);
+
+        int timeoutMillis = mPingTimeoutMillis;
+        CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
         try {
-            scheduleMillis(timeout, PING_TIMEOUT_MILLIS);
+            if (timeoutTask != null) {
+                scheduleMillis(timeoutTask, timeoutMillis);
+            }
 
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
@@ -363,7 +379,7 @@ public final class Engine implements Environment {
             RemoteInfo serverInfo = RemoteInfo.readFrom(pipe);
             Object metadata = pipe.readObject();
 
-            if (!timeout.cancel()) {
+            if (timeoutTask != null && !timeoutTask.cancel()) {
                 throw new RemoteException("Timed out");
             }
 
@@ -389,7 +405,9 @@ public final class Engine implements Environment {
 
             return session;
         } catch (Throwable e) {
-            timeout.cancel();
+            if (timeoutTask != null) {
+                timeoutTask.cancel();
+            }
             session.close();
             CoreUtils.closeQuietly(pipe);
             throw e;
@@ -442,7 +460,7 @@ public final class Engine implements Environment {
                 }
 
                 try {
-                    // Adjust delay by +/- 10%.
+                    // Adjust delay by ±10%.
                     long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
                     jitter -= reconnectDelayMillis / 10;
                     long delay = reconnectDelayMillis + jitter;
@@ -458,7 +476,7 @@ public final class Engine implements Environment {
             }
 
             void schedule() throws IOException {
-                // Adjust delay by +/- 10%.
+                // Adjust delay by ±10%.
                 long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
                 jitter -= reconnectDelayMillis / 10;
                 long delay = reconnectDelayMillis + jitter;
@@ -489,6 +507,21 @@ public final class Engine implements Environment {
         } finally {
             mMainLock.unlock();
         }
+    }
+
+    @Override
+    public void reconnectDelayMillis(int millis) {
+        mReconnectDelayMillis = millis;
+    }
+
+    @Override
+    public void pingTimeoutMillis(int millis) {
+        mPingTimeoutMillis = millis;
+    }
+
+    @Override
+    public void idleConnectionMillis(int millis) {
+        mIdleConnectionMillis = millis;
     }
 
     @Override
@@ -574,7 +607,7 @@ public final class Engine implements Environment {
     }
 
     void startSessionTasks(CoreSession session) throws IOException {
-        session.startTasks(PING_TIMEOUT_MILLIS, IDLE_CONNECTION_AGE_MILLIS);
+        session.startTasks(mPingTimeoutMillis, mIdleConnectionMillis);
     }
 
     @Override

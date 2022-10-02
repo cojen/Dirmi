@@ -530,9 +530,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * if ping requests don't get responses, and to close idle available connections.  A call
      * to controlPipe(CorePipe) must be made before calling startTasks.
      *
-     * @param ageMillis average age of idle connection before being closed
+     * @param idleMillis average age of idle connection before being closed
      */
-    void startTasks(long pingTimeoutMillis, long ageMillis) throws IOException {
+    void startTasks(long pingTimeoutMillis, long idleMillis) throws IOException {
         CorePipe pipe = controlPipe();
 
         var pongTask = (Runnable) () -> {
@@ -599,11 +599,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             }
         });
 
-        long pingDelayNanos = taskDelayNanos(pingTimeoutMillis);
-        mEngine.scheduleNanos(new Pinger(this, pingDelayNanos), pingDelayNanos);
+        if (pingTimeoutMillis >= 0) {
+            long pingDelayNanos = taskDelayNanos(pingTimeoutMillis);
+            mEngine.scheduleNanos(new Pinger(this, pingDelayNanos), pingDelayNanos);
+        }
 
-        long ageDelayNanos = taskDelayNanos(ageMillis);
-        mEngine.scheduleNanos(new Closer(this, ageDelayNanos), ageDelayNanos);
+        if (idleMillis >= 0) {
+            long idleDelayNanos = taskDelayNanos(idleMillis);
+            mEngine.scheduleNanos(new Closer(this, idleDelayNanos), idleDelayNanos);
+        }
     }
 
     private static long taskDelayNanos(long timeoutMillis) {

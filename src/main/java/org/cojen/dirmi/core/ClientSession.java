@@ -49,6 +49,8 @@ final class ClientSession<R> extends CoreSession<R> {
         }
     }
 
+    private final int mReconnectDelayMillis;
+
     private long mServerSessionId;
     private Class<R> mRootType;
     private byte[] mRootName;
@@ -56,8 +58,13 @@ final class ClientSession<R> extends CoreSession<R> {
     private RemoteInfo mServerRootInfo;
     private R mRoot;
 
-    ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr) {
+    ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr,
+                  int reconnectDelayMillis)
+    {
         super(engine);
+
+        mReconnectDelayMillis = reconnectDelayMillis;
+
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
         controlPipe(CorePipe.newNullPipe(localAddr, remoteAttr));
@@ -101,19 +108,21 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     void close(int reason, CorePipe controlPipe) {
+        if (mReconnectDelayMillis < 0) {
+            reason |= CLOSED;
+        }
+
         if ((reason & CLOSED) != 0) {
             super.close(reason, null); // pass null to force close
             mEngine.removeSession(this);
             return;
         }
 
-        // FIXME: If reconnect is disabled, close as usual.
-
         reason |= DISCONNECTED;
         super.close(reason, controlPipe);
 
-        // FIXME: Configurable reconnect delay.
-        mEngine.reconnect(mRootType, mRootName, remoteAddress(), 1000, this::reconnectAttempt);
+        mEngine.reconnect(mRootType, mRootName, remoteAddress(), mReconnectDelayMillis,
+                          this::reconnectAttempt);
     }
 
     @SuppressWarnings("unchecked")

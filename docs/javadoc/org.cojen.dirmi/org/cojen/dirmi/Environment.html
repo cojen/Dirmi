@@ -181,8 +181,23 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="block">Export a named server-side object.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#idleConnectionMillis(int)" class="member-name-link">idleConnectionMillis</a><wbr>(int&nbsp;millis)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Set the maximum idle connection time for newly established sessions (±33%).</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#pingTimeoutMillis(int)" class="member-name-link">pingTimeoutMillis</a><wbr>(int&nbsp;millis)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Set the ping timeout for newly established sessions (±33%).</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#reconnectDelayMillis(int)" class="member-name-link">reconnectDelayMillis</a><wbr>(int&nbsp;millis)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Set the reconnect delay for newly established client sessions (±10%).</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this environment
  instance.</div>
 </div>
@@ -387,6 +402,38 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
 </dl>
+</section>
+</li>
+<li>
+<section class="detail" id="reconnectDelayMillis(int)">
+<h3>reconnectDelayMillis</h3>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">reconnectDelayMillis</span><wbr><span class="parameters">(int&nbsp;millis)</span></div>
+<div class="block">Set the reconnect delay for newly established client sessions (±10%). Client sessions
+ attempt to reconnect when the session is disconnected, and the delay is applied before
+ each attempt. The default reconnect delay is 1 second. Pass a negative delay to disable
+ reconnect, and instead the session is closed when it's disconnected.</div>
+</section>
+</li>
+<li>
+<section class="detail" id="pingTimeoutMillis(int)">
+<h3>pingTimeoutMillis</h3>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">pingTimeoutMillis</span><wbr><span class="parameters">(int&nbsp;millis)</span></div>
+<div class="block">Set the ping timeout for newly established sessions (±33%). If no ping response is
+ received from the remote endpoint in time, then the session is disconnected or closed.
+ Server-side sessions are always closed, but client-side sessions are closed only when
+ reconnect is disabled. The default ping timeout is 2 seconds. Pass a negative timeout to
+ disable pings. The session can still close or be disconnected if communication over the
+ control connection fails.</div>
+</section>
+</li>
+<li>
+<section class="detail" id="idleConnectionMillis(int)">
+<h3>idleConnectionMillis</h3>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">idleConnectionMillis</span><wbr><span class="parameters">(int&nbsp;millis)</span></div>
+<div class="block">Set the maximum idle connection time for newly established sessions (±33%). This defines
+ the maximum amount of time a connection can remain idle before it's automatically
+ closed. The default idle time is 60 seconds. Pass a negative amount to disable the
+ closing of idle connections.</div>
 </section>
 </li>
 <li>

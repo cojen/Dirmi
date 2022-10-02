@@ -176,6 +176,32 @@ public interface Environment extends Closeable, Executor {
     Connector connector(Connector c) throws IOException;
 
     /**
+     * Set the reconnect delay for newly established client sessions (±10%). Client sessions
+     * attempt to reconnect when the session is disconnected, and the delay is applied before
+     * each attempt. The default reconnect delay is 1 second. Pass a negative delay to disable
+     * reconnect, and instead the session is closed when it's disconnected.
+     */
+    void reconnectDelayMillis(int millis);
+
+    /**
+     * Set the ping timeout for newly established sessions (±33%). If no ping response is
+     * received from the remote endpoint in time, then the session is disconnected or closed.
+     * Server-side sessions are always closed, but client-side sessions are closed only when
+     * reconnect is disabled. The default ping timeout is 2 seconds. Pass a negative timeout to
+     * disable pings. The session can still close or be disconnected if communication over the
+     * control connection fails.
+     */
+    void pingTimeoutMillis(int millis);
+
+    /**
+     * Set the maximum idle connection time for newly established sessions (±33%). This defines
+     * the maximum amount of time a connection can remain idle before it's automatically
+     * closed. The default idle time is 60 seconds. Pass a negative amount to disable the
+     * closing of idle connections.
+     */
+    void idleConnectionMillis(int millis);
+
+    /**
      * Set the handler which is invoked for any uncaught exceptions within this environment
      * instance. The session instance passed to the handler is null when not applicable. By
      * default, uncaught exceptions are passed to the current thread's uncaught exception

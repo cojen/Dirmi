@@ -89,6 +89,8 @@ public class RestorableTest {
             } catch (DisconnectedException e) {
                 disconnected++;
                 anyFailures = true;
+            } catch (ClosedException e) {
+                throw e;
             } catch (RemoteException e) {
                 anyFailures = true;
             }
@@ -98,6 +100,8 @@ public class RestorableTest {
             } catch (DisconnectedException e) {
                 disconnected++;
                 anyFailures = true;
+            } catch (ClosedException e) {
+                throw e;
             } catch (RemoteException e) {
                 anyFailures = true;
             }
@@ -107,6 +111,8 @@ public class RestorableTest {
             } catch (DisconnectedException e) {
                 disconnected++;
                 anyFailures = true;
+            } catch (ClosedException e) {
+                throw e;
             } catch (RemoteException e) {
                 anyFailures = true;
             }
