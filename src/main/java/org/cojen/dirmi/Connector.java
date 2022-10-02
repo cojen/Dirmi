@@ -18,7 +18,10 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import javax.net.ssl.*;
+
 import org.cojen.dirmi.core.DirectConnector;
+import org.cojen.dirmi.core.SecureConnector;
 
 /**
  * Defines a function which is called whenever client-side socket connections need to be
@@ -34,6 +37,15 @@ public interface Connector {
      */
     static Connector direct() {
         return DirectConnector.THE;
+    }
+
+    /**
+     * Returns a connector that directly connects sockets over TLS/SSL.
+     *
+     * @param context can pass null to use the default
+     */
+    static Connector secure(SSLContext context) {
+        return context == null ? SecureConnector.THE : new SecureConnector(context);
     }
 
     /**

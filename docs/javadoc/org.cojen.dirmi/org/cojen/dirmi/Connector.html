@@ -129,6 +129,11 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Returns a default connector that directly connects sockets.</div>
 </div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#secure(javax.net.ssl.SSLContext)" class="member-name-link">secure</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/javax/net/ssl/SSLContext.html" title="class or interface in javax.net.ssl" class="external-link">SSLContext</a>&nbsp;context)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1">
+<div class="block">Returns a connector that directly connects sockets over TLS/SSL.</div>
+</div>
 </div>
 </div>
 </div>
@@ -148,6 +153,17 @@ loadScripts(document, 'script');</script>
 <h3>direct</h3>
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></span>&nbsp;<span class="element-name">direct</span>()</div>
 <div class="block">Returns a default connector that directly connects sockets.</div>
+</section>
+</li>
+<li>
+<section class="detail" id="secure(javax.net.ssl.SSLContext)">
+<h3>secure</h3>
+<div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></span>&nbsp;<span class="element-name">secure</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/javax/net/ssl/SSLContext.html" title="class or interface in javax.net.ssl" class="external-link">SSLContext</a>&nbsp;context)</span></div>
+<div class="block">Returns a connector that directly connects sockets over TLS/SSL.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>context</code> - can pass null to use the default</dd>
+</dl>
 </section>
 </li>
 <li>
