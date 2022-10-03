@@ -37,7 +37,7 @@ public class TimeoutTest {
 
     private Environment mEnv;
 
-    private LockedOutputStream mClientOut, mServerOut;
+    private volatile LockedOutputStream mClientOut, mServerOut;
 
     private Session<Echo> mClientSession;
     private Session<Echo> mServerSession;
@@ -152,6 +152,8 @@ public class TimeoutTest {
             setup(true);
             fail();
         } catch (ClosedException e) {
+        } finally {
+            mServerOut.unlock();
         }
     }
 
