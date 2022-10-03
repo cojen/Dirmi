@@ -1800,8 +1800,14 @@ class BufferedPipe implements Pipe {
         return (i | (i >> 16)) + 1;
     }
 
-    boolean isEmpty() {
-        return available() == 0 && mOutEnd == 0;
+    boolean tryReset() {
+        if (available() == 0 && mOutEnd == 0) {
+            mInRefLookup = null;
+            mOutRefMap = null;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override
