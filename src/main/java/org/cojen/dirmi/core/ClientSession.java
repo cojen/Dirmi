@@ -196,13 +196,13 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
             });
 
-            sendFlushRequest();
+            sendInfoRequestTerminator();
 
             typeMap = waitMap.await();
             mTypeWaitMap = null;
 
             // Flush the control pipe to send any pending C_KNOWN_TYPE commands.
-            flushControlPipeEx();
+            flushControlPipe();
         } catch (IOException | InterruptedException e) {
             close(DISCONNECTED, null);
             return false;

@@ -48,8 +48,9 @@ import org.cojen.dirmi.SessionAware;
  */
 abstract class CoreSession<R> extends Item implements Session<R> {
     // Control commands.
-    static final int C_FLUSH = 1, C_PING = 2, C_PONG = 3, C_MESSAGE = 4, C_KNOWN_TYPE = 5,
-        C_REQUEST_CONNECTION = 6, C_REQUEST_INFO = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9;
+    static final int
+        C_PING = 1, C_PONG = 2, C_MESSAGE = 3, C_KNOWN_TYPE = 4, C_REQUEST_CONNECTION = 5,
+        C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9;
 
     static final int CLOSED = 1, DISCONNECTED = 2, PING_FAILURE = 4, CONTROL_FAILURE = 8;
 
@@ -540,9 +541,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 while (true) {
                     int command = pipe.readUnsignedByte();
                     switch (command) {
-                    case C_FLUSH:
-                        mEngine.executeTask(() -> flushControlPipe(pipe));
-                        break;
                     case C_PING:
                         mEngine.execute(pongTask);
                         break;
@@ -563,6 +561,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     case C_REQUEST_INFO:
                         var typeName = (String) pipe.readObject();
                         mEngine.executeTask(() -> sendInfoResponse(pipe, typeName));
+                        break;
+                    case C_REQUEST_INFO_TERM:
+                        mEngine.executeTask(() -> sendInfoResponseTerminator(pipe));
                         break;
                     case C_INFO_FOUND:
                         long typeId = pipe.readLong();
@@ -619,23 +620,23 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    void sendFlushRequest() throws IOException {
-        mControlLock.lock();
-        try {
-            CorePipe pipe = controlPipe();
-            pipe.write(C_FLUSH);
-            pipe.flush();
-        } finally {
-            mControlLock.unlock();
-        }
-    }
-
     void sendInfoRequest(Class<?> type) throws IOException {
         mControlLock.lock();
         try {
             CorePipe pipe = controlPipe();
             pipe.write(C_REQUEST_INFO);
             pipe.writeObject(type.getName());
+        } finally {
+            mControlLock.unlock();
+        }
+    }
+
+    void sendInfoRequestTerminator() throws IOException {
+        mControlLock.lock();
+        try {
+            CorePipe pipe = controlPipe();
+            pipe.write(C_REQUEST_INFO_TERM);
+            pipe.flush();
         } finally {
             mControlLock.unlock();
         }
@@ -680,6 +681,20 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
+    private void sendInfoResponseTerminator(CorePipe controlPipe) {
+        mControlLock.lock();
+        try {
+            // Send any object down the pipe to force the input side to disable reference mode.
+            controlPipe.write(C_MESSAGE);
+            controlPipe.writeObject((Object) null);
+            controlPipe.flush();
+        } catch (IOException e) {
+            close(CONTROL_FAILURE, controlPipe);
+        } finally {
+            mControlLock.unlock();
+        }
+    }
+
     private void infoFound(CorePipe controlPipe, long typeId, RemoteInfo info, boolean flush) {
         WaitMap<String, RemoteInfo> waitMap = mTypeWaitMap;
 
@@ -702,36 +717,22 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         mControlLock.lock();
         try {
-            try {
-                controlPipe.write(C_KNOWN_TYPE);
-                controlPipe.writeLong(typeId);
-                if (flush) {
-                    controlPipe.flush();
-                }
-            } catch (IOException e) {
-                close(CONTROL_FAILURE, controlPipe);
+            controlPipe.write(C_KNOWN_TYPE);
+            controlPipe.writeLong(typeId);
+            if (flush) {
+                controlPipe.flush();
             }
+        } catch (IOException e) {
+            close(CONTROL_FAILURE, controlPipe);
         } finally {
             mControlLock.unlock();
         }
     }
 
-    private void flushControlPipe(CorePipe controlPipe) {
-        try {
-            flushControlPipeEx(controlPipe);
-        } catch (IOException e) {
-            close(CONTROL_FAILURE, controlPipe);
-        }
-    }
-
-    void flushControlPipeEx() throws IOException {
-        flushControlPipeEx(controlPipe());
-    }
-
-    private void flushControlPipeEx(CorePipe controlPipe) throws IOException {
+    void flushControlPipe() throws IOException {
         mControlLock.lock();
         try {
-            controlPipe.flush();
+            controlPipe().flush();
         } finally {
             mControlLock.unlock();
         }
@@ -782,7 +783,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
             cPipeClockHandle.setVolatile(pipe, 1);
 
-            try{
+            try {
                 session.sendByte(C_PING);
             } catch (IOException e) {
                 session.close(CONTROL_FAILURE, pipe);

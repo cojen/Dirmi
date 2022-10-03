@@ -19,7 +19,7 @@ package org.cojen.dirmi.core;
 import java.util.Arrays;
 
 /**
- * A ReferenceMap which also supports finding objects by identifier. Not thread-safe.
+ * A companion to ReferenceMap which supports finding objects by identifier. Not thread-safe.
  *
  * @author Brian S O'Neill
  */
