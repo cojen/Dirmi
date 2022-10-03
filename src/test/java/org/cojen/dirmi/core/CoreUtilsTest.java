@@ -89,7 +89,7 @@ public class CoreUtilsTest {
         e = remoteException(RemoteException.class, new EOFException());
         assertTrue(e instanceof ClosedException);
         assertNull(e.getCause());
-        assertEquals("Pipe input is closed", e.getMessage());
+        assertEquals("Pipe is closed by remote endpoint", e.getMessage());
 
         Exception cause = new RemoteException();
         e = remoteException(IOException.class, cause);

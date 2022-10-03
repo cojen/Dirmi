@@ -208,7 +208,7 @@ public final class CoreUtils {
             cause = new RemoteException();
         } else if (cause instanceof EOFException) {
             // EOF is not meaningful in this context, so replace it.
-            cause = new ClosedException("Pipe input is closed");
+            cause = new ClosedException("Pipe is closed by remote endpoint");
         }
 
         if (remoteFailureEx.isInstance(cause)) {
