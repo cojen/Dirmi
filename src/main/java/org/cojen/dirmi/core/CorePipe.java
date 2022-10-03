@@ -122,8 +122,18 @@ final class CorePipe extends BufferedPipe {
 
     @Override
     public void recycle() throws IOException {
-        CoreSession session;
-        if (tryReset() && (session = mSession) != null) {
+        try {
+            tryRecycle();
+        } catch (IllegalStateException e) {
+            try {
+                close();
+            } catch (Exception e2) {
+                e.addSuppressed(e);
+            }
+        }
+
+        CoreSession session = mSession;
+        if (session != null) {
             session.recycleConnection(this);
         } else {
             close();

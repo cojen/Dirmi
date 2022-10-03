@@ -1800,14 +1800,16 @@ class BufferedPipe implements Pipe {
         return (i | (i >> 16)) + 1;
     }
 
-    boolean tryReset() {
-        if (available() == 0 && mOutEnd == 0) {
-            mInRefLookup = null;
-            mOutRefMap = null;
-            return true;
-        } else {
-            return false;
+    void tryRecycle() {
+        // Not a perfect detection technique, but it should help identify bugs.
+        if (available() != 0) {
+            throw new IllegalStateException("Pipe has pending input");
         }
+        if (mOutEnd != 0) {
+            throw new IllegalStateException("Pipe has unflushed output");
+        }
+        mInRefLookup = null;
+        mOutRefMap = null;
     }
 
     @Override

@@ -125,6 +125,8 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     /**
      * Attempt to recycle the connection instead of closing it. The caller must ensure that the
      * pipe has no pending input or unflushed output.
+     *
+     * @throws IllegalStateException if it's detected that the pipe isn't in a recyclable state
      */
     void recycle() throws IOException;
 
