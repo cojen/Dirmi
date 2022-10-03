@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 

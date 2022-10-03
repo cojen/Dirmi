@@ -1378,8 +1378,7 @@ class BufferedPipe implements Pipe {
                 int chunk = (int) (avail / 3);
                 encodeUTF(v, from, from += chunk);
                 maxLen -= chunk * 3;
-                int newEnd = mOutEnd;
-                end = newEnd;
+                end = mOutEnd;
                 avail = buf.length - end;
             }
         }

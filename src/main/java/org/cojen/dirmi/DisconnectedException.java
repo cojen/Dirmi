@@ -17,7 +17,7 @@
 package org.cojen.dirmi;
 
 /**
- * Exception which indicates that a session is disconnected, but a reconnect is in progess.
+ * Exception which indicates that a session is disconnected, but a reconnect is in progress.
  *
  * @author Brian S O'Neill
  */

@@ -23,7 +23,6 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.UndeclaredThrowableException;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.cojen.maker.AnnotationMaker;

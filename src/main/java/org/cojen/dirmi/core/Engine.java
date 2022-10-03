@@ -417,7 +417,7 @@ public final class Engine implements Environment {
     /**
      * Start a reconnect task. When reconnect succeeds, the given callback receives the
      * ClientSession instance, which isn't registered and no tasks have started. When a
-     * reconnect attempt fails, the callback is given null and it can return false to stop the
+     * reconnect attempt fails, the callback is given null, and it can return false to stop the
      * task. If reconnect cannot succeed, the callback is given an exception and no further
      * attempts are made.
      *

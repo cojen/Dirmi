@@ -95,9 +95,8 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
      * object graphs, and to potentially reduce the overall encoding size. This mode has higher
      * memory overhead because each object flowing through the pipe must be remembered.
      *
-     * <p>This method call is reentrant and it counts the number of times it was invoked. A
-     * matching number of calls to {@link #disableReferences} is required to fully disable the
-     * mode.
+     * <p>This method counts the number of times it's invoked, and a matching number of calls
+     * to {@link #disableReferences} is required to fully disable the mode.
      */
     void enableReferences();
 

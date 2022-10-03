@@ -34,7 +34,6 @@ import java.util.function.BiConsumer;
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Variable;
 
-import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
