@@ -509,6 +509,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     final void controlPipe(CorePipe pipe) {
         conLockAcquire();
+        pipe.mSession = this;
         cControlPipeHandle.setRelease(this, pipe);
         conLockRelease();
     }
