@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.EOFException;
 import java.io.IOException;
 
 import java.net.SocketException;
@@ -85,11 +84,6 @@ public class CoreUtilsTest {
         e = remoteException(java.rmi.RemoteException.class, null);
         assertTrue(e instanceof java.rmi.RemoteException);
         assertTrue(e.getCause() instanceof RemoteException);
-
-        e = remoteException(RemoteException.class, new EOFException());
-        assertTrue(e instanceof ClosedException);
-        assertNull(e.getCause());
-        assertEquals("Pipe is closed by remote endpoint", e.getMessage());
 
         Exception cause = new RemoteException();
         e = remoteException(IOException.class, cause);

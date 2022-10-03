@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi;
 
-import java.io.EOFException;
 import java.io.IOException;
 
 import java.net.ServerSocket;
@@ -169,7 +168,7 @@ public class RemotePipeTest {
         try {
             p1.readInt();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
 
         handler.await();

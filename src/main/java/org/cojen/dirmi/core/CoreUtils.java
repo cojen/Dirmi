@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.Closeable;
-import java.io.EOFException;
 import java.io.IOException;
 
 import java.net.Socket;
@@ -206,9 +205,6 @@ public final class CoreUtils {
     static <T extends Throwable> T remoteException(Class<T> remoteFailureEx, Throwable cause) {
         if (cause == null) {
             cause = new RemoteException();
-        } else if (cause instanceof EOFException) {
-            // EOF is not meaningful in this context, so replace it.
-            cause = new ClosedException("Pipe is closed by remote endpoint");
         }
 
         if (remoteFailureEx.isInstance(cause)) {

@@ -18,7 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
 import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
@@ -43,6 +42,8 @@ import java.util.Set;
 
 import org.junit.*;
 import static org.junit.Assert.*;
+
+import org.cojen.dirmi.ClosedException;
 
 import static org.cojen.dirmi.core.TypeCodes.*;
 
@@ -173,13 +174,13 @@ public class PipeTest {
         try {
             in.readUnsignedByte();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
 
         try {
             in.readUnsignedShort();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -255,7 +256,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -300,7 +301,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -335,7 +336,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -421,7 +422,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -544,7 +545,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -616,7 +617,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -648,7 +649,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 
@@ -730,7 +731,7 @@ public class PipeTest {
         try {
             pipe.readObject();
             fail();
-        } catch (EOFException e) {
+        } catch (ClosedException e) {
         }
     }
 

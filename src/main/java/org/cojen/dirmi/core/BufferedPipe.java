@@ -21,7 +21,6 @@ import java.lang.invoke.VarHandle;
 
 import java.lang.reflect.Array;
 
-import java.io.EOFException;
 import java.io.InputStream;
 import java.io.InvalidObjectException;
 import java.io.IOException;
@@ -47,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;
 
@@ -214,7 +214,7 @@ class BufferedPipe implements Pipe {
                 if (len == 0) {
                     break;
                 }
-                throw inputException(new EOFException());
+                throw inputException(noMoreInput());
             }
             if ((len -= amt) <= 0) {
                 break;
@@ -242,7 +242,7 @@ class BufferedPipe implements Pipe {
     public final int readUnsignedByte() throws IOException {
         int b = read();
         if (b < 0) {
-            throw inputException(new EOFException());
+            throw inputException(noMoreInput());
         }
         return b;
     }
@@ -921,7 +921,7 @@ class BufferedPipe implements Pipe {
             while (true) {
                 avail = doRead(buf, end, tail);
                 if (avail <= 0) {
-                    throw new EOFException();
+                    throw noMoreInput();
                 }
                 end += avail;
                 mInEnd = end;
@@ -1846,6 +1846,11 @@ class BufferedPipe implements Pipe {
     public String toString() {
         return "Pipe@" + Integer.toHexString(System.identityHashCode(this)) +
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
+    }
+
+    private static ClosedException noMoreInput() {
+        // Throw an exception which is more meaningful than EOFException.
+        return new ClosedException("Pipe is closed by remote endpoint");
     }
 
     /**
