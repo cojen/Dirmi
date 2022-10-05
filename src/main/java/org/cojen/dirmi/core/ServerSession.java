@@ -46,8 +46,8 @@ final class ServerSession<R> extends CoreSession<R> {
     // Queue of threads waiting for a reverse connection to be established.
     private ConnectWaiter mFirstWaiter, mLastWaiter;
 
-    ServerSession(Engine engine, R root, CorePipe pipe) throws RemoteException {
-        super(engine);
+    ServerSession(Engine engine, Settings settings, R root, CorePipe pipe) throws RemoteException {
+        super(engine, settings);
 
         // Store the pipe before calling skeletonFor, in case the root is SessionAware. The
         // address fields should be available to it.

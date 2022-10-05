@@ -66,9 +66,9 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 public final class Engine implements Environment {
-    private volatile int mReconnectDelayMillis, mPingTimeoutMillis, mIdleConnectionMillis;
-
     private final Lock mMainLock;
+
+    private volatile Settings mSettings;
 
     private final Executor mExecutor;
     private final boolean mOwnsExecutor;
@@ -105,11 +105,9 @@ public final class Engine implements Environment {
     }
 
     public Engine(Executor executor) {
-        mReconnectDelayMillis =  1_000;
-        mPingTimeoutMillis    =  2_000;
-        mIdleConnectionMillis = 60_000;
-
         mMainLock = new ReentrantLock();
+
+        mSettings = new Settings();
 
         if (executor == null) {
             mExecutor = Executors.newCachedThreadPool(TFactory.THE);
@@ -209,7 +207,8 @@ public final class Engine implements Environment {
 
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
 
-        int timeoutMillis = mPingTimeoutMillis;
+        var settings = mSettings;
+        int timeoutMillis = settings.pingTimeoutMillis;
         CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
         long clientSessionId = 0;
@@ -267,7 +266,7 @@ public final class Engine implements Environment {
                 throw new RemoteException("Mismatched root object type");
             }
 
-            session = new ServerSession<Object>(this, root, pipe);
+            session = new ServerSession<Object>(this, settings, root, pipe);
         } catch (Throwable e) {
             if (timeoutTask != null) {
                 timeoutTask.cancel();
@@ -313,7 +312,7 @@ public final class Engine implements Environment {
             }
 
             session.controlPipe(pipe);
-            startSessionTasks(session);
+            session.startTasks();
 
             return session;
         } catch (Throwable e) {
@@ -330,24 +329,24 @@ public final class Engine implements Environment {
         throws IOException
     {
         checkClosed();
-        return doConnect(type, binaryName(name), addr, true);
+        return doConnect(mSettings, true, type, binaryName(name), addr);
     }
 
     /**
      * @return register when false, don't register the new session or start tasks
      */
-    <R> ClientSession<R> doConnect(Class<R> type, byte[] bname, SocketAddress addr,
-                                   boolean register)
+    <R> ClientSession<R> doConnect(Settings settings, boolean register,
+                                   Class<R> type, byte[] bname, SocketAddress addr)
         throws IOException
     {
         checkClosed();
 
         RemoteInfo info = RemoteInfo.examine(type);
 
-        var session = new ClientSession<R>(this, null, addr, mReconnectDelayMillis);
+        var session = new ClientSession<R>(this, settings, null, addr);
         CorePipe pipe = session.connect();
 
-        int timeoutMillis = mPingTimeoutMillis;
+        int timeoutMillis = settings.pingTimeoutMillis;
         CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
         try {
@@ -388,7 +387,7 @@ public final class Engine implements Environment {
             session.controlPipe(pipe);
 
             if (register) {
-                startSessionTasks(session);
+                session.startTasks();
 
                 mMainLock.lock();
                 try {
@@ -421,11 +420,10 @@ public final class Engine implements Environment {
      * task. If reconnect cannot succeed, the callback is given an exception and no further
      * attempts are made.
      *
-     * @param reconnectDelayMillis delay between reconnect attempts
      * @param callback receives a ClientSession instance, null, or a terminal exception
      */
-    void reconnect(Class<?> type, byte[] bname, SocketAddress addr,
-                   long reconnectDelayMillis, Predicate<Object> callback)
+    void reconnect(Settings settings, Class<?> type, byte[] bname, SocketAddress addr,
+                   Predicate<Object> callback)
     {
         var task = new Scheduled() {
             private final Random mRnd = new Random();
@@ -435,7 +433,7 @@ public final class Engine implements Environment {
                 ClientSession<?> session = null;
                 
                 try {
-                    session = doConnect(type, bname, addr, false);
+                    session = doConnect(settings, false, type, bname, addr);
                 } catch (Throwable e) {
                     try {
                         checkClosed();
@@ -468,6 +466,7 @@ public final class Engine implements Environment {
 
             void schedule() throws IOException {
                 // Adjust delay by ±10%.
+                int reconnectDelayMillis = settings.reconnectDelayMillis;
                 long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
                 jitter -= reconnectDelayMillis / 10;
                 long delay = reconnectDelayMillis + jitter;
@@ -502,17 +501,32 @@ public final class Engine implements Environment {
 
     @Override
     public void reconnectDelayMillis(int millis) {
-        mReconnectDelayMillis = millis;
+        mMainLock.lock();
+        try {
+            mSettings = mSettings.withReconnectDelayMillis(millis);
+        } finally {
+            mMainLock.unlock();
+        }
     }
 
     @Override
     public void pingTimeoutMillis(int millis) {
-        mPingTimeoutMillis = millis;
+        mMainLock.lock();
+        try {
+            mSettings = mSettings.withPingTimeoutMillis(millis);
+        } finally {
+            mMainLock.unlock();
+        }
     }
 
     @Override
     public void idleConnectionMillis(int millis) {
-        mIdleConnectionMillis = millis;
+        mMainLock.lock();
+        try {
+            mSettings = mSettings.withIdleConnectionMillis(millis);
+        } finally {
+            mMainLock.unlock();
+        }
     }
 
     @Override
@@ -595,10 +609,6 @@ public final class Engine implements Environment {
         if (sessions != null) {
             sessions.changeIdentity(session, newSessionId);
         }
-    }
-
-    void startSessionTasks(CoreSession session) throws IOException {
-        session.startTasks(mPingTimeoutMillis, mIdleConnectionMillis);
     }
 
     @Override

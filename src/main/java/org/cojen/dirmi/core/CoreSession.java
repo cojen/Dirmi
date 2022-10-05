@@ -76,6 +76,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final Engine mEngine;
+    final Settings mSettings;
     final ItemMap<Stub> mStubs;
     final ItemMap<StubFactory> mStubFactories;
     final ConcurrentHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
@@ -104,9 +105,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // Used when reconnecting.
     volatile WaitMap<String, RemoteInfo> mTypeWaitMap;
 
-    CoreSession(Engine engine) {
+    CoreSession(Engine engine, Settings settings) {
         super(IdGenerator.next());
         mEngine = engine;
+        mSettings = settings;
         mStubs = new ItemMap<Stub>();
         mStubFactories = new ItemMap<StubFactory>();
         mStubFactoriesByClass = new ConcurrentHashMap<>();
@@ -517,12 +519,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     /**
      * Start a tasks to read and process commands over the control pipe, to close the session
-     * if ping requests don't get responses, and to close idle available connections.  A call
+     * if ping requests don't get responses, and to close idle available connections. A call
      * to controlPipe(CorePipe) must be made before calling startTasks.
-     *
-     * @param idleMillis average age of idle connection before being closed
      */
-    void startTasks(long pingTimeoutMillis, long idleMillis) throws IOException {
+    void startTasks() throws IOException {
         CorePipe pipe = controlPipe();
 
         var pongTask = (Runnable) () -> {
@@ -589,11 +589,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             }
         });
 
+        int pingTimeoutMillis = mSettings.pingTimeoutMillis;
         if (pingTimeoutMillis >= 0) {
             long pingDelayNanos = taskDelayNanos(pingTimeoutMillis);
             mEngine.scheduleNanos(new Pinger(this, pingDelayNanos), pingDelayNanos);
         }
 
+        int idleMillis = mSettings.idleConnectionMillis;
         if (idleMillis >= 0) {
             long idleDelayNanos = taskDelayNanos(idleMillis);
             mEngine.scheduleNanos(new Closer(this, idleDelayNanos), idleDelayNanos);

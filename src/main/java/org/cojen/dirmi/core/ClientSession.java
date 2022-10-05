@@ -48,8 +48,6 @@ final class ClientSession<R> extends CoreSession<R> {
         }
     }
 
-    private final int mReconnectDelayMillis;
-
     private long mServerSessionId;
     private Class<R> mRootType;
     private byte[] mRootName;
@@ -57,12 +55,10 @@ final class ClientSession<R> extends CoreSession<R> {
     private RemoteInfo mServerRootInfo;
     private R mRoot;
 
-    ClientSession(Engine engine, SocketAddress localAddr, SocketAddress remoteAttr,
-                  int reconnectDelayMillis)
+    ClientSession(Engine engine, Settings settings,
+                  SocketAddress localAddr, SocketAddress remoteAttr)
     {
-        super(engine);
-
-        mReconnectDelayMillis = reconnectDelayMillis;
+        super(engine, settings);
 
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
@@ -107,7 +103,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     void close(int reason, CorePipe controlPipe) {
-        if (mReconnectDelayMillis < 0) {
+        if (mSettings.reconnectDelayMillis < 0) {
             reason |= CLOSED;
         }
 
@@ -120,8 +116,7 @@ final class ClientSession<R> extends CoreSession<R> {
         reason |= DISCONNECTED;
         super.close(reason, controlPipe);
 
-        mEngine.reconnect(mRootType, mRootName, remoteAddress(), mReconnectDelayMillis,
-                          this::reconnectAttempt);
+        mEngine.reconnect(mSettings, mRootType, mRootName, remoteAddress(), this::reconnectAttempt);
     }
 
     @SuppressWarnings("unchecked")
@@ -171,7 +166,7 @@ final class ClientSession<R> extends CoreSession<R> {
         Map<String, RemoteInfo> typeMap;
 
         try {
-            mEngine.startSessionTasks(this);
+            startTasks();
 
             long newRootTypeId = newSession.mRootTypeId;
             RemoteInfo newServerRootInfo = newSession.mServerRootInfo;
@@ -258,7 +253,8 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
-                          InputStream in, OutputStream out) throws IOException
+                          InputStream in, OutputStream out)
+        throws IOException
     {
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_CLIENT);
 
@@ -279,12 +275,12 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void startTasks(long pingTimeoutMillis, long ageMillis) throws IOException {
+    void startTasks() throws IOException {
         // These fields are only needed by a reconnect.
         mRootTypeId = 0;
         mServerRootInfo = null;
 
-        super.startTasks(pingTimeoutMillis, ageMillis);
+        super.startTasks();
     }
 
     @Override
