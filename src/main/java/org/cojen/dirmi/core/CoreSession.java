@@ -90,6 +90,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final Lock mControlLock;
     private CorePipe mControlPipe;
 
+    TypeCodeMap mTypeCodeMap;
+
     private volatile int mConLock;
 
     // Linked list of connections. Connections which range from first to before avail are
@@ -119,6 +121,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mSkeletonSupport = new CoreSkeletonSupport(this);
 
         mControlLock = new ReentrantLock();
+    }
+
+    /**
+     * Must call this method before a new session is ready.
+     */
+    final void initTypeCodeMap(TypeCodeMap tcm) {
+        mTypeCodeMap = tcm;
+        VarHandle.storeStoreFence();
     }
 
     /**

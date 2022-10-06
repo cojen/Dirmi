@@ -34,6 +34,8 @@ import java.nio.channels.SocketChannel;
 
 import java.util.Arrays;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -59,6 +61,7 @@ import org.cojen.dirmi.Environment;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
+import org.cojen.dirmi.Serializer;
 
 /**
  * 
@@ -215,6 +218,9 @@ public final class Engine implements Environment {
         ServerSession session;
         RemoteInfo serverInfo;
 
+        int firstCustomTypeCode;
+        LinkedHashSet<String> clientCustomTypes = null;
+
         try {
             if (timeoutTask != null) {
                 scheduleMillis(timeoutTask, timeoutMillis);
@@ -251,6 +257,12 @@ public final class Engine implements Environment {
 
             Object name = pipe.readObject();
             RemoteInfo clientInfo = RemoteInfo.readFrom(pipe);
+
+            firstCustomTypeCode = pipe.readUnsignedByte();
+            if (firstCustomTypeCode != 0) {
+                clientCustomTypes = Settings.readSerializerTypes(pipe);
+            }
+
             Object metadata = pipe.readObject();
 
             var exports = mExports;
@@ -304,6 +316,7 @@ public final class Engine implements Environment {
 
             session.writeHeader(pipe, clientSessionId);
             serverInfo.writeTo(pipe);
+            LinkedHashSet<String> serverCustomTypes = settings.writeSerializerTypes(pipe);
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
@@ -311,6 +324,10 @@ public final class Engine implements Environment {
                 throw new RemoteException("Timed out");
             }
 
+            TypeCodeMap tcm = settings.mergeSerializerTypes
+                (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
+
+            session.initTypeCodeMap(tcm);
             session.controlPipe(pipe);
             session.startTasks();
 
@@ -349,6 +366,10 @@ public final class Engine implements Environment {
         int timeoutMillis = settings.pingTimeoutMillis;
         CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
+        int firstCustomTypeCode;
+        LinkedHashSet<String> clientCustomTypes;
+        LinkedHashSet<String> serverCustomTypes = null;
+
         try {
             if (timeoutTask != null) {
                 scheduleMillis(timeoutTask, timeoutMillis);
@@ -357,6 +378,7 @@ public final class Engine implements Environment {
             session.writeHeader(pipe, 0); // server session of zero creates a new session
             pipe.write(bname); // root object name
             info.writeTo(pipe);  // root object type
+            clientCustomTypes = settings.writeSerializerTypes(pipe);
             pipe.writeObject((Object) null); // optional metadata
             pipe.flush();
 
@@ -376,6 +398,12 @@ public final class Engine implements Environment {
             long rootId = pipe.readLong();
             long rootTypeId = pipe.readLong();
             RemoteInfo serverInfo = RemoteInfo.readFrom(pipe);
+
+            firstCustomTypeCode = pipe.readUnsignedByte();
+            if (firstCustomTypeCode != 0) {
+                serverCustomTypes = Settings.readSerializerTypes(pipe);
+            }
+
             Object metadata = pipe.readObject();
 
             if (timeoutTask != null && !timeoutTask.cancel()) {
@@ -384,6 +412,10 @@ public final class Engine implements Environment {
 
             session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
+            TypeCodeMap tcm = settings.mergeSerializerTypes
+                (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
+
+            session.initTypeCodeMap(tcm);
             session.controlPipe(pipe);
 
             if (register) {
@@ -494,6 +526,32 @@ public final class Engine implements Environment {
             Connector old = checkClosed();
             cConnectorHandle.setRelease(this, c);
             return old;
+        } finally {
+            mMainLock.unlock();
+        }
+    }
+
+    @Override
+    public void customSerializers(Map<Class<?>, Serializer<?>> serializers) {
+        LinkedHashMap<Class<?>, Serializer<?>> copy;
+
+        if (serializers == null || serializers.isEmpty()) {
+            copy = null;
+        } else {
+            copy = new LinkedHashMap<>(serializers.size());
+
+            for (var e : serializers.entrySet()) {
+                Class<?> clazz = e.getKey();
+                Serializer<?> serializer = e.getValue();
+                Objects.requireNonNull(clazz);
+                Objects.requireNonNull(serializer);
+                copy.put(clazz, serializer);
+            }
+        }
+
+        mMainLock.lock();
+        try {
+            mSettings = mSettings.withSerializers(copy);
         } finally {
             mMainLock.unlock();
         }

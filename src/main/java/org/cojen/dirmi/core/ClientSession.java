@@ -141,6 +141,8 @@ final class ClientSession<R> extends CoreSession<R> {
 
         var newSession = (ClientSession<R>) result;
 
+        newSession.initTypeCodeMap(newSession.mTypeCodeMap);
+
         moveConnectionsFrom(newSession);
 
         mEngine.changeIdentity(this, newSession.id);
@@ -257,6 +259,7 @@ final class ClientSession<R> extends CoreSession<R> {
         throws IOException
     {
         var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_CLIENT);
+        pipe.initTypeCodeMap(mTypeCodeMap);
 
         long serverSessionId = (long) cServerSessionIdHandle.getAcquire(this);
 

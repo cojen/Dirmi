@@ -664,8 +664,11 @@ public class PipeTest {
             T_THROWABLE, T_STACK_TRACE,
         };
 
+        TypeCodeMap tcm = TypeCodeMap.STANDARD;
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), OutputStream.nullOutputStream());
+
         for (int typeCode : typeCodes) {
-            assertEquals(typeCode, TypeCodeMap.THE.find(TypeCodeMap.typeClass(typeCode)));
+            assertEquals(typeCode, tcm.writeTypeCode(pipe, tcm.typeClass(typeCode)));
         }
     }
 
@@ -688,6 +691,49 @@ public class PipeTest {
         var list2 = (List) pipe.readObject();
         assertEquals(1, list2.size());
         assertTrue(list2.get(0) == list2);
+    }
+
+    @Test
+    public void voidObject() throws Exception {
+        var bout = new ByteArrayOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+
+        Object obj = new Object();
+        pipe.writeObject(Void.TYPE);
+        pipe.writeObject(Void.TYPE);
+
+        pipe.flush();
+        byte[] bytes = bout.toByteArray();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        assertEquals(Void.TYPE, pipe.readObject());
+        assertEquals(Void.TYPE, pipe.readObject());
+    }
+
+    @Test
+    public void plainObject() throws Exception {
+        var bout = new ByteArrayOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+
+        pipe.enableReferences();
+
+        Object obj = new Object();
+        pipe.writeObject(obj);
+        pipe.writeObject(obj);
+
+        pipe.disableReferences();
+
+        pipe.flush();
+        byte[] bytes = bout.toByteArray();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        var obj1 = pipe.readObject();
+        var obj2 = pipe.readObject();
+
+        assertNotNull(obj1);
+        assertSame(obj1, obj2);
     }
 
     @Test

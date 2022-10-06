@@ -663,38 +663,6 @@ public class RemoteInfoTest {
         }
     }
 
-    public static interface R34 extends Remote {
-        Collection foo(Object a, Number b) throws RemoteException;
-    }
-
-    public static interface R35 extends Remote {
-        HashMap foo() throws RemoteException;
-    }
-
-    public static interface R36 extends Remote {
-        void foo(Iterator it) throws RemoteException;
-    }
-
-    @Test
-    public void specialTypes() {
-        // Should be fine, although it might still fail when actually used.
-        RemoteInfo.examine(R34.class);
-
-        try {
-            RemoteInfo.examine(R35.class);
-            fail();
-        } catch (IllegalArgumentException e) {
-            confirm(e, "Remote method return type isn't supported");
-        }
-
-        try {
-            RemoteInfo.examine(R36.class);
-            fail();
-        } catch (IllegalArgumentException e) {
-            confirm(e, "Remote method parameter type isn't supported");
-        }
-    }
-
     public static class C5 extends Exception {
         public C5(String msg) {
         }

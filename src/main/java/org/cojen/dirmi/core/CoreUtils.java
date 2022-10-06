@@ -190,6 +190,16 @@ public final class CoreUtils {
         return false;
     }
 
+    static int roundUpPower2(int i) {
+        // Hacker's Delight figure 3-3.
+        i--;
+        i |= i >> 1;
+        i |= i >> 2;
+        i |= i >> 4;
+        i |= i >> 8;
+        return (i | (i >> 16)) + 1;
+    }
+
     public static void closeQuietly(Closeable c) {
         try {
             if (c != null) {

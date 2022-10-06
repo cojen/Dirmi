@@ -95,6 +95,8 @@ class BufferedPipe implements Pipe {
     private In mIn;
     private Out mOut;
 
+    private TypeCodeMap mTypeCodeMap = TypeCodeMap.STANDARD;
+
     BufferedPipe(InputStream in, OutputStream out) {
         this(null, null, in, out);
     }
@@ -111,6 +113,11 @@ class BufferedPipe implements Pipe {
         // Initial buffer sizes must be a power of 2.
         mInBuffer = new byte[32];
         mOutBuffer = new byte[32];
+    }
+
+    void initTypeCodeMap(TypeCodeMap tcm) {
+        mTypeCodeMap = tcm;
+        VarHandle.storeStoreFence();
     }
 
     @Override
@@ -408,7 +415,7 @@ class BufferedPipe implements Pipe {
     public final Object readObject() throws IOException {
         int typeCode;
 
-        // Simple objects cannot reference other objects read from the pipe.
+        // Simple objects cannot reference other objects.
         Object simple;
 
         loop: while (true) {
@@ -418,7 +425,22 @@ class BufferedPipe implements Pipe {
             case T_REF_MODE_OFF:    mInRefLookup = null; continue;
             case T_REFERENCE:       return readReference(readUnsignedByte());
             case T_REFERENCE_L:     return readReference(readInt());
+
+            case T_REMOTE:          simple = objectFor(readLong()); break loop;
+            case T_REMOTE_T:        simple = objectFor(readLong(), readLong()); break loop;
+            case T_REMOTE_TI: {
+                long id = readLong();
+                long typeId = readLong();
+                RemoteInfo info = RemoteInfo.readFrom(this);
+                simple = objectFor(id, typeId, info);
+                break loop;
+            }
+
+            case T_DISPOSED: disposed(readLong(), readObject()); continue;
+
             case T_NULL:            return null;
+            case T_VOID:            simple = Void.TYPE; break loop;
+            case T_OBJECT:          simple = new Object(); break loop;
             case T_TRUE:            simple = Boolean.TRUE; break loop;
             case T_FALSE:           simple = Boolean.FALSE; break loop;
             case T_CHAR:            simple = readChar(); break loop;
@@ -459,20 +481,10 @@ class BufferedPipe implements Pipe {
             case T_BIG_DECIMAL:     simple = readBigDecimal(); break loop;
             case T_THROWABLE:       return readThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
+            case T_CUSTOM_2:        return mTypeCodeMap.readCustom(this, readUnsignedShort());
+            case T_CUSTOM_4:        return mTypeCodeMap.readCustom(this, readInt());
 
-            case T_REMOTE:          simple = objectFor(readLong()); break loop;
-            case T_REMOTE_T:        simple = objectFor(readLong(), readLong()); break loop;
-            case T_REMOTE_TI: {
-                long id = readLong();
-                long typeId = readLong();
-                RemoteInfo info = RemoteInfo.readFrom(this);
-                simple = objectFor(id, typeId, info);
-                break loop;
-            }
-
-            case T_DISPOSED: disposed(readLong(), readObject()); continue;
-
-            default: throw inputException(new InvalidObjectException("Unknown type: " + typeCode));
+            default:                return mTypeCodeMap.readCustom(this, typeCode);
             }
         }
 
@@ -519,7 +531,7 @@ class BufferedPipe implements Pipe {
     /**
      * @return -1 if references aren't enabled
      */
-    private int reserveReference() {
+    int reserveReference() {
         ReferenceLookup refLookup = mInRefLookup;
         return refLookup == null ? - 1: refLookup.reserve();
     }
@@ -527,7 +539,7 @@ class BufferedPipe implements Pipe {
     /**
      * Does nothing if identifier is -1.
      */
-    private void stashReference(int identifier, Object obj) {
+    void stashReference(int identifier, Object obj) {
         if (identifier != -1) {
             mInRefLookup.stash(identifier, obj);
         }
@@ -708,8 +720,11 @@ class BufferedPipe implements Pipe {
     private Object[] readObjectArray(int length) throws IOException {
         Object[] array;
 
-        int componentTypeCode = read();
+        int componentTypeCode = readTypeCode();
+
         switch (componentTypeCode) {
+        case T_REMOTE: case T_REMOTE_T: array = new Item[length]; break;
+        case T_OBJECT: array = new Object[length]; break;
         case T_TRUE: case T_FALSE: array = new Boolean[length]; break;
         case T_CHAR: array = new Character[length]; break;
         case T_FLOAT: array = new Float[length]; break;
@@ -729,9 +744,9 @@ class BufferedPipe implements Pipe {
         case T_LONG_ARRAY: case T_LONG_ARRAY_L: array = new long[length][]; break;
 
         case T_OBJECT_ARRAY: case T_OBJECT_ARRAY_L: {
-            componentTypeCode = read();
+            componentTypeCode = readTypeCode();
             int extraDims = read();
-            Class<?> arrayType = TypeCodeMap.typeClass(componentTypeCode);
+            Class<?> arrayType = mTypeCodeMap.typeClass(componentTypeCode);
             while (--extraDims >= 0) {
                 arrayType = arrayType.arrayType();
             }
@@ -746,9 +761,11 @@ class BufferedPipe implements Pipe {
         case T_BIG_DECIMAL: array = new BigDecimal[length]; break;
         case T_THROWABLE: array = new Throwable[length]; break;
         case T_STACK_TRACE: array = new StackTraceElement[length]; break;
-        case T_REMOTE: case T_REMOTE_T: array = new Item[length]; break;
 
-        default: array = new Object[length]; break;
+        default:
+            Class<?> arrayType = mTypeCodeMap.typeClass(componentTypeCode);
+            array = (Object[]) Array.newInstance(arrayType, length);
+            break;
         }
 
         stashReference(array);
@@ -764,6 +781,16 @@ class BufferedPipe implements Pipe {
         }
 
         return array;
+    }
+
+    private int readTypeCode() throws IOException {
+        int typeCode = readUnsignedByte();
+        if (typeCode == T_CUSTOM_2) {
+            typeCode = readUnsignedShort();
+        } else if (typeCode == T_CUSTOM_4) {
+            typeCode = readInt();
+        }
+        return typeCode;
     }
 
     private List<?> readList(int length) throws IOException {
@@ -1013,7 +1040,7 @@ class BufferedPipe implements Pipe {
 
             if (len > buf.length) {
                 // Expand the buffer.
-                mOutBuffer = buf = new byte[roundUpPower2(len)];
+                mOutBuffer = buf = new byte[CoreUtils.roundUpPower2(len)];
             }
         }
 
@@ -1179,43 +1206,13 @@ class BufferedPipe implements Pipe {
     public final void writeObject(Object v) throws IOException {
         if (v == null) {
             writeNull();
-            return;
-        }
-
-        switch (TypeCodeMap.THE.find(v.getClass())) {
-        case T_TRUE: case T_FALSE: writeObject((Boolean) v); break;
-        case T_CHAR: writeObject((Character) v); break;
-        case T_FLOAT: writeObject((Float) v); break;
-        case T_DOUBLE: writeObject((Double) v); break;
-        case T_BYTE: writeObject((Byte) v); break;
-        case T_SHORT: writeObject((Short) v); break;
-        case T_INT: writeObject((Integer) v); break;
-        case T_LONG: writeObject((Long) v); break;
-        case T_STRING: case T_STRING_L: writeObject((String) v); break;
-        case T_BOOLEAN_ARRAY: case T_BOOLEAN_ARRAY_L: writeObject((boolean[]) v); break;
-        case T_CHAR_ARRAY: case T_CHAR_ARRAY_L: writeObject((char[]) v); break;
-        case T_FLOAT_ARRAY: case T_FLOAT_ARRAY_L: writeObject((float[]) v); break;
-        case T_DOUBLE_ARRAY: case T_DOUBLE_ARRAY_L: writeObject((double[]) v); break;
-        case T_BYTE_ARRAY: case T_BYTE_ARRAY_L: writeObject((byte[]) v); break;
-        case T_SHORT_ARRAY: case T_SHORT_ARRAY_L: writeObject((short[]) v); break;
-        case T_INT_ARRAY: case T_INT_ARRAY_L: writeObject((int[]) v); break;
-        case T_LONG_ARRAY: case T_LONG_ARRAY_L: writeObject((long[]) v); break;
-        case T_OBJECT_ARRAY: case T_OBJECT_ARRAY_L: writeObject((Object[]) v); break;
-        case T_LIST: case T_LIST_L: writeObject((List) v); break;
-        case T_SET: case T_SET_L: writeObject((Set) v); break;
-        case T_MAP: case T_MAP_L: writeObject((Map) v); break;
-        case T_BIG_INTEGER: case T_BIG_INTEGER_L: writeObject((BigInteger) v); break;
-        case T_BIG_DECIMAL: writeObject((BigDecimal) v); break;
-        case T_THROWABLE: writeObject((Throwable) v); break;
-        case T_STACK_TRACE: writeObject((StackTraceElement) v); break;
-        case T_REMOTE: writeStub((Stub) v); break;
-        case T_REMOTE_T: writeSkeleton(v); break;
-        default: throw unsupported(v);
+        } else {
+            mTypeCodeMap.write(this, v);
         }
     }
 
-    private static IllegalArgumentException unsupported(Object v) {
-        return new IllegalArgumentException("Unsupported object type: " + v.getClass().getName());
+    static IllegalArgumentException unsupported(Class<?> clazz) {
+        return new IllegalArgumentException("Unsupported object type: " + clazz.getName());
     }
 
     /**
@@ -1223,7 +1220,7 @@ class BufferedPipe implements Pipe {
      */
     // CorePipe subclass must override this method.
     void writeStub(Stub stub) throws IOException {
-        throw unsupported(stub);
+        throw unsupported(stub.getClass());
     }
 
     /**
@@ -1231,7 +1228,13 @@ class BufferedPipe implements Pipe {
      */
     // CorePipe subclass must override this method.
     void writeSkeleton(Object server) throws IOException {
-        throw unsupported(server);
+        throw unsupported(server.getClass());
+    }
+
+    final void writePlainObject(Object v) throws IOException {
+        if (!tryWriteReferenceOrNull(v)) {
+            write(T_OBJECT);
+        }
     }
 
     @Override
@@ -1477,8 +1480,7 @@ class BufferedPipe implements Pipe {
             writeVarTypeCode(T_OBJECT_ARRAY, v.length);
 
             Class componentType = v.getClass().getComponentType();
-            int componentTypeCode = TypeCodeMap.THE.find(componentType);
-            write(componentTypeCode);
+            int componentTypeCode = mTypeCodeMap.writeTypeCode(this, componentType);
 
             if (componentTypeCode == T_OBJECT_ARRAY) {
                 int extraDims = 0;
@@ -1494,7 +1496,7 @@ class BufferedPipe implements Pipe {
                     componentType = subType;
                     extraDims++;
                 }
-                write(TypeCodeMap.THE.find(componentType));
+                mTypeCodeMap.writeTypeCode(this, componentType);
                 write(extraDims);
             }
 
@@ -1774,7 +1776,8 @@ class BufferedPipe implements Pipe {
      */
     private int expand(int end, int amount) {
         int length = end + amount;
-        length = length < 0 ? MAX_BUFFER_SIZE : Math.min(roundUpPower2(length), MAX_BUFFER_SIZE);
+        length = length < 0 ? MAX_BUFFER_SIZE
+            : Math.min(CoreUtils.roundUpPower2(length), MAX_BUFFER_SIZE);
         mOutBuffer = Arrays.copyOf(mOutBuffer, length);
         return length - end;
     }
@@ -1787,16 +1790,6 @@ class BufferedPipe implements Pipe {
         } catch (IOException e) {
             throw outputException(e);
         }
-    }
-
-    private static int roundUpPower2(int i) {
-        // Hacker's Delight figure 3-3.
-        i--;
-        i |= i >> 1;
-        i |= i >> 2;
-        i |= i >> 4;
-        i |= i >> 8;
-        return (i | (i >> 16)) + 1;
     }
 
     void tryRecycle() {

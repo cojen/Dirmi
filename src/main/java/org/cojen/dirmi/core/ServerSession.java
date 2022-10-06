@@ -113,6 +113,7 @@ final class ServerSession<R> extends CoreSession<R> {
      * @param pipe must have M_SERVER mode
      */
     void accepted(CorePipe pipe) throws IOException {
+        pipe.initTypeCodeMap(mTypeCodeMap);
         registerNewConnection(pipe);
         startRequestProcessor(pipe);
     }
