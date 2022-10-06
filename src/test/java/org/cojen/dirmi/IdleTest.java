@@ -36,17 +36,26 @@ public class IdleTest {
         org.junit.runner.JUnitCore.main(IdleTest.class.getName());
     }
 
+    private Environment mEnv;
+
+    @After
+    public void teardown() throws Exception {
+        if (mEnv != null) {
+            mEnv.close();
+        }
+    }
+
     @Test
     public void basic() throws Exception {
         // Verify that idle connections are closed and that new connections are created again
         // when needed.
 
-        var env = Environment.create();
-        env.export("main", new IfaceServer());
+        mEnv = Environment.create();
+        mEnv.export("main", new IfaceServer());
         var ss = new ServerSocket(0);
-        env.acceptAll(ss);
+        mEnv.acceptAll(ss);
 
-        env.idleConnectionMillis(100);
+        mEnv.idleConnectionMillis(100);
 
         var connector = new Connector() {
             final AtomicInteger mTotal = new AtomicInteger();
@@ -60,9 +69,9 @@ public class IdleTest {
             }
         };
 
-        env.connector(connector);
+        mEnv.connector(connector);
 
-        var session = env.connect(Iface.class, "main", "localhost", ss.getLocalPort());
+        var session = mEnv.connect(Iface.class, "main", "localhost", ss.getLocalPort());
         var iface = session.root();
 
         class Runner extends Thread {
@@ -127,7 +136,7 @@ public class IdleTest {
         }
 
         int total = connector.mTotal.get();
-        assertTrue(2 <= total && total <= 5);
+        assertTrue("" + total, 2 <= total && total <= 5);
 
         Thread.sleep(1000);
 
@@ -142,8 +151,6 @@ public class IdleTest {
 
         int total2 = connector.mTotal.get();
         assertTrue(total < total2 && total2 <= 9);
-
-        env.close();
     }
 
     public static interface Iface extends Remote {
