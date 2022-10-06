@@ -254,6 +254,10 @@ final class TypeCodeMap {
         return e.writeTypeCode(pipe);
     }
 
+    /**
+     * Can be called without explicit synchronization, but entries can appear to go missing.
+     * Double check with synchronization.
+     */
     private Entry tryFind(Class<?> clazz) {
         var entries = mEntries;
         for (var e = entries[clazz.hashCode() & (entries.length - 1)]; e != null; e = e.mNext) {
@@ -264,7 +268,7 @@ final class TypeCodeMap {
         return null;
     }
 
-    private Entry infer(Class<?> clazz) {
+    private Entry infer(Class<?> clazz) throws IllegalArgumentException {
         Entry e = tryInfer(clazz);
         if (e == null) {
             throw BufferedPipe.unsupported(clazz);
@@ -273,9 +277,22 @@ final class TypeCodeMap {
     }
 
     private Entry tryInfer(Class<?> clazz) {
-        int typeCode;
+        Entry e;
+        // Double check finding it with synchronization.
+        synchronized (this) {
+            e = tryFind(clazz);
+            if (e != null) {
+                return e;
+            }
+        }
 
-        Entry e = STANDARD.tryFind(clazz);
+        if (this != STANDARD) {
+            synchronized (STANDARD) {
+                e = STANDARD.tryFind(clazz);
+            }
+        }
+
+        int typeCode;
 
         if (e != null) {
             typeCode = e.mTypeCode;
