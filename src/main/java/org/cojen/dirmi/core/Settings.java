@@ -18,7 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.io.IOException;
 
-import java.util.Iterator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

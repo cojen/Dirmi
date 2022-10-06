@@ -24,10 +24,8 @@ import java.math.BigInteger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Serializer;
 
 import static org.cojen.dirmi.core.TypeCodes.*;
