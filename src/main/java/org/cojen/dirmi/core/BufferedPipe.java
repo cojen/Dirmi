@@ -95,7 +95,7 @@ class BufferedPipe implements Pipe {
     private In mIn;
     private Out mOut;
 
-    private TypeCodeMap mTypeCodeMap = TypeCodeMap.STANDARD;
+    private TypeCodeMap mTypeCodeMap;
 
     BufferedPipe(InputStream in, OutputStream out) {
         this(null, null, in, out);
@@ -113,6 +113,8 @@ class BufferedPipe implements Pipe {
         // Initial buffer sizes must be a power of 2.
         mInBuffer = new byte[32];
         mOutBuffer = new byte[32];
+
+        initTypeCodeMap(TypeCodeMap.STANDARD);
     }
 
     void initTypeCodeMap(TypeCodeMap tcm) {
@@ -1231,22 +1233,29 @@ class BufferedPipe implements Pipe {
         throw unsupported(server.getClass());
     }
 
+    /**
+     * @param v non-null
+     */
     final void writePlainObject(Object v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+        if (!tryWriteReference(v)) {
             write(T_OBJECT);
         }
     }
 
-    @Override
-    public final void writeObject(Boolean v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeBooleanObj(Boolean v) throws IOException {
+        if (!tryWriteReference(v)) {
             write(v ? T_TRUE : T_FALSE);
         }
     }
 
-    @Override
-    public final void writeObject(Character v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeCharObj(Character v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(3);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1256,9 +1265,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Float v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeFloatObj(Float v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(5);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1268,9 +1279,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Double v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeDoubleObj(Double v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(9);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1280,9 +1293,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Byte v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeByteObj(Byte v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(2);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1292,9 +1307,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Short v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeShortObj(Short v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(3);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1304,9 +1321,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Integer v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeIntObj(Integer v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(5);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1316,9 +1335,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Long v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeLongObj(Long v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(9);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1328,9 +1349,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(String v) throws IOException {
-        if (tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeString(String v) throws IOException {
+        if (tryWriteReference(v)) {
             return;
         }
 
@@ -1389,9 +1412,11 @@ class BufferedPipe implements Pipe {
         encodeUTF(v, from, strLen);
     }
 
-    @Override
-    public final void writeObject(boolean[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeBooleanA(boolean[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_BOOLEAN_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1400,9 +1425,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(char[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeCharA(char[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_CHAR_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1411,9 +1438,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(float[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeFloatA(float[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_FLOAT_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1422,9 +1451,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(double[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeDoubleA(double[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_DOUBLE_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1433,17 +1464,21 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(byte[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeByteA(byte[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_BYTE_ARRAY, v.length);
             write(v);
         }
     }
 
-    @Override
-    public final void writeObject(short[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeShortA(short[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_SHORT_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1452,9 +1487,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(int[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeIntA(int[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_INT_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1463,9 +1500,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(long[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeLongA(long[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_LONG_ARRAY, v.length);
             // TODO: Optimize by writing chunks.
             for (int i=0; i<v.length; i++) {
@@ -1474,9 +1513,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Object[] v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeObjectA(Object[] v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_OBJECT_ARRAY, v.length);
 
             Class componentType = v.getClass().getComponentType();
@@ -1506,9 +1547,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(List<?> v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeList(List<?> v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_LIST, v.size());
             for (Object e : v) {
                 writeObject(e);
@@ -1516,9 +1559,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Set<?> v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeSet(Set<?> v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_SET, v.size());
             for (Object e : v) {
                 writeObject(e);
@@ -1526,9 +1571,11 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Map<?,?> v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeMap(Map<?,?> v) throws IOException {
+        if (!tryWriteReference(v)) {
             writeVarTypeCode(T_MAP, v.size());
             for (Map.Entry<?,?> e : v.entrySet()) {
                 writeObject(e.getKey());
@@ -1537,18 +1584,22 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(BigInteger v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeBigInteger(BigInteger v) throws IOException {
+        if (!tryWriteReference(v)) {
             byte[] bytes = v.toByteArray();
             writeVarTypeCode(T_BIG_INTEGER, bytes.length);
             write(bytes);
         }
     }
 
-    @Override
-    public final void writeObject(BigDecimal v) throws IOException {
-        if (!tryWriteReferenceOrNull(v)) {
+    /**
+     * @param v non-null
+     */
+    final void writeBigDecimal(BigDecimal v) throws IOException {
+        if (!tryWriteReference(v)) {
             requireOutput(5);
             int end = mOutEnd;
             byte[] buf = mOutBuffer;
@@ -1559,22 +1610,13 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(Throwable v) throws IOException {
-        // This method is called to write remote method responses, which is usually null. Only
-        // call the writeThrowable method when there's an actual throwable to write, because it
-        // then enables reference tracking mode, which allocates objects, etc.
-        if (v == null) {
-            writeNull();
-        } else {
-            writeThrowable(v);
-        }
-    }
-
-    private void writeThrowable(Throwable v) throws IOException {
+    /**
+     * @param v non-null
+     */
+    final void writeThrowable(Throwable v) throws IOException {
         enableReferences();
         try {
-            if (!tryWriteReferenceOrNull(v)) {
+            if (!tryWriteReference(v)) {
                 writeShort((T_THROWABLE << 8) | 1); // type code and encoding format
                 writeObject(v.getClass().getName());
                 writeObject(v.getMessage());
@@ -1587,27 +1629,24 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    @Override
-    public final void writeObject(StackTraceElement v) throws IOException {
-        if (v == null) {
-            // Don't enable reference tracking mode when given null.
-            writeNull();
-        } else {
-            enableReferences();
-            try {
-                if (!tryWriteReferenceOrNull(v)) {
-                    writeShort((T_STACK_TRACE << 8) | 1); // type code and encoding format
-                    writeObject(v.getClassLoaderName());
-                    writeObject(v.getModuleName());
-                    writeObject(v.getModuleVersion());
-                    writeObject(v.getClassName());
-                    writeObject(v.getMethodName());
-                    writeObject(v.getFileName());
-                    writeInt(v.getLineNumber());
-                }
-            } finally {
-                disableReferences();
+    /**
+     * @param v non-null
+     */
+    final void writeStackTraceElement(StackTraceElement v) throws IOException {
+        enableReferences();
+        try {
+            if (!tryWriteReference(v)) {
+                writeShort((T_STACK_TRACE << 8) | 1); // type code and encoding format
+                writeObject(v.getClassLoaderName());
+                writeObject(v.getModuleName());
+                writeObject(v.getModuleVersion());
+                writeObject(v.getClassName());
+                writeObject(v.getMethodName());
+                writeObject(v.getFileName());
+                writeInt(v.getLineNumber());
             }
+        } finally {
+            disableReferences();
         }
     }
 
@@ -1636,13 +1675,27 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    private void writeNull() throws IOException {
+    @Override
+    public final void writeNull() throws IOException {
         ReferenceMap refMap = mOutRefMap;
         if (refMap == null || !refMap.isDisabled()) {
             write(T_NULL);
         } else {
             writeShort((T_REF_MODE_OFF << 8) | T_NULL);
             mOutRefMap = null;
+        }
+    }
+
+    /**
+     * @param v non-null
+     * @return true if an object reference was written
+     */
+    private boolean tryWriteReference(Object v) throws IOException {
+        ReferenceMap refMap = mOutRefMap;
+        if (refMap == null) {
+            return false;
+        } else {
+            return tryWriteReferenceOrNull(refMap, v);
         }
     }
 

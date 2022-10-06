@@ -136,130 +136,14 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     @Override
     Object readObject() throws IOException;
 
-    // The remaining methods are hidden to keep the javadocs from being too cluttered.
+    /**
+     * Write an object (or null) to the pipe.
+     */
+    @Override
+    void writeObject(Object obj) throws IOException;
 
     /**
-     * @hidden
+     * Write a null object reference.
      */
-    void writeObject(Boolean v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Character v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Float v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Double v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Byte v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Short v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Integer v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Long v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(BigInteger v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(BigDecimal v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(String v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(boolean[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(char[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(float[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(double[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(byte[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(short[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(int[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(long[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Object[] v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Throwable v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(StackTraceElement v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(List<?> v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Set<?> v) throws IOException;
-
-    /**
-     * @hidden
-     */
-    void writeObject(Map<?,?> v) throws IOException;
+    void writeNull() throws IOException;
 }

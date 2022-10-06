@@ -121,6 +121,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mSkeletonSupport = new CoreSkeletonSupport(this);
 
         mControlLock = new ReentrantLock();
+
+        initTypeCodeMap(TypeCodeMap.STANDARD);
     }
 
     /**

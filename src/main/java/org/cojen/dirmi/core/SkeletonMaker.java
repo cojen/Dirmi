@@ -343,7 +343,7 @@ final class SkeletonMaker<R> {
                 Label invokeEnd = mm.label().here();
 
                 // Write a null Throwable to indicate success.
-                pipeVar.invoke(null, "writeObject", new Object[] {Throwable.class}, new Object[1]);
+                pipeVar.invoke("writeNull");
 
                 if (rm.isBatchedImmediate()) {
                     var supportVar = mm.param(3);
