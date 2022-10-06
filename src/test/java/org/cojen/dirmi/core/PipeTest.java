@@ -93,22 +93,22 @@ public class PipeTest {
         }
 
         // Can still write to the pipe.
-        OutputStream out = pipe.getOutputStream();
+        OutputStream out = pipe.outputStream();
         out.write(10);
         out.flush();
-        pipe.getOutputStream().close();
+        pipe.outputStream().close();
 
         byte[] bytes = bout.toByteArray();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
         byte[] b = new byte[100];
-        assertEquals(0, pipe.getInputStream().read(b, 0, 0));
+        assertEquals(0, pipe.inputStream().read(b, 0, 0));
         assertEquals(0, b[0]);
-        assertEquals(1, pipe.getInputStream().read(b, 0, 20));
+        assertEquals(1, pipe.inputStream().read(b, 0, 20));
         assertEquals(10, b[0]);
 
-        pipe.getInputStream().close();
+        pipe.inputStream().close();
     }
 
     @Test
@@ -121,7 +121,7 @@ public class PipeTest {
         for (String str : strs) {
             var bin = new ByteArrayInputStream(str.getBytes("UTF-8"));
             var pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
-            var in = (ObjectInput) pipe.getInputStream();
+            var in = (ObjectInput) pipe.inputStream();
             String line = in.readLine();
             if (line.equals("hello")) {
                 line = in.readLine();
@@ -142,12 +142,12 @@ public class PipeTest {
             pipe.writeInt(i);
         }
 
-        pipe.getOutputStream().close();
+        pipe.outputStream().close();
         byte[] bytes = bout.toByteArray();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
-        var in = (ObjectInput) pipe.getInputStream();
+        var in = (ObjectInput) pipe.inputStream();
 
         assertEquals(0, in.available());
         assertEquals(4, in.skipBytes(4));
@@ -801,13 +801,13 @@ public class PipeTest {
         int max = 100;
         int num = rnd.nextInt(max) + 1;
 
-        ObjectOutput out = streams ? ((ObjectOutput) pipe.getOutputStream()) : pipe;
+        ObjectOutput out = streams ? ((ObjectOutput) pipe.outputStream()) : pipe;
 
         for (int i=0; i<num; i++) {
             writeRandom(rnd, out);
         }
 
-        pipe.getOutputStream().close();
+        pipe.outputStream().close();
         byte[] bytes = bout.toByteArray();
 
         rnd = new Random(seed);
@@ -816,7 +816,7 @@ public class PipeTest {
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
-        ObjectInput in = streams ? ((ObjectInput) pipe.getInputStream()) : pipe;
+        ObjectInput in = streams ? ((ObjectInput) pipe.inputStream()) : pipe;
 
         for (int i=0; i<num; i++) {
             verifyRandom(rnd, in);

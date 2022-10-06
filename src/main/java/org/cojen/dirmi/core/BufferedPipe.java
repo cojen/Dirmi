@@ -1728,7 +1728,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public final InputStream getInputStream() {
+    public final InputStream inputStream() {
         In in = mIn;
         if (in == null) {
             mIn = in = new In();
@@ -1737,7 +1737,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public final OutputStream getOutputStream() {
+    public final OutputStream outputStream() {
         Out out = mOut;
         if (out == null) {
             mOut = out = new Out();

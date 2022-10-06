@@ -113,13 +113,13 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
      * Returns the pipe's {@code InputStream}, which also implements {@code
      * ObjectInput}. Closing the stream is equivalent to closing the pipe.
      */
-    InputStream getInputStream();
+    InputStream inputStream();
 
     /**
      * Returns the pipe's {@code OutputStream}, which also implements {@code
      * ObjectOutput}. Closing the stream is equivalent to closing the pipe.
      */
-    OutputStream getOutputStream();
+    OutputStream outputStream();
 
     /**
      * Attempt to recycle the connection instead of closing it. The caller must ensure that the
