@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -120,6 +121,58 @@ public class SerializerTest {
 
         clientEnv.close();
         serverEnv.close();
+    }
+
+    @Test
+    public void array() throws Exception {
+        var env = Environment.create();
+
+        env.customSerializers(Map.of(UUID.class, new UUIDSerializer()));
+
+        env.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 r1 = session.root();
+
+        UUID[] array = { UUID.randomUUID(), UUID.randomUUID() };
+
+        Object obj = r1.echo(array);
+        assertArrayEquals(array, (UUID[]) obj);
+
+        UUID[][] array2 = {
+            { UUID.randomUUID(), UUID.randomUUID() },
+            { UUID.randomUUID(), UUID.randomUUID() }
+        };
+
+        obj = r1.echo(array2);
+        assertArrayEquals(array2, (UUID[][]) obj);
+
+        env.close();
+    }
+
+    @Test
+    public void list() throws Exception {
+        var env = Environment.create();
+
+        env.customSerializers(Map.of(UUID.class, new UUIDSerializer()));
+
+        env.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 r1 = session.root();
+
+        List<UUID> list = List.of(UUID.randomUUID(), UUID.randomUUID());
+
+        Object obj = r1.echo(list);
+        assertEquals(list, (List) obj);
+
+        env.close();
     }
 
     public static interface R1 extends Remote {
