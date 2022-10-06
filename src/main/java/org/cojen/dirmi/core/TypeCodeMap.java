@@ -19,6 +19,8 @@ package org.cojen.dirmi.core;
 import java.io.InvalidObjectException;
 import java.io.IOException;
 
+import java.lang.ref.SoftReference;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
@@ -128,7 +130,7 @@ final class TypeCodeMap {
                 mCustomSerializers[typeCode - T_FIRST_CUSTOM] = custom;
 
                 if (key instanceof Class) {
-                    put(custom);
+                    put(clazz, custom);
                 }
 
                 typeCode++;
@@ -206,7 +208,7 @@ final class TypeCodeMap {
 
         typeCode -= T_FIRST_CUSTOM;
         if (typeCode >= 0) {
-            Entry[] customs = mCustomSerializers;
+            Custom[] customs = mCustomSerializers;
             if (typeCode < customs.length) {
                 return customs[typeCode].mClass;
             }
@@ -261,7 +263,7 @@ final class TypeCodeMap {
     private Entry tryFind(Class<?> clazz) {
         var entries = mEntries;
         for (var e = entries[clazz.hashCode() & (entries.length - 1)]; e != null; e = e.mNext) {
-            if (clazz == e.mClass) {
+            if (clazz == e.clazz()) {
                 return e;
             }
         }
@@ -318,16 +320,16 @@ final class TypeCodeMap {
     }
 
     private Entry put(Class<?> clazz, int typeCode) {
-        return put(new Standard(clazz, typeCode));
+        return put(clazz, new Standard(clazz, typeCode));
     }
 
-    private synchronized Entry put(Entry newEntry) {
+    private synchronized Entry put(Class<?> clazz, Entry newEntry) {
         var entries = mEntries;
-        int hash = newEntry.mClass.hashCode();
+        int hash = clazz.hashCode();
         int index = hash & (entries.length - 1);
 
         for (Entry e = entries[index]; e != null; e = e.mNext) {
-            if (newEntry.mClass == e.mClass) {
+            if (clazz == e.clazz()) {
                 // Entry already exists.
                 return e;
             }
@@ -338,16 +340,22 @@ final class TypeCodeMap {
         if ((size + (size >> 1)) >= entries.length && entries.length < (1 << 30)) {
             // Rehash.
             var newEntries = new Entry[entries.length << 1];
+            size = 0;
             for (int i=0; i<entries.length; i++) {
                 for (var existing = entries[i]; existing != null; ) {
                     var e = existing;
                     existing = existing.mNext;
-                    index = e.mClass.hashCode() & (newEntries.length - 1);
-                    e.mNext = newEntries[index];
-                    newEntries[index] = e;
+                    Class ec = e.clazz();
+                    if (ec != null) {
+                        size++;
+                        index = ec.hashCode() & (newEntries.length - 1);
+                        e.mNext = newEntries[index];
+                        newEntries[index] = e;
+                    }
                 }
             }
             mEntries = entries = newEntries;
+            mSize = size;
             index = hash & (entries.length - 1);
         }
 
@@ -359,19 +367,22 @@ final class TypeCodeMap {
     }
 
     private abstract static class Entry<T> {
-        final Class mClass;
         final int mTypeCode;
 
         Entry mNext;
 
-        Entry(Class clazz, int typeCode) {
-            mClass = clazz;
+        Entry(int typeCode) {
             mTypeCode = typeCode;
         }
 
         T read(BufferedPipe pipe) throws IOException {
             throw new UnsupportedOperationException();
         }
+
+        /**
+         * Returns null if GC'd.
+         */
+        abstract Class clazz();
 
         /**
          * @param obj non-null object to write to the pipe
@@ -382,8 +393,16 @@ final class TypeCodeMap {
     }
 
     private static final class Standard extends Entry<Object> {
+        final SoftReference<Class> mClassRef;
+
         Standard(Class clazz, int typeCode) {
-            super(clazz, typeCode);
+            super(typeCode);
+            mClassRef = new SoftReference<>(clazz);
+        }
+
+        @Override
+        Class clazz() {
+            return mClassRef.get();
         }
 
         @Override
@@ -430,11 +449,18 @@ final class TypeCodeMap {
     }
 
     private abstract static class Custom<T> extends Entry<T> {
+        final Class mClass;
         final Serializer<T> mSerializer;
 
         Custom(Class clazz, int typeCode, Serializer<T> serializer) {
-            super(clazz, typeCode);
+            super(typeCode);
+            mClass = clazz;
             mSerializer = serializer;
+        }
+
+        @Override
+        Class clazz() {
+            return mClass;
         }
 
         @Override
