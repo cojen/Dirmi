@@ -14,25 +14,19 @@
  *  limitations under the License.
  */
 
-package org.cojen.dirmi.core;
+package org.cojen.dirmi;
+
+import java.lang.annotation.*;
 
 /**
- * Wraps an exception caught when invoking a server-side piped or no-reply method. Is used by
- * SkeletonSupport to distinguish a general I/O exception from something which should be logged
- * as being uncaught.
+ * Designates a remote method which doesn't block reading a reply or acknowledgment. The method
+ * can only return void, and any exception thrown from the implementation is treated as {@link
+ * Environment#uncaughtExceptionHandler uncaught}.
  *
  * @author Brian S O'Neill
  */
-public final class UncaughtException extends Exception {
-    public UncaughtException(Throwable cause) {
-        super(cause);
-    }
-
-    /**
-     * The exception shouldn't propagate to the caller so no need to capture the trace.
-     */
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
-    }
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+public @interface NoReply {
 }

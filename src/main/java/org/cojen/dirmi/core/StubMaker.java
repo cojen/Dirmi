@@ -373,8 +373,10 @@ final class StubMaker {
                 thrownVar.ifNe(null, throwException);
                 noBatch.here();
 
-                thrownVar.set(supportVar.invoke("readResponse", pipeVar));
-                thrownVar.ifNe(null, throwException);
+                if (!serverMethod.isNoReply()) {
+                    thrownVar.set(supportVar.invoke("readResponse", pipeVar));
+                    thrownVar.ifNe(null, throwException);
+                }
 
                 if (isVoid(returnType)) {
                     invokeEnd.here();

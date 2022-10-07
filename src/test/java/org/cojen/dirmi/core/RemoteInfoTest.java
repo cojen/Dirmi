@@ -33,6 +33,7 @@ import static org.junit.Assert.*;
 
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.Disposer;
+import org.cojen.dirmi.NoReply;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
@@ -708,6 +709,21 @@ public class RemoteInfoTest {
             fail();
         } catch (IllegalArgumentException e) {
             confirm(e, "must return a remote object");
+        }
+    }
+
+    public static interface R40 extends Remote {
+        @NoReply
+        String foo() throws RemoteException;
+    }
+
+    @Test
+    public void hasReply() {
+        try {
+            RemoteInfo.examine(R40.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "must return void");
         }
     }
 

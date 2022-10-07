@@ -342,18 +342,22 @@ final class SkeletonMaker<R> {
                 var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
-                // Write a null Throwable to indicate success.
-                pipeVar.invoke("writeNull");
+                if (rm.isNoReply()) {
+                    finished.here();
+                } else {
+                    // Write a null Throwable to indicate success.
+                    pipeVar.invoke("writeNull");
 
-                if (rm.isBatchedImmediate()) {
-                    var supportVar = mm.param(3);
-                    supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
-                } else if (resultVar != null) {
-                    CoreUtils.writeParam(pipeVar, resultVar);
+                    if (rm.isBatchedImmediate()) {
+                        var supportVar = mm.param(3);
+                        supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
+                    } else if (resultVar != null) {
+                        CoreUtils.writeParam(pipeVar, resultVar);
+                    }
+
+                    finished.here();
+                    pipeVar.invoke("flush");
                 }
-
-                finished.here();
-                pipeVar.invoke("flush");
 
                 if (!rm.isBatchedImmediate()) {
                     mm.return_(null);
@@ -369,9 +373,13 @@ final class SkeletonMaker<R> {
                     supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
                 }
 
-                pipeVar.invoke("writeObject", exVar);
-                pipeVar.invoke("flush");
-                mm.return_(null);
+                if (rm.isNoReply()) {
+                    mm.new_(UncaughtException.class, exVar).throw_();
+                } else {
+                    pipeVar.invoke("writeObject", exVar);
+                    pipeVar.invoke("flush");
+                    mm.return_(null);
+                }
             }
         }
 

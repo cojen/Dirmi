@@ -31,6 +31,7 @@ import java.util.TreeSet;
 
 import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.Disposer;
+import org.cojen.dirmi.NoReply;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
@@ -44,7 +45,7 @@ import org.cojen.dirmi.Unbatched;
  */
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
-        F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32;
+        F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64;
 
     private final int mFlags;
     private final String mName;
@@ -89,6 +90,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         if (m.isAnnotationPresent(Restorable.class)) {
             flags |= F_RESTORABLE;
+        }
+        if (m.isAnnotationPresent(NoReply.class)) {
+            flags |= F_NOREPLY;
         }
 
         if ((flags & F_BATCHED) != 0 && (flags & F_UNBATCHED) != 0) {
@@ -162,6 +166,10 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             if ((flags & F_RESTORABLE) != 0 && !CoreUtils.isRemote(returnType)) {
                 throw new IllegalArgumentException
                     ("Restorable method must return a remote object: " + m);
+            }
+
+            if ((flags & F_NOREPLY) != 0 && returnType != void.class) {
+                throw new IllegalArgumentException("NoReply method must return void: " + m);
             }
 
             mReturnType = returnType.descriptorString().intern();
@@ -255,7 +263,8 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
      * @see #isBatchedImmediate
      */
     RemoteMethod asBatchedImmediate() {
-        return new RemoteMethod(mFlags | (F_BATCHED | F_UNBATCHED), mName, mRemoteFailureException,
+        int flags = (mFlags | (F_BATCHED | F_UNBATCHED)) & ~F_NOREPLY;
+        return new RemoteMethod(flags, mName, mRemoteFailureException,
                                 mReturnType, mParameterTypes, mExceptionTypes);
     }
 
@@ -307,6 +316,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
      */
     boolean isPiped() {
         return (mFlags & F_PIPED) != 0;
+    }
+
+    /**
+     * @see NoReply
+     */
+    boolean isNoReply() {
+        return (mFlags & F_NOREPLY) != 0;
     }
 
     /**
