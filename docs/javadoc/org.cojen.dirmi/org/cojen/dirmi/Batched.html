@@ -89,11 +89,11 @@ loadScripts(document, 'script');</script>
 <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/Retention.html" title="class or interface in java.lang.annotation" class="external-link">@Retention</a>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/RetentionPolicy.html#RUNTIME" title="class or interface in java.lang.annotation" class="external-link">RUNTIME</a>)
 <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/Target.html" title="class or interface in java.lang.annotation" class="external-link">@Target</a>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/ElementType.html#METHOD" title="class or interface in java.lang.annotation" class="external-link">METHOD</a>)
 </span><span class="modifiers">public @interface </span><span class="element-name type-name-label">Batched</span></div>
-<div class="block">Identify a method as being batched, which can be used to reduce transport overhead. Method
- calls are sent to the remote endpoint, but the pipe isn't immediately flushed. The calling
- thread holds the same pipe for making additional method calls until a non-batched method is
- called. All method calls received by the remote endpoint are executed in one thread, in the
- original order.
+<div class="block">Designates a remote method as being batched, which can be used to reduce transport
+ overhead. Method calls are sent to the remote endpoint, but the pipe isn't immediately
+ flushed. The calling thread holds the same pipe for making additional method calls until a
+ non-batched method is called. All method calls received by the remote endpoint are executed
+ in one thread, in the original order.
 
  <p>A batched method must declare returning <code>void</code> or a <a href="Remote.html" title="interface in org.cojen.dirmi"><code>Remote</code></a>
  object. Returning a remote object allows batched calls to be chained together.

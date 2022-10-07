@@ -87,7 +87,8 @@ loadScripts(document, 'script');</script>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Batched.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Batched</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Identify a method as being batched, which can be used to reduce transport overhead.</div>
+<div class="block">Designates a remote method as being batched, which can be used to reduce transport
+ overhead.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:C">C</h2>
@@ -197,8 +198,8 @@ loadScripts(document, 'script');</script>
 <dd>&nbsp;</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Disposer.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Disposer</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Identify a method as being a <a href="org.cojen.dirmi/org/cojen/dirmi/Remote.html" title="interface in org.cojen.dirmi"><code>Remote</code></a> object disposer, allowing memory to be freed on
- the remote side.</div>
+<div class="block">Designates a remote method as being a <a href="org.cojen.dirmi/org/cojen/dirmi/Remote.html" title="interface in org.cojen.dirmi"><code>Remote</code></a> object disposer, allowing memory to be
+ freed on the remote side.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:E">E</h2>
@@ -246,6 +247,10 @@ loadScripts(document, 'script');</script>
 </dl>
 <h2 class="title" id="I:N">N</h2>
 <dl class="index">
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/NoReply.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">NoReply</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>
+<div class="block">Designates a remote method which doesn't block reading a reply or acknowledgment.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/NoSuchObjectException.html" class="type-name-link" title="class in org.cojen.dirmi">NoSuchObjectException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Thrown when attempting to invoke a method against an object that is unknown to a <a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi"><code>session</code></a>.</div>
@@ -327,8 +332,8 @@ loadScripts(document, 'script');</script>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Restorable.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Restorable</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Identify a method which returns a remote object which should be restored when a session
- reconnects.</div>
+<div class="block">Designates a remote method which returns a remote object which should be restored when a
+ session reconnects.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#root()" class="member-name-link">root()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
@@ -360,7 +365,8 @@ loadScripts(document, 'script');</script>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Unbatched.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Unbatched</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Identify a method which should never be included in a <a href="org.cojen.dirmi/org/cojen/dirmi/Batched.html" title="annotation interface in org.cojen.dirmi"><code>batched</code></a> request.</div>
+<div class="block">Designates a remote method which should never be included in a <a href="org.cojen.dirmi/org/cojen/dirmi/Batched.html" title="annotation interface in org.cojen.dirmi"><code>batched</code></a>
+ request.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler(BiConsumer&lt;Session&lt;?&gt;, Throwable&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
