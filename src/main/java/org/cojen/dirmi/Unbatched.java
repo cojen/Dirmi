@@ -19,9 +19,9 @@ package org.cojen.dirmi;
 import java.lang.annotation.*;
 
 /**
- * Identify a method which should never be included in a {@link Batched batched} request. This
- * makes it possible to send out-of-band messages from the thread which is forming a batched
- * request.
+ * Designates a remote method which should never be included in a {@link Batched batched}
+ * request. This makes it possible to send out-of-band messages from the thread which is
+ * forming a batched request.
  *
  * @author Brian S O'Neill
  */

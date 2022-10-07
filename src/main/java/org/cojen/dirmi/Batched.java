@@ -21,11 +21,11 @@ import java.lang.annotation.*;
 import java.lang.reflect.UndeclaredThrowableException;
 
 /**
- * Identify a method as being batched, which can be used to reduce transport overhead. Method
- * calls are sent to the remote endpoint, but the pipe isn't immediately flushed. The calling
- * thread holds the same pipe for making additional method calls until a non-batched method is
- * called. All method calls received by the remote endpoint are executed in one thread, in the
- * original order.
+ * Designates a remote method as being batched, which can be used to reduce transport
+ * overhead. Method calls are sent to the remote endpoint, but the pipe isn't immediately
+ * flushed. The calling thread holds the same pipe for making additional method calls until a
+ * non-batched method is called. All method calls received by the remote endpoint are executed
+ * in one thread, in the original order.
  *
  * <p>A batched method must declare returning {@code void} or a {@link Remote}
  * object. Returning a remote object allows batched calls to be chained together.

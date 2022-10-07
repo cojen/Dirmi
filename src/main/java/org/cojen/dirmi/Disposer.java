@@ -19,8 +19,8 @@ package org.cojen.dirmi;
 import java.lang.annotation.*;
 
 /**
- * Identify a method as being a {@link Remote} object disposer, allowing memory to be freed on
- * the remote side.
+ * Designates a remote method as being a {@link Remote} object disposer, allowing memory to be
+ * freed on the remote side.
  *
  * <p>When a disposer method is called, it immediately prevents all new remote method
  * invocations on the same object from functioning. Any attempt causes an exception to be

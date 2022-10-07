@@ -19,10 +19,10 @@ package org.cojen.dirmi;
 import java.lang.annotation.*;
 
 /**
- * Identify a method which returns a remote object which should be restored when a session
- * reconnects. All of the parameters passed to the method are referenced internally by the
- * returned remote object so that they can be used again. To ensure that the restoration works
- * idempotently, the contents of any object parameters must not be modified.
+ * Designates a remote method which returns a remote object which should be restored when a
+ * session reconnects. All of the parameters passed to the method are referenced internally by
+ * the returned remote object so that they can be used again. To ensure that the restoration
+ * works idempotently, the contents of any object parameters must not be modified.
  *
  * @author Brian S O'Neill
  */
