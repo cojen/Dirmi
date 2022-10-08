@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 import java.lang.invoke.MethodHandles;
@@ -1095,7 +1094,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    private final class Processor implements Runnable, Closeable {
+    private final class Processor implements Runnable {
         private final CorePipe mPipe;
 
         Processor(CorePipe pipe) {
@@ -1118,15 +1117,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 } else if (e instanceof NoSuchObjectException || !(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                CoreUtils.closeQuietly(this);
+                CoreUtils.closeQuietly(mPipe);
             } finally {
                 CoreUtils.cCurrentSession.remove();
             }
-        }
-
-        @Override
-        public void close() throws IOException {
-            mPipe.close();
         }
     }
 }
