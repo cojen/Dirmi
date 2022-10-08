@@ -23,6 +23,10 @@ import java.lang.annotation.*;
  * can only return void, and any exception thrown from the implementation is treated as {@link
  * Environment#uncaughtExceptionHandler uncaught}.
  *
+ * <p>A {@code NoReply} method implementation is run in the same thread that processes incoming
+ * requests for a particular socket. Therefore, the implementation should finish quickly or
+ * else continue execution in another thread.
+ *
  * @author Brian S O'Neill
  */
 @Documented

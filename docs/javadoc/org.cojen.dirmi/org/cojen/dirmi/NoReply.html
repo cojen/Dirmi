@@ -90,7 +90,11 @@ loadScripts(document, 'script');</script>
 <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/Target.html" title="class or interface in java.lang.annotation" class="external-link">@Target</a>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/ElementType.html#METHOD" title="class or interface in java.lang.annotation" class="external-link">METHOD</a>)
 </span><span class="modifiers">public @interface </span><span class="element-name type-name-label">NoReply</span></div>
 <div class="block">Designates a remote method which doesn't block reading a reply or acknowledgment. The method
- can only return void, and any exception thrown from the implementation is treated as <a href="Environment.html#uncaughtExceptionHandler(java.util.function.BiConsumer)"><code>uncaught</code></a>.</div>
+ can only return void, and any exception thrown from the implementation is treated as <a href="Environment.html#uncaughtExceptionHandler(java.util.function.BiConsumer)"><code>uncaught</code></a>.
+
+ <p>A <code>NoReply</code> method implementation is run in the same thread that processes incoming
+ requests for a particular socket. Therefore, the implementation should finish quickly or
+ else continue execution in another thread.</div>
 </section>
 <section class="details" id="annotation-interface-element-detail"></section>
 <!-- ========= END OF CLASS DATA ========= -->
