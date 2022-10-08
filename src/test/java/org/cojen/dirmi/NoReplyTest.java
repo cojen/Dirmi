@@ -75,16 +75,65 @@ public class NoReplyTest {
         env.close();
     }
 
+    @Test
+    public void stuck() throws Exception {
+        // Verifies that a NoReply method runs in the same thread that is processing the socket.
+
+        var env = Environment.create();
+        var server = new R1Server();
+        env.export("main", server);
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 r1 = session.root();
+
+        r1.stuck();
+
+        // Should use same socket, and so this should block.
+        var t = new Thread(() -> {
+            try {
+                r1.acceptAck(123);
+            } catch (RemoteException e) {
+                // Ignore.
+            }
+        });
+        t.start();
+
+        Thread.sleep(1000);
+        assertTrue(server.mValue == 0);
+
+        server.stop();
+
+        while (true) {
+            int value = server.mValue;
+            if (value == 0) {
+                Thread.yield();
+            } else {
+                assertEquals(123, value);
+                break;
+            }
+        }
+
+        env.close();
+    }
+
     public static interface R1 extends Remote {
         @NoReply
         void accept(int v) throws RemoteException;
 
+        void acceptAck(int v) throws RemoteException;
+
         @NoReply
         void fail() throws RemoteException;
+
+        @NoReply
+        void stuck() throws RemoteException;
     }
 
     private static class R1Server implements R1 {
-        private int mValue;
+        volatile int mValue;
+        private boolean mStop;
 
         @Override
         public synchronized void accept(int v) {
@@ -93,8 +142,23 @@ public class NoReplyTest {
         }
 
         @Override
+        public void acceptAck(int v) {
+            accept(v);
+        }
+
+        @Override
         public void fail() {
             throw new IllegalStateException("fail");
+        }
+
+        @Override
+        public synchronized void stuck() {
+            try {
+                while (!mStop) {
+                    wait();
+                }
+            } catch (InterruptedException e) {
+            }
         }
 
         synchronized int await() throws InterruptedException {
@@ -102,6 +166,11 @@ public class NoReplyTest {
                 wait();
             }
             return mValue;
+        }
+
+        synchronized void stop() {
+            mStop = true;
+            notify();
         }
     }
 }

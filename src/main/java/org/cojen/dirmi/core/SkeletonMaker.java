@@ -214,7 +214,8 @@ final class SkeletonMaker<R> {
      *
      *    static <context> <name>(RemoteObject, Pipe, <context>, SkeletonSupport support)
      *
-     * The latter form is used by batched methods which return an object.
+     * The latter form is used by batched methods which return an object, and also by NoReply
+     * methods.
      *
      * See {@link Skeleton#invoke} regarding exception handling
      */
@@ -236,7 +237,7 @@ final class SkeletonMaker<R> {
             caseMap.put(methodId++, new CaseInfo(rm, name));
 
             MethodMaker mm;
-            if (!rm.isBatched() || rm.returnType().equals("V")) {
+            if (!needsSupport(rm)) {
                 mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class);
             } else {
                 mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class,
@@ -368,22 +369,27 @@ final class SkeletonMaker<R> {
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
 
-                if (rm.isBatchedImmediate()) {
-                    var supportVar = mm.param(3);
-                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
-                }
-
                 if (rm.isNoReply()) {
-                    mm.new_(UncaughtException.class, exVar).throw_();
+                    var supportVar = mm.param(3);
+                    supportVar.invoke("uncaughtException", exVar);
                 } else {
+                    if (rm.isBatchedImmediate()) {
+                        var supportVar = mm.param(3);
+                        supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                    }
                     pipeVar.invoke("writeObject", exVar);
                     pipeVar.invoke("flush");
-                    mm.return_(null);
                 }
+
+                mm.return_(null);
             }
         }
 
         return caseMap;
+    }
+
+    private static boolean needsSupport(RemoteMethod rm) {
+        return rm.isNoReply() || (rm.isBatched() && !rm.returnType().equals("V"));
     }
 
     private static String generateMethodName(Map<String, Integer> methodNames, RemoteMethod rm) {
@@ -411,7 +417,7 @@ final class SkeletonMaker<R> {
         Variable invoke(MethodMaker mm, Variable pipeVar, Variable contextVar,
                         Variable supportVar, Variable serverVar)
         {
-            if (!serverMethod.isBatched() || serverMethod.returnType().equals("V")) {
+            if (!needsSupport(serverMethod)) {
                 return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar);
             }
             return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar, supportVar);

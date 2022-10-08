@@ -51,4 +51,9 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     public void dispose(Skeleton<?> skeleton) {
         mSession.removeSkeleton(skeleton);
     }
+
+    @Override
+    public void uncaughtException(Throwable e) {
+        mSession.uncaughtException(e);
+    }
 }

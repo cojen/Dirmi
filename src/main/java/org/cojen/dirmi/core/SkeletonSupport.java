@@ -52,4 +52,6 @@ public interface SkeletonSupport {
      * any exceptions.
      */
     void dispose(Skeleton<?> skeleton);
+
+    void uncaughtException(Throwable e);
 }
