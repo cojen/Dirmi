@@ -38,9 +38,6 @@ import java.nio.channels.ServerSocketChannel;
 import org.junit.*;
 import static org.junit.Assert.*;
 
-import org.cojen.dirmi.io.PipedInputStream;
-import org.cojen.dirmi.io.PipedOutputStream;
-
 /**
  * 
  *
@@ -140,28 +137,10 @@ public class HelloWorldTest {
     }
 
     @Test
-    public void piped() throws Exception {
+    public void local() throws Exception {
         var env = Environment.create();
         env.export("main", new ControlServer());
-
-        env.connector(session -> {
-            var clientIn = new PipedInputStream();
-            var serverOut = new PipedOutputStream(clientIn);
-
-            var clientOut = new PipedOutputStream();
-            var serverIn = new PipedInputStream(clientOut);
-
-            env.execute(() -> {
-                try {
-                    env.accepted(null, null, serverIn, serverOut);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-
-            session.connected(null, null, clientIn, clientOut);
-        });
-
+        env.connector(Connector.local(env));
         var session = env.connect(Control.class, "main", null);
 
         var control = session.root();

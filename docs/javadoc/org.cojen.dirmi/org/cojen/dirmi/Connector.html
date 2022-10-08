@@ -130,8 +130,14 @@ loadScripts(document, 'script');</script>
 <div class="block">Returns a default connector that directly connects sockets.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#secure(javax.net.ssl.SSLContext)" class="member-name-link">secure</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/javax/net/ssl/SSLContext.html" title="class or interface in javax.net.ssl" class="external-link">SSLContext</a>&nbsp;context)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#local(org.cojen.dirmi.Environment)" class="member-name-link">local</a><wbr>(<a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a>&nbsp;env)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1">
+<div class="block">Returns a connector that doesn't establish remote connections, but instead pipes
+ communication directly to accepted sessions of the given environment.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#secure(javax.net.ssl.SSLContext)" class="member-name-link">secure</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/javax/net/ssl/SSLContext.html" title="class or interface in javax.net.ssl" class="external-link">SSLContext</a>&nbsp;context)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Returns a connector that directly connects sockets over TLS/SSL.</div>
 </div>
 </div>
@@ -164,6 +170,16 @@ loadScripts(document, 'script');</script>
 <dt>Parameters:</dt>
 <dd><code>context</code> - can pass null to use the default</dd>
 </dl>
+</section>
+</li>
+<li>
+<section class="detail" id="local(org.cojen.dirmi.Environment)">
+<h3>local</h3>
+<div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></span>&nbsp;<span class="element-name">local</span><wbr><span class="parameters">(<a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a>&nbsp;env)</span></div>
+<div class="block">Returns a connector that doesn't establish remote connections, but instead pipes
+ communication directly to accepted sessions of the given environment. This type of
+ connector is mostly useful for testing purposes. Note that it completely ignores socket
+ addresses, and so a null <code>SocketAddress</code> can be passed to the <a href="Environment.html#connect(java.lang.Class,java.lang.Object,java.net.SocketAddress)"><code>connect</code></a> method.</div>
 </section>
 </li>
 <li>

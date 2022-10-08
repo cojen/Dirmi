@@ -72,6 +72,18 @@ loadScripts(document, 'script');</script>
 <div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
 </div>
 </div>
+<div class="caption"><span>Methods in <a href="../package-summary.html">org.cojen.dirmi</a> with parameters of type <a href="../Environment.html" title="interface in org.cojen.dirmi">Environment</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static <a href="../Connector.html" title="interface in org.cojen.dirmi">Connector</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Connector.</span><code><a href="../Connector.html#local(org.cojen.dirmi.Environment)" class="member-name-link">local</a><wbr>(<a href="../Environment.html" title="interface in org.cojen.dirmi">Environment</a>&nbsp;env)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Returns a connector that doesn't establish remote connections, but instead pipes
+ communication directly to accepted sessions of the given environment.</div>
+</div>
+</div>
 </section>
 </li>
 </ul>

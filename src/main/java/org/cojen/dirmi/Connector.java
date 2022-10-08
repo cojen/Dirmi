@@ -21,6 +21,7 @@ import java.io.IOException;
 import javax.net.ssl.*;
 
 import org.cojen.dirmi.core.DirectConnector;
+import org.cojen.dirmi.core.LocalConnector;
 import org.cojen.dirmi.core.SecureConnector;
 
 /**
@@ -46,6 +47,17 @@ public interface Connector {
      */
     static Connector secure(SSLContext context) {
         return context == null ? SecureConnector.THE : new SecureConnector(context);
+    }
+
+    /**
+     * Returns a connector that doesn't establish remote connections, but instead pipes
+     * communication directly to accepted sessions of the given environment. This type of
+     * connector is mostly useful for testing purposes. Note that it completely ignores socket
+     * addresses, and so a null {@code SocketAddress} can be passed to the {@link
+     * Environment#connect connect} method.
+     */
+    static Connector local(Environment env) {
+        return new LocalConnector(env);
     }
 
     /**
