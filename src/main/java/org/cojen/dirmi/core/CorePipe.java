@@ -128,8 +128,9 @@ final class CorePipe extends BufferedPipe {
             try {
                 close();
             } catch (Exception e2) {
-                e.addSuppressed(e);
+                e.addSuppressed(e2);
             }
+            throw e;
         }
 
         CoreSession session = mSession;

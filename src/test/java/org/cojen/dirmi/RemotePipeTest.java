@@ -105,7 +105,12 @@ public class RemotePipeTest {
         assertEquals(10, p1.readInt());
         String pipeName = (String) p1.readObject();
         p1.writeInt(123);
-        p1.recycle();
+        try {
+            p1.recycle();
+            fail();
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("unflushed"));
+        }
 
         // The pipe was recycled incorrectly on both sides, and so it was closed.
         Pipe p2 = root.echo(123, null, "hello");
@@ -127,7 +132,12 @@ public class RemotePipeTest {
         assertEquals("hello", p1.readObject());
         String pipeName = (String) p1.readObject();
         p1.writeInt(123);
-        p1.recycle();
+        try {
+            p1.recycle();
+            fail();
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("unflushed"));
+        }
 
         // The pipe was recycled incorrectly on the client side, and so it was closed.
         Pipe p2 = root.echo(123, null, "hello");
@@ -203,7 +213,12 @@ public class RemotePipeTest {
             pipe.writeObject(pipe.toString());
             pipe.flush();
             pipe.writeInt(a);
-            pipe.recycle();
+            try {
+                pipe.recycle();
+                fail();
+            } catch (IllegalStateException e) {
+                assertTrue(e.getMessage().contains("unflushed"));
+            }
             return null;
         }
 
