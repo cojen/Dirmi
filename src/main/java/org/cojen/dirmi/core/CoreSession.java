@@ -699,7 +699,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         try {
             // Send any object down the pipe to force the input side to disable reference mode.
             controlPipe.write(C_MESSAGE);
-            controlPipe.writeObject((Object) null);
+            controlPipe.writeNull();
             controlPipe.flush();
         } catch (IOException e) {
             close(CONTROL_FAILURE, controlPipe);

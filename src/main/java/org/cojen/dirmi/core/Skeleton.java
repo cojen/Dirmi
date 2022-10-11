@@ -97,7 +97,7 @@ public abstract class Skeleton<R> extends Item {
             pipe.disableReferences();
             return 1;
         } else {
-            pipe.writeObject((Object) null);
+            pipe.writeNull();
             return 0;
         }
     }

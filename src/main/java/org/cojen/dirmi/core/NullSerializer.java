@@ -34,7 +34,7 @@ class NullSerializer implements Serializer<Object> {
 
     @Override
     public void write(Pipe pipe, Object obj) throws IOException {
-        pipe.writeObject((Object) null);
+        pipe.writeNull();
     }
 
     @Override

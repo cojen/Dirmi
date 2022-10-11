@@ -317,7 +317,7 @@ public final class Engine implements Environment {
             session.writeHeader(pipe, clientSessionId);
             serverInfo.writeTo(pipe);
             LinkedHashSet<String> serverCustomTypes = settings.writeSerializerTypes(pipe);
-            pipe.writeObject((Object) null); // optional metadata
+            pipe.writeNull(); // optional metadata
             pipe.flush();
 
             if (timeoutTask != null && !timeoutTask.cancel()) {
@@ -379,7 +379,7 @@ public final class Engine implements Environment {
             pipe.write(bname); // root object name
             info.writeTo(pipe);  // root object type
             clientCustomTypes = settings.writeSerializerTypes(pipe);
-            pipe.writeObject((Object) null); // optional metadata
+            pipe.writeNull(); // optional metadata
             pipe.flush();
 
             long version = pipe.readLong();
