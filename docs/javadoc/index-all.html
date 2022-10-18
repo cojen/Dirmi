@@ -51,7 +51,7 @@ loadScripts(document, 'script');</script>
 <div class="header">
 <h1>Index</h1>
 </div>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
 <h2 class="title" id="I:A">A</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#acceptAll(java.net.ServerSocket)" class="member-name-link">acceptAll(ServerSocket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
@@ -102,6 +102,10 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Closes all connections and immediately closes any future connections.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#CLOSED" class="member-name-link">CLOSED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Indicates that the session is permanently closed.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/ClosedException.html" class="type-name-link" title="class in org.cojen.dirmi">ClosedException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Generic exception indicating that a resource is closed.</div>
@@ -137,6 +141,11 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#connected(java.nio.channels.SocketChannel)" class="member-name-link">connected(SocketChannel)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
 <div class="block">Receives new connections from a <a href="org.cojen.dirmi/org/cojen/dirmi/Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#CONNECTED" class="member-name-link">CONNECTED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Indicates that the session is currenty connected, and remote calls are likely to
+ succeed.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#connector(org.cojen.dirmi.Connector)" class="member-name-link">connector(Connector)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
@@ -183,6 +192,10 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#disableReferences()" class="member-name-link">disableReferences()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
 <dd>
 <div class="block">Disables tracking of object references.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#DISCONNECTED" class="member-name-link">DISCONNECTED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Indicates that the session isn't connected and is about to begin reconnecting.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" class="type-name-link" title="class in org.cojen.dirmi">DisconnectedException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
@@ -306,6 +319,16 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Set the reconnect delay for newly established client sessions (±10%).</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#RECONNECTED" class="member-name-link">RECONNECTED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Indicates that the session has just finished reconnecting, but remote calls will
+ still fail.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#RECONNECTING" class="member-name-link">RECONNECTING</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Indicates that the session is attempting to reconnect, and all remote calls from
+ this session are failing.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#recycle()" class="member-name-link">recycle()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
 <dd>
 <div class="block">Attempt to recycle the connection instead of closing it.</div>
@@ -360,10 +383,20 @@ loadScripts(document, 'script');</script>
 <div class="block">Manages a client-side or server-side remote session, which establishes new socket
  connections as needed.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" class="type-name-link" title="enum class in org.cojen.dirmi">Session.State</a> - Enum Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>&nbsp;</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html" class="type-name-link" title="interface in org.cojen.dirmi">SessionAware</a> - Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Remote objects implementing this interface are notified when they are attached and detached
  from sessions.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#state()" class="member-name-link">state()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Returns the current session state.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#stateListener(java.util.function.Consumer)" class="member-name-link">stateListener(Consumer&lt;Session&lt;?&gt;&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Set a listener which is invoked when the session state changes.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:U">U</h2>
@@ -396,6 +429,18 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html#%3Cinit%3E(java.lang.Throwable)" class="member-name-link">UnimplementedException(Throwable)</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></dt>
 <dd>&nbsp;</dd>
 </dl>
+<h2 class="title" id="I:V">V</h2>
+<dl class="index">
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#valueOf(java.lang.String)" class="member-name-link">valueOf(String)</a> - Static method in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Returns the enum constant of this class with the specified name.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#values()" class="member-name-link">values()</a> - Static method in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
+<dd>
+<div class="block">Returns an array containing the constants of this enum class, in
+the order they are declared.</div>
+</dd>
+</dl>
 <h2 class="title" id="I:W">W</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#write(org.cojen.dirmi.Pipe,T)" class="member-name-link">write(Pipe, T)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
@@ -411,7 +456,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Write an object (or null) to the pipe.</div>
 </dd>
 </dl>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
 <footer role="contentinfo">
 <hr>
 <p class="legal-copy"><small>Copyright &#169; 2006&#x2013;2022 <a href="https://github.com/cojen">Cojen</a>. All rights reserved.</small></p>
