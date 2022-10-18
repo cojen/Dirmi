@@ -22,6 +22,11 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import java.util.function.Consumer;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
@@ -63,6 +68,8 @@ public class RestorableTest {
 
     @Test
     public void basic() throws Exception {
+        assertEquals(Session.State.CONNECTED, mSession.state());
+
         R1 root = mSession.root();
         R2 r2 = root.a(123);
 
@@ -72,6 +79,17 @@ public class RestorableTest {
         } catch (IllegalStateException e) {
             assertTrue(e.getMessage().contains("non-restorable parent"));
         }
+
+        var listener = new Consumer<Session<?>>() {
+            final List<Session.State> states = new ArrayList<>();
+
+            @Override
+            public void accept(Session<?> session) {
+                states.add(session.state());
+            }
+        };
+
+        mSession.stateListener(listener);
 
         R1 r1x = r2.a();
 
@@ -124,6 +142,16 @@ public class RestorableTest {
                 }
             }
         }
+
+        assertEquals(List.of(Session.State.DISCONNECTED, Session.State.RECONNECTING,
+                             Session.State.RECONNECTED, Session.State.CONNECTED),
+                     listener.states);
+
+        listener.states.clear();
+
+        mSession.close();
+
+        assertEquals(List.of(Session.State.CLOSED), listener.states);
     }
 
     private static class Acceptor implements Runnable {

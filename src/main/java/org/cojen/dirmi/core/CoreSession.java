@@ -31,6 +31,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.DisconnectedException;
@@ -51,7 +52,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         C_PING = 1, C_PONG = 2, C_MESSAGE = 3, C_KNOWN_TYPE = 4, C_REQUEST_CONNECTION = 5,
         C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9;
 
-    static final int CLOSED = 1, DISCONNECTED = 2, PING_FAILURE = 4, CONTROL_FAILURE = 8;
+    static final int R_CLOSED = 1, R_DISCONNECTED = 2, R_PING_FAILURE = 4, R_CONTROL_FAILURE = 8;
 
     private static final int SPIN_LIMIT;
 
@@ -103,6 +104,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private int mClosed;
 
+    final Lock mStateLock;
+    private volatile Consumer<Session<?>> mStateListener;
+    private volatile State mState;
+
     // Used when reconnecting.
     volatile WaitMap<String, RemoteInfo> mTypeWaitMap;
 
@@ -120,6 +125,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mSkeletonSupport = new CoreSkeletonSupport(this);
 
         mControlLock = new ReentrantLock();
+
+        mStateLock = new ReentrantLock();
+        mState = State.CONNECTED;
 
         initTypeCodeMap(TypeCodeMap.STANDARD);
     }
@@ -380,42 +388,89 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
+    public final State state() {
+        return mState;
+    }
+
+    @Override
+    public final void stateListener(Consumer<Session<?>> listener) {
+        mStateListener = listener;
+    }
+
+    // Caller must hold mStateLock.
+    private void setStateAnyNotify(Session.State state) {
+        if (mState != state) {
+            mState = state;
+
+            Consumer<Session<?>> listener = mStateListener;
+
+            if (listener != null) {
+                try {
+                    listener.accept(this);
+                } catch (Throwable e) {
+                    uncaughtException(e);
+                }
+            }
+        }
+    }
+
+    void casStateAndNotify(Session.State expect, Session.State newState) {
+        mStateLock.lock();
+        try {
+            if (mState == expect) {
+                setStateAnyNotify(newState);
+            }
+        } finally {
+            mStateLock.unlock();
+        }
+    }
+
+    @Override
     public final void close() {
-        close(CLOSED, null);
+        close(R_CLOSED, null);
     }
 
     /**
-     * Close with a reason. When reason is DISCONNECTED and controlPipe isn't null, only closes
-     * if the current control pipe matches. This guards against a race condition in which a
-     * session is closed after it was reconnected. Pass null to force close.
+     * Close with a reason. When reason is R_DISCONNECTED and controlPipe isn't null, only
+     * closes if the current control pipe matches. This guards against a race condition in
+     * which a session is closed after it was reconnected. Pass null to force close.
      */
     void close(int reason, CorePipe controlPipe) {
-        if ((reason & (CLOSED | DISCONNECTED)) == 0) {
-            reason |= CLOSED;
+        if ((reason & (R_CLOSED | R_DISCONNECTED)) == 0) {
+            reason |= R_CLOSED;
         }
 
         CorePipe first;
 
-        conLockAcquire();
+        mStateLock.lock();
         try {
-            if ((reason & DISCONNECTED) != 0
+            if ((reason & R_DISCONNECTED) != 0
                 && controlPipe != null && mControlPipe != controlPipe)
             {
                 return;
             }
+
             int closed = mClosed;
             if (closed == 0) {
                 mClosed = reason;
-            } else if ((closed & CLOSED) != 0) {
-                reason |= CLOSED;
-                reason &= ~DISCONNECTED;
+            } else if ((closed & R_CLOSED) != 0) {
+                reason |= R_CLOSED;
+                reason &= ~R_DISCONNECTED;
             }
-            first = mConFirst;
-            mConFirst = null;
-            mConAvail = null;
-            mConLast = null;
+
+            setStateAnyNotify((reason & R_DISCONNECTED) != 0 ? State.DISCONNECTED : State.CLOSED);
+
+            conLockAcquire();
+            try {
+                first = mConFirst;
+                mConFirst = null;
+                mConAvail = null;
+                mConLast = null;
+            } finally {
+                conLockRelease();
+            }
         } finally {
-            conLockRelease();
+            mStateLock.unlock();
         }
 
         closePipes(first);
@@ -428,10 +483,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         var newSupport = new CoreStubSupport(this);
         stubSupport(newSupport);
 
-        if ((reason & CLOSED) != 0) {
+        if ((reason & R_CLOSED) != 0) {
             mStubs.clear();
         } else {
-            assert (reason & DISCONNECTED) != 0;
+            assert (reason & R_DISCONNECTED) != 0;
 
             mStubs.forEachToRemove(stub -> {
                 if (Stub.cOriginHandle.getAcquire(stub) != null || stub == root()) {
@@ -475,9 +530,25 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * Called after the session has been reconnected.
      */
     final void unclose() {
-        conLockAcquire();
-        mClosed = 0;
-        conLockRelease();
+        mStateLock.lock();
+        try {
+            if (mState == State.DISCONNECTED) {
+                // Reconnected too quickly, before the RECONNECTING state was set. The
+                // RECONNECTING state should always be observed by the listener before
+                // observing RECONNECTED, so set it now.
+                setStateAnyNotify(State.RECONNECTING);
+            }
+
+            setStateAnyNotify(State.RECONNECTED);
+
+            conLockAcquire();
+            mClosed = 0;
+            conLockRelease();
+
+            setStateAnyNotify(State.CONNECTED);
+        } finally {
+            mStateLock.unlock();
+        }
     }
 
     /**
@@ -506,9 +577,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     @Override
     public final String toString() {
+        // FIXME: include state
         return getClass().getSimpleName() + '@' +
-            Integer.toHexString(System.identityHashCode(this)) +
-            "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
+            Integer.toHexString(System.identityHashCode(this)) + "{state=" + state() +
+            ", localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
     final void uncaughtException(Throwable e) {
@@ -522,10 +594,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final void controlPipe(CorePipe pipe) {
-        conLockAcquire();
+        mStateLock.lock();
         pipe.mSession = this;
         cControlPipeHandle.setRelease(this, pipe);
-        conLockRelease();
+        mStateLock.unlock();
     }
 
     /**
@@ -543,7 +615,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (!(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                close(CONTROL_FAILURE, pipe);
+                close(R_CONTROL_FAILURE, pipe);
             }
         };
 
@@ -596,7 +668,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (!(e instanceof IOException)) {
                     uncaughtException(e);
                 }
-                close(CONTROL_FAILURE, pipe);
+                close(R_CONTROL_FAILURE, pipe);
             }
         });
 
@@ -688,7 +760,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 controlPipe.writeObject(response);
             }
         } catch (IOException e) {
-            close(CONTROL_FAILURE, controlPipe);
+            close(R_CONTROL_FAILURE, controlPipe);
         } finally {
             mControlLock.unlock();
         }
@@ -702,7 +774,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             controlPipe.writeNull();
             controlPipe.flush();
         } catch (IOException e) {
-            close(CONTROL_FAILURE, controlPipe);
+            close(R_CONTROL_FAILURE, controlPipe);
         } finally {
             mControlLock.unlock();
         }
@@ -736,7 +808,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 controlPipe.flush();
             }
         } catch (IOException e) {
-            close(CONTROL_FAILURE, controlPipe);
+            close(R_CONTROL_FAILURE, controlPipe);
         } finally {
             mControlLock.unlock();
         }
@@ -790,7 +862,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             int clock = (int) cPipeClockHandle.getVolatile(pipe);
 
             if (clock == 1) {
-                session.close(PING_FAILURE, pipe);
+                session.close(R_PING_FAILURE, pipe);
                 return false;
             }
 
@@ -799,7 +871,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 session.sendByte(C_PING);
             } catch (IOException e) {
-                session.close(CONTROL_FAILURE, pipe);
+                session.close(R_CONTROL_FAILURE, pipe);
                 return false;
             }
 
@@ -1027,7 +1099,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         conLockAcquire();
         int closed = mClosed;
         conLockRelease();
-        return (closed & CLOSED) != 0;
+        return (closed & R_CLOSED) != 0;
     }
 
     final boolean isClosedOrDisconnected() {
@@ -1039,29 +1111,32 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     final void checkClosed() throws RemoteException {
         int closed = mClosed;
-
         if (closed != 0) {
-            StringBuilder b = new StringBuilder(80).append("Session is ");
+            throwClosed(closed);
+        }
+    }
 
-            b.append((closed & DISCONNECTED) == 0 ? "closed" : "disconnected");
+    private void throwClosed(int closed) throws RemoteException {
+        StringBuilder b = new StringBuilder(80).append("Session is ");
 
-            if ((closed & PING_FAILURE) != 0) {
-                b.append(" (ping response timeout)");
-            } else if ((closed & CONTROL_FAILURE) != 0) {
-                b.append(" (control connection failure)");
-            }
+        b.append((closed & R_DISCONNECTED) == 0 ? "closed" : "disconnected");
 
-            if ((closed & DISCONNECTED) != 0) {
-                b.append("; attempting to reconnect");
-            }
+        if ((closed & R_PING_FAILURE) != 0) {
+            b.append(" (ping response timeout)");
+        } else if ((closed & R_CONTROL_FAILURE) != 0) {
+            b.append(" (control connection failure)");
+        }
 
-            String message = b.toString();
+        if ((closed & R_DISCONNECTED) != 0) {
+            b.append("; attempting to reconnect");
+        }
 
-            if ((closed & DISCONNECTED) != 0) {
-                throw new DisconnectedException(message);
-            } else {
-                throw new ClosedException(message);
-            }
+        String message = b.toString();
+
+        if ((closed & R_DISCONNECTED) != 0) {
+            throw new DisconnectedException(message);
+        } else {
+            throw new ClosedException(message);
         }
     }
 

@@ -30,6 +30,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.Executor;
 
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import org.cojen.dirmi.core.CoreUtils;
 
@@ -109,9 +110,53 @@ public interface Session<R> extends Closeable, Link, Executor {
     void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h);
 
     /**
+     * Returns the current session state.
+     */
+    State state();
+
+    /**
+     * Set a listener which is invoked when the session state changes. The listener is invoked
+     * in a blocking fashion, preventing any further state changes until the listener returns.
+     */
+    void stateListener(Consumer<Session<?>> listener);
+
+    /**
      * Closes all connections and immediately closes any future connections. All remote objects
      * are invalidated as a side effect.
      */
     @Override
     void close();
+
+    /**
+     * @see Session#state
+     */
+    public enum State {
+        /**
+         * Indicates that the session isn't connected and is about to begin reconnecting.
+         */
+        DISCONNECTED,
+
+        /**
+         * Indicates that the session is attempting to reconnect, and all remote calls from
+         * this session are failing.
+         */
+        RECONNECTING,
+
+        /**
+         * Indicates that the session has just finished reconnecting, but remote calls will
+         * still fail.
+         */
+        RECONNECTED,
+
+        /**
+         * Indicates that the session is currenty connected, and remote calls are likely to
+         * succeed.
+         */
+        CONNECTED,
+
+        /**
+         * Indicates that the session is permanently closed.
+         */
+        CLOSED;
+    }
 }

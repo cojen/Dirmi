@@ -104,28 +104,32 @@ final class ClientSession<R> extends CoreSession<R> {
     @Override
     void close(int reason, CorePipe controlPipe) {
         if (mSettings.reconnectDelayMillis < 0) {
-            reason |= CLOSED;
+            reason |= R_CLOSED;
         }
 
-        if ((reason & CLOSED) != 0) {
+        if ((reason & R_CLOSED) != 0) {
             super.close(reason, null); // pass null to force close
             mEngine.removeSession(this);
             return;
         }
 
-        reason |= DISCONNECTED;
+        reason |= R_DISCONNECTED;
         super.close(reason, controlPipe);
 
         mEngine.reconnect(mSettings, mRootType, mRootName, remoteAddress(), this::reconnectAttempt);
+
+        // Must compare to the expected state first, in case the reconnect was quick and the
+        // state has already changed.
+        casStateAndNotify(State.DISCONNECTED, State.RECONNECTING);
     }
 
     @SuppressWarnings("unchecked")
     private boolean reconnectAttempt(Object result) {
         if (isClosed()) {
             if (result instanceof ClientSession) {
-                ((ClientSession) result).close(CLOSED, null);
+                ((ClientSession) result).close(R_CLOSED, null);
             }
-            close(CLOSED, null);
+            close(R_CLOSED, null);
             return false;
         }
 
@@ -135,7 +139,7 @@ final class ClientSession<R> extends CoreSession<R> {
         }
 
         if (!(result instanceof ClientSession)) {
-            close(CLOSED, null);
+            close(R_CLOSED, null);
             return false;
         }
 
@@ -200,7 +204,7 @@ final class ClientSession<R> extends CoreSession<R> {
             // Flush the control pipe to send any pending C_KNOWN_TYPE commands.
             flushControlPipe();
         } catch (IOException | InterruptedException e) {
-            close(DISCONNECTED, null);
+            close(R_DISCONNECTED, null);
             return false;
         }
 
