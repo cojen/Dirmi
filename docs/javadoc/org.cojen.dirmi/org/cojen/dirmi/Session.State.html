@@ -104,6 +104,7 @@ loadScripts(document, 'script');</script>
 <hr>
 <div class="type-signature"><span class="modifiers">public static enum </span><span class="element-name type-name-label">Session.State</span>
 <span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Enum.html" title="class or interface in java.lang" class="external-link">Enum</a>&lt;<a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a>&gt;</span></div>
+<div class="block">Indicates the session's current connection state.</div>
 <dl class="notes">
 <dt>See Also:</dt>
 <dd>
@@ -201,6 +202,14 @@ the order they are declared.</div>
 <h2>Enum Constant Details</h2>
 <ul class="member-list">
 <li>
+<section class="detail" id="CONNECTED">
+<h3>CONNECTED</h3>
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></span>&nbsp;<span class="element-name">CONNECTED</span></div>
+<div class="block">Indicates that the session is currenty connected, and remote calls are likely to
+ succeed.</div>
+</section>
+</li>
+<li>
 <section class="detail" id="DISCONNECTED">
 <h3>DISCONNECTED</h3>
 <div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></span>&nbsp;<span class="element-name">DISCONNECTED</span></div>
@@ -221,14 +230,6 @@ the order they are declared.</div>
 <div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></span>&nbsp;<span class="element-name">RECONNECTED</span></div>
 <div class="block">Indicates that the session has just finished reconnecting, but remote calls will
  still fail.</div>
-</section>
-</li>
-<li>
-<section class="detail" id="CONNECTED">
-<h3>CONNECTED</h3>
-<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></span>&nbsp;<span class="element-name">CONNECTED</span></div>
-<div class="block">Indicates that the session is currenty connected, and remote calls are likely to
- succeed.</div>
 </section>
 </li>
 <li>

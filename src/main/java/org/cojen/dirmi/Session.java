@@ -128,9 +128,17 @@ public interface Session<R> extends Closeable, Link, Executor {
     void close();
 
     /**
+     * Indicates the session's current connection state.
+     *
      * @see Session#state
      */
     public enum State {
+        /**
+         * Indicates that the session is currenty connected, and remote calls are likely to
+         * succeed.
+         */
+        CONNECTED,
+
         /**
          * Indicates that the session isn't connected and is about to begin reconnecting.
          */
@@ -147,12 +155,6 @@ public interface Session<R> extends Closeable, Link, Executor {
          * still fail.
          */
         RECONNECTED,
-
-        /**
-         * Indicates that the session is currenty connected, and remote calls are likely to
-         * succeed.
-         */
-        CONNECTED,
 
         /**
          * Indicates that the session is permanently closed.
