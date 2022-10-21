@@ -577,7 +577,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     @Override
     public final String toString() {
-        // FIXME: include state
         return getClass().getSimpleName() + '@' +
             Integer.toHexString(System.identityHashCode(this)) + "{state=" + state() +
             ", localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
