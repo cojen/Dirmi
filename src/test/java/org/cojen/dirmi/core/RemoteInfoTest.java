@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -40,6 +39,8 @@ import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Unbatched;
+
+import org.cojen.dirmi.io.CaptureOutputStream;
 
 /**
  * 
@@ -283,12 +284,12 @@ public class RemoteInfoTest {
     public void empty() throws Exception {
         var info = RemoteInfo.examine(Empty.class);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
         info.writeTo(pipe);
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -332,12 +333,12 @@ public class RemoteInfoTest {
     public void basic() throws Exception {
         var info = RemoteInfo.examine(R30.class);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
         info.writeTo(pipe);
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -606,12 +607,12 @@ public class RemoteInfoTest {
     public void big() throws Exception {
         var info = RemoteInfo.examine(R31.class);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
         info.writeTo(pipe);
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 

@@ -37,7 +37,7 @@ import org.cojen.dirmi.ClosedException;
  * @author Brian S O'Neill
  * @see PipedInputStream
  */
-public class PipedOutputStream extends OutputStream {
+public final class PipedOutputStream extends OutputStream {
     private final Lock mLock;
     private final Condition mReadCondition;
     private final Condition mWriteCondition;

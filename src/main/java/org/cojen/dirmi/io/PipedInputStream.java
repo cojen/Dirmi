@@ -33,7 +33,7 @@ import org.cojen.dirmi.ClosedException;
  * @author Brian S O'Neill
  * @see PipedOutputStream
  */
-public class PipedInputStream extends InputStream {
+public final class PipedInputStream extends InputStream {
     private static final int NOT_CONNECTED = 0, CONNECTED = 1, HALF_CLOSED = 2, CLOSED = 3;
 
     private final Lock mLock;

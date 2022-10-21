@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -27,6 +26,8 @@ import static org.junit.Assert.*;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.UnimplementedException;
+
+import org.cojen.dirmi.io.CaptureOutputStream;
 
 /**
  * 
@@ -61,8 +62,8 @@ public class MethodIdWriterTest {
         RemoteInfo info = RemoteInfo.examine(A.class);
         MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info, true);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         for (int i=0; i<3; i++) {
             writer.writeMethodId(pipe, i);
@@ -76,7 +77,7 @@ public class MethodIdWriterTest {
 
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -108,8 +109,8 @@ public class MethodIdWriterTest {
         RemoteInfo current = RemoteInfo.examine(B.class);
         MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current, true);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         writer.writeMethodId(pipe, 0);
         writer.writeMethodId(pipe, 1);
@@ -122,7 +123,7 @@ public class MethodIdWriterTest {
 
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -138,8 +139,8 @@ public class MethodIdWriterTest {
         RemoteInfo current = RemoteInfo.examine(C.class);
         MethodIdWriter writer = MethodIdWriterMaker.writerFor(original, current, true);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         writer.writeMethodId(pipe, 1);
 
@@ -159,7 +160,7 @@ public class MethodIdWriterTest {
 
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 

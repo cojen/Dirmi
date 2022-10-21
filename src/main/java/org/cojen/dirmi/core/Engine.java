@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.InputStream;
 import java.io.IOException;
@@ -62,6 +61,8 @@ import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.Serializer;
+
+import org.cojen.dirmi.io.CaptureOutputStream;
 
 /**
  * 
@@ -812,43 +813,12 @@ public final class Engine implements Environment {
     }
 
     private static byte[] binaryName(Object name) {
-        var capture = new OutputStream() {
-            private byte[] mBytes;
-            private ByteArrayOutputStream mBout;
-
-            @Override
-            public void write(int b) throws IOException {
-                write(new byte[] {(byte) b});
-            }
-
-            @Override
-            public void write(byte[] b, int off, int len) throws IOException {
-                if (mBout == null) {
-                    if (mBytes == null) {
-                        var bytes = new byte[len];
-                        System.arraycopy(b, off, bytes, 0, len);
-                        mBytes = bytes;
-                        return;
-                    }
-                    mBout = new ByteArrayOutputStream();
-                    mBout.write(mBytes);
-                    mBytes = null;
-                }
-
-                mBout.write(b, off, len);
-            }
-
-            byte[] bytes() {
-                return mBout == null ? mBytes : mBout.toByteArray();
-            }
-        };
-
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
-
         try {
+            var capture = new CaptureOutputStream();
+            var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
             pipe.writeObject(name);
             pipe.flush();
-            return capture.bytes();
+            return capture.getBytes();
         } catch (IOException e) {
             throw new AssertionError(e);
         }

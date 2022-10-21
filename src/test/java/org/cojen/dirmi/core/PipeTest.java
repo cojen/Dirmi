@@ -17,7 +17,6 @@
 package org.cojen.dirmi.core;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
@@ -45,6 +44,8 @@ import static org.junit.Assert.*;
 
 import org.cojen.dirmi.ClosedException;
 
+import org.cojen.dirmi.io.CaptureOutputStream;
+
 import static org.cojen.dirmi.core.TypeCodes.*;
 
 /**
@@ -59,12 +60,12 @@ public class PipeTest {
 
     @Test
     public void emptyUTF() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
         pipe.writeUTF("");
         pipe.flush();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         assertEquals(2, bytes.length);
         assertEquals(0, bytes[0]);
         assertEquals(0, bytes[1]);
@@ -76,8 +77,8 @@ public class PipeTest {
 
     @Test
     public void longUTF() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         try {
             pipe.writeUTF(new String(new char[65536]));
@@ -98,7 +99,7 @@ public class PipeTest {
         out.flush();
         pipe.outputStream().close();
 
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -135,15 +136,15 @@ public class PipeTest {
 
     @Test
     public void skip() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         for (int i=1; i<=2500; i++) {
             pipe.writeInt(i);
         }
 
         pipe.outputStream().close();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -195,8 +196,8 @@ public class PipeTest {
 
     @Test
     public void boxedPrimitives() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         pipe.writeObject((Boolean) null);
         pipe.writeObject(true);
@@ -224,7 +225,7 @@ public class PipeTest {
         pipe.writeObject(4L);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -262,8 +263,8 @@ public class PipeTest {
 
     @Test
     public void bigNumbers() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         var rnd = new Random(8675309);
         var number = new byte[1000];
@@ -286,7 +287,7 @@ public class PipeTest {
         }
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -307,8 +308,8 @@ public class PipeTest {
 
     @Test
     public void strings() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         var rnd = new Random(8675309);
         var strings = new String[1000];
@@ -323,7 +324,7 @@ public class PipeTest {
         pipe.writeObject((String) null);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -342,8 +343,8 @@ public class PipeTest {
 
     @Test
     public void bogus() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
         try {
             pipe.writeObject(this);
             fail();
@@ -353,8 +354,8 @@ public class PipeTest {
 
     @Test
     public void arrays() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         var rnd = new Random(8675309);
 
@@ -411,7 +412,7 @@ public class PipeTest {
         }
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -515,8 +516,8 @@ public class PipeTest {
 
     @Test
     public void collections() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         var rnd = new Random(8675309);
 
@@ -534,7 +535,7 @@ public class PipeTest {
         }
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -578,8 +579,8 @@ public class PipeTest {
 
     @Test
     public void exception() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         var ex1 = new NullPointerException();
         var ex2 = new NullPointerException("test");
@@ -593,7 +594,7 @@ public class PipeTest {
         pipe.writeObject((Object) null);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -623,8 +624,8 @@ public class PipeTest {
 
     @Test
     public void multidimensional() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         String[][] array1 = {
             {"a", "b"}, {"c", "d"}
@@ -639,7 +640,7 @@ public class PipeTest {
         pipe.writeObject(array2);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -677,14 +678,14 @@ public class PipeTest {
         var list = new ArrayList<Object>();
         list.add(list);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         pipe.enableReferences();
         pipe.writeObject(list);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -695,15 +696,15 @@ public class PipeTest {
 
     @Test
     public void voidObject() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         Object obj = new Object();
         pipe.writeObject(Void.TYPE);
         pipe.writeObject(Void.TYPE);
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -713,8 +714,8 @@ public class PipeTest {
 
     @Test
     public void plainObject() throws Exception {
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         pipe.enableReferences();
 
@@ -725,7 +726,7 @@ public class PipeTest {
         pipe.disableReferences();
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -745,8 +746,8 @@ public class PipeTest {
             map.put(("" + i).intern(), ("" + (i % 1000)).intern());
         }
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         pipe.enableReferences();
         pipe.writeObject(map);
@@ -755,7 +756,7 @@ public class PipeTest {
         pipe.writeObject("0");
 
         pipe.flush();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
         var bin = new ByteArrayInputStream(bytes);
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
@@ -793,8 +794,8 @@ public class PipeTest {
     private void fuzz(long seed, boolean streams) throws Exception {
         var rnd = new Random(seed);
 
-        var bout = new ByteArrayOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), bout);
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         pipe.flush(); // should do nothing
 
@@ -808,7 +809,7 @@ public class PipeTest {
         }
 
         pipe.outputStream().close();
-        byte[] bytes = bout.toByteArray();
+        byte[] bytes = capture.getBytes();
 
         rnd = new Random(seed);
         assertEquals(num, rnd.nextInt(max) + 1);
