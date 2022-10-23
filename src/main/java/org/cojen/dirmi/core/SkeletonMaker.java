@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.ObjectInputFilter;
+
 import java.lang.invoke.MethodHandles;
 
 import java.util.Collections;
@@ -255,15 +257,26 @@ final class SkeletonMaker<R> {
             boolean isPiped = rm.isPiped();
             boolean findPipe = isPiped;
 
-            for (int i=0; i<paramVars.length; i++) {
-                var paramVar = mm.var(paramTypes.get(i));
-                if (findPipe && paramVar.classType() == Pipe.class) {
-                    paramVar = pipeVar;
-                    findPipe = false;
-                } else {
-                    CoreUtils.readParam(pipeVar, paramVar);
+            if (paramVars.length > 0) {
+                var inVar = pipeVar;
+
+                if (rm.isSerialized() && CoreUtils.anyObjectTypes(paramTypes)) {
+                    inVar = mm.new_(CoreObjectInputStream.class, pipeVar);
+                    ObjectInputFilter filter = rm.objectInputFilter();
+                    var filterVar = mm.var(ObjectInputFilter.class).setExact(filter);
+                    inVar.invoke("setObjectInputFilter", filterVar);
                 }
-                paramVars[i] = paramVar;
+
+                for (int i=0; i<paramVars.length; i++) {
+                    var paramVar = mm.var(paramTypes.get(i));
+                    if (findPipe && paramVar.classType() == Pipe.class) {
+                        paramVar = pipeVar;
+                        findPipe = false;
+                    } else {
+                        CoreUtils.readParam(inVar, paramVar);
+                    }
+                    paramVars[i] = paramVar;
+                }
             }
 
             Variable aliasIdVar = null;
@@ -353,7 +366,14 @@ final class SkeletonMaker<R> {
                         var supportVar = mm.param(3);
                         supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
                     } else if (resultVar != null) {
-                        CoreUtils.writeParam(pipeVar, resultVar);
+                        Variable outVar = pipeVar;
+                        if (rm.isSerialized() && CoreUtils.isObjectType(resultVar)) {
+                            outVar = mm.new_(CoreObjectOutputStream.class, pipeVar);
+                        }
+                        CoreUtils.writeParam(outVar, resultVar);
+                        if (outVar != pipeVar) {
+                            outVar.invoke("drain");
+                        }
                     }
 
                     finished.here();

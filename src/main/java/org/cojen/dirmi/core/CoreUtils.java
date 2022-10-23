@@ -305,4 +305,51 @@ public final class CoreUtils {
             paramVar.set(pipeVar.invoke(m));
         }
     }
+
+    /**
+     * Returns true if any of the given parameter types represents an object.
+     *
+     * @param ptypes consists of Class instances, Variables, or String descriptors
+     */
+    static boolean anyObjectTypes(Object[] ptypes) {
+        for (Object ptype : ptypes) {
+            if (isObjectType(ptype)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if any of the given parameter types represents an object.
+     *
+     * @param ptypes consists of Class instances, Variables, or String descriptors
+     */
+    static boolean anyObjectTypes(List<? extends Object> ptypes) {
+        for (Object ptype : ptypes) {
+            if (isObjectType(ptype)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean isObjectType(Object type) {
+        if (type instanceof Class) {
+            if (!((Class) type).isPrimitive()) {
+                return true;
+            }
+        } else if (type instanceof Variable) {
+            Class<?> ctype = ((Variable) type).classType();
+            if (ctype == null || !ctype.isPrimitive()) {
+                return true;
+            }
+        } else {
+            char first = ((String) type).charAt(0);
+            if (first == 'L' || first == '[') {
+                return true;
+            }
+        }
+        return false;
+    }
 }

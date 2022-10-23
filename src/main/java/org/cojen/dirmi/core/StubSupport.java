@@ -17,7 +17,9 @@
 package org.cojen.dirmi.core;
 
 import java.io.IOException;
+import java.io.ObjectInput;
 
+import org.cojen.dirmi.Link;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 

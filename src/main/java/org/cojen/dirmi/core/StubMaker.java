@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.ObjectInputFilter;
+
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -179,7 +181,11 @@ final class StubMaker {
             if (clientMethod == null) {
                 // Attempt to implement a method that only exists on the server-side.
                 try {
-                    returnType = classForEx(serverMethod.returnType());
+                    Class<?> returnClass = classForEx(serverMethod.returnType());
+                    if (serverMethod.isSerialized() && !returnClass.isPrimitive()) {
+                        // Client doesn't have an object input filter, so skip the method.
+                        continue;
+                    }
                     methodName = serverMethod.name();
                     List<String> pnames = serverMethod.parameterTypes();
                     ptypes = new Object[pnames.size()];
@@ -187,6 +193,7 @@ final class StubMaker {
                     for (String pname : pnames) {
                         ptypes[i++] = classForEx(pname);
                     }
+                    returnType = returnClass;
                 } catch (ClassNotFoundException e) {
                     // Can't be implemented, so skip it.
                     continue;
@@ -383,8 +390,15 @@ final class StubMaker {
                     supportVar.invoke("finished", pipeVar);
                     mm.return_();
                 } else {
+                    Variable inVar = pipeVar;
+                    if (serverMethod.isSerialized() && CoreUtils.isObjectType(returnType)) {
+                        inVar = mm.new_(CoreObjectInputStream.class, pipeVar);
+                        ObjectInputFilter filter = clientMethod.objectInputFilter();
+                        var filterVar = mm.var(ObjectInputFilter.class).setExact(filter);
+                        inVar.invoke("setObjectInputFilter", filterVar);
+                    }
                     var returnVar = mm.var(returnType);
-                    CoreUtils.readParam(pipeVar, returnVar);
+                    CoreUtils.readParam(inVar, returnVar);
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
                     returnResult(mm, clientMethod, returnVar);
@@ -437,20 +451,30 @@ final class StubMaker {
             return;
         }
 
+        var outVar = pipeVar;
+
+        if (method.isSerialized() && CoreUtils.anyObjectTypes(ptypes)) {
+            outVar = mm.new_(CoreObjectOutputStream.class, pipeVar);
+        }
+
         // Write all of the non-pipe parameters.
 
         if (!method.isPiped()) {
             for (int i=0; i<ptypes.length; i++) {
-                CoreUtils.writeParam(pipeVar, mm.param(i));
+                CoreUtils.writeParam(outVar, mm.param(i));
             }
         } else {
             String pipeDesc = Pipe.class.descriptorString();
             for (int i=0; i<ptypes.length; i++) {
                 Object ptype = ptypes[i];
                 if (ptype != Pipe.class && !ptype.equals(pipeDesc)) {
-                    CoreUtils.writeParam(pipeVar, mm.param(i));
+                    CoreUtils.writeParam(outVar, mm.param(i));
                 }
             }
+        }
+
+        if (outVar != pipeVar) {
+            outVar.invoke("drain");
         }
     }
 

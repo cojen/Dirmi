@@ -17,6 +17,7 @@
 package org.cojen.dirmi.core;
 
 import java.io.IOException;
+import java.io.ObjectInputFilter;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -36,6 +37,7 @@ import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Restorable;
+import org.cojen.dirmi.Serialized;
 import org.cojen.dirmi.Unbatched;
 
 /**
@@ -45,7 +47,8 @@ import org.cojen.dirmi.Unbatched;
  */
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
-        F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64;
+        F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64,
+        F_SERIALIZED = 128;
 
     private final int mFlags;
     private final String mName;
@@ -53,11 +56,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     private final String mReturnType;
     private final List<String> mParameterTypes;
     private final Set<String> mExceptionTypes;
+    private final ObjectInputFilter mObjectInputFilter;
 
     private int mHashCode;
 
     private RemoteMethod(int flags, String name, String remoteFailureException,
-                         String returnType, List<String> parameterTypes, Set<String> exceptionTypes)
+                         String returnType, List<String> parameterTypes, Set<String> exceptionTypes,
+                         ObjectInputFilter objectInputFilter)
     {
         mFlags = flags;
         mName = name;
@@ -65,6 +70,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         mReturnType = returnType;
         mParameterTypes = parameterTypes;
         mExceptionTypes = exceptionTypes;
+        mObjectInputFilter = objectInputFilter;
     }
 
     /**
@@ -78,6 +84,8 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         mName = m.getName().intern();
 
         int flags = 0;
+
+        Serialized serializedAnn;
 
         if (m.isAnnotationPresent(Disposer.class)) {
             flags |= F_DISPOSER;
@@ -93,6 +101,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         if (m.isAnnotationPresent(NoReply.class)) {
             flags |= F_NOREPLY;
+        }
+        if ((serializedAnn = m.getAnnotation(Serialized.class)) != null) {
+            flags |= F_SERIALIZED;
         }
 
         if ((flags & F_BATCHED) != 0 && (flags & F_UNBATCHED) != 0) {
@@ -203,6 +214,10 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
                     throw new IllegalArgumentException
                         ("Piped method must have exactly one Pipe parameter: " + m);
                 }
+                if (serializedAnn != null) {
+                    throw new IllegalArgumentException
+                        ("Piped method cannot have @Serialized annotation: " + m);
+                }
             } else if (numPipes != 0) {
                 throw new IllegalArgumentException("Piped method must return a Pipe: " + m);
             }
@@ -255,6 +270,30 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         mFlags = flags;
 
         mRemoteFailureException = remoteFailureException.getName().intern();
+
+        if (serializedAnn == null) {
+            mObjectInputFilter = null;
+        } else {
+            String originalFilter = serializedAnn.filter();
+            String filter = originalFilter;
+
+            if (!filter.contains("!*")) {
+                filter = filter + ';' + "!*";
+            }
+
+            filter = MarshalledStub.class.getName() + ';'
+                + MarshalledSkeleton.class.getName() + ';' + filter;
+
+            try {
+                mObjectInputFilter = ObjectInputFilter.Config.createFilter(filter);
+            } catch (IllegalArgumentException e) {
+                if (filter != originalFilter) {
+                    // Try to report only the original filter in the exception.
+                    ObjectInputFilter.Config.createFilter(originalFilter);
+                }
+                throw e;
+            }
+        }
     }
 
     /**
@@ -265,7 +304,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     RemoteMethod asBatchedImmediate() {
         int flags = (mFlags | (F_BATCHED | F_UNBATCHED)) & ~F_NOREPLY;
         return new RemoteMethod(flags, mName, mRemoteFailureException,
-                                mReturnType, mParameterTypes, mExceptionTypes);
+                                mReturnType, mParameterTypes, mExceptionTypes, mObjectInputFilter);
     }
 
     /**
@@ -323,6 +362,21 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
      */
     boolean isNoReply() {
         return (mFlags & F_NOREPLY) != 0;
+    }
+
+    /**
+     * @see Serialized
+     */
+    boolean isSerialized() {
+        return (mFlags & F_SERIALIZED) != 0;
+    }
+
+    /**
+     * Returns a non-null filter if this method is Serialized and this RemoteMethod instance
+     * was constructed locally. That is, it didn't come from the readFrom method.
+     */
+    ObjectInputFilter objectInputFilter() {
+        return mObjectInputFilter;
     }
 
     /**
@@ -463,6 +517,6 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         var exceptionTypes = RemoteInfo.readInternedStringSet(pipe);
 
         return new RemoteMethod(flags, name, remoteFailureException,
-                                returnType, parameterTypes, exceptionTypes);
+                                returnType, parameterTypes, exceptionTypes, null);
     }
 }

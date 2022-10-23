@@ -16,7 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.InputStream;
 import java.io.IOException;
+import java.io.ObjectStreamException;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -40,6 +42,8 @@ import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAware;
+
+import org.cojen.dirmi.io.CaptureOutputStream;
 
 /**
  * Base class for ClientSession and ServerSession.
@@ -1077,6 +1081,34 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
+    static MarshalledSkeleton marshallSkeleton(CorePipe pipe, Object server) {
+        return pipe.mSession.marshallSkeleton(server);
+    }
+
+    private MarshalledSkeleton marshallSkeleton(Object server) {
+        Skeleton skeleton = mSkeletons.skeletonFor(server);
+
+        long typeId = skeleton.typeId();
+        byte[] infoBytes;
+
+        if (mKnownTypes.tryGet(typeId) != null) {
+            infoBytes = null;
+        } else {
+            RemoteInfo info = RemoteInfo.examine(skeleton.type());
+            var out = new CaptureOutputStream();
+            var pipe = new BufferedPipe(InputStream.nullInputStream(), out);
+            try {
+                info.writeTo(pipe);
+                pipe.flush();
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+            infoBytes = out.getBytes();
+        }
+
+        return new MarshalledSkeleton(skeleton.id, typeId, infoBytes);
+    }
+
     final void removeSkeleton(Skeleton<?> skeleton) {
         if (mSkeletons.remove(skeleton) != null) {
             detached(skeleton);
@@ -1188,7 +1220,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             } catch (Throwable e) {
                 if (e instanceof UncaughtException) {
                     uncaughtException(e.getCause());
-                } else if (e instanceof NoSuchObjectException || !(e instanceof IOException)) {
+                } else if (e instanceof NoSuchObjectException ||
+                           e instanceof ObjectStreamException ||
+                           !(e instanceof IOException))
+                {
                     uncaughtException(e);
                 }
                 CoreUtils.closeQuietly(mPipe);
