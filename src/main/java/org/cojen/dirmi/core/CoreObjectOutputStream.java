@@ -45,7 +45,7 @@ public final class CoreObjectOutputStream extends ObjectOutputStream {
     }
 
     @Override
-    protected final Object replaceObject(Object obj) throws IOException {
+    protected final Object replaceObject(Object obj) {
         if (obj instanceof Stub) {
             return new MarshalledStub((Stub) obj);
         } else if (CoreUtils.isRemote(obj.getClass())) {

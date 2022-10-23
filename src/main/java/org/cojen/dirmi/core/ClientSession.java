@@ -174,7 +174,6 @@ final class ClientSession<R> extends CoreSession<R> {
         try {
             startTasks();
 
-            long newRootTypeId = newSession.mRootTypeId;
             RemoteInfo newServerRootInfo = newSession.mServerRootInfo;
 
             // Request server-side RemoteInfos for all restorable stubs. If any changes, then

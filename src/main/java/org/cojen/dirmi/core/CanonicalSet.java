@@ -24,8 +24,8 @@ import java.lang.ref.WeakReference;
 /**
  * Specialized set for managing canonical objects: sharable objects that are typically
  * immutable. This is a generic version of the String.intern method.
- * 
- * Objects that do not customize the hashCode and equals methods don't make sense to be
+ *
+ * <p>Objects that do not customize the hashCode and equals methods don't make sense to be
  * canonicalized because each instance will be considered unique. The object returned from the
  * add method will always be the same as the one passed in.
  *

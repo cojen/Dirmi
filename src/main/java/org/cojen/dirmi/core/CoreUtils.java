@@ -341,14 +341,10 @@ public final class CoreUtils {
             }
         } else if (type instanceof Variable) {
             Class<?> ctype = ((Variable) type).classType();
-            if (ctype == null || !ctype.isPrimitive()) {
-                return true;
-            }
+            return ctype == null || !ctype.isPrimitive();
         } else {
             char first = ((String) type).charAt(0);
-            if (first == 'L' || first == '[') {
-                return true;
-            }
+            return first == 'L' || first == '[';
         }
         return false;
     }

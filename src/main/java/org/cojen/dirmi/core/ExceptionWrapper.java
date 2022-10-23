@@ -30,7 +30,7 @@ import org.cojen.maker.Variable;
  * Wraps an exception using a hidden class, in order to provide a clean stack trace. If using
  * reflection, a few extra traces would be added which expose the reflection classes.
  *
- * If the wrapped exception type isn't public or doesn't have an appropriate constructor, then
+ * <p>If the wrapped exception type isn't public or doesn't have an appropriate constructor, then
  * no wrapping occurs and instead original exception is returned as-is.
  *
  * @author Brian S O'Neill

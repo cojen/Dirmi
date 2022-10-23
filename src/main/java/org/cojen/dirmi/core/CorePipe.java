@@ -68,7 +68,7 @@ final class CorePipe extends BufferedPipe {
     }
 
     @Override
-    Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Object objectFor(long id, long typeId, RemoteInfo info) {
         return mSession.objectFor(id, typeId, info);
     }
 

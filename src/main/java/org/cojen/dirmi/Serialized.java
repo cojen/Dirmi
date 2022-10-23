@@ -24,7 +24,7 @@ import java.lang.annotation.*;
  * Environment#customSerializers custom} serialization is generally preferred.
  *
  * <p>This feature isn't supported for {@link Pipe piped} methods, and instead Java object
- * serialization must be applied manually. Care must be taken when recylcing the pipe to ensure
+ * serialization must be applied manually. Care must be taken when recycling the pipe to ensure
  * that the object input stream doesn't read too far ahead.
  *
  * @author Brian S O'Neill
