@@ -217,7 +217,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <section class="detail" id="access(java.lang.Object)">
 <h3>access</h3>
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;</span>&nbsp;<span class="element-name">access</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;obj)</span></div>
-<div class="block">Access the session that the given remote object is bound to.</div>
+<div class="block">Access the session that the given remote object is bound to. This is method is expected
+ to be called on the client-side.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if not given a remote stub</dd>
@@ -230,7 +231,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <h3>current</h3>
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;</span>&nbsp;<span class="element-name">current</span>()</div>
 <div class="block">Returns the current thread-local session, which is available to a remote method
- implementation when it's invoked.</div>
+ implementation when it's invoked. This method is expected to be called on the server-side.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - if no current session</dd>

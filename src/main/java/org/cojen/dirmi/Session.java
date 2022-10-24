@@ -45,7 +45,8 @@ import org.cojen.dirmi.core.CoreUtils;
  */
 public interface Session<R> extends Closeable, Link, Executor {
     /**
-     * Access the session that the given remote object is bound to.
+     * Access the session that the given remote object is bound to. This is method is expected
+     * to be called on the client-side.
      *
      * @throws IllegalArgumentException if not given a remote stub
      * @throws IllegalStateException if the object is disposed
@@ -56,7 +57,7 @@ public interface Session<R> extends Closeable, Link, Executor {
 
     /**
      * Returns the current thread-local session, which is available to a remote method
-     * implementation when it's invoked.
+     * implementation when it's invoked. This method is expected to be called on the server-side.
      *
      * @throws IllegalStateException if no current session
      */
