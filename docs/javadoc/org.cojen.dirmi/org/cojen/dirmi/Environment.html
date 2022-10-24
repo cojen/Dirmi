@@ -138,6 +138,16 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Call when a server-side connection has been explicitly accepted.</div>
 </div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#classLoader(java.lang.ClassLoader)" class="member-name-link">classLoader</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/ClassLoader.html" title="class or interface in java.lang" class="external-link">ClassLoader</a>&nbsp;loader)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="block">Convenience method to use a <code>ClassLoader</code> for resolving classes.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#classResolver(org.cojen.dirmi.ClassResolver)" class="member-name-link">classResolver</a><wbr>(<a href="ClassResolver.html" title="interface in org.cojen.dirmi">ClassResolver</a>&nbsp;resolver)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Set the class resolver to use for newly established sessions.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
@@ -452,6 +462,29 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
  the maximum amount of time a connection can remain idle before it's automatically
  closed. The default idle time is 60 seconds. Pass a negative amount to disable the
  closing of idle connections.</div>
+</section>
+</li>
+<li>
+<section class="detail" id="classResolver(org.cojen.dirmi.ClassResolver)">
+<h3>classResolver</h3>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">classResolver</span><wbr><span class="parameters">(<a href="ClassResolver.html" title="interface in org.cojen.dirmi">ClassResolver</a>&nbsp;resolver)</span></div>
+<div class="block">Set the class resolver to use for newly established sessions. This affects the class
+ loading behavior for <a href="Serialized.html" title="annotation interface in org.cojen.dirmi"><code>Serialized</code></a> methods.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>resolver</code> - resolver to use; pass null to use the default resolver</dd>
+</dl>
+</section>
+</li>
+<li>
+<section class="detail" id="classLoader(java.lang.ClassLoader)">
+<h3>classLoader</h3>
+<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">classLoader</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/ClassLoader.html" title="class or interface in java.lang" class="external-link">ClassLoader</a>&nbsp;loader)</span></div>
+<div class="block">Convenience method to use a <code>ClassLoader</code> for resolving classes.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>loader</code> - loader to use to resolve classes; pass null to use the default resolver</dd>
+</dl>
 </section>
 </li>
 <li>

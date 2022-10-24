@@ -93,6 +93,18 @@ loadScripts(document, 'script');</script>
 </dl>
 <h2 class="title" id="I:C">C</h2>
 <dl class="index">
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#classLoader(java.lang.ClassLoader)" class="member-name-link">classLoader(ClassLoader)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
+<dd>
+<div class="block">Convenience method to use a <code>ClassLoader</code> for resolving classes.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#classResolver(org.cojen.dirmi.ClassResolver)" class="member-name-link">classResolver(ClassResolver)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
+<dd>
+<div class="block">Set the class resolver to use for newly established sessions.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/ClassResolver.html" class="type-name-link" title="interface in org.cojen.dirmi">ClassResolver</a> - Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dd>
+<div class="block">Defines a custom class loading scheme.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#close()" class="member-name-link">close()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
 <div class="block">Stops accepting new sessions, closes all acceptors, closes all sessions, and disposes of
@@ -364,6 +376,14 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Annotate a remote method or interface to specify what exception is to be used for indicating
  a remote call failure.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/ClassResolver.html#resolveClass(java.lang.String)" class="member-name-link">resolveClass(String)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/ClassResolver.html" title="interface in org.cojen.dirmi">ClassResolver</a></dt>
+<dd>
+<div class="block">Load the class or interface for the given name.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#resolveClass(java.lang.String)" class="member-name-link">resolveClass(String)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Resolve a class using the default or custom <a href="org.cojen.dirmi/org/cojen/dirmi/ClassResolver.html" title="interface in org.cojen.dirmi"><code>ClassResolver</code></a>.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Restorable.html" class="type-name-link" title="annotation interface in org.cojen.dirmi">Restorable</a> - Annotation Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>

@@ -172,24 +172,29 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="block">Returns the current thread-local session, which is available to a remote method
  implementation when it's invoked.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#resolveClass(java.lang.String)" class="member-name-link">resolveClass</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Resolve a class using the default or custom <a href="ClassResolver.html" title="interface in org.cojen.dirmi"><code>ClassResolver</code></a>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the root object which was exported or imported.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the current session state.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#stateListener(java.util.function.Consumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&gt;&nbsp;listener)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#stateListener(java.util.function.Consumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&gt;&nbsp;listener)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set a listener which is invoked when the session state changes.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this session
  instance.</div>
 </div>
@@ -284,6 +289,20 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/UnsupportedOperationException.html" title="class or interface in java.lang" class="external-link">UnsupportedOperationException</a></code> - if not supported by this session</dd>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</section>
+</li>
+<li>
+<section class="detail" id="resolveClass(java.lang.String)">
+<h3>resolveClass</h3>
+<div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;</span>&nbsp;<span class="element-name">resolveClass</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span>
+               throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a>,
+<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/ClassNotFoundException.html" title="class or interface in java.lang" class="external-link">ClassNotFoundException</a></span></div>
+<div class="block">Resolve a class using the default or custom <a href="ClassResolver.html" title="interface in org.cojen.dirmi"><code>ClassResolver</code></a>.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/ClassNotFoundException.html" title="class or interface in java.lang" class="external-link">ClassNotFoundException</a></code></dd>
 </dl>
 </section>
 </li>
