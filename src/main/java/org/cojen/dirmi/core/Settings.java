@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 
+import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Serializer;
 
@@ -35,6 +36,7 @@ final class Settings implements Cloneable {
     int reconnectDelayMillis;
     int pingTimeoutMillis;
     int idleConnectionMillis;
+    ClassResolver resolver;
     LinkedHashMap<Class<?>, Serializer<?>> serializers;
 
     Settings() {
@@ -66,6 +68,12 @@ final class Settings implements Cloneable {
     Settings withIdleConnectionMillis(int millis) {
         var settings = copy();
         settings.idleConnectionMillis = millis;
+        return settings;
+    }
+
+    Settings withClassResolver(ClassResolver resolver) {
+        var settings = copy();
+        settings.resolver = resolver;
         return settings;
     }
 

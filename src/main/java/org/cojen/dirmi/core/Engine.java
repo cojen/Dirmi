@@ -54,6 +54,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.function.BiConsumer;
 
+import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Connector;
 import org.cojen.dirmi.Environment;
@@ -583,6 +584,16 @@ public final class Engine implements Environment {
         mMainLock.lock();
         try {
             mSettings = mSettings.withIdleConnectionMillis(millis);
+        } finally {
+            mMainLock.unlock();
+        }
+    }
+
+    @Override
+    public void classResolver(ClassResolver resolver) {
+        mMainLock.lock();
+        try {
+            mSettings = mSettings.withClassResolver(resolver);
         } finally {
             mMainLock.unlock();
         }

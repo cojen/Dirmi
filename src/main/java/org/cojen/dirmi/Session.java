@@ -102,6 +102,11 @@ public interface Session<R> extends Closeable, Link, Executor {
         throws IOException;
 
     /**
+     * Resolve a class using the default or custom {@link ClassResolver}.
+     */
+    Class<?> resolveClass(String name) throws IOException, ClassNotFoundException;
+
+    /**
      * Set the handler which is invoked for any uncaught exceptions within this session
      * instance. By default, uncaught exceptions are passed to the environment instance.
      *

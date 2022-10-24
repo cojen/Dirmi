@@ -17,6 +17,7 @@
 package org.cojen.dirmi;
 
 import java.io.InvalidClassException;
+import java.io.Serializable;
 
 import java.net.ServerSocket;
 
@@ -26,6 +27,8 @@ import java.util.function.BiConsumer;
 
 import org.junit.*;
 import static org.junit.Assert.*;
+
+import org.cojen.maker.ClassMaker;
 
 /**
  * 
@@ -52,6 +55,10 @@ public class SerializedTest {
             mException = ex;
         });
 
+        finishSetup();
+    }
+
+    private void finishSetup() throws Exception {
         mServer = new R1Server();
         mEnv.export("main", mServer);
         mServerSocket = new ServerSocket(0);
@@ -136,6 +143,22 @@ public class SerializedTest {
         assertEquals("hello", root.newR2().value());
     }
 
+    @Test
+    public void customClass() throws Exception {
+        teardown();
+        mEnv = Environment.create();
+
+        mEnv.classResolver(name -> {
+            return mServer.custom;
+        });
+
+        finishSetup();
+
+        R1 root = mSession.root();
+        Object custom = root.custom();
+        assertEquals(mServer.custom, custom.getClass());
+    }
+
     public static interface R1 extends Remote {
         @Serialized(filter="java.base/*")
         void m1(Object a, String b, int c) throws RemoteException;
@@ -171,6 +194,9 @@ public class SerializedTest {
 
         @Serialized(filter="org.cojen.dirmi.*")
         R2 newR2() throws RemoteException;
+
+        @Serialized(filter="org.cojen.**")
+        Object custom() throws Exception;
     }
 
     public static interface R2 extends Remote {
@@ -181,6 +207,7 @@ public class SerializedTest {
         volatile Object a;
         volatile String b;
         volatile int c;
+        volatile Class<?> custom;
 
         @Override
         public void m1(Object a, String b, int c) {
@@ -240,6 +267,15 @@ public class SerializedTest {
         @Override
         public R2 newR2() {
             return () -> "hello";
+        }
+
+        @Override
+        public Object custom() throws Exception {
+            ClassMaker cm = ClassMaker.begin().public_().implement(Serializable.class);
+            cm.addConstructor().public_();
+            Class<?> clazz = cm.finish();
+            custom = clazz;
+            return clazz.getConstructor().newInstance();
         }
     }
 }

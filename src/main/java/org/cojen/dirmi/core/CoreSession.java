@@ -35,6 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.DisconnectedException;
 import org.cojen.dirmi.NoSuchObjectException;
@@ -379,6 +380,24 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     public final SocketAddress remoteAddress() {
         CorePipe pipe = controlPipe();
         return pipe == null ? null : pipe.remoteAddress();
+    }
+
+    @Override
+    public final Class<?> resolveClass(String name) throws IOException, ClassNotFoundException {
+        ClassResolver resolver = mSettings.resolver;
+        try {
+            if (resolver != null) {
+                Class<?> clazz = resolver.resolveClass(name);
+                if (clazz != null) {
+                    return clazz;
+                }
+            }
+            return ClassLoaderResolver.SYSTEM.resolveClass(name);
+        } catch (IOException | ClassNotFoundException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new ClassNotFoundException(name, e);
+        }
     }
 
     @Override
@@ -1222,6 +1241,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     uncaughtException(e.getCause());
                 } else if (e instanceof NoSuchObjectException ||
                            e instanceof ObjectStreamException ||
+                           e instanceof ClassNotFoundException ||
                            !(e instanceof IOException))
                 {
                     uncaughtException(e);

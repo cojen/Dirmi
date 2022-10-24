@@ -37,6 +37,7 @@ import java.util.concurrent.Executor;
 
 import java.util.function.BiConsumer;
 
+import org.cojen.dirmi.core.ClassLoaderResolver;
 import org.cojen.dirmi.core.CoreUtils;
 import org.cojen.dirmi.core.Engine;
 
@@ -210,6 +211,23 @@ public interface Environment extends Closeable, Executor {
      * closing of idle connections.
      */
     void idleConnectionMillis(int millis);
+
+    /**
+     * Set the class resolver to use for newly established sessions. This affects the class
+     * loading behavior for {@link Serialized} methods.
+     *
+     * @param resolver resolver to use; pass null to use the default resolver
+     */
+    void classResolver(ClassResolver resolver);
+
+    /**
+     * Convenience method to use a {@code ClassLoader} for resolving classes.
+     *
+     * @param loader loader to use to resolve classes; pass null to use the default resolver
+     */
+    default void classLoader(ClassLoader loader) {
+        classResolver(loader == null ? null : new ClassLoaderResolver(loader));
+    }
 
     /**
      * Set the handler which is invoked for any uncaught exceptions within this environment

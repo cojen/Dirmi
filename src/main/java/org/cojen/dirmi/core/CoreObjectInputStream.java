@@ -19,6 +19,7 @@ package org.cojen.dirmi.core;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectStreamClass;
 import java.io.OutputStream;
 
 import org.cojen.dirmi.Pipe;
@@ -39,6 +40,13 @@ public final class CoreObjectInputStream extends ObjectInputStream {
         super(pipe.inputStream());
         enableResolveObject(true);
         mPipe = pipe;
+    }
+
+    @Override
+    protected Class<?> resolveClass(ObjectStreamClass desc)
+        throws IOException, ClassNotFoundException
+    {
+        return mPipe.mSession.resolveClass(desc.getName());
     }
 
     @Override
