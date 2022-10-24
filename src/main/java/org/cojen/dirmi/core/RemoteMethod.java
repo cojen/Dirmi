@@ -274,25 +274,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (serializedAnn == null) {
             mObjectInputFilter = null;
         } else {
-            String originalFilter = serializedAnn.filter();
-            String filter = originalFilter;
-
-            if (!filter.contains("!*")) {
-                filter = filter + ';' + "!*";
-            }
-
-            filter = MarshalledStub.class.getName() + ';'
-                + MarshalledSkeleton.class.getName() + ';' + filter;
-
-            try {
-                mObjectInputFilter = ObjectInputFilter.Config.createFilter(filter);
-            } catch (IllegalArgumentException e) {
-                if (filter != originalFilter) {
-                    // Try to report only the original filter in the exception.
-                    ObjectInputFilter.Config.createFilter(originalFilter);
-                }
-                throw e;
-            }
+            mObjectInputFilter = SerializedFilter.filterFor(serializedAnn);
         }
     }
 
