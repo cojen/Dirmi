@@ -495,40 +495,33 @@ final class StubMaker {
                     "Cannot make a restorable object from a non-restorable parent").throw_();
             parentHasOrigin.here();
 
-            try {
-                Class<?> returnType = classFor(method.returnType());
+            originStub[0] = resultVar.cast(Stub.class);
+            originField.getAcquire().ifNe(null, finished);
 
-                List<String> pnames = method.parameterTypes();
-                var ptypes = new Class[pnames.size()];
-                int i = 0;
-                for (String pname : pnames) {
-                    ptypes[i++] = classFor(pname);
-                }
+            Class<?> returnType = classFor(method.returnType());
 
-                MethodType mt = MethodType.methodType(returnType, ptypes);
-
-                MethodHandles.Lookup lookup = MethodHandles.publicLookup();
-                MethodHandle mh = lookup.findVirtual(mType, method.name(), mt);
-
-                originStub[0] = resultVar.cast(Stub.class);
-                originField.getAcquire().ifNe(null, finished);
-
-                var mhVar = mm.var(MethodHandle.class).setExact(mh);
-
-                var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
-                paramVars.aset(0, mm.this_());
-                for (i=0; i<ptypes.length; i++) {
-                    paramVars.aset(i + 1, mm.param(i));
-                }
-
-                var methodHandlesVar = mm.var(MethodHandles.class);
-                mhVar.set(methodHandlesVar.invoke("insertArguments", mhVar, 0, paramVars));
-
-                originField.setRelease(mhVar);
-            } catch (NoSuchMethodException | IllegalAccessException e) {
-                // Not expected.
-                throw new IllegalStateException(e);
+            List<String> pnames = method.parameterTypes();
+            var ptypes = new Class[pnames.size()];
+            int i = 0;
+            for (String pname : pnames) {
+                ptypes[i++] = classFor(pname);
             }
+
+            MethodType mt = MethodType.methodType(returnType, ptypes);
+
+            var mhVar = mm.var(CoreUtils.class).condy("findVirtual", mType, mt)
+                .invoke(MethodHandle.class, method.name());
+
+            var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
+            paramVars.aset(0, mm.this_());
+            for (i=0; i<ptypes.length; i++) {
+                paramVars.aset(i + 1, mm.param(i));
+            }
+
+            var methodHandlesVar = mm.var(MethodHandles.class);
+            mhVar = methodHandlesVar.invoke("insertArguments", mhVar, 0, paramVars);
+
+            originField.setRelease(mhVar);
 
             finished.here();
         }
