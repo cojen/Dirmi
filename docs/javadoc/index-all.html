@@ -207,7 +207,7 @@ loadScripts(document, 'script');</script>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#DISCONNECTED" class="member-name-link">DISCONNECTED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
 <dd>
-<div class="block">Indicates that the session isn't connected and is about to begin reconnecting.</div>
+<div class="block">Indicates that the session isn't connected, and it's about to begin reconnecting.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/DisconnectedException.html" class="type-name-link" title="class in org.cojen.dirmi">DisconnectedException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
@@ -341,7 +341,7 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#RECONNECTED" class="member-name-link">RECONNECTED</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
 <dd>
 <div class="block">Indicates that the session has just finished reconnecting, but remote calls will
- still fail.</div>
+ still fail until the session state is connected.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html#RECONNECTING" class="member-name-link">RECONNECTING</a> - Enum constant in enum class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></dt>
 <dd>
@@ -430,7 +430,8 @@ loadScripts(document, 'script');</script>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#stateListener(java.util.function.Consumer)" class="member-name-link">stateListener(Consumer&lt;Session&lt;?&gt;&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
-<div class="block">Set a listener which is invoked when the session state changes.</div>
+<div class="block">Set a listener which is immediately invoked (in the current thread), and is also invoked
+ when the session state changes.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:U">U</h2>
