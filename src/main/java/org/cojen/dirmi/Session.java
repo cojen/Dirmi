@@ -121,8 +121,9 @@ public interface Session<R> extends Closeable, Link, Executor {
     State state();
 
     /**
-     * Set a listener which is invoked when the session state changes. The listener is invoked
-     * in a blocking fashion, preventing any further state changes until the listener returns.
+     * Set a listener which is immediately invoked (in the current thread), and is also invoked
+     * when the session state changes. The listener is invoked in a blocking fashion,
+     * preventing any state changes until the listener returns.
      */
     void stateListener(Consumer<Session<?>> listener);
 
@@ -146,7 +147,7 @@ public interface Session<R> extends Closeable, Link, Executor {
         CONNECTED,
 
         /**
-         * Indicates that the session isn't connected and is about to begin reconnecting.
+         * Indicates that the session isn't connected, and it's about to begin reconnecting.
          */
         DISCONNECTED,
 
@@ -158,7 +159,7 @@ public interface Session<R> extends Closeable, Link, Executor {
 
         /**
          * Indicates that the session has just finished reconnecting, but remote calls will
-         * still fail.
+         * still fail until the session state is connected.
          */
         RECONNECTED,
 

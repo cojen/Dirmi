@@ -143,7 +143,8 @@ public class RestorableTest {
             }
         }
 
-        assertEquals(List.of(Session.State.DISCONNECTED, Session.State.RECONNECTING,
+        assertEquals(List.of(Session.State.CONNECTED,
+                             Session.State.DISCONNECTED, Session.State.RECONNECTING,
                              Session.State.RECONNECTED, Session.State.CONNECTED),
                      listener.states);
 

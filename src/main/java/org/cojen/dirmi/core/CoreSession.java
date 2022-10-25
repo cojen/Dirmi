@@ -417,7 +417,21 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     @Override
     public final void stateListener(Consumer<Session<?>> listener) {
-        mStateListener = listener;
+        if (listener == null) {
+            mStateListener = null;
+        } else {
+            mStateLock.lock();
+            try {
+                mStateListener = listener;
+                try {
+                    listener.accept(this);
+                } catch (Throwable e) {
+                    uncaughtException(e);
+                }
+            } finally {
+                mStateLock.unlock();
+            }
+        }
     }
 
     // Caller must hold mStateLock.
