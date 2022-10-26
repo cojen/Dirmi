@@ -61,8 +61,8 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-first">Modifier and Type</div>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color"><code>static &lt;T&gt;&nbsp;<a href="../Serializer.html" title="interface in org.cojen.dirmi">Serializer</a>&lt;T&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">Serializer.</span><code><a href="../Serializer.html#simple(java.lang.Class)" class="member-name-link">simple</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;T&gt;&nbsp;type)</code></div>
+<div class="col-first even-row-color"><code>static <a href="../Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Serializer.</span><code><a href="../Serializer.html#simple(java.lang.Class)" class="member-name-link">simple</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;&nbsp;type)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Generates and returns a serializer for a record type or simple class.</div>
 </div>
@@ -73,7 +73,7 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">Environment.</span><code><a href="../Environment.html#customSerializers(java.util.Map)" class="member-name-link">customSerializers</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;,<wbr><a href="../Serializer.html" title="interface in org.cojen.dirmi">Serializer</a>&lt;?&gt;&gt;&nbsp;serializers)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Environment.</span><code><a href="../Environment.html#customSerializers(java.util.List)" class="member-name-link">customSerializers</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Serializer.html" title="interface in org.cojen.dirmi">Serializer</a>&gt;&nbsp;serializers)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Provide custom serializers for newly established sessions.</div>
 </div>

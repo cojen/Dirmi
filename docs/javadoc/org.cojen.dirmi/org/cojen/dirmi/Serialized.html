@@ -90,7 +90,7 @@ loadScripts(document, 'script');</script>
 <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/Target.html" title="class or interface in java.lang.annotation" class="external-link">@Target</a>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/annotation/ElementType.html#METHOD" title="class or interface in java.lang.annotation" class="external-link">METHOD</a>)
 </span><span class="modifiers">public @interface </span><span class="element-name type-name-label">Serialized</span></div>
 <div class="block">Indicates that a remote method should use Java object serialization for the parameters and
- return value. Object serialization isn't very efficient, and so built-in and <a href="Environment.html#customSerializers(java.util.Map)"><code>custom</code></a> serialization is generally preferred.
+ return value. Object serialization isn't very efficient, and so built-in and <a href="Environment.html#customSerializers(java.util.List)"><code>custom</code></a> serialization is generally preferred.
 
  <p>This feature isn't supported for <a href="Pipe.html" title="interface in org.cojen.dirmi"><code>piped</code></a> methods, and instead Java object
  serialization must be applied manually. Care must be taken when recycling the pipe to ensure

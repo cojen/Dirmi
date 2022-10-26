@@ -181,7 +181,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Returns the current thread-local session, which is available to a remote method
  implementation when it's invoked.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#customSerializers(java.util.Map)" class="member-name-link">customSerializers(Map&lt;Class&lt;?&gt;, Serializer&lt;?&gt;&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#customSerializers(java.util.List)" class="member-name-link">customSerializers(List&lt;Serializer&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
 <dd>
 <div class="block">Provide custom serializers for newly established sessions.</div>
 </dd>
@@ -328,7 +328,7 @@ loadScripts(document, 'script');</script>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#read(org.cojen.dirmi.Pipe)" class="member-name-link">read(Pipe)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
 <dd>
-<div class="block">Reads an object from the pipe, which can be null.</div>
+<div class="block">Reads an object from the pipe.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html#readObject()" class="member-name-link">readObject()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></dt>
 <dd>
@@ -406,7 +406,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Indicates that a remote method should use Java object serialization for the parameters and
  return value.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" class="type-name-link" title="interface in org.cojen.dirmi">Serializer</a>&lt;<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="type parameter in Serializer">T</a>&gt; - Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" class="type-name-link" title="interface in org.cojen.dirmi">Serializer</a> - Interface in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
 <div class="block">Supports writing and reading of object instances to/from a pipe.</div>
 </dd>
@@ -424,7 +424,7 @@ loadScripts(document, 'script');</script>
 <div class="block">Remote objects implementing this interface are notified when they are attached and detached
  from sessions.</div>
 </dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#simple(java.lang.Class)" class="member-name-link">simple(Class&lt;T&gt;)</a> - Static method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#simple(java.lang.Class)" class="member-name-link">simple(Class&lt;?&gt;)</a> - Static method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
 <dd>
 <div class="block">Generates and returns a serializer for a record type or simple class.</div>
 </dd>
@@ -436,6 +436,10 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Set a listener which is immediately invoked (in the current thread), and is also invoked
  when the session state changes.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#supportedTypes()" class="member-name-link">supportedTypes()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
+<dd>
+<div class="block">Returns a non-null set of classes.</div>
 </dd>
 </dl>
 <h2 class="title" id="I:U">U</h2>
@@ -482,7 +486,7 @@ the order they are declared.</div>
 </dl>
 <h2 class="title" id="I:W">W</h2>
 <dl class="index">
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#write(org.cojen.dirmi.Pipe,T)" class="member-name-link">write(Pipe, T)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#write(org.cojen.dirmi.Pipe,java.lang.Object)" class="member-name-link">write(Pipe, Object)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
 <dd>
 <div class="block">Writes a non-null object to the pipe.</div>
 </dd>
