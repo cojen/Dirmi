@@ -40,7 +40,7 @@ public class CorruptSerializerTest {
 
     @Test
     public void basic() throws Exception {
-        Serializer<PointRec> s = Serializer.simple(PointRec.class);
+        Serializer s = Serializer.simple(PointRec.class);
         assertSame(s, Serializer.simple(PointRec.class));
 
         var capture = new CaptureOutputStream();

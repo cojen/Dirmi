@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,9 +48,7 @@ public class SerializerTest {
         var env = Environment.create();
 
         env.customSerializers
-            (Map.of(StringBuilder.class, new StringBuilderSerializer(),
-                    ConcurrentHashMap.class, new ConcurrentHashMapSerializer())
-             );
+            (List.of(new StringBuilderSerializer(), new ConcurrentHashMapSerializer()));
 
         env.export("main", new R1Server());
 
@@ -84,17 +83,15 @@ public class SerializerTest {
         var clientEnv = Environment.create();
 
         clientEnv.customSerializers
-            (Map.of(ConcurrentHashMap.class, new ConcurrentHashMapSerializer(),
-                    UUID.class, new UUIDSerializer(),
-                    Optional.class, new OptionalSerializer())
+            (List.of(new ConcurrentHashMapSerializer(),
+                     new UUIDSerializer(),
+                     new OptionalSerializer())
              );
 
         var serverEnv = Environment.create();
 
         serverEnv.customSerializers
-            (Map.of(StringBuilder.class, new StringBuilderSerializer(),
-                    UUID.class, new UUIDSerializer())
-             );
+            (List.of(new StringBuilderSerializer(), new UUIDSerializer()));
 
         serverEnv.export("main", new R1Server());
 
@@ -128,7 +125,7 @@ public class SerializerTest {
     public void array() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(Map.of(UUID.class, new UUIDSerializer()));
+        env.customSerializers(List.of(new UUIDSerializer()));
 
         env.export("main", new R1Server());
 
@@ -158,7 +155,7 @@ public class SerializerTest {
     public void list() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(Map.of(UUID.class, new UUIDSerializer()));
+        env.customSerializers(List.of(new UUIDSerializer()));
 
         env.export("main", new R1Server());
 
@@ -180,12 +177,12 @@ public class SerializerTest {
     public void simple() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(Map.of(
-            PointClass.class, Serializer.simple(PointClass.class),
-            PointRec.class, Serializer.simple(PointRec.class),
-            SomeClass.class, Serializer.simple(SomeClass.class),
+        env.customSerializers(List.of(
+            Serializer.simple(PointClass.class),
+            Serializer.simple(PointRec.class),
+            Serializer.simple(SomeClass.class),
             // No public fields, and so it won't serialize anything.
-            HashMap.class, Serializer.simple(HashMap.class)
+            Serializer.simple(HashMap.class)
         ));
 
         env.export("main", new R1Server());
@@ -297,9 +294,15 @@ public class SerializerTest {
         }
     }
 
-    private static class ConcurrentHashMapSerializer implements Serializer<ConcurrentHashMap<?,?>> {
+    private static class ConcurrentHashMapSerializer implements Serializer {
         @Override
-            public void write(Pipe pipe, ConcurrentHashMap<?,?> map) throws IOException {
+        public Set<Class<?>> supportedTypes() {
+            return Set.of(ConcurrentHashMap.class);
+        }
+
+        @Override
+        public void write(Pipe pipe, Object obj) throws IOException {
+            var map = (ConcurrentHashMap<?,?>) obj;
             pipe.writeInt(map.size());
             for (Map.Entry e : map.entrySet()) {
                 pipe.writeObject(e.getKey());
@@ -308,7 +311,7 @@ public class SerializerTest {
         }
 
         @Override
-        public ConcurrentHashMap<?,?> read(Pipe pipe) throws IOException {
+        public Object read(Pipe pipe) throws IOException {
             int size = pipe.readInt();
             var map = new ConcurrentHashMap<>();
             for (int i=0; i<size; i++) {
@@ -318,39 +321,55 @@ public class SerializerTest {
         }
     }
 
-    private static class StringBuilderSerializer implements Serializer<StringBuilder> {
+    private static class StringBuilderSerializer implements Serializer {
         @Override
-        public void write(Pipe pipe, StringBuilder obj) throws IOException {
-            pipe.writeObject(obj.toString());
+        public Set<Class<?>> supportedTypes() {
+            return Set.of(StringBuilder.class);
         }
 
         @Override
-        public StringBuilder read(Pipe pipe) throws IOException {
+        public void write(Pipe pipe, Object obj) throws IOException {
+            pipe.writeObject(((StringBuilder) obj).toString());
+        }
+
+        @Override
+        public Object read(Pipe pipe) throws IOException {
             return new StringBuilder((String) pipe.readObject());
         }
     }
 
-    private static class UUIDSerializer implements Serializer<UUID> {
+    private static class UUIDSerializer implements Serializer {
         @Override
-        public void write(Pipe pipe, UUID obj) throws IOException {
-            pipe.writeLong(obj.getMostSignificantBits());
-            pipe.writeLong(obj.getLeastSignificantBits());
+        public Set<Class<?>> supportedTypes() {
+            return Set.of(UUID.class);
         }
 
         @Override
-        public UUID read(Pipe pipe) throws IOException {
+        public void write(Pipe pipe, Object obj) throws IOException {
+            var uuid = (UUID) obj;
+            pipe.writeLong(uuid.getMostSignificantBits());
+            pipe.writeLong(uuid.getLeastSignificantBits());
+        }
+
+        @Override
+        public Object read(Pipe pipe) throws IOException {
             return new UUID(pipe.readLong(), pipe.readLong());
         }
     }
 
-    private static class OptionalSerializer implements Serializer<Optional<?>> {
+    private static class OptionalSerializer implements Serializer {
         @Override
-        public void write(Pipe pipe, Optional<?> obj) throws IOException {
-            pipe.writeObject(obj.orElse(null));
+        public Set<Class<?>> supportedTypes() {
+            return Set.of(Optional.class);
         }
 
         @Override
-        public Optional<?> read(Pipe pipe) throws IOException {
+        public void write(Pipe pipe, Object obj) throws IOException {
+            pipe.writeObject(((Optional<?>) obj).orElse(null));
+        }
+
+        @Override
+        public Object read(Pipe pipe) throws IOException {
             return Optional.ofNullable(pipe.readObject());
         }
     }

@@ -37,7 +37,7 @@ final class Settings implements Cloneable {
     int pingTimeoutMillis;
     int idleConnectionMillis;
     ClassResolver resolver;
-    LinkedHashMap<Class<?>, Serializer<?>> serializers;
+    LinkedHashMap<Class<?>, Serializer> serializers;
 
     Settings() {
         reconnectDelayMillis =  1_000;
@@ -77,7 +77,7 @@ final class Settings implements Cloneable {
         return settings;
     }
 
-    Settings withSerializers(LinkedHashMap<Class<?>, Serializer<?>> serializers) {
+    Settings withSerializers(LinkedHashMap<Class<?>, Serializer> serializers) {
         var settings = copy();
         settings.serializers = serializers;
         return settings;
@@ -138,7 +138,7 @@ final class Settings implements Cloneable {
 
         var available = new HashMap<String, ClassSerializer>();
 
-        for (Map.Entry<Class<?>, Serializer<?>> e : serializers.entrySet()) {
+        for (Map.Entry<Class<?>, Serializer> e : serializers.entrySet()) {
             Class clazz = e.getKey();
             String name = clazz.getName();
 

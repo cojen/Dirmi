@@ -18,6 +18,8 @@ package org.cojen.dirmi.core;
 
 import java.io.IOException;
 
+import java.util.Set;
+
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Serializer;
 
@@ -26,10 +28,15 @@ import org.cojen.dirmi.Serializer;
  *
  * @author Brian S O'Neill
  */
-class NullSerializer implements Serializer<Object> {
+class NullSerializer implements Serializer {
     static final NullSerializer THE = new NullSerializer();
 
     private NullSerializer() {
+    }
+
+    @Override
+    public Set<Class<?>> supportedTypes() {
+        return null;
     }
 
     @Override

@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import java.util.Set;
+
 import org.cojen.dirmi.core.SerializerMaker;
 
 /**
@@ -26,7 +28,7 @@ import org.cojen.dirmi.core.SerializerMaker;
  * @author Brian S O'Neill
  * @see Environment#customSerializers
  */
-public interface Serializer<T> {
+public interface Serializer {
     /**
      * Generates and returns a serializer for a record type or simple class. A simple class
      * must have a public no-arg constructor, and only public fields are serialized. Static and
@@ -34,17 +36,22 @@ public interface Serializer<T> {
      *
      * @throws IllegalArgumentException if the given type isn't supported
      */
-    static <T> Serializer<T> simple(Class<T> type) {
+    static Serializer simple(Class<?> type) {
         return SerializerMaker.forClass(type);
     }
 
     /**
-     * Writes a non-null object to the pipe.
+     * Returns a non-null set of classes.
      */
-    void write(Pipe pipe, T obj) throws IOException;
+    Set<Class<?>> supportedTypes();
 
     /**
-     * Reads an object from the pipe, which can be null.
+     * Writes a non-null object to the pipe.
      */
-    T read(Pipe pipe) throws IOException;
+    void write(Pipe pipe, Object obj) throws IOException;
+
+    /**
+     * Reads an object from the pipe. The returned object can be null.
+     */
+    Object read(Pipe pipe) throws IOException;
 }

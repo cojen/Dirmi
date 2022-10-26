@@ -35,10 +35,12 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Random;
+import java.util.Set;
 
 import java.util.function.Predicate;
 
@@ -534,26 +536,26 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public void customSerializers(Map<Class<?>, Serializer<?>> serializers) {
-        LinkedHashMap<Class<?>, Serializer<?>> copy;
+    public void customSerializers(List<Serializer> serializers) {
+        LinkedHashMap<Class<?>, Serializer> map;
 
         if (serializers == null || serializers.isEmpty()) {
-            copy = null;
+            map = null;
         } else {
-            copy = new LinkedHashMap<>(serializers.size());
+            map = new LinkedHashMap<>(serializers.size());
 
-            for (var e : serializers.entrySet()) {
-                Class<?> clazz = e.getKey();
-                Serializer<?> serializer = e.getValue();
-                Objects.requireNonNull(clazz);
-                Objects.requireNonNull(serializer);
-                copy.put(clazz, serializer);
+            for (var serializer : serializers) {
+                Set<Class<?>> types = serializer.supportedTypes();
+                for (Class<?> type : types) {
+                    Objects.requireNonNull(type);
+                    map.putIfAbsent(type, serializer);
+                }
             }
         }
 
         mMainLock.lock();
         try {
-            mSettings = mSettings.withSerializers(copy);
+            mSettings = mSettings.withSerializers(map);
         } finally {
             mMainLock.unlock();
         }

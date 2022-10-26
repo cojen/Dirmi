@@ -29,6 +29,7 @@ import java.lang.reflect.RecordComponent;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Set;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
@@ -43,10 +44,9 @@ import org.cojen.dirmi.Serializer;
  * @see Serializer#simple
  */
 public final class SerializerMaker {
-    private static final SoftCache<Class<?>, Serializer<?>> cCache = new SoftCache<>();
+    private static final SoftCache<Class<?>, Serializer> cCache = new SoftCache<>();
 
-    @SuppressWarnings("unchecked")
-    public static <T> Serializer<T> forClass(Class<T> type) {
+    public static Serializer forClass(Class<?> type) {
         var serializer = cCache.get(type);
 
         if (serializer == null) synchronized (cCache) {
@@ -57,10 +57,10 @@ public final class SerializerMaker {
             }
         }
 
-        return (Serializer<T>) serializer;
+        return (Serializer) serializer;
     }
 
-    private static Serializer<?> make(Class<?> type) {
+    private static Serializer make(Class<?> type) {
         if (!Modifier.isPublic(type.getModifiers())) {
             throw new IllegalArgumentException("Not public: " + type.getName());
         }
@@ -71,7 +71,7 @@ public final class SerializerMaker {
         }
     }
 
-    private static Serializer<?> makeForRecord(Class<?> type) {
+    private static Serializer makeForRecord(Class<?> type) {
         RecordComponent[] components = type.getRecordComponents();
 
         Class<?>[] paramTypes =
@@ -100,7 +100,6 @@ public final class SerializerMaker {
         }
 
         ClassMaker cm = begin(type);
-        cm.addConstructor();
 
         MethodMaker writeMaker = cm.addMethod(null, "write", Pipe.class, Object.class).public_();
         var writePipeVar = writeMaker.param(0);
@@ -133,7 +132,7 @@ public final class SerializerMaker {
         }
     }
 
-    private static Serializer<?> makeForClass(Class<?> type) {
+    private static Serializer makeForClass(Class<?> type) {
         Constructor<?> ctor;
         try {
             ctor = type.getConstructor();
@@ -158,7 +157,6 @@ public final class SerializerMaker {
         }
 
         ClassMaker cm = begin(type);
-        cm.addConstructor();
 
         MethodMaker writeMaker = cm.addMethod(null, "write", Pipe.class, Object.class).public_();
         var writePipeVar = writeMaker.param(0);
@@ -199,7 +197,15 @@ public final class SerializerMaker {
         if (name.startsWith("java.")) {
             name = null;
         }
-        return ClassMaker.begin(name).implement(Serializer.class);
+
+        ClassMaker cm = ClassMaker.begin(name).implement(Serializer.class);
+
+        cm.addConstructor();
+
+        MethodMaker mm = cm.addMethod(Set.class, "supportedTypes").public_();
+        mm.return_(mm.var(Set.class).invoke("of", type));
+
+        return cm;
     }
 
     private static void versionCheck(Class<?> type, Variable pipeVar, long version) {

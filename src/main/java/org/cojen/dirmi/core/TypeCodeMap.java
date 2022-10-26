@@ -366,7 +366,7 @@ final class TypeCodeMap {
         return newEntry;
     }
 
-    private abstract static class Entry<T> {
+    private abstract static class Entry {
         final int mTypeCode;
 
         Entry mNext;
@@ -375,7 +375,7 @@ final class TypeCodeMap {
             mTypeCode = typeCode;
         }
 
-        T read(BufferedPipe pipe) throws IOException {
+        Object read(BufferedPipe pipe) throws IOException {
             throw new UnsupportedOperationException();
         }
 
@@ -387,12 +387,12 @@ final class TypeCodeMap {
         /**
          * @param obj non-null object to write to the pipe
          */
-        abstract void write(BufferedPipe pipe, T obj) throws IOException;
+        abstract void write(BufferedPipe pipe, Object obj) throws IOException;
 
         abstract int writeTypeCode(BufferedPipe pipe) throws IOException;
     }
 
-    private static final class Standard extends Entry<Object> {
+    private static final class Standard extends Entry {
         final SoftReference<Class> mClassRef;
 
         Standard(Class clazz, int typeCode) {
@@ -448,11 +448,11 @@ final class TypeCodeMap {
         }
     }
 
-    private abstract static class Custom<T> extends Entry<T> {
+    private abstract static class Custom extends Entry {
         final Class mClass;
-        final Serializer<T> mSerializer;
+        final Serializer mSerializer;
 
-        Custom(Class clazz, int typeCode, Serializer<T> serializer) {
+        Custom(Class clazz, int typeCode, Serializer serializer) {
             super(typeCode);
             mClass = clazz;
             mSerializer = serializer;
@@ -464,15 +464,15 @@ final class TypeCodeMap {
         }
 
         @Override
-        T read(BufferedPipe pipe) throws IOException {
+        Object read(BufferedPipe pipe) throws IOException {
             int identifier = pipe.reserveReference();
-            T obj = mSerializer.read(pipe);
+            Object obj = mSerializer.read(pipe);
             pipe.stashReference(identifier, obj);
             return obj;
         }
 
         @Override
-        final void write(BufferedPipe pipe, T obj) throws IOException {
+        final void write(BufferedPipe pipe, Object obj) throws IOException {
             writeTypeCode(pipe);
             mSerializer.write(pipe, obj);
         }
@@ -481,8 +481,8 @@ final class TypeCodeMap {
     /**
      * Writes a one byte header.
      */
-    private static final class Custom1<T> extends Custom<T> {
-        Custom1(Class clazz, int typeCode, Serializer<T> serializer) {
+    private static final class Custom1 extends Custom {
+        Custom1(Class clazz, int typeCode, Serializer serializer) {
             super(clazz, typeCode, serializer);
         }
 
@@ -497,8 +497,8 @@ final class TypeCodeMap {
     /**
      * Writes a three byte header for supporting up to 65536 types.
      */
-    private static final class Custom2<T> extends Custom<T> {
-        Custom2(Class clazz, int typeCode, Serializer<T> serializer) {
+    private static final class Custom2 extends Custom {
+        Custom2(Class clazz, int typeCode, Serializer serializer) {
             super(clazz, typeCode, serializer);
         }
 
@@ -514,8 +514,8 @@ final class TypeCodeMap {
     /**
      * Writes a five byte header for supporting up to 2^32 types.
      */
-    private static final class Custom4<T> extends Custom<T> {
-        Custom4(Class clazz, int typeCode, Serializer<T> serializer) {
+    private static final class Custom4 extends Custom {
+        Custom4(Class clazz, int typeCode, Serializer serializer) {
             super(clazz, typeCode, serializer);
         }
 
