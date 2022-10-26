@@ -23,6 +23,7 @@ import java.net.ServerSocket;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -173,6 +174,106 @@ public class SerializerTest {
         assertEquals(list, (List) obj);
 
         env.close();
+    }
+
+    @Test
+    public void simple() throws Exception {
+        var env = Environment.create();
+
+        env.customSerializers(Map.of(
+            PointClass.class, Serializer.simple(PointClass.class),
+            PointRec.class, Serializer.simple(PointRec.class),
+            SomeClass.class, Serializer.simple(SomeClass.class),
+            // No public fields, and so it won't serialize anything.
+            HashMap.class, Serializer.simple(HashMap.class)
+        ));
+
+        env.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        assertEquals(new PointClass(1, 2), root.echo(new PointClass(1, 2)));
+        assertEquals(new PointRec(1, 2), root.echo(new PointRec(1, 2)));
+        assertEquals(new SomeClass(null, null, "hello"),
+                     root.echo(new SomeClass("x", "y", "hello")));
+
+        var map = new HashMap<String, String>();
+        map.put("hello", "world");
+        assertEquals(new HashMap<>(), root.echo(map));
+
+        env.close();
+    }
+
+    public static class PointClass {
+        public int x, y;
+
+        public PointClass() {
+        }
+
+        PointClass(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            var other = (PointClass) obj;
+            return x == other.x && y == other.y;
+        }
+    }
+
+    public record PointRec(int x, int y) {}
+
+    public static class SomeClass {
+        public SomeClass() {
+        }
+
+        SomeClass(String b, String c, String d) {
+            this.b = b;
+            this.c = c;
+            this.d = d;
+        }
+
+        public static String a;
+        public transient String b;
+        String c;
+        public String d;
+
+        @Override
+        public boolean equals(Object obj) {
+            var other = (SomeClass) obj;
+            return Objects.equals(b, other.b)
+                && Objects.equals(c, other.c)
+                && Objects.equals(d, other.d);
+        }
+
+        @Override
+        public String toString() {
+            return "b=" + b + ", c=" + c + ", d=" + d;
+        }
+    }
+
+    @Test
+    public void simpleWrong() throws Exception {
+        record Rec() { }
+
+        try {
+            Serializer.simple(Rec.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Not public"));
+        }
+
+        try {
+            Serializer.simple(List.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("No public no-arg"));
+        }
     }
 
     public static interface R1 extends Remote {

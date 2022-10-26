@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import org.cojen.dirmi.core.SerializerMaker;
+
 /**
  * Supports writing and reading of object instances to/from a pipe.
  *
@@ -25,6 +27,17 @@ import java.io.IOException;
  * @see Environment#customSerializers
  */
 public interface Serializer<T> {
+    /**
+     * Generates and returns a serializer for a record type or simple class. A simple class
+     * must have a public no-arg constructor, and only public fields are serialized. Static and
+     * transient fields aren't serialized.
+     *
+     * @throws IllegalArgumentException if the given type isn't supported
+     */
+    static <T> Serializer<T> simple(Class<T> type) {
+        return SerializerMaker.forClass(type);
+    }
+
     /**
      * Writes a non-null object to the pipe.
      */
