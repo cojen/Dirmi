@@ -47,8 +47,7 @@ public class SerializerTest {
     public void basic() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers
-            (List.of(new StringBuilderSerializer(), new ConcurrentHashMapSerializer()));
+        env.customSerializers(new StringBuilderSerializer(), new ConcurrentHashMapSerializer());
 
         env.export("main", new R1Server());
 
@@ -83,15 +82,11 @@ public class SerializerTest {
         var clientEnv = Environment.create();
 
         clientEnv.customSerializers
-            (List.of(new ConcurrentHashMapSerializer(),
-                     new UUIDSerializer(),
-                     new OptionalSerializer())
-             );
+            (new ConcurrentHashMapSerializer(), new UUIDSerializer(), new OptionalSerializer());
 
         var serverEnv = Environment.create();
 
-        serverEnv.customSerializers
-            (List.of(new StringBuilderSerializer(), new UUIDSerializer()));
+        serverEnv.customSerializers(new StringBuilderSerializer(), new UUIDSerializer());
 
         serverEnv.export("main", new R1Server());
 
@@ -125,7 +120,7 @@ public class SerializerTest {
     public void array() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(List.of(new UUIDSerializer()));
+        env.customSerializers(new UUIDSerializer());
 
         env.export("main", new R1Server());
 
@@ -155,7 +150,7 @@ public class SerializerTest {
     public void list() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(List.of(new UUIDSerializer()));
+        env.customSerializers(new UUIDSerializer());
 
         env.export("main", new R1Server());
 
@@ -177,13 +172,13 @@ public class SerializerTest {
     public void simple() throws Exception {
         var env = Environment.create();
 
-        env.customSerializers(List.of(
+        env.customSerializers(
             Serializer.simple(PointClass.class),
             Serializer.simple(PointRec.class),
             Serializer.simple(SomeClass.class),
             // No public fields, and so it won't serialize anything.
             Serializer.simple(HashMap.class)
-        ));
+        );
 
         env.export("main", new R1Server());
 

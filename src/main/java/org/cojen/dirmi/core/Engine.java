@@ -536,13 +536,13 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public void customSerializers(List<Serializer> serializers) {
+    public void customSerializers(Serializer... serializers) {
         LinkedHashMap<Class<?>, Serializer> map;
 
-        if (serializers == null || serializers.isEmpty()) {
+        if (serializers == null || serializers.length == 0) {
             map = null;
         } else {
-            map = new LinkedHashMap<>(serializers.size());
+            map = new LinkedHashMap<>(serializers.length);
 
             for (var serializer : serializers) {
                 Set<Class<?>> types = serializer.supportedTypes();

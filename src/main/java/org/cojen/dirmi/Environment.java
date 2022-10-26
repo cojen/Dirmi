@@ -30,7 +30,6 @@ import java.nio.channels.Channels;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import java.util.List;
 import java.util.Objects;
 
 import java.util.concurrent.Executor;
@@ -182,9 +181,9 @@ public interface Environment extends Closeable, Executor {
      * provided by the client and server sessions don't match, then null is serialized for
      * classes which aren't customized on both sides.
      *
-     * @throws NullPointerException if any list elements are null
+     * @throws NullPointerException if any serializers are null
      */
-    void customSerializers(List<Serializer> serializers);
+    void customSerializers(Serializer... serializers);
 
     /**
      * Set the reconnect delay for newly established client sessions (±10%). Client sessions
