@@ -305,6 +305,8 @@ public final class Engine implements Environment {
             throw e;
         }
 
+        session.mStateLock.lock();
+
         try {
             mMainLock.lock();
             try {
@@ -332,6 +334,11 @@ public final class Engine implements Environment {
                 (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
 
             session.initTypeCodeMap(tcm);
+
+            // Assign the state after the call to initTypeCodeMap, to prevent race conditions
+            // when a new connection is accepted too soon. See ServerSession.accepeted.
+            session.mState = Session.State.CONNECTED;
+
             session.controlPipe(pipe);
             session.startTasks();
 
@@ -342,6 +349,8 @@ public final class Engine implements Environment {
             }
             CoreUtils.closeQuietly(session);
             throw e;
+        } finally {
+            session.mStateLock.unlock();
         }
     }
 

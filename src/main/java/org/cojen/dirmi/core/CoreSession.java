@@ -111,7 +111,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     final Lock mStateLock;
     private volatile Consumer<Session<?>> mStateListener;
-    private volatile State mState;
+    volatile State mState;
 
     // Used when reconnecting.
     volatile WaitMap<String, RemoteInfo> mTypeWaitMap;
@@ -132,7 +132,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mControlLock = new ReentrantLock();
 
         mStateLock = new ReentrantLock();
-        mState = State.CONNECTED;
 
         initTypeCodeMap(TypeCodeMap.STANDARD);
     }
@@ -435,7 +434,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     // Caller must hold mStateLock.
-    private void setStateAnyNotify(Session.State state) {
+    private void setStateAnyNotify(State state) {
         if (mState != state) {
             mState = state;
 
@@ -451,7 +450,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    void casStateAndNotify(Session.State expect, Session.State newState) {
+    void casStateAndNotify(State expect, State newState) {
         mStateLock.lock();
         try {
             if (mState == expect) {
