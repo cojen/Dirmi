@@ -78,6 +78,11 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Access the session that the given remote object is bound to.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#adapt(java.lang.Object)" class="member-name-link">adapt(Object)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
+<dd>
+<div class="block">Adapts this serializer to conform to the given descriptor or else returns this instance
+ if no adaptation is required.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html#attached(org.cojen.dirmi.Session)" class="member-name-link">attached(Session&lt;?&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html" title="interface in org.cojen.dirmi">SessionAware</a></dt>
 <dd>
 <div class="block">Called when this object has been attached to a session and can be accessed remotely.</div>
@@ -191,6 +196,10 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteFailure.html#declared()" class="member-name-link">declared()</a> - Element in annotation interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/RemoteFailure.html" title="annotation interface in org.cojen.dirmi">RemoteFailure</a></dt>
 <dd>
 <div class="block">By default, if the exception is checked, it must be declared to be thrown.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#descriptor()" class="member-name-link">descriptor()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
+<dd>
+<div class="block">Returns an opaque serializable object describing the encoding format.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html#detached(org.cojen.dirmi.Session)" class="member-name-link">detached(Session&lt;?&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html" title="interface in org.cojen.dirmi">SessionAware</a></dt>
 <dd>
