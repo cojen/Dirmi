@@ -132,7 +132,7 @@ loadScripts(document, 'script');</script>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#simple(java.lang.Class)" class="member-name-link">simple</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;&nbsp;type)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
-<div class="block">Generates and returns a serializer for a record type or simple class.</div>
+<div class="block">Generates and returns a serializer for a record type, an enum type, or a simple class.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/Set.html" title="class or interface in java.util" class="external-link">Set</a>&lt;<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#supportedTypes()" class="member-name-link">supportedTypes</a>()</code></div>
@@ -163,9 +163,9 @@ loadScripts(document, 'script');</script>
 <section class="detail" id="simple(java.lang.Class)">
 <h3>simple</h3>
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></span>&nbsp;<span class="element-name">simple</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;&nbsp;type)</span></div>
-<div class="block">Generates and returns a serializer for a record type or simple class. A simple class
- must have a public no-arg constructor, and only public fields are serialized. Static and
- transient fields aren't serialized.</div>
+<div class="block">Generates and returns a serializer for a record type, an enum type, or a simple class. A
+ simple class must have a public no-arg constructor, and only public fields are
+ serialized. Static and transient fields aren't serialized either.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if the given type isn't supported</dd>
