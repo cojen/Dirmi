@@ -20,6 +20,7 @@ import java.io.InvalidClassException;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.VarHandle;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -244,6 +245,9 @@ public final class SerializerMaker {
                 appendToDescriptor(name, field.getType());
             }
         }
+
+        // With respect to memory ordering, treat the field stores as if they were final.
+        mReadMaker.var(VarHandle.class).invoke("storeStoreFence");
 
         mReadMaker.return_(readObjectVar);
     }
