@@ -30,9 +30,9 @@ import org.cojen.dirmi.core.SerializerMaker;
  */
 public interface Serializer {
     /**
-     * Generates and returns a serializer for a record type or simple class. A simple class
-     * must have a public no-arg constructor, and only public fields are serialized. Static and
-     * transient fields aren't serialized.
+     * Generates and returns a serializer for a record type, an enum type, or a simple class. A
+     * simple class must have a public no-arg constructor, and only public fields are
+     * serialized. Static and transient fields aren't serialized either.
      *
      * @throws IllegalArgumentException if the given type isn't supported
      */

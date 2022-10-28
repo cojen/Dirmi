@@ -417,7 +417,7 @@ class BufferedPipe implements Pipe {
     public final Object readObject() throws IOException {
         int typeCode;
 
-        // Simple objects cannot reference other objects.
+        // Simple objects cannot reference themselves.
         Object simple;
 
         loop: while (true) {

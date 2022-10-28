@@ -30,6 +30,8 @@ import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -124,6 +126,8 @@ public final class SerializerMaker {
 
         if (mType.isRecord()) {
             makeForRecord();
+        } else if (mType.isEnum()) {
+            makeForEnum();
         } else {
             makeForClass();
         }
@@ -174,19 +178,19 @@ public final class SerializerMaker {
         }
 
         // For consistency, write/read the components in sorted order.
-        var orderedComponents = new TreeMap<RecordComponent, Integer>((rc1, rc2) -> {
-            return rc1.getName().compareTo(rc2.getName());
-        });
+        var componentMap = new TreeMap<RecordComponent, Integer>
+            (Comparator.comparing(RecordComponent::getName));
         for (int i=0; i<components.length; i++) {
-            RecordComponent comp = components[i];
-            orderedComponents.put(comp, i);
+            componentMap.put(components[i], i);
         }
 
         begin();
 
+        mDescriptorMap = parseDescriptorMap(mDescriptor);
+
         var readParamVars = new Variable[components.length];
 
-        for (Map.Entry<RecordComponent, Integer> e : orderedComponents.entrySet()) {
+        for (Map.Entry<RecordComponent, Integer> e : componentMap.entrySet()) {
             RecordComponent comp = e.getKey();
             int i = e.getValue();
             readParamVars[i] = mReadMaker.var(paramTypes[i]);
@@ -227,6 +231,8 @@ public final class SerializerMaker {
 
         begin();
 
+        mDescriptorMap = parseDescriptorMap(mDescriptor);
+
         var readObjectVar = mReadMaker.new_(mType);
 
         for (int i=0; i<fields.length; i++) {
@@ -242,9 +248,116 @@ public final class SerializerMaker {
         mReadMaker.return_(readObjectVar);
     }
 
-    private void begin() {
-        mDescriptorMap = parseDescriptor(mDescriptor);
+    private void makeForEnum() {
+        var enums = (Enum[]) mType.getEnumConstants();
 
+        if (mDescriptor != null) {
+            // Support a reduced set of enums.
+
+            var supported = new LinkedHashMap<String, Enum>(enums.length * 2);
+            for (Enum e : enums) {
+                supported.put(e.name(), e);
+            }
+
+            String[] split = mDescriptor.split(";");
+            var retain = new HashSet<String>(split.length * 2);
+            for (String name : split) {
+                retain.add(name);
+            }
+
+            supported.keySet().retainAll(retain);
+
+            enums = supported.values().toArray(Enum[]::new);
+        }
+
+        begin();
+
+        var writeCases = new int[enums.length];
+        var writeLabels = new Label[enums.length];
+
+        for (int i=0; i<enums.length; i++) {
+            writeCases[i] = enums[i].ordinal();
+            writeLabels[i] = mWriteMaker.label();
+        }
+
+        // For consistency, number the enum constants in sorted order.
+        var sortedEnums = enums.clone();
+        Comparator<Enum> cmp = Comparator.comparing(Enum::name);
+        Arrays.sort(sortedEnums, cmp);
+
+        var readCases = new int[sortedEnums.length];
+        var readLabels = new Label[sortedEnums.length];
+
+        for (int i=0; i<sortedEnums.length; i++) {
+            Enum e = sortedEnums[i];
+
+            readCases[i] = i + 1;
+            readLabels[i] = mReadMaker.label();
+
+            if (!mDescriptorBuilder.isEmpty()) {
+                mDescriptorBuilder.append(';');
+            }
+            mDescriptorBuilder.append(e.name());
+        }
+
+        // Make the write method.
+        {
+            Label unknown = mWriteMaker.label();
+            mWriteObjectVar.invoke("ordinal").switch_(unknown, writeCases, writeLabels);
+
+            var numberVar = mWriteMaker.var(int.class);
+            Label doWrite = mWriteMaker.label();
+
+            for (int i=0; i<enums.length; i++) {
+                writeLabels[i].here();
+                numberVar.set(Arrays.binarySearch(sortedEnums, enums[i], cmp) + 1);
+                doWrite.goto_();
+            }
+
+            unknown.here();
+            numberVar.set(0);
+
+            doWrite.here();
+
+            if (enums.length < 256) {
+                mWritePipeVar.invoke("writeByte", numberVar);
+            } else if (enums.length < 65536) {
+                mWritePipeVar.invoke("writeShort", numberVar);
+            } else {
+                // Impossible case.
+                mWritePipeVar.invoke("writeInt", numberVar);
+            }
+        }
+
+        // Make the read method.
+        {
+            var numberVar = mReadMaker.var(int.class);
+
+            if (enums.length < 256) {
+                numberVar.set(mReadPipeVar.invoke("readUnsignedByte"));
+            } else if (enums.length < 65536) {
+                numberVar.set(mReadPipeVar.invoke("readUnsignedShort"));
+            } else {
+                // Impossible case.
+                numberVar.set(mReadPipeVar.invoke("readInt"));
+            }
+
+            Label end = mReadMaker.label();
+            numberVar.switch_(end, readCases, readLabels);
+
+            var typeVar = mReadMaker.var(mType);
+
+            for (int i=0; i<sortedEnums.length; i++) {
+                readLabels[i].here();
+                mReadMaker.return_(typeVar.field(sortedEnums[i].name()));
+            }
+
+            end.here();
+            mReadMaker.return_(null);
+        }
+    }
+
+    private void begin() {
         String name = mType.getName();
         if (name.startsWith("java.")) {
             name = null;
@@ -300,7 +413,7 @@ public final class SerializerMaker {
     /**
      * Returns a field name to descriptor mapping, or null if the descriptor is null.
      */
-    private static Map<String, String> parseDescriptor(String descriptor) {
+    private static Map<String, String> parseDescriptorMap(String descriptor) {
         if (descriptor == null) {
             return null;
         }

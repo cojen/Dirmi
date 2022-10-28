@@ -36,6 +36,7 @@ import org.junit.*;
 import static org.junit.Assert.*;
 
 import org.cojen.maker.ClassMaker;
+import org.cojen.maker.MethodMaker;
 
 /**
  * 
@@ -180,6 +181,7 @@ public class SerializerTest {
             Serializer.simple(PointClass.class),
             Serializer.simple(PointRec.class),
             Serializer.simple(SomeClass.class),
+            Serializer.simple(Thread.State.class),
             // No public fields, and so it won't serialize anything.
             Serializer.simple(HashMap.class)
         );
@@ -196,6 +198,9 @@ public class SerializerTest {
         assertEquals(new PointRec(1, 2), root.echo(new PointRec(1, 2)));
         assertEquals(new SomeClass(null, null, "hello"),
                      root.echo(new SomeClass("x", "y", "hello")));
+
+        assertEquals(Thread.State.NEW, root.echo(Thread.State.NEW));
+        assertEquals(Thread.State.WAITING, root.echo(Thread.State.WAITING));
 
         var map = new HashMap<String, String>();
         map.put("hello", "world");
@@ -372,6 +377,86 @@ public class SerializerTest {
         assertEquals(123, rec1Class.getField("a").get(result));
         assertNull(rec1Class.getField("c").get(result));
         assertNull(rec1Class.getField("d").get(result));
+
+        clientEnv.close();
+        serverEnv.close();
+    }
+
+    @Test
+    public void adaptEnum() throws Exception {
+        String name = getClass().getName() + "$AdaptEnum";
+
+        Class<?> enum1Class;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "enum1").public_().enum_();
+            cm.extend(Enum.class);
+
+            cm.addField(cm, "A").public_().static_().final_();
+            cm.addField(cm, "B").public_().static_().final_();
+            cm.addField(cm, "D").public_().static_().final_();
+
+            MethodMaker mm = cm.addConstructor(String.class, int.class).private_();
+            mm.invokeSuperConstructor(mm.param(0), mm.param(1));
+
+            mm = cm.addClinit();
+            mm.field("A").set(mm.new_(cm, "A", 2));
+            mm.field("B").set(mm.new_(cm, "B", 1));
+            mm.field("D").set(mm.new_(cm, "D", 0));
+            
+            mm = cm.addMethod(cm.arrayType(1), "values").public_().static_();
+            var arrayVar = mm.new_(cm.arrayType(1), 3);
+            arrayVar.aset(0, mm.field("D"));
+            arrayVar.aset(1, mm.field("B"));
+            arrayVar.aset(2, mm.field("A"));
+            mm.return_(arrayVar);
+
+            enum1Class = cm.finish();
+        }
+
+        Class<?> enum2Class;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "enum2").public_().enum_();
+            cm.extend(Enum.class);
+
+            cm.addField(cm, "B").public_().static_().final_();
+            cm.addField(cm, "C").public_().static_().final_();
+
+            MethodMaker mm = cm.addConstructor(String.class, int.class).private_();
+            mm.invokeSuperConstructor(mm.param(0), mm.param(1));
+
+            mm = cm.addClinit();
+            mm.field("B").set(mm.new_(cm, "B", 0));
+            mm.field("C").set(mm.new_(cm, "C", 1));
+
+            mm = cm.addMethod(cm.arrayType(1), "values").public_().static_();
+            var arrayVar = mm.new_(cm.arrayType(1), 2);
+            arrayVar.aset(0, mm.field("B"));
+            arrayVar.aset(1, mm.field("C"));
+            mm.return_(arrayVar);
+
+            enum2Class = cm.finish();
+        }
+
+        var clientEnv = Environment.create();
+        clientEnv.customSerializers(Serializer.simple(enum1Class));
+
+        var serverEnv = Environment.create();
+        serverEnv.customSerializers(Serializer.simple(enum2Class));
+        serverEnv.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        serverEnv.acceptAll(ss);
+
+        var session = clientEnv.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        Object A1 = enum1Class.getField("A").get(null);
+        Object B1 = enum1Class.getField("B").get(null);
+        Object D1 = enum1Class.getField("D").get(null);
+
+        assertNull(root.echo(A1));
+        assertEquals(B1, root.echo(B1));
+        assertNull(root.echo(D1));
 
         clientEnv.close();
         serverEnv.close();
