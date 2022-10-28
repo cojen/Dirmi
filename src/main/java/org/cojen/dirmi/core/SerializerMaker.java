@@ -29,7 +29,10 @@ import java.lang.reflect.RecordComponent;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
@@ -44,7 +47,7 @@ import org.cojen.dirmi.Serializer;
  * @see Serializer#simple
  */
 public final class SerializerMaker {
-    private static final SoftCache<Class<?>, Serializer> cCache = new SoftCache<>();
+    private static final SoftCache<Object, Serializer> cCache = new SoftCache<>();
 
     public static Serializer forClass(Class<?> type) {
         var serializer = cCache.get(type);
@@ -52,7 +55,7 @@ public final class SerializerMaker {
         if (serializer == null) synchronized (cCache) {
             serializer = cCache.get(type);
             if (serializer == null) {
-                serializer = make(type);
+                serializer = new SerializerMaker(type, null).make().finish();
                 cCache.put(type, serializer);
             }
         }
@@ -60,168 +63,277 @@ public final class SerializerMaker {
         return (Serializer) serializer;
     }
 
-    private static Serializer make(Class<?> type) {
-        if (!Modifier.isPublic(type.getModifiers())) {
-            throw new IllegalArgumentException("Not public: " + type.getName());
+    /**
+     * Is called by generated code.
+     */
+    public static Serializer adapt(Serializer s, Class<?> type, Object descriptor) {
+        if (s.descriptor().equals(descriptor)) {
+            return s;
         }
-        if (type.isRecord()) {
-            return makeForRecord(type);
+
+        var descString = ((String) descriptor).intern();
+        var key = new WithDescriptor(type, descString);
+
+        var serializer = cCache.get(key);
+
+        if (serializer == null) synchronized (cCache) {
+            serializer = cCache.get(key);
+
+            if (serializer == null) {
+                var maker = new SerializerMaker(type, descString).make();
+
+                var canonicalKey = new WithDescriptor(type, maker.mEffectiveDescriptor);
+                serializer = cCache.get(canonicalKey);
+
+                if (serializer != null) {
+                    cCache.put(key, serializer);
+                } else {
+                    serializer = maker.finish();
+                    cCache.put(key, serializer);
+                    cCache.put(canonicalKey, serializer);
+                }
+            }
+        }
+
+        return (Serializer) serializer;
+    }
+
+    private static record WithDescriptor(Class<?> type, String descriptor) { }
+
+    private final Class<?> mType;
+    private final String mDescriptor;
+
+    private Map<String, String> mDescriptorMap;
+    private ClassMaker mMaker;
+    private MethodMaker mWriteMaker;
+    private Variable mWritePipeVar, mWriteObjectVar;
+    private MethodMaker mReadMaker;
+    private Variable mReadPipeVar;
+    private StringBuilder mDescriptorBuilder;
+    private String mEffectiveDescriptor;
+
+    private SerializerMaker(Class<?> type, String descriptor) {
+        mType = type;
+        mDescriptor = descriptor;
+    }
+
+    private SerializerMaker make() {
+        if (!Modifier.isPublic(mType.getModifiers())) {
+            throw new IllegalArgumentException("Not public: " + mType.getName());
+        }
+
+        if (mType.isRecord()) {
+            makeForRecord();
         } else {
-            return makeForClass(type);
+            makeForClass();
+        }
+
+        mEffectiveDescriptor = mDescriptorBuilder.toString().intern();
+
+        return this;
+    }
+
+    private Serializer finish() {
+        mMaker.addMethod(Object.class, "descriptor").public_().return_(mEffectiveDescriptor);
+
+        MethodMaker mm = mMaker.addMethod(Serializer.class, "adapt", Object.class).public_();
+        mm.return_(mm.var(SerializerMaker.class).invoke("adapt", mm.this_(), mType, mm.param(0)));
+
+        MethodHandles.Lookup lookup = mMaker.finishLookup();
+
+        try {
+            return (Serializer) lookup.findConstructor
+                (lookup.lookupClass(), MethodType.methodType(void.class)).invoke();
+        } catch (Throwable e) {
+            throw new AssertionError(e);
         }
     }
 
-    private static Serializer makeForRecord(Class<?> type) {
-        RecordComponent[] components = type.getRecordComponents();
+    private void makeForRecord() {
+        RecordComponent[] components = mType.getRecordComponents();
 
         Class<?>[] paramTypes =
             Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);
 
         Constructor<?> ctor;
         try {
-            ctor = type.getDeclaredConstructor(paramTypes);
+            ctor = mType.getDeclaredConstructor(paramTypes);
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException(e);
         }
 
         if (!Modifier.isPublic(ctor.getModifiers())) {
-            throw new IllegalArgumentException("No public constructor: " + type.getName());
+            throw new IllegalArgumentException("No public constructor: " + mType.getName());
         }
-
-        long version = hashMix(0, type.getName());
 
         for (RecordComponent comp : components) {
             if (!Modifier.isPublic(comp.getAccessor().getModifiers())) {
                 throw new IllegalArgumentException
-                    ("Not public: " + type.getName() + "." + comp.getName());
+                    ("Not public: " + mType.getName() + "." + comp.getName());
             }
-            version = hashMix(version, comp.getName());
-            version = hashMix(version, comp.getType().descriptorString());
         }
 
-        ClassMaker cm = begin(type);
+        // For consistency, write/read the components in sorted order.
+        var orderedComponents = new TreeMap<RecordComponent, Integer>((rc1, rc2) -> {
+            return rc1.getName().compareTo(rc2.getName());
+        });
+        for (int i=0; i<components.length; i++) {
+            RecordComponent comp = components[i];
+            orderedComponents.put(comp, i);
+        }
 
-        MethodMaker writeMaker = cm.addMethod(null, "write", Pipe.class, Object.class).public_();
-        var writePipeVar = writeMaker.param(0);
-        var writeRecordVar = writeMaker.param(1).cast(type);
-
-        MethodMaker readMaker = cm.addMethod(Object.class, "read", Pipe.class).public_();
-        var readPipeVar = readMaker.param(0);
-
-        writePipeVar.invoke("writeLong", version);
-
-        versionCheck(type, readPipeVar, version);
+        begin();
 
         var readParamVars = new Variable[components.length];
 
-        for (int i=0; i<components.length; i++) {
-            RecordComponent comp = components[i];
-            CoreUtils.writeParam(writePipeVar, writeRecordVar.invoke(comp.getName()));
-            CoreUtils.readParam(readPipeVar, readParamVars[i] = readMaker.var(paramTypes[i]));
+        for (Map.Entry<RecordComponent, Integer> e : orderedComponents.entrySet()) {
+            RecordComponent comp = e.getKey();
+            int i = e.getValue();
+            readParamVars[i] = mReadMaker.var(paramTypes[i]);
+
+            if (shouldSkip(comp)) {
+                readParamVars[i].clear();
+            } else {
+                String name = comp.getName();
+                CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.invoke(name));
+                CoreUtils.readParam(mReadPipeVar, readParamVars[i]);
+                appendToDescriptor(name, comp.getType());
+            }
         }
 
-        readMaker.return_(readMaker.new_(type, (Object[]) readParamVars));
-
-        MethodHandles.Lookup lookup = cm.finishLookup();
-
-        try {
-            return (Serializer) lookup.findConstructor
-                (lookup.lookupClass(), MethodType.methodType(void.class)).invoke();
-        } catch (Throwable e) {
-            throw new AssertionError(e);
-        }
+        mReadMaker.return_(mReadMaker.new_(mType, (Object[]) readParamVars));
     }
 
-    private static Serializer makeForClass(Class<?> type) {
+    private void makeForClass() {
         Constructor<?> ctor;
         try {
-            ctor = type.getConstructor();
+            ctor = mType.getConstructor();
         } catch (NoSuchMethodException e) {
-            throw new IllegalArgumentException("No public no-arg constructor: " + type.getName());
+            throw new IllegalArgumentException("No public no-arg constructor: " + mType.getName());
         }
 
-        Field[] fields = type.getFields();
+        // For consistency, write/read the fields in sorted order.
+        Field[] fields = mType.getFields();
         Arrays.sort(fields, Comparator.comparing(Field::getName));
 
-        long version = hashMix(0, type.getName());
-
+        // Skip static and transient fields.
         for (int i=0; i<fields.length; i++) {
             Field field = fields[i];
             int mods = field.getModifiers();
             if (Modifier.isStatic(mods) || Modifier.isTransient(mods)) {
                 fields[i] = null;
-            } else {
-                version = hashMix(version, field.getName());
-                version = hashMix(version, field.getType().descriptorString());
             }
         }
 
-        ClassMaker cm = begin(type);
+        begin();
 
-        MethodMaker writeMaker = cm.addMethod(null, "write", Pipe.class, Object.class).public_();
-        var writePipeVar = writeMaker.param(0);
-        var writeObjectVar = writeMaker.param(1).cast(type);
-
-        MethodMaker readMaker = cm.addMethod(Object.class, "read", Pipe.class).public_();
-        var readPipeVar = readMaker.param(0);
-
-        writePipeVar.invoke("writeLong", version);
-
-        versionCheck(type, readPipeVar, version);
-
-        var readObjectVar = readMaker.new_(type);
+        var readObjectVar = mReadMaker.new_(mType);
 
         for (int i=0; i<fields.length; i++) {
             Field field = fields[i];
-            if (field != null) {
+            if (field != null && !shouldSkip(field)) {
                 String name = field.getName();
-                CoreUtils.writeParam(writePipeVar, writeObjectVar.field(name));
-                CoreUtils.readParam(readPipeVar, readObjectVar.field(name));
+                CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.field(name));
+                CoreUtils.readParam(mReadPipeVar, readObjectVar.field(name));
+                appendToDescriptor(name, field.getType());
             }
         }
 
-        readMaker.return_(readObjectVar);
-
-        MethodHandles.Lookup lookup = cm.finishLookup();
-
-        try {
-            return (Serializer) lookup.findConstructor
-                (lookup.lookupClass(), MethodType.methodType(void.class)).invoke();
-        } catch (Throwable e) {
-            throw new AssertionError(e);
-        }
+        mReadMaker.return_(readObjectVar);
     }
 
-    private static ClassMaker begin(Class<?> type) {
-        String name = type.getName();
+    private void begin() {
+        mDescriptorMap = parseDescriptor(mDescriptor);
+
+        String name = mType.getName();
         if (name.startsWith("java.")) {
             name = null;
         }
 
-        ClassMaker cm = ClassMaker.begin(name).implement(Serializer.class);
+        ClassMaker cm = ClassMaker.begin(name, mType.getClassLoader()).implement(Serializer.class);
 
         cm.addConstructor();
 
         MethodMaker mm = cm.addMethod(Set.class, "supportedTypes").public_();
-        mm.return_(mm.var(Set.class).invoke("of", type));
+        mm.return_(mm.var(Set.class).invoke("of", mType));
 
-        return cm;
+        mMaker = cm;
+
+        mWriteMaker = mMaker.addMethod(null, "write", Pipe.class, Object.class).public_();
+        mWritePipeVar = mWriteMaker.param(0);
+        mWriteObjectVar = mWriteMaker.param(1).cast(mType);
+
+        mReadMaker = mMaker.addMethod(Object.class, "read", Pipe.class).public_();
+        mReadPipeVar = mReadMaker.param(0);
+
+        mDescriptorBuilder = new StringBuilder();
     }
 
-    private static void versionCheck(Class<?> type, Variable pipeVar, long version) {
-        MethodMaker mm = pipeVar.methodMaker();
-        var versionVar = pipeVar.invoke("readLong");
-        Label versionMatch = mm.label();
-        versionVar.ifEq(version, versionMatch);
-        var cnameVar = mm.var(Class.class).set(type).invoke("getName");
-        mm.new_(InvalidClassException.class, cnameVar, "Serializer version mismatch").throw_();
-        versionMatch.here();
-    }
-
-    private static long hashMix(long hash, String str) {
-        for (int i=0; i<str.length(); i++) {
-            hash = hash * 31 + str.charAt(i);
+    /**
+     * Returns true if the component isn't in the adapt descriptor.
+     */
+    private boolean shouldSkip(RecordComponent comp) {
+        Map<String, String> descMap = mDescriptorMap;        
+        if (descMap != null) {
+            String desc = descMap.get(comp.getName());
+            return desc == null || !desc.equals(comp.getType().descriptorString());
         }
-        return hash;
+        return false;
+    }
+
+    /**
+     * Returns true if the field isn't in the adapt descriptor.
+     */
+    private boolean shouldSkip(Field field) {
+        Map<String, String> descMap = mDescriptorMap;        
+        if (descMap != null) {
+            String desc = descMap.get(field.getName());
+            return desc == null || !desc.equals(field.getType().descriptorString());
+        }
+        return false;
+    }
+
+    private void appendToDescriptor(String name, Class<?> type) {
+        mDescriptorBuilder.append(name).append(';').append(type.descriptorString());
+    }
+
+    /**
+     * Returns a field name to descriptor mapping, or null if the descriptor is null.
+     */
+    private static Map<String, String> parseDescriptor(String descriptor) {
+        if (descriptor == null) {
+            return null;
+        }
+
+        var map = new HashMap<String, String>();
+
+        for (int ix = 0;;) {
+            int ix2 = descriptor.indexOf(';', ix);
+            if (ix2 < 0) {
+                break;
+            }
+
+            String name = descriptor.substring(ix, ix2);
+            ix = ix2 + 1;
+
+            ix2 = ix;
+            int c;
+            while ((c = descriptor.charAt(ix2)) == '[') ix2++;
+
+            String desc;
+            if (c == 'L') {
+                ix2 = descriptor.indexOf(';', ix2 + 1) + 1;
+                desc = descriptor.substring(ix, ix2);
+            } else {
+                ix2++;
+                desc = descriptor.substring(ix, ix2);
+            }
+
+            map.put(name, desc);
+
+            ix = ix2;
+        }
+
+        return map;
     }
 }

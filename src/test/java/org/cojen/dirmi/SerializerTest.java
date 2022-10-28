@@ -18,6 +18,8 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import java.lang.reflect.Constructor;
+
 import java.net.ServerSocket;
 
 import java.util.HashMap;
@@ -32,6 +34,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.*;
 import static org.junit.Assert.*;
+
+import org.cojen.maker.ClassMaker;
 
 /**
  * 
@@ -266,6 +270,111 @@ public class SerializerTest {
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("No public no-arg"));
         }
+    }
+
+    @Test
+    public void adaptRecord() throws Exception {
+        String name = getClass().getName() + "$AdaptRecord";
+
+        Class<?> rec1Class;
+        Constructor<?> rec1Ctor;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "rec1").public_();
+            cm.addField(int.class, "a");
+            cm.addField(double[].class, "c");
+            cm.addField(String.class, "d");
+            cm.asRecord();
+            rec1Class = cm.finish();
+
+            rec1Ctor = rec1Class.getConstructor(int.class, double[].class, String.class);
+        }
+
+        Class<?> rec2Class;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "rec2").public_();
+            cm.addField(String[].class, "c");
+            cm.addField(String.class, "b");
+            cm.addField(int.class, "a");
+            cm.asRecord();
+            rec2Class = cm.finish();
+        }
+
+        var clientEnv = Environment.create();
+        clientEnv.customSerializers(Serializer.simple(rec1Class));
+
+        var serverEnv = Environment.create();
+        serverEnv.customSerializers(Serializer.simple(rec2Class));
+        serverEnv.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        serverEnv.acceptAll(ss);
+
+        var session = clientEnv.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        Object rec1 = rec1Ctor.newInstance(123, new double[] {3.14}, "hello");
+
+        Object result = root.echo(rec1);
+
+        assertEquals(123, rec1Class.getMethod("a").invoke(result));
+        assertNull(rec1Class.getMethod("c").invoke(result));
+        assertNull(rec1Class.getMethod("d").invoke(result));
+
+        clientEnv.close();
+        serverEnv.close();
+    }
+
+    @Test
+    public void adaptClass() throws Exception {
+        String name = getClass().getName() + "$AdaptClass";
+
+        Class<?> rec1Class;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "class1").public_();
+            cm.addField(int.class, "a").public_();
+            cm.addField(double[].class, "c").public_();
+            cm.addField(String.class, "d").public_();
+            cm.addConstructor().public_();
+            rec1Class = cm.finish();
+        }
+
+        Class<?> rec2Class;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, "class2").public_();
+            cm.addField(String[].class, "c").public_();
+            cm.addField(String.class, "b").public_();
+            cm.addField(int.class, "a").public_();
+            cm.addConstructor().public_();
+            rec2Class = cm.finish();
+        }
+
+        var clientEnv = Environment.create();
+        clientEnv.customSerializers(Serializer.simple(rec1Class));
+
+        var serverEnv = Environment.create();
+        serverEnv.customSerializers(Serializer.simple(rec2Class));
+        serverEnv.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        serverEnv.acceptAll(ss);
+
+        var session = clientEnv.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        Object rec1 = rec1Class.getConstructor().newInstance();
+
+        rec1Class.getField("a").set(rec1, 123);
+        rec1Class.getField("c").set(rec1, new double[] {3.14});
+        rec1Class.getField("d").set(rec1, "hello");
+
+        Object result = root.echo(rec1);
+
+        assertEquals(123, rec1Class.getField("a").get(result));
+        assertNull(rec1Class.getField("c").get(result));
+        assertNull(rec1Class.getField("d").get(result));
+
+        clientEnv.close();
+        serverEnv.close();
     }
 
     public static interface R1 extends Remote {

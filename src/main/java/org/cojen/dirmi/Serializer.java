@@ -54,4 +54,23 @@ public interface Serializer {
      * Reads an object from the pipe. The returned object can be null.
      */
     Object read(Pipe pipe) throws IOException;
+
+    /**
+     * Returns an opaque serializable object describing the encoding format. The descriptor
+     * type itself can only depend on built-in serializers and is typically a string.
+     */
+    default Object descriptor() {
+        return null;
+    }
+
+    /**
+     * Adapts this serializer to conform to the given descriptor or else returns this instance
+     * if no adaptation is required. If adaptation isn't possible, can return null to specify a
+     * serializer which always reads and writes null, thus discarding the object entirely.
+     *
+     * @param descriptor an object which was provided by the {@link #descriptor} method
+     */
+    default Serializer adapt(Object descriptor) {
+        return this;
+    }
 }

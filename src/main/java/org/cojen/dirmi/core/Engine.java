@@ -34,7 +34,6 @@ import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -223,7 +222,7 @@ public final class Engine implements Environment {
         RemoteInfo serverInfo;
 
         int firstCustomTypeCode;
-        LinkedHashSet<String> clientCustomTypes = null;
+        LinkedHashMap<String, Object> clientCustomTypes = null;
 
         try {
             if (timeoutTask != null) {
@@ -322,7 +321,7 @@ public final class Engine implements Environment {
 
             session.writeHeader(pipe, clientSessionId);
             serverInfo.writeTo(pipe);
-            LinkedHashSet<String> serverCustomTypes = settings.writeSerializerTypes(pipe);
+            LinkedHashMap<String, Object> serverCustomTypes = settings.writeSerializerTypes(pipe);
             pipe.writeNull(); // optional metadata
             pipe.flush();
 
@@ -380,8 +379,8 @@ public final class Engine implements Environment {
         CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
 
         int firstCustomTypeCode;
-        LinkedHashSet<String> clientCustomTypes;
-        LinkedHashSet<String> serverCustomTypes = null;
+        LinkedHashMap<String, Object> clientCustomTypes;
+        LinkedHashMap<String, Object> serverCustomTypes = null;
 
         try {
             if (timeoutTask != null) {
@@ -426,7 +425,7 @@ public final class Engine implements Environment {
             session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
             TypeCodeMap tcm = settings.mergeSerializerTypes
-                (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
+                (firstCustomTypeCode, clientCustomTypes, serverCustomTypes);
 
             session.initTypeCodeMap(tcm);
             session.controlPipe(pipe);

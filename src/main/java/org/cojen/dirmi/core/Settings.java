@@ -20,7 +20,6 @@ import java.io.IOException;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 
 import org.cojen.dirmi.ClassResolver;
@@ -87,52 +86,56 @@ final class Settings implements Cloneable {
      * Writes the first custom type code and then the class names. If aren't any serializers,
      * then only 0 is written.
      *
-     * @return a new set with the types that were written, or null if none
+     * @return a new map with the types and descriptors that were written, or null if none
      */
-    LinkedHashSet<String> writeSerializerTypes(Pipe pipe) throws IOException {
+    LinkedHashMap<String, Object> writeSerializerTypes(Pipe pipe) throws IOException {
         if (serializers == null || serializers.isEmpty()) {
             pipe.writeByte(0);
             return null;
         }
 
         int size = serializers.size();
-        var types = new LinkedHashSet<String>(size);
+        var typeMap = new LinkedHashMap<String, Object>(size * 2);
             
         pipe.writeByte(TypeCodes.T_FIRST_CUSTOM);
         pipe.writeInt(size);
 
-        for (Class<?> clazz : serializers.keySet()) {
-            String name = clazz.getName();
-            types.add(name);
+        for (Map.Entry<Class<?>, Serializer> e : serializers.entrySet()) {
+            String name = e.getKey().getName();
+            Object descriptor = e.getValue().descriptor();
+            typeMap.put(name, descriptor);
             pipe.writeObject(name);
+            pipe.writeObject(descriptor);
         }
 
-        return types;
+        return typeMap;
     }
 
     /**
      * Caller must have already read the first custom type code. If 0, then there aren't any
      * serializer types to read.
      */
-    static LinkedHashSet<String> readSerializerTypes(Pipe pipe) throws IOException {
+    static LinkedHashMap<String, Object> readSerializerTypes(Pipe pipe) throws IOException {
         int size = pipe.readInt();
-        var set = new LinkedHashSet<String>(size);
+        var typeMap = new LinkedHashMap<String, Object>(size * 2);
         for (int i=0; i<size; i++) {
-            set.add((String) pipe.readObject());
+            var name = (String) pipe.readObject();
+            var descriptor = pipe.readObject();
+            typeMap.put(name, descriptor);
         }
-        return set;
+        return typeMap;
     }
 
     /**
      * @param typeCode the first custom type code to assign, as suggested by the remote side
-     * @param serverCustomTypes can be null
-     * @param clientCustomTypes can be null
+     * @param localCustomTypes can be null
+     * @param remoteCustomTypes can be null
      */
     TypeCodeMap mergeSerializerTypes(int typeCode,
-                                     LinkedHashSet<String> serverCustomTypes,
-                                     LinkedHashSet<String> clientCustomTypes)
+                                     LinkedHashMap<String, Object> localCustomTypes,
+                                     LinkedHashMap<String, Object> remoteCustomTypes)
     {
-        if (isEmpty(serverCustomTypes) && isEmpty(clientCustomTypes)) {
+        if (isEmpty(localCustomTypes) && isEmpty(remoteCustomTypes)) {
             return TypeCodeMap.STANDARD;
         }
 
@@ -143,8 +146,9 @@ final class Settings implements Cloneable {
             String name = clazz.getName();
 
             Serializer serializer;
-            if (exists(serverCustomTypes, name) && exists(clientCustomTypes, name)) {
+            if (containsKey(localCustomTypes, name) && containsKey(remoteCustomTypes, name)) {
                 serializer = e.getValue();
+                serializer = serializer.adapt(remoteCustomTypes.get(name));
             } else {
                 serializer = null;
             }
@@ -153,42 +157,36 @@ final class Settings implements Cloneable {
         }
 
         var merged = new LinkedHashMap<Object, Serializer>();
-        putAll(serverCustomTypes, merged, available);
-        putAll(clientCustomTypes, merged, available);
+        putAll(localCustomTypes, merged, available);
+        putAll(remoteCustomTypes, merged, available);
 
         typeCode = Math.max(typeCode, TypeCodes.T_FIRST_CUSTOM);
 
         return TypeCodeMap.find(typeCode, merged);
     }
 
-    private static boolean isEmpty(LinkedHashSet<?> set) {
-        return set == null || set.isEmpty();
+    private static boolean isEmpty(LinkedHashMap<?,?> map) {
+        return map == null || map.isEmpty();
     }
 
-    private static boolean exists(LinkedHashSet<?> set, Object key) {
-        return set != null && set.contains(key);
+    private static boolean containsKey(LinkedHashMap<?,?> map, Object key) {
+        return map == null ? false : map.containsKey(key);
     }
 
-    private static void putAll(LinkedHashSet<String> src, LinkedHashMap<Object, Serializer> dst,
+    private static void putAll(LinkedHashMap<String, Object> src,
+                               LinkedHashMap<Object, Serializer> dst,
                                Map<String, ClassSerializer> available)
     {
-        for (String name : src) {
+        if (src != null) for (Map.Entry<String, Object> e : src.entrySet()) {
+            String name = e.getKey();
             if (available == null || !available.containsKey(name)) {
                 dst.put(name, null);
             } else {
                 ClassSerializer cs = available.get(name);
-                dst.put(cs.mClass, cs.mSerializer);
+                dst.put(cs.clazz, cs.serializer);
             }
         }
     }
 
-    private static class ClassSerializer {
-        final Class mClass;
-        final Serializer mSerializer;
-
-        ClassSerializer(Class clazz, Serializer serializer) {
-            mClass = clazz;
-            mSerializer = serializer;
-        }
-    }
+    private static record ClassSerializer(Class clazz, Serializer serializer) { }
 }
