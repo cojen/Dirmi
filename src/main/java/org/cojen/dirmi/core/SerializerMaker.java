@@ -369,6 +369,12 @@ public final class SerializerMaker {
 
         ClassMaker cm = ClassMaker.begin(name, mType.getClassLoader()).implement(Serializer.class);
 
+        Class thisClass = getClass();
+        var thisModule = thisClass.getModule();
+        var thatModule = cm.classLoader().getUnnamedModule();
+        // Provide access to the adapt method, which is in a non-exported package.
+        thisModule.addExports(thisClass.getPackageName(), thatModule);
+
         cm.addConstructor();
 
         MethodMaker mm = cm.addMethod(Set.class, "supportedTypes").public_();
