@@ -364,7 +364,7 @@ public final class SerializerMaker {
     private void begin() {
         String name = mType.getName();
         if (name.startsWith("java.")) {
-            name = null;
+            name = '$' + name;
         }
 
         ClassMaker cm = ClassMaker.begin(name, mType.getClassLoader()).implement(Serializer.class);
