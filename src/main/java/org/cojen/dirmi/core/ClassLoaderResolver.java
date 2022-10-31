@@ -24,12 +24,6 @@ import org.cojen.dirmi.ClassResolver;
  * @author Brian S O'Neill
  */
 public final class ClassLoaderResolver implements ClassResolver {
-    static final ClassLoaderResolver SYSTEM;
-
-    static {
-        SYSTEM = new ClassLoaderResolver(ClassLoader.getSystemClassLoader());
-    }
-
     private final ClassLoader mLoader;
     private final SoftCache<String, Class<?>> mCache;
 

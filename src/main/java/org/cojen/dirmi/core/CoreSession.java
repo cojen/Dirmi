@@ -391,7 +391,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     return clazz;
                 }
             }
-            return ClassLoaderResolver.SYSTEM.resolveClass(name);
+            return loadClass(name);
         } catch (IOException | ClassNotFoundException e) {
             throw e;
         } catch (Throwable e) {
