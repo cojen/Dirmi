@@ -217,7 +217,7 @@ final class ClientSession<R> extends CoreSession<R> {
         var restorableSupport = new RestorableStubSupport(newSupport);
 
         mStubs.forEach(stub -> {
-            if (!Stub.isRestorable(stub)) {
+            if (!Stub.isRestorable(stub) && stub != mRoot) {
                 return;
             }
 
@@ -245,7 +245,9 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
             }
 
-            Stub.cSupportHandle.setRelease(stub, restorableSupport);
+            if (stub != mRoot) {
+                Stub.cSupportHandle.setRelease(stub, restorableSupport);
+            }
         });
 
         unclose();
