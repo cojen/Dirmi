@@ -23,6 +23,7 @@ import java.net.ProtocolFamily;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
 
 import java.security.KeyStore;
 import java.security.GeneralSecurityException;
@@ -100,18 +101,12 @@ public class HelloWorldTest {
 
     @Test
     public void domainSocketChannel() throws Exception {
-        if (Runtime.version().feature() < 16) {
-            // Domain socket support isn't available.
-            return;
-        }
-
-        var family = (ProtocolFamily) StandardProtocolFamily.class.getField("UNIX").get(null);
-        var ss = (ServerSocketChannel) ServerSocketChannel.class.getMethod
-            ("open", ProtocolFamily.class).invoke(null, family);
+        StandardProtocolFamily family = StandardProtocolFamily.UNIX;
+        ServerSocketChannel ss = ServerSocketChannel.open(family);
         ss.bind(null);
-        SocketAddress address = ss.getLocalAddress();
+        var address = (UnixDomainSocketAddress) ss.getLocalAddress();
 
-        Path path = (Path) address.getClass().getMethod("getPath").invoke(address);
+        Path path = address.getPath();
         path.toFile().deleteOnExit();
 
         var serverEnv = Environment.create();
