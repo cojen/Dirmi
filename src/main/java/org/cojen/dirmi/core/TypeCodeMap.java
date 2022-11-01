@@ -177,7 +177,7 @@ final class TypeCodeMap {
 
     Class<?> typeClass(int typeCode) {
         switch (typeCode) {
-        case T_REMOTE: case T_REMOTE_T: return Item.class;
+        case T_REMOTE: case T_REMOTE_T: return Object.class;
         case T_VOID: return Void.TYPE;
         case T_TRUE: case T_FALSE: return Boolean.class;
         case T_CHAR: return Character.class;

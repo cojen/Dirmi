@@ -725,7 +725,7 @@ class BufferedPipe implements Pipe {
         int componentTypeCode = readTypeCode();
 
         switch (componentTypeCode) {
-        case T_REMOTE: case T_REMOTE_T: array = new Item[length]; break;
+        case T_REMOTE: case T_REMOTE_T:
         case T_OBJECT: array = new Object[length]; break;
         case T_TRUE: case T_FALSE: array = new Boolean[length]; break;
         case T_CHAR: array = new Character[length]; break;

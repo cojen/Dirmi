@@ -53,6 +53,10 @@ public class ParamTest {
         assertEquals("hello", r1.echo("hello"));
         assertEquals(null, r1.echo((Object) null));
 
+        var result = (Object[]) r1.echo(new R1[] {r1});
+        assertEquals(1, result.length);
+        assertEquals(r1, result[0]);
+
         env.close();
     }
 
