@@ -169,10 +169,15 @@ public class RestorableTest {
         mAcceptor.suspend();
         mAcceptor.closeLastAccepted();
 
-        try {
-            r2.c();
-            fail();
-        } catch (DisconnectedException e) {
+        while (true) {
+            try {
+                r2.c();
+                fail();
+            } catch (DisconnectedException e) {
+                break;
+            } catch (RemoteException e) {
+                Thread.sleep(100);
+            }
         }
 
         // Define new remote interfaces, with some slight changes.
@@ -285,10 +290,15 @@ public class RestorableTest {
         mAcceptor.suspend();
         mAcceptor.closeLastAccepted();
 
-        try {
-            r2.c();
-            fail();
-        } catch (DisconnectedException e) {
+        while (true) {
+            try {
+                r2.c();
+                fail();
+            } catch (DisconnectedException e) {
+                break;
+            } catch (RemoteException e) {
+                Thread.sleep(100);
+            }
         }
 
         // Define a completely new remote interface.
