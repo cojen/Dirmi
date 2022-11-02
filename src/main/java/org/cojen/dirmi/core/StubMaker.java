@@ -49,6 +49,8 @@ import org.cojen.dirmi.UnimplementedException;
  * @author Brian S O'Neill
  */
 final class StubMaker {
+    private record TypeInfoKey(Class<?> type, RemoteInfo info) { }
+
     private static final SoftCache<TypeInfoKey, MethodHandle> cCache = new SoftCache<>();
 
     /**

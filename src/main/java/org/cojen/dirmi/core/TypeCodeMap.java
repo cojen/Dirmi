@@ -40,34 +40,9 @@ import static org.cojen.dirmi.core.TypeCodes.*;
 final class TypeCodeMap {
     static final TypeCodeMap STANDARD = new TypeCodeMap();
 
+    private record Key(int typeCode, Map<Object, Serializer> serializers) { }
+
     private static final SoftCache<Key, TypeCodeMap> cCache = new SoftCache<>();
-
-    private static final class Key {
-        final int mTypeCode;
-        final Map<Object, Serializer> mSerializers;
-
-        Key(int typeCode, Map<Object, Serializer> serializers) {
-            mTypeCode = typeCode;
-            mSerializers = serializers;
-        }
-
-        @Override
-        public int hashCode() {
-            return mTypeCode ^ mSerializers.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj instanceof Key) {
-                Key other = (Key) obj;
-                return mTypeCode == other.mTypeCode && mSerializers.equals(other.mSerializers);
-            }
-            return false;
-        }
-    }
 
     /**
      * @param typeCode the first custom type code to assign
