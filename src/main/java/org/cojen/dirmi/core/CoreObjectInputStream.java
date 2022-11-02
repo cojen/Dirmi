@@ -50,11 +50,10 @@ public final class CoreObjectInputStream extends ObjectInputStream {
     }
 
     @Override
-    protected final Object resolveObject(Object obj) throws IOException {
+    protected Object resolveObject(Object obj) throws IOException {
         if (obj instanceof MarshalledStub) {
             return mPipe.objectFor(((MarshalledStub) obj).id);
-        } else if (obj instanceof MarshalledSkeleton) {
-            var ms = (MarshalledSkeleton) obj;
+        } else if (obj instanceof MarshalledSkeleton ms) {
             byte[] infoBytes = ms.infoBytes;
             if (infoBytes == null) {
                 return mPipe.objectFor(ms.id, ms.typeId);

@@ -170,7 +170,7 @@ final class Settings implements Cloneable {
     }
 
     private static boolean containsKey(LinkedHashMap<?,?> map, Object key) {
-        return map == null ? false : map.containsKey(key);
+        return map != null && map.containsKey(key);
     }
 
     private static void putAll(LinkedHashMap<String, Object> src,
@@ -188,5 +188,5 @@ final class Settings implements Cloneable {
         }
     }
 
-    private static record ClassSerializer(Class clazz, Serializer serializer) { }
+    private record ClassSerializer(Class clazz, Serializer serializer) { }
 }

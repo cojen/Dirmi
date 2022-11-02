@@ -51,7 +51,6 @@ final class ClientSession<R> extends CoreSession<R> {
     private long mServerSessionId;
     private Class<R> mRootType;
     private byte[] mRootName;
-    private long mRootTypeId;
     private RemoteInfo mServerRootInfo;
     private R mRoot;
 
@@ -88,7 +87,6 @@ final class ClientSession<R> extends CoreSession<R> {
         cServerSessionIdHandle.setRelease(this, serverId);
         mRootType = rootType;
         mRootName = bname;
-        mRootTypeId = rootTypeId;
         mServerRootInfo = rootInfo;
 
         StubFactory factory = StubMaker.factoryFor(rootType, rootTypeId, rootInfo);
@@ -286,8 +284,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     void startTasks() throws IOException {
-        // These fields are only needed by a reconnect.
-        mRootTypeId = 0;
+        // This field is only needed by a reconnect.
         mServerRootInfo = null;
 
         super.startTasks();

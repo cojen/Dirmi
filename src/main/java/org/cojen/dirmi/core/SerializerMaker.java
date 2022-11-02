@@ -16,20 +16,18 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.InvalidClassException;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -63,7 +61,7 @@ public final class SerializerMaker {
             }
         }
 
-        return (Serializer) serializer;
+        return serializer;
     }
 
     /**
@@ -98,10 +96,10 @@ public final class SerializerMaker {
             }
         }
 
-        return (Serializer) serializer;
+        return serializer;
     }
 
-    private static record WithDescriptor(Class<?> type, String descriptor) { }
+    private record WithDescriptor(Class<?> type, String descriptor) { }
 
     private final Class<?> mType;
     private final String mDescriptor;
@@ -210,9 +208,8 @@ public final class SerializerMaker {
     }
 
     private void makeForClass() {
-        Constructor<?> ctor;
         try {
-            ctor = mType.getConstructor();
+            mType.getConstructor();
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("No public no-arg constructor: " + mType.getName());
         }
@@ -265,9 +262,7 @@ public final class SerializerMaker {
 
             String[] split = mDescriptor.split(";");
             var retain = new HashSet<String>(split.length * 2);
-            for (String name : split) {
-                retain.add(name);
-            }
+            Collections.addAll(retain, split);
 
             supported.keySet().retainAll(retain);
 

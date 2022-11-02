@@ -416,15 +416,7 @@ final class SkeletonMaker<R> {
         }
     }
 
-    private static class CaseInfo {
-        final RemoteMethod serverMethod;
-        final String serverMethodName;
-
-        CaseInfo(RemoteMethod serverMethod, String serverMethodName) {
-            this.serverMethod = serverMethod;
-            this.serverMethodName = serverMethodName;
-        }
-
+    private record CaseInfo(RemoteMethod serverMethod, String serverMethodName) {
         Variable invoke(MethodMaker mm, Variable pipeVar, Variable contextVar,
                         Variable supportVar, Variable serverVar)
         {

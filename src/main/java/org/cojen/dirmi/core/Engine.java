@@ -34,7 +34,6 @@ import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
@@ -335,7 +334,7 @@ public final class Engine implements Environment {
             session.initTypeCodeMap(tcm);
 
             // Assign the state after the call to initTypeCodeMap, to prevent race conditions
-            // when a new connection is accepted too soon. See ServerSession.accepeted.
+            // when a new connection is accepted too soon. See ServerSession.accepted.
             session.mState = Session.State.CONNECTED;
 
             session.controlPipe(pipe);
@@ -813,7 +812,7 @@ public final class Engine implements Environment {
         return cConnectorHandle.getAcquire(this) == null;
     }
 
-    final void uncaughtException(Session<?> s, Throwable e) {
+    void uncaughtException(Session<?> s, Throwable e) {
         if (!CoreUtils.acceptException(mUncaughtExceptionHandler, s, e)) {
             try {
                 Thread t = Thread.currentThread();

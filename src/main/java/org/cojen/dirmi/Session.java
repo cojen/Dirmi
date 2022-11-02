@@ -141,7 +141,7 @@ public interface Session<R> extends Closeable, Link, Executor {
      */
     public enum State {
         /**
-         * Indicates that the session is currenty connected, and remote calls are likely to
+         * Indicates that the session is currently connected, and remote calls are likely to
          * succeed.
          */
         CONNECTED,

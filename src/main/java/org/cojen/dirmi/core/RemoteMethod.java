@@ -428,8 +428,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (this == obj) {
             return true;
         }
-        if (obj instanceof RemoteMethod) {
-            var other = (RemoteMethod) obj;
+        if (obj instanceof RemoteMethod other) {
             return mFlags == other.mFlags && mName.equals(other.mName)
                 && mRemoteFailureException.equals(other.mRemoteFailureException)
                 && mReturnType.equals(other.mReturnType)

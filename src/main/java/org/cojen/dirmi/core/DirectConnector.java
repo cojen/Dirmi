@@ -41,7 +41,7 @@ public final class DirectConnector implements Connector {
 
         if (address instanceof InetSocketAddress) {
             /*
-              Favor the Socket class, due to a 20 year old SocketChannel design flaw which
+              Favor the Socket class, due to a 20-year-old SocketChannel design flaw which
               prevents concurrent reads and writes. It's finally fixed in Java 19.
 
               https://bugs.openjdk.org/browse/JDK-8279339

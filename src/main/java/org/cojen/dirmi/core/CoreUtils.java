@@ -251,7 +251,7 @@ public final class CoreUtils {
      *
      * @param name method name
      * @param clazz enclosing class
-     * @param mt paramaters and return type
+     * @param mt parameters and return type
      * @see StubMaker
      */
     public static MethodHandle findVirtual(MethodHandles.Lookup lookup, String name, Class type,
@@ -387,9 +387,7 @@ public final class CoreUtils {
 
     static boolean isObjectType(Object type) {
         if (type instanceof Class) {
-            if (!((Class) type).isPrimitive()) {
-                return true;
-            }
+            return !((Class) type).isPrimitive();
         } else if (type instanceof Variable) {
             Class<?> ctype = ((Variable) type).classType();
             return ctype == null || !ctype.isPrimitive();
@@ -397,6 +395,5 @@ public final class CoreUtils {
             char first = ((String) type).charAt(0);
             return first == 'L' || first == '[';
         }
-        return false;
     }
 }

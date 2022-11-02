@@ -363,8 +363,7 @@ final class RemoteInfo {
         if (this == obj) {
             return true;
         }
-        if (obj instanceof RemoteInfo) {
-            var other = (RemoteInfo) obj;
+        if (obj instanceof RemoteInfo other) {
             return mFlags == other.mFlags && mName.equals(other.mName)
                 && mRemoteFailureException.equals(other.mRemoteFailureException)
                 && mInterfaceNames.equals(other.mInterfaceNames)
