@@ -278,6 +278,82 @@ public class SerializerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void many() throws Exception {
+        var classes = new Class[250];
+        var serializers = new Serializer[classes.length];
+
+        for (int i=0; i<classes.length; i++) {
+            ClassMaker cm = ClassMaker.begin().public_();
+            cm.addField(int.class, String.valueOf((char) ('a' + i))).public_().final_();
+            cm.asRecord();
+            classes[i] = cm.finish();
+            serializers[i] = Serializer.simple(classes[i]);
+        }
+
+        var env = Environment.create();
+        env.customSerializers(serializers);
+        env.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        for (int i=0; i<classes.length; i++) {
+            Object obj = classes[i].getConstructor(int.class).newInstance(i);
+            assertEquals(obj, root.echo(obj));
+        }
+
+        env.close();
+    }
+
+    @Test
+    public void bigEnum() throws Exception {
+        final int count = 300;
+
+        ClassMaker cm = ClassMaker.begin().public_().enum_().extend(Enum.class);
+
+        MethodMaker ctor = cm.addConstructor(String.class, int.class).private_();
+        ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1));
+
+        MethodMaker clinit = cm.addClinit();
+
+        MethodMaker values = cm.addMethod(cm.arrayType(1), "values").public_().static_();
+        var arrayVar = values.new_(cm.arrayType(1), count);
+
+        for (int i=0; i<count; i++) {
+            String name = String.valueOf((char) ('a' + i));
+            cm.addField(cm, name).public_().static_().final_();
+            clinit.field(name).set(clinit.new_(cm, name, i));
+            arrayVar.aset(i, values.field(name));
+        }
+
+        values.return_(arrayVar);
+
+        var enumClass = cm.finish();
+
+        var env = Environment.create();
+        env.customSerializers(Serializer.simple(enumClass));
+        env.export("main", new R1Server());
+
+        var ss = new ServerSocket(0);
+        env.acceptAll(ss);
+
+        var session = env.connect(R1.class, "main", "localhost", ss.getLocalPort());
+        R1 root = session.root();
+
+        for (int i=0; i<count; i++) {
+            String name = String.valueOf((char) ('a' + i));
+            Object obj = enumClass.getField(name).get(null);
+            assertEquals(obj, root.echo(obj));
+        }
+
+        env.close();
+    }
+
+    @Test
     public void adaptRecord() throws Exception {
         String name = getClass().getName() + "$AdaptRecord";
 
