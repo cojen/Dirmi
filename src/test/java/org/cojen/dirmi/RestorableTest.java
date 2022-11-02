@@ -60,6 +60,8 @@ public class RestorableTest {
         mServerSocket = new ServerSocket(0);
         mAcceptor = new Acceptor(mEnv, mServerSocket);
         mEnv.execute(mAcceptor);
+        mEnv.reconnectDelayMillis(100);
+        mEnv.pingTimeoutMillis(1000);
 
         mSession = mEnv.connect(R1.class, "main", "localhost", mServerSocket.getLocalPort());
     }
