@@ -153,16 +153,7 @@ final class SkeletonMaker<R> {
         final var pipeVar = mm.param(0);
         final var contextVar = mm.param(1);
 
-        var methodIdVar = mm.var(int.class);
-
-        if (caseMap.size() < 256) {
-            methodIdVar.set(pipeVar.invoke("readUnsignedByte"));
-        } else if (caseMap.size() < 65536) {
-            methodIdVar.set(pipeVar.invoke("readUnsignedShort"));
-        } else {
-            // Impossible case.
-            methodIdVar.set(pipeVar.invoke("readInt"));
-        }
+        var methodIdVar = CoreUtils.readIntId(pipeVar, caseMap.size());
 
         var cases = new int[caseMap.size()];
         var labels = new Label[cases.length];

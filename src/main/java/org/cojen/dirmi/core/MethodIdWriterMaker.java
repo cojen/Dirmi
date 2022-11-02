@@ -135,14 +135,7 @@ final class MethodIdWriterMaker {
                     writeLabel.here();
                 }
 
-                if (maxCurrentId < 256) {
-                    pipeVar.invoke("writeByte", idCurrentVar);
-                } else if (maxCurrentId < 65536) {
-                    pipeVar.invoke("writeShort", idCurrentVar);
-                } else {
-                    // Impossible case.
-                    pipeVar.invoke("writeInt", idCurrentVar);
-                }
+                CoreUtils.writeIntId(pipeVar, maxCurrentId, idCurrentVar);
 
                 mm.return_();
 

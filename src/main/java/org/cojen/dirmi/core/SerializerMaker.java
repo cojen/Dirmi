@@ -323,28 +323,12 @@ public final class SerializerMaker {
 
             doWrite.here();
 
-            if (enums.length < 256) {
-                mWritePipeVar.invoke("writeByte", numberVar);
-            } else if (enums.length < 65536) {
-                mWritePipeVar.invoke("writeShort", numberVar);
-            } else {
-                // Impossible case.
-                mWritePipeVar.invoke("writeInt", numberVar);
-            }
+            CoreUtils.writeIntId(mWritePipeVar, enums.length, numberVar);
         }
 
         // Make the read method.
         {
-            var numberVar = mReadMaker.var(int.class);
-
-            if (enums.length < 256) {
-                numberVar.set(mReadPipeVar.invoke("readUnsignedByte"));
-            } else if (enums.length < 65536) {
-                numberVar.set(mReadPipeVar.invoke("readUnsignedShort"));
-            } else {
-                // Impossible case.
-                numberVar.set(mReadPipeVar.invoke("readInt"));
-            }
+            var numberVar = CoreUtils.readIntId(mReadPipeVar, enums.length);
 
             Label end = mReadMaker.label();
             numberVar.switch_(end, readCases, readLabels);

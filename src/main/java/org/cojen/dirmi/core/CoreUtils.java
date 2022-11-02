@@ -327,6 +327,37 @@ public final class CoreUtils {
     }
 
     /**
+     * @param max maximum possible id
+     */
+    static void writeIntId(Variable pipeVar, int max, Variable idVar) {
+        if (max < 256) {
+            pipeVar.invoke("writeByte", idVar);
+        } else if (max < 65536) {
+            pipeVar.invoke("writeShort", idVar);
+        } else {
+            pipeVar.invoke("writeInt", idVar);
+        }
+    }
+
+    /**
+     * @param max maximum possible id
+     * @return a new int variable with the id
+     */
+    static Variable readIntId(Variable pipeVar, int max) {
+        var methodIdVar = pipeVar.methodMaker().var(int.class);
+
+        if (max < 256) {
+            methodIdVar.set(pipeVar.invoke("readUnsignedByte"));
+        } else if (max < 65536) {
+            methodIdVar.set(pipeVar.invoke("readUnsignedShort"));
+        } else {
+            methodIdVar.set(pipeVar.invoke("readInt"));
+        }
+
+        return methodIdVar;
+    }
+
+    /**
      * Returns true if any of the given parameter types represents an object.
      *
      * @param ptypes consists of Class instances, Variables, or String descriptors
