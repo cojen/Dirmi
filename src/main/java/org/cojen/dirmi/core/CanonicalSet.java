@@ -41,6 +41,10 @@ final class CanonicalSet<V> extends ReferenceQueue<Object> {
         mEntries = new Entry[2];
     }
 
+    public synchronized int size() {
+        return mSize;
+    }
+
     /**
      * Returns the original value or another equal value.
      */
