@@ -287,6 +287,20 @@ public class RemoteObjectTest {
         }
     }
 
+    @Test
+    public void many() throws Exception {
+        R1 root = mSession.root();
+
+        R2[] many = new R2[1000];
+        for (int i=0; i<many.length; i++) {
+            many[i] = root.c1(i);
+        }
+
+        for (int i=0; i<many.length; i++) {
+            assertEquals("hello " + i, many[i].c2());
+        }
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 
