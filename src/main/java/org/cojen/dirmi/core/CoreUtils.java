@@ -261,6 +261,20 @@ public final class CoreUtils {
         return lookup.findVirtual(clazz, name, mt);
     }
 
+    /**
+     * Condy bootstrap method for generating a message when a batched method is attempting to
+     * return null.
+     *
+     * @param name method name
+     * @param remoteType enclosing class
+     * @see SkeletonMaker
+     */
+    public static String nullBatchedResult(MethodHandles.Lookup lookup, String name, Class type,
+                                           Class remoteType)
+    {
+        return "Cannot return null from a batched method: " + remoteType.getName() + '.' + name;
+    }
+
     static void writeParam(Variable pipeVar, Variable paramVar) {
         Class<?> type = paramVar.classType();
 
