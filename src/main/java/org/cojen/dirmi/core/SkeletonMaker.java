@@ -239,7 +239,7 @@ final class SkeletonMaker<R> {
 
             mm.private_().static_();
 
-            final var remoteVar = mm.param(0);
+            final var serverVar = mm.param(0);
             final var pipeVar = mm.param(1);
             final var contextVar = mm.param(2);
 
@@ -296,13 +296,13 @@ final class SkeletonMaker<R> {
                 }
 
                 invokeStart.here();
-                var serverVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
-                batchedResultCheck(rm, serverVar);
+                var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
+                batchedResultCheck(rm, resultVar);
                 Label invokeEnd = mm.label().here();
 
-                if (serverVar != null) {
+                if (resultVar != null) {
                     var supportVar = mm.param(3);
-                    supportVar.invoke("createSkeletonAlias", serverVar, aliasIdVar);
+                    supportVar.invoke("createSkeletonAlias", resultVar, aliasIdVar);
                 }
 
                 contextVar.set(skeletonClassVar.invoke("batchInvokeSuccess", contextVar));
@@ -332,7 +332,7 @@ final class SkeletonMaker<R> {
                 mm.return_(null);
 
                 invokeStart.here();
-                remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                serverVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
                 mm.return_(skeletonClassVar.field("STOP_READING"));
@@ -353,7 +353,7 @@ final class SkeletonMaker<R> {
                 batchResultVar.ifNe(0, finished);
 
                 invokeStart.here();
-                var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
+                var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
                 if (rm.isBatchedImmediate()) {
                     batchedResultCheck(rm, resultVar);
                 }
