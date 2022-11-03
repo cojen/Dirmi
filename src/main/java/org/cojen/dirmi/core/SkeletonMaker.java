@@ -321,13 +321,14 @@ final class SkeletonMaker<R> {
 
                 mm.return_(contextVar);
             } else if (isPiped) {
-                var resultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                var batchResultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
                 Label invokeStart = mm.label();
-                resultVar.ifLt(0, invokeStart);
-                pipeVar.invoke("flush");
-                // If result is less than or equal to 0, then the batch finished without an
-                // exception. Otherwise, this method should be skipped.
-                resultVar.ifLe(0, invokeStart);
+                // If the batch result is less than 0, then no batch was in progress.
+                batchResultVar.ifLt(0, invokeStart);
+                pipeVar.invoke("flush"); // flush the batch response
+                // If the batch result is 0, then the batch finished without an exception.
+                // Otherwise, this method should be skipped.
+                batchResultVar.ifEq(0, invokeStart);
                 mm.return_(null);
 
                 invokeStart.here();
@@ -339,12 +340,19 @@ final class SkeletonMaker<R> {
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
+                var batchResultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                Label invokeStart = mm.label();
+                // If the batch result is less than 0, then no batch was in progress.
+                batchResultVar.ifLt(0, invokeStart);
+                if (rm.isNoReply()) {
+                    pipeVar.invoke("flush"); // flush the batch response
+                }
                 Label finished = mm.label();
-                // If result is greater than 0, then the batch finished with an exception and
+                // If the batch result isn't 0, then the batch finished with an exception, and
                 // so this method should be skipped.
-                skeletonClassVar.invoke("batchFinish", pipeVar, contextVar).ifGt(0, finished);
+                batchResultVar.ifNe(0, finished);
 
-                Label invokeStart = mm.label().here();
+                invokeStart.here();
                 var resultVar = remoteVar.invoke(rm.name(), (Object[]) paramVars);
                 if (rm.isBatchedImmediate()) {
                     batchedResultCheck(rm, resultVar);

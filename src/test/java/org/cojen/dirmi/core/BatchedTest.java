@@ -29,6 +29,7 @@ import org.cojen.dirmi.Batched;
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Environment;
+import org.cojen.dirmi.NoReply;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
@@ -279,6 +280,33 @@ public class BatchedTest {
         assertEquals(0, cs.mStubs.size());
     }
 
+    @Test
+    public void noReply() throws Exception {
+        // Verify that a no-reply method writes a batch response.
+
+        R1 root = mSession.root();
+
+        root.a("hello");
+        assertNull(mServer.check());
+
+        // Even though this is a no-reply method, a batch is in progress and so the server must
+        // finish it and write a response for the client to read.
+        root.j();
+
+        assertEquals("hello", mServer.check());
+
+        // Generates a pending exception.
+        root.e();
+
+        try {
+            // Even though this is a no-reply method, a batch is in progress and so the server
+            // must finish it and write the exception for the client to catch.
+            root.j();
+        } catch (Exception e) {
+            assertEquals("foo", e.getMessage());
+        }
+    }
+
     public static interface R1 extends Remote {
         @Batched
         public void a(Object msg) throws RemoteException;
@@ -310,6 +338,9 @@ public class BatchedTest {
         @Batched
         public R2 i() throws RemoteException;
 
+        @NoReply
+        public void j() throws RemoteException, Exception;
+
         @Unbatched
         public String check() throws RemoteException;
 
@@ -322,7 +353,7 @@ public class BatchedTest {
     }
 
     private static class R1Server implements R1 {
-        private StringBuilder mBuilder;
+        private volatile StringBuilder mBuilder;
 
         @Override
         public void a(Object msg) {
@@ -388,8 +419,13 @@ public class BatchedTest {
         }
 
         @Override
+        public void j() {
+        }
+
+        @Override
         public String check() {
-            return mBuilder == null ? null : mBuilder.toString();
+            StringBuilder b = mBuilder;
+            return b == null ? null : b.toString();
         }
 
         @Override
@@ -397,10 +433,11 @@ public class BatchedTest {
         }
 
         private void append(Object msg) {
-            if (mBuilder == null) {
-                mBuilder = new StringBuilder();
+            StringBuilder b = mBuilder;
+            if (b == null) {
+                mBuilder = b = new StringBuilder();
             }
-            mBuilder.append(msg);
+            b.append(msg);
         }
     }
 }
