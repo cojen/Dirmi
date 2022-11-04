@@ -275,12 +275,10 @@ final class SkeletonMaker<R> {
                 aliasIdVar = pipeVar.invoke("readLong");
             }
 
-            final var skeletonClassVar = mm.var(Skeleton.class);
-
             if (rm.isBatched() && !rm.isBatchedImmediate()) {
                 // Check if an exception was encountered and stop calling any more batched
                 // methods if so.
-                var exceptionVar = skeletonClassVar.invoke("batchException", contextVar);
+                var exceptionVar = mm.invoke("batchException", contextVar);
 
                 Label invokeStart = mm.label();
                 Label skip = mm.label();
@@ -305,14 +303,13 @@ final class SkeletonMaker<R> {
                     supportVar.invoke("createSkeletonAlias", resultVar, aliasIdVar);
                 }
 
-                contextVar.set(skeletonClassVar.invoke("batchInvokeSuccess", contextVar));
+                contextVar.set(mm.invoke("batchInvokeSuccess", contextVar));
 
                 skip.here();
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                contextVar.set(skeletonClassVar.invoke("batchInvokeFailure",
-                                                       pipeVar, contextVar, exVar));
+                contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
 
                 if (aliasIdVar != null) {
                     var supportVar = mm.param(3);
@@ -321,7 +318,7 @@ final class SkeletonMaker<R> {
 
                 mm.return_(contextVar);
             } else if (isPiped) {
-                var batchResultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
                 Label invokeStart = mm.label();
                 // If the batch result is less than 0, then no batch was in progress.
                 batchResultVar.ifLt(0, invokeStart);
@@ -335,12 +332,12 @@ final class SkeletonMaker<R> {
                 serverVar.invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
-                mm.return_(skeletonClassVar.field("STOP_READING"));
+                mm.return_(mm.field("STOP_READING"));
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
-                var batchResultVar = skeletonClassVar.invoke("batchFinish", pipeVar, contextVar);
+                var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
                 Label invokeStart = mm.label();
                 // If the batch result is less than 0, then no batch was in progress.
                 batchResultVar.ifLt(0, invokeStart);
@@ -387,7 +384,7 @@ final class SkeletonMaker<R> {
                     mm.return_(null);
                 } else {
                     // Need to keep the batch going, but with a fresh context.
-                    mm.return_(skeletonClassVar.invoke("batchInvokeSuccess", (Object) null));
+                    mm.return_(mm.invoke("batchInvokeSuccess", (Object) null));
                 }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
