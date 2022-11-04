@@ -1091,8 +1091,27 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return existing;
     }
 
+    final Skeleton<?> createBrokenSkeletonAlias(Class<?> type, long aliasId, Throwable exception) {
+        SkeletonFactory<?> factory = SkeletonMaker.factoryFor(type);
+        Skeleton<?> skeleton = factory.newSkeleton(exception, aliasId, mSkeletonSupport);
+        return mSkeletons.putIfAbsent(skeleton);
+    }
+
     final void writeSkeletonAlias(CorePipe pipe, Object server, long aliasId) throws IOException {
         Skeleton skeleton = createSkeletonAlias(server, aliasId);
+        try {
+            writeSkeleton(pipe, skeleton);
+        } catch (Throwable e) {
+            removeSkeleton(skeleton);
+            throw e;
+        }
+    }
+
+    final void writeBrokenSkeletonAlias(CorePipe pipe,
+                                        Class<?> type, long aliasId, Throwable exception)
+        throws IOException
+    {
+        Skeleton skeleton = createBrokenSkeletonAlias(type, aliasId, exception);
         try {
             writeSkeleton(pipe, skeleton);
         } catch (Throwable e) {

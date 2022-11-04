@@ -38,13 +38,21 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
+    public void createBrokenSkeletonAlias(Class<?> type, long aliasId, Throwable exception) {
+        mSession.createBrokenSkeletonAlias(type, aliasId, exception);
+    }
+
+    @Override
     public void writeSkeletonAlias(Pipe pipe, Object server, long aliasId) throws IOException {
         mSession.writeSkeletonAlias((CorePipe) pipe, server, aliasId);
     }
 
     @Override
-    public void writeDisposed(Pipe pipe, long id, Object reason) throws IOException {
-        ((CorePipe) pipe).writeDisposed(id, reason);
+    public void writeBrokenSkeletonAlias(Pipe pipe,
+                                         Class<?> type, long aliasId, Throwable exception)
+        throws IOException
+    {
+        mSession.writeBrokenSkeletonAlias((CorePipe) pipe, type, aliasId, exception);
     }
 
     @Override

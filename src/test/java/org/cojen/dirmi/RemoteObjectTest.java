@@ -187,7 +187,7 @@ public class RemoteObjectTest {
         R2 r2 = root.c6(9);
         assertEquals("hello 9", r2.c2());
 
-        // Batched remote object id is an aliases.
+        // Batched remote object id is an alias.
         assertTrue(r2.toString().contains("id=-"));
         assertTrue(r2.toString().contains("remoteAddress"));
 
@@ -195,7 +195,7 @@ public class RemoteObjectTest {
         assertNotSame(r2, r2x);
         assertEquals(9, R2Server.cParam);
 
-        // Batched remote object id is an aliases.
+        // Batched remote object id is an alias.
         assertTrue(r2x.toString().contains("id=-"));
 
         // This forces the batch to finish as a side-effect.
@@ -244,6 +244,63 @@ public class RemoteObjectTest {
             fail();
         } catch (ClosedException ex) {
             assertTrue(ex.getMessage().contains("disposed"));
+        }
+    }
+
+    @Test
+    public void batchedNull() throws Exception {
+        R1 root = mSession.root();
+
+        R2 r2 = root.c7(true); // return null; batched immediate
+
+        try {
+            r2.c2();
+        } catch (IllegalStateException e) {
+            assertTrue(e.getMessage().contains("Cannot return null"));
+        }
+
+        r2 = root.c7(false); // return non-null; begin a batch
+        assertEquals("hello 123", r2.c2());
+
+        r2 = root.c7(true); // return null; within a batch
+        assertTrue(r2.toString().contains("id=-"));
+
+        R2 r22 = r2.next(123);
+
+        try {
+            r2.c2();
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("Cannot return null"));
+        }
+
+        try {
+            r2.c2();
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("Cannot return null"));
+        }
+
+        try {
+            r22.c2();
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("Cannot return null"));
+        }
+
+        r2.dispose();
+
+        r22.dispose();
+
+        try {
+            r2.dispose();
+            fail();
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
+
+        try {
+            r22.dispose();
+            fail();
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("disposed"));
         }
     }
 
@@ -316,6 +373,9 @@ public class RemoteObjectTest {
         R2 c6(int param) throws RemoteException;
 
         @Batched
+        R2 c7(boolean fail) throws RemoteException;
+
+        @Batched
         R1 self() throws RemoteException;
 
         String selfString() throws RemoteException;
@@ -361,6 +421,11 @@ public class RemoteObjectTest {
         @Override
         public R2 c6(int param) {
             return new R2Server(param);
+        }
+
+        @Override
+        public R2 c7(boolean fail) {
+            return fail ? null : new R2Server(123);
         }
 
         @Override

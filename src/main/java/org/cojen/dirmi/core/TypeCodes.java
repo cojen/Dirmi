@@ -30,7 +30,6 @@ class TypeCodes {
         T_REMOTE = 6,    // + remote object id
         T_REMOTE_T = 7,  // + remote object id + type id
         T_REMOTE_TI = 8, // + remote object id + type id + info
-        T_DISPOSED = 9,  // + remote object id + reason object
         T_NULL = 10,
         T_VOID = 11,
         T_OBJECT = 12, // plain object, not a subclass

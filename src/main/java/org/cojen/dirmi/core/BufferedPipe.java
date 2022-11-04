@@ -438,8 +438,6 @@ class BufferedPipe implements Pipe {
                 break loop;
             }
 
-            case T_DISPOSED: disposed(readLong(), readObject()); continue;
-
             case T_NULL:            return null;
             case T_VOID:            simple = Void.TYPE; break loop;
             case T_OBJECT:          simple = new Object(); break loop;
@@ -508,10 +506,6 @@ class BufferedPipe implements Pipe {
     // CorePipe subclass must override this method.
     Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
         throw new NoSuchObjectException(id);
-    }
-
-    // CorePipe subclass must override this method.
-    void disposed(long id, Object reason) {
     }
 
     private Object readReference(int identifier) throws IOException {

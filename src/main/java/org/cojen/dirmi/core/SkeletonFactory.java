@@ -30,4 +30,13 @@ public interface SkeletonFactory<R> {
      * @param server implementation of Remote object
      */
     Skeleton<R> newSkeleton(long id, SkeletonSupport support, R server);
+
+    /**
+     * Constructs a broken skeleton.
+     *
+     * @param exception exception to throw when attempting to invoke methods
+     * @param id remote object identifier
+     * @param support for reusing pipes
+     */
+    Skeleton<R> newSkeleton(Throwable exception, long id, SkeletonSupport support);
 }

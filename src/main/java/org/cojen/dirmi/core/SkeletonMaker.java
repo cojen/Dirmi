@@ -87,10 +87,17 @@ final class SkeletonMaker<R> {
         mSkeletonMaker.addField(SkeletonSupport.class, "support").private_().final_();
         mSkeletonMaker.addField(mType, "server").private_().final_();
 
+        // Regular skeleton constructor.
         MethodMaker mm = mSkeletonMaker.addConstructor(long.class, SkeletonSupport.class, mType);
         mm.invokeSuperConstructor(mm.param(0));
         mm.field("support").set(mm.param(1));
         mm.field("server").set(mm.param(2));
+
+        // Broken skeleton constructor.
+        mm = mSkeletonMaker.addConstructor(Throwable.class, long.class, SkeletonSupport.class);
+        mm.invokeSuperConstructor(mm.param(0), mm.param(1));
+        mm.field("support").set(mm.param(2));
+        mm.field("server").set(null);
     }
 
     private SkeletonFactory<R> finishFactory() {
@@ -99,10 +106,21 @@ final class SkeletonMaker<R> {
 
         mFactoryMaker.addMethod(long.class, "typeId").public_().return_(mTypeId);
 
-        MethodMaker mm = mFactoryMaker.addMethod
-            (Skeleton.class, "newSkeleton", long.class, SkeletonSupport.class, Object.class);
-        var skel = mm.new_(mSkeletonMaker, mm.param(0), mm.param(1), mm.param(2).cast(mType));
-        mm.public_().return_(skel);
+        // Regular skeleton factory method.
+        {
+            MethodMaker mm = mFactoryMaker.addMethod
+                (Skeleton.class, "newSkeleton", long.class, SkeletonSupport.class, Object.class);
+            var skel = mm.new_(mSkeletonMaker, mm.param(0), mm.param(1), mm.param(2).cast(mType));
+            mm.public_().return_(skel);
+        }
+
+        // Broken skeleton factory method.
+        {
+            MethodMaker mm = mFactoryMaker.addMethod
+                (Skeleton.class, "newSkeleton", Throwable.class, long.class, SkeletonSupport.class);
+            var skel = mm.new_(mSkeletonMaker, mm.param(0), mm.param(1), mm.param(2));
+            mm.public_().return_(skel);
+        }
 
         // Need to finish this now because the call to get the skeleton lookup forces it to be
         // initialized. This in turn runs the static initializer (see below) which needs to be
@@ -116,7 +134,7 @@ final class SkeletonMaker<R> {
         // a strong factory reference from the cache would prevent it from being GC'd at all,
         // because the factory indirectly refers to the cache key.
         mSkeletonMaker.addField(SkeletonFactory.class, "factory").private_().static_().final_();
-        mm = mSkeletonMaker.addClinit();
+        MethodMaker mm = mSkeletonMaker.addClinit();
         mm.field("factory").set(mm.new_(mFactoryMaker));
 
         MethodHandles.Lookup skeletonLookup = finishSkeleton();
@@ -287,7 +305,9 @@ final class SkeletonMaker<R> {
                 } else {
                     exceptionVar.ifEq(null, invokeStart);
                     var supportVar = mm.param(2);
-                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exceptionVar);
+                    Class<?> returnType = mm.var(rm.returnType()).classType();
+                    supportVar.invoke("createBrokenSkeletonAlias",
+                                      returnType, aliasIdVar, exceptionVar);
                     mm.goto_(skip);
                 }
 
@@ -310,11 +330,23 @@ final class SkeletonMaker<R> {
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+                boolean disposer = checkException(rm, exVar);
+
+                if (disposer) {
+                    // Ignore the exception if disposing a broken skeleton.
+                    Label cont = mm.label();
+                    exVar.ifNe(null, cont);
+                    contextVar.set(mm.invoke("batchInvokeSuccess", contextVar));
+                    mm.return_(contextVar);
+                    cont.here();
+                }
+
                 contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
 
                 if (aliasIdVar != null) {
                     var supportVar = mm.param(2);
-                    supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                    supportVar.invoke("createBrokenSkeletonAlias",
+                                      resultVar.classType(), aliasIdVar, exVar);
                 }
 
                 mm.return_(contextVar);
@@ -336,6 +368,15 @@ final class SkeletonMaker<R> {
                 mm.return_(mm.field("STOP_READING"));
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+
+                if (checkException(rm, exVar)) {
+                    // Ignore the exception if disposing a broken skeleton.
+                    Label cont = mm.label();
+                    exVar.ifNe(null, cont);
+                    mm.return_(null);
+                    cont.here();
+                }
+
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
                 var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
@@ -390,16 +431,29 @@ final class SkeletonMaker<R> {
                 }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+                boolean disposer = checkException(rm, exVar);
 
                 if (rm.isNoReply()) {
+                    Label cont = mm.label();
+                    if (disposer) {
+                        // Ignore the exception if disposing a broken skeleton.
+                        exVar.ifEq(null, cont);
+                    }
                     var supportVar = mm.param(2);
                     supportVar.invoke("uncaughtException", exVar);
+                    cont.here();
                 } else {
                     if (rm.isBatchedImmediate()) {
+                        // Even though invocation failed with an exception, match the behavior
+                        // of a regular batched call. Create a broken skeleton and don't throw
+                        // an exception to the caller.
+                        pipeVar.invoke("writeNull"); // null indicates success
                         var supportVar = mm.param(2);
-                        supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
+                        supportVar.invoke("writeBrokenSkeletonAlias", pipeVar,
+                                          resultVar.classType(), aliasIdVar, exVar);
+                    } else {
+                        pipeVar.invoke("writeObject", exVar);
                     }
-                    pipeVar.invoke("writeObject", exVar);
                     pipeVar.invoke("flush");
                 }
 
@@ -408,6 +462,20 @@ final class SkeletonMaker<R> {
         }
 
         return caseMap;
+    }
+
+    /**
+     * @return true if method returns void and is a disposer, and the exception might be cleared
+     */
+    private boolean checkException(RemoteMethod rm, Variable exVar) {
+        MethodMaker mm = exVar.methodMaker();
+        if (rm.isDisposer() && rm.returnType().equals("V")) {
+            exVar.set(mm.invoke("checkExceptionForDisposer", exVar));
+            return true;
+        } else {
+            exVar.set(mm.invoke("checkException", exVar));
+            return false;
+        }
     }
 
     private static boolean needsSupport(RemoteMethod rm) {

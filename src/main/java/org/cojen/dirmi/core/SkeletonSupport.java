@@ -34,6 +34,8 @@ public interface SkeletonSupport {
      */
     void createSkeletonAlias(Object server, long aliasId);
 
+    void createBrokenSkeletonAlias(Class<?> type, long aliasId, Throwable exception);
+
     /**
      * Used by batched immediate methods for writing a Remote object.
      *
@@ -41,11 +43,8 @@ public interface SkeletonSupport {
      */
     void writeSkeletonAlias(Pipe pipe, Object server, long aliasId) throws IOException;
 
-    /**
-     * Used by batched methods which cannot call createSkeletonAlias because of a prior
-     * exception. The client must dispose of the stub because it's not linked to anything.
-     */
-    void writeDisposed(Pipe pipe, long id, Object reason) throws IOException;
+    void writeBrokenSkeletonAlias(Pipe pipe, Class<?> type, long aliasId, Throwable exception)
+        throws IOException;
 
     /**
      * Called by a disposer method when finished executing. This method itself should not throw
