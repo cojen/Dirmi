@@ -168,7 +168,6 @@ final class SkeletonMaker<R> {
         }
 
         var supportVar = mm.field("support");
-        var serverVar = mm.field("server").get();
 
         Label noMethodLabel = mm.label();
         methodIdVar.switch_(noMethodLabel, cases, labels);
@@ -179,10 +178,10 @@ final class SkeletonMaker<R> {
             CaseInfo ci = caseMap.get(cases[i]);
 
             if (!ci.serverMethod.isDisposer()) {
-                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar, serverVar));
+                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar));
             } else {
                 Label invokeStart = mm.label().here();
-                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar, serverVar));
+                mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar));
                 mm.finally_(invokeStart, () -> supportVar.invoke("dispose", mm.this_()));
             }
         }
@@ -198,14 +197,14 @@ final class SkeletonMaker<R> {
     }
 
     /**
-     * Makes private static methods which are responsible for reading parameters, invoking a
+     * Makes private methods which are responsible for reading parameters, invoking a
      * server-side method, and writing a response.
      *
      * Each method assumes one of these forms:
      *
-     *    static <context> <name>(RemoteObject, Pipe, <context>)
+     *    private <context> <name>(Pipe, <context>)
      *
-     *    static <context> <name>(RemoteObject, Pipe, <context>, SkeletonSupport support)
+     *    private <context> <name>(Pipe, <context>, SkeletonSupport support)
      *
      * The latter form is used by batched methods which return an object, and also by NoReply
      * methods.
@@ -231,17 +230,16 @@ final class SkeletonMaker<R> {
 
             MethodMaker mm;
             if (!needsSupport(rm)) {
-                mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class);
+                mm = mSkeletonMaker.addMethod(Object.class, name, Pipe.class, Object.class);
             } else {
-                mm = mSkeletonMaker.addMethod(Object.class, name, mType, Pipe.class, Object.class,
+                mm = mSkeletonMaker.addMethod(Object.class, name, Pipe.class, Object.class,
                                               SkeletonSupport.class);
             }
 
-            mm.private_().static_();
+            mm.private_();
 
-            final var serverVar = mm.param(0);
-            final var pipeVar = mm.param(1);
-            final var contextVar = mm.param(2);
+            final var pipeVar = mm.param(0);
+            final var contextVar = mm.param(1);
 
             List<String> paramTypes = rm.parameterTypes();
             var paramVars = new Variable[paramTypes.size()];
@@ -288,12 +286,13 @@ final class SkeletonMaker<R> {
                     exceptionVar.ifNe(null, skip);
                 } else {
                     exceptionVar.ifEq(null, invokeStart);
-                    var supportVar = mm.param(3);
+                    var supportVar = mm.param(2);
                     supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exceptionVar);
                     mm.goto_(skip);
                 }
 
                 invokeStart.here();
+                var serverVar = mm.field("server").get();
                 var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
                 if (resultVar != null) {
                     mm.invoke("batchedResultCheck", serverVar, rm.name(), resultVar);
@@ -301,7 +300,7 @@ final class SkeletonMaker<R> {
                 Label invokeEnd = mm.label().here();
 
                 if (resultVar != null) {
-                    var supportVar = mm.param(3);
+                    var supportVar = mm.param(2);
                     supportVar.invoke("createSkeletonAlias", resultVar, aliasIdVar);
                 }
 
@@ -314,7 +313,7 @@ final class SkeletonMaker<R> {
                 contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
 
                 if (aliasIdVar != null) {
-                    var supportVar = mm.param(3);
+                    var supportVar = mm.param(2);
                     supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
                 }
 
@@ -331,7 +330,7 @@ final class SkeletonMaker<R> {
                 mm.return_(null);
 
                 invokeStart.here();
-                serverVar.invoke(rm.name(), (Object[]) paramVars);
+                mm.field("server").invoke(rm.name(), (Object[]) paramVars);
                 Label invokeEnd = mm.label().here();
 
                 mm.return_(mm.field("STOP_READING"));
@@ -352,6 +351,7 @@ final class SkeletonMaker<R> {
                 batchResultVar.ifNe(0, finished);
 
                 invokeStart.here();
+                var serverVar = mm.field("server").get();
                 var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
                 if (resultVar != null && rm.isBatchedImmediate()) {
                     mm.invoke("batchedResultCheck", serverVar, rm.name(), resultVar);
@@ -365,7 +365,7 @@ final class SkeletonMaker<R> {
                     pipeVar.invoke("writeNull");
 
                     if (rm.isBatchedImmediate()) {
-                        var supportVar = mm.param(3);
+                        var supportVar = mm.param(2);
                         supportVar.invoke("writeSkeletonAlias", pipeVar, resultVar, aliasIdVar);
                     } else if (resultVar != null) {
                         Variable outVar = pipeVar;
@@ -392,11 +392,11 @@ final class SkeletonMaker<R> {
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
 
                 if (rm.isNoReply()) {
-                    var supportVar = mm.param(3);
+                    var supportVar = mm.param(2);
                     supportVar.invoke("uncaughtException", exVar);
                 } else {
                     if (rm.isBatchedImmediate()) {
-                        var supportVar = mm.param(3);
+                        var supportVar = mm.param(2);
                         supportVar.invoke("writeDisposed", pipeVar, aliasIdVar, exVar);
                     }
                     pipeVar.invoke("writeObject", exVar);
@@ -428,13 +428,12 @@ final class SkeletonMaker<R> {
     }
 
     private record CaseInfo(RemoteMethod serverMethod, String serverMethodName) {
-        Variable invoke(MethodMaker mm, Variable pipeVar, Variable contextVar,
-                        Variable supportVar, Variable serverVar)
+        Variable invoke(MethodMaker mm, Variable pipeVar, Variable contextVar, Variable supportVar)
         {
             if (!needsSupport(serverMethod)) {
-                return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar);
+                return mm.invoke(serverMethodName, pipeVar, contextVar);
             }
-            return mm.invoke(serverMethodName, serverVar, pipeVar, contextVar, supportVar);
+            return mm.invoke(serverMethodName, pipeVar, contextVar, supportVar);
         }
     }
 }
