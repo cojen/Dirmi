@@ -45,13 +45,18 @@ import org.cojen.dirmi.core.CoreUtils;
  */
 public interface Session<R> extends Closeable, Link, Executor {
     /**
+     * Returns the root object which was exported or imported.
+     */
+    R root();
+
+    /**
      * Access the session that the given remote object is bound to. This is method is expected
      * to be called on the client-side.
      *
      * @throws IllegalArgumentException if not given a remote stub
      * @throws IllegalStateException if the object is disposed
      */
-    public static Session<?> access(Object obj) {
+    static Session<?> access(Object obj) {
         return CoreUtils.accessSession(obj);
     }
 
@@ -61,14 +66,17 @@ public interface Session<R> extends Closeable, Link, Executor {
      *
      * @throws IllegalStateException if no current session
      */
-    public static Session<?> current() {
+    static Session<?> current() {
         return CoreUtils.currentSession();
     }
 
     /**
-     * Returns the root object which was exported or imported.
+     * Explicitly dispose a client-side or server-side remote object from this session.
+     *
+     * @throws IllegalStateException if object belongs to another session
+     * @see Disposer
      */
-    R root();
+    boolean dispose(Object obj);
 
     /**
      * Receives new connections from a {@link Connector Connector}.

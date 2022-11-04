@@ -32,13 +32,15 @@ public class RemoteObjectTest {
     }
 
     private Environment mServerEnv, mClientEnv;
+    private R1Server mServer;
     private ServerSocket mServerSocket;
     private Session<R1> mSession;
 
     @Before
     public void setup() throws Exception {
         mServerEnv = Environment.create();
-        mServerEnv.export("main", new R1Server());
+        mServer = new R1Server();
+        mServerEnv.export("main", mServer);
         mServerSocket = new ServerSocket(0);
         mServerEnv.acceptAll(mServerSocket);
 
@@ -358,6 +360,61 @@ public class RemoteObjectTest {
         }
     }
 
+    @Test
+    public void disposeFromClientSession() throws Exception {
+        assertFalse(mSession.dispose("hello"));
+        assertFalse(mSession.dispose(null));
+
+        assertFalse(mServer.mDetached);
+
+        R1 root = mSession.root();
+
+        assertTrue(mSession.dispose(root));
+
+        try {
+            root.c4();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
+
+        for (int i=0; i<100; i++) {
+            if (mServer.mDetached) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+
+        fail("Not detached");
+    }
+
+    @Test
+    public void disposeFromServerSession() throws Exception {
+        assertFalse(mServer.mDetached);
+
+        R1 root = mSession.root();
+
+        assertTrue(root.disposeSelf());
+
+        check: {
+            for (int i=0; i<100; i++) {
+                if (mServer.mDetached) {
+                    break check;
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Not detached");
+        }
+
+        try {
+            root.c4();
+            fail();
+        } catch (ClosedException e) {
+            assertTrue(e.getMessage().contains("disposed by remote endpoint"));
+        }
+    }
+
     public static interface R1 extends Remote {
         R2 c1(int param) throws RemoteException;
 
@@ -382,9 +439,22 @@ public class RemoteObjectTest {
 
         @Disposer
         void dispose() throws RemoteException;
+
+        boolean disposeSelf() throws RemoteException;
     }
 
-    private static class R1Server implements R1 {
+    private static class R1Server implements R1, SessionAware {
+        volatile boolean mDetached;
+
+        @Override
+        public void attached(Session<?> s) {
+        }
+
+        @Override
+        public void detached(Session<?> s) {
+            mDetached = true;
+        }
+
         @Override
         public R2 c1(int param) {
             return new R2Server(param);
@@ -440,6 +510,11 @@ public class RemoteObjectTest {
 
         @Override
         public void dispose() {
+        }
+
+        @Override
+        public boolean disposeSelf() {
+            return Session.current().dispose(this);
         }
     }
 

@@ -55,7 +55,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // Control commands.
     static final int
         C_PING = 1, C_PONG = 2, C_MESSAGE = 3, C_KNOWN_TYPE = 4, C_REQUEST_CONNECTION = 5,
-        C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9;
+        C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9,
+        C_SKELETON_DISPOSE = 10, C_STUB_DISPOSE = 11;
 
     static final int R_CLOSED = 1, R_DISCONNECTED = 2, R_PING_FAILURE = 4, R_CONTROL_FAILURE = 8;
 
@@ -132,6 +133,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mControlLock = new ReentrantLock();
 
         mStateLock = new ReentrantLock();
+        mState = State.CONNECTED;
 
         initTypeCodeMap(TypeCodeMap.STANDARD);
     }
@@ -407,6 +409,61 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     @Override
     public void execute(Runnable command) {
         mEngine.execute(command);
+    }
+
+    @Override
+    public boolean dispose(Object object) {
+        long id;
+        int command;
+
+        local: {
+            if (object instanceof Stub stub) {
+                var support = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
+                if (support instanceof CoreStubSupport css) {
+                    if (css.session() != this) {
+                        throw new IllegalStateException("Object belongs to another session");
+                    }
+                    id = stub.id;
+                    if (stubDispose(id, null)) {
+                        command = C_SKELETON_DISPOSE;
+                        break local;
+                    }
+                }
+            } else if (object != null) {
+                Skeleton skeleton = mSkeletons.removeServer(object);
+                if (skeleton != null) {
+                    id = skeleton.id;
+                    command = C_STUB_DISPOSE;
+                    break local;
+                }
+            }
+
+            return false;
+        }
+
+        // Notify the remote endpoint to dispose the object too.
+
+        mControlLock.lock();
+        try {
+            CorePipe pipe = controlPipe();
+            pipe.write(command);
+            pipe.writeLong(id);
+            pipe.flush();
+        } catch (IOException e) {
+            // Control connection is down and so the object will be disposed anyhow.
+        } finally {
+            mControlLock.unlock();
+        }
+
+        if (command == C_STUB_DISPOSE && object instanceof SessionAware sa) {
+            try {
+                sa.detached(this);
+            } catch (Throwable e) {
+                uncaughtException(e);
+            }
+        }
+
+        return true;
     }
 
     @Override
@@ -694,6 +751,16 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         if (waitMap != null) {
                             waitMap.remove(typeName);
                         }
+                        break;
+                    case C_SKELETON_DISPOSE:
+                        Skeleton<?> skeleton = mSkeletons.remove(pipe.readLong());
+                        if (skeleton != null) {
+                            // Pass newTask=true to prevent blocking the control thread.
+                            detached(skeleton, true);
+                        }
+                        break;
+                    case C_STUB_DISPOSE:
+                        stubDispose(pipe.readLong(), "Object is disposed by remote endpoint");
                         break;
                     default:
                         throw new IllegalStateException("Unknown command: " + command);
@@ -1016,20 +1083,23 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return DisposedStubSupport.EXPLICIT;
     }
 
-    final void stubDisposed(long id, Object reason) {
+    final boolean stubDispose(long id, String message) {
         Stub removed = mStubs.remove(id);
 
-        if (removed != null) {
-            StubSupport disposed;
-            if (reason instanceof Throwable) {
-                disposed = new DisposedStubSupport(null, (Throwable) reason);
-            } else if (reason != null) {
-                disposed = new DisposedStubSupport(reason.toString(), null);
-            } else {
-                disposed = DisposedStubSupport.EXPLICIT;
-            }
-            Stub.cSupportHandle.setRelease(removed, disposed);
+        if (removed == null) {
+            return false;
         }
+
+        StubSupport disposed;
+        if (message == null) {
+            disposed = DisposedStubSupport.EXPLICIT;
+        } else {
+            disposed = new DisposedStubSupport(message);
+        }
+
+        Stub.cSupportHandle.setRelease(removed, disposed);
+
+        return true;
     }
 
     final Class<?> loadClass(String name) throws ClassNotFoundException {
@@ -1167,10 +1237,29 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     private void detached(Skeleton<?> skeleton) {
+        detached(skeleton, false);
+    }
+
+    private void detached(Skeleton<?> skeleton, boolean newTask) {
         Object server = skeleton.server();
-        if (server instanceof SessionAware) {
+
+        if (server instanceof SessionAware sa) {
+            if (newTask) {
+                Runnable task = () -> {
+                    try {
+                        sa.detached(this);
+                    } catch (Throwable e) {
+                        uncaughtException(e);
+                    }
+                };
+
+                if (mEngine.tryExecuteTask(task)) {
+                    return;
+                }
+            }
+
             try {
-                ((SessionAware) server).detached(this);
+                sa.detached(this);
             } catch (Throwable e) {
                 uncaughtException(e);
             }

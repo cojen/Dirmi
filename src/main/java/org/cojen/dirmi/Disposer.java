@@ -34,6 +34,7 @@ import java.lang.annotation.*;
  *
  * @author Brian S O'Neill
  * @see SessionAware
+ * @see Session#dispose
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

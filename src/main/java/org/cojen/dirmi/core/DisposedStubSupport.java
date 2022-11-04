@@ -26,25 +26,19 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class DisposedStubSupport implements StubSupport {
-    static final DisposedStubSupport EXPLICIT = new DisposedStubSupport(null, null);
+    static final DisposedStubSupport EXPLICIT = new DisposedStubSupport("Object is disposed");
     static final DisposedStubSupport DISCONNECTED = new DisposedStubSupport
-        ("Object is disposed due to session disconnect", null);
+        ("Object is disposed due to session disconnect");
 
     private final String mMessage;
-    private final Throwable mCause;
 
-    DisposedStubSupport(String message, Throwable cause) {
-        mMessage = message == null ? "Object is disposed" : message;
-        mCause = cause;
+    DisposedStubSupport(String message) {
+        mMessage = message;
     }
 
     @Override
     public Session session() {
-        Throwable ex = new IllegalStateException(mMessage);
-        if (mCause != null) {
-            ex.initCause(mCause);
-        }
-        throw new IllegalStateException(ex);
+        throw new IllegalStateException(mMessage);
     }
 
     @Override
@@ -58,11 +52,7 @@ final class DisposedStubSupport implements StubSupport {
 
     @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        Throwable ex = new ClosedException(mMessage);
-        if (mCause != null) {
-            ex.initCause(mCause);
-        }
-        throw CoreUtils.remoteException(remoteFailureException, ex);
+        throw CoreUtils.remoteException(remoteFailureException, new ClosedException(mMessage));
     }
 
     @Override

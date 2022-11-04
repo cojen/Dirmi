@@ -68,10 +68,10 @@ public final class CoreUtils {
     }
 
     public static Session accessSession(Object obj) {
-        if (!(obj instanceof Stub)) {
+        if (!(obj instanceof Stub stub)) {
             throw new IllegalArgumentException();
         }
-        return ((StubSupport) Stub.cSupportHandle.getAcquire((Stub) obj)).session();
+        return ((StubSupport) Stub.cSupportHandle.getAcquire(stub)).session();
     }
 
     public static Session currentSession() {
