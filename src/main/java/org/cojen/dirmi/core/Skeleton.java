@@ -57,6 +57,18 @@ public abstract class Skeleton<R> extends Item {
      */
     public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
 
+    public static void batchedResultCheck(Object server, String methodName, Object result) {
+        if (result == null) {
+            nullBatchedResult(server, methodName);
+        }
+    }
+
+    private static void nullBatchedResult(Object server, String methodName) {
+        String message = "Cannot return null from a batched method: " +
+            server.getClass().getName() + '.' + methodName;
+        throw new IllegalStateException(message);
+    }
+
     /**
      * @return null if no exception is present
      */

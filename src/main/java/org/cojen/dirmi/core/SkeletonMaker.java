@@ -295,7 +295,9 @@ final class SkeletonMaker<R> {
 
                 invokeStart.here();
                 var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
-                batchedResultCheck(rm, resultVar);
+                if (resultVar != null) {
+                    mm.invoke("batchedResultCheck", serverVar, rm.name(), resultVar);
+                }
                 Label invokeEnd = mm.label().here();
 
                 if (resultVar != null) {
@@ -351,8 +353,8 @@ final class SkeletonMaker<R> {
 
                 invokeStart.here();
                 var resultVar = serverVar.invoke(rm.name(), (Object[]) paramVars);
-                if (rm.isBatchedImmediate()) {
-                    batchedResultCheck(rm, resultVar);
+                if (resultVar != null && rm.isBatchedImmediate()) {
+                    mm.invoke("batchedResultCheck", serverVar, rm.name(), resultVar);
                 }
                 Label invokeEnd = mm.label().here();
 
@@ -406,19 +408,6 @@ final class SkeletonMaker<R> {
         }
 
         return caseMap;
-    }
-
-    private void batchedResultCheck(RemoteMethod rm, Variable resultVar) {
-        if (resultVar == null) {
-            return;
-        }
-        MethodMaker mm = resultVar.methodMaker();
-        Label notNull = mm.label();
-        resultVar.ifNe(null, notNull);
-        var messageVar = mm.var(CoreUtils.class)
-            .condy("nullBatchedResult", mm.param(0).classType()).invoke(String.class, rm.name());
-        mm.new_(IllegalStateException.class, messageVar).throw_();
-        notNull.here();
     }
 
     private static boolean needsSupport(RemoteMethod rm) {
