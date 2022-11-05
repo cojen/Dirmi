@@ -783,6 +783,18 @@ public class PipeTest {
     }
 
     @Test
+    public void brokenDisable() throws Exception {
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
+
+        try {
+            pipe.disableReferences();
+            fail();
+        } catch (IllegalStateException e) {
+        }
+    }
+
+    @Test
     public void fuzz() throws Exception {
         long seed = 8675309;
         for (int i=0; i<100; i++) {

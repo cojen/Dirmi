@@ -38,6 +38,7 @@ import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Restorable;
+import org.cojen.dirmi.Serialized;
 import org.cojen.dirmi.Unbatched;
 
 import org.cojen.dirmi.io.CaptureOutputStream;
@@ -725,6 +726,41 @@ public class RemoteInfoTest {
             fail();
         } catch (IllegalArgumentException e) {
             confirm(e, "must return void");
+        }
+    }
+
+    public static interface R41 extends Remote {
+        @Serialized(filter="!*")
+        Pipe foo(Pipe pipe) throws RemoteException;
+    }
+
+    @Test
+    public void notSerialized() {
+        try {
+            RemoteInfo.examine(R41.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "cannot have @Serialized");
+        }
+    }
+
+    @Test
+    public void brokenStub() {
+        try {
+            RemoteInfo.examineStub(R1.class);
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "No Remote types");
+        }
+
+        class Stub implements R1, R2 {
+        }
+
+        try {
+            RemoteInfo.examineStub(new Stub());
+            fail();
+        } catch (IllegalArgumentException e) {
+            confirm(e, "At most one");
         }
     }
 

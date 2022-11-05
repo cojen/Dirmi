@@ -36,6 +36,10 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
         mEntries = new Entry[2];
     }
 
+    public synchronized int size() {
+        return mSize;
+    }
+
     /**
      * Can be called without explicit synchronization, but entries can appear to go missing.
      * Double check with synchronization.

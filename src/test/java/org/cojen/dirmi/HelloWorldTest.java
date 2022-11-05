@@ -64,7 +64,7 @@ public class HelloWorldTest {
         assertEquals("Hello!!! World", control.call("Hello!!! "));
 
         try {
-            System.out.println(control.call(null));
+            control.call(null);
             fail();
         } catch (RuntimeException e) {
             assertEquals("yo", e.getMessage());
@@ -89,7 +89,7 @@ public class HelloWorldTest {
         assertEquals("Hello!!! World", control.call("Hello!!! "));
 
         try {
-            System.out.println(control.call(null));
+            control.call(null);
             fail();
         } catch (RuntimeException e) {
             assertEquals("yo", e.getMessage());
@@ -121,7 +121,7 @@ public class HelloWorldTest {
         assertEquals("Hello!!! World", control.call("Hello!!! "));
 
         try {
-            System.out.println(control.call(null));
+            control.call(null);
             fail();
         } catch (RuntimeException e) {
             assertEquals("yo", e.getMessage());
@@ -141,6 +141,13 @@ public class HelloWorldTest {
         var control = session.root();
 
         assertEquals("HelloWorld", control.call("Hello"));
+
+        try {
+            control.call(null);
+            fail();
+        } catch (RuntimeException e) {
+            assertEquals("yo", e.getMessage());
+        }
 
         env.close();
     }
@@ -164,7 +171,7 @@ public class HelloWorldTest {
         assertEquals("Hello!!! World", control.call("Hello!!! "));
 
         try {
-            System.out.println(control.call(null));
+            control.call(null);
             fail();
         } catch (RuntimeException e) {
             assertEquals("yo", e.getMessage());

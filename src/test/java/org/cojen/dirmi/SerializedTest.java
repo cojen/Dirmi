@@ -159,6 +159,17 @@ public class SerializedTest {
         assertEquals(mServer.custom, custom.getClass());
     }
 
+    @Test
+    public void brokenFilter() throws Exception {
+        R1 root = mSession.root();
+        try {
+            root.newR3().broken();
+        } catch (ClosedException e) {
+        }
+
+        assertTrue(mException instanceof IllegalArgumentException);
+    }
+
     public static interface R1 extends Remote {
         @Serialized(filter="java.base/*")
         void m1(Object a, String b, int c) throws RemoteException;
@@ -195,12 +206,19 @@ public class SerializedTest {
         @Serialized(filter="org.cojen.dirmi.*")
         R2 newR2() throws RemoteException;
 
+        R3 newR3() throws RemoteException;
+
         @Serialized(filter="org.cojen.**")
         Object custom() throws Exception;
     }
 
     public static interface R2 extends Remote {
         String value() throws RemoteException;
+    }
+
+    public static interface R3 extends Remote {
+        @Serialized(filter="/")
+        Object broken() throws RemoteException;
     }
 
     private static class R1Server implements R1 {
@@ -267,6 +285,11 @@ public class SerializedTest {
         @Override
         public R2 newR2() {
             return () -> "hello";
+        }
+
+        @Override
+        public R3 newR3() {
+            return () -> new Vector();
         }
 
         @Override

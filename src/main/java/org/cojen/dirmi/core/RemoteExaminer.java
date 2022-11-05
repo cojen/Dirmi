@@ -29,12 +29,10 @@ final class RemoteExaminer {
     /**
      * Returns the remote interface implemented by the given remote object.
      *
-     * @throws IllegalArgumentException if object is null or malformed
+     * @throws NullPointerException if object is null
+     * @throws IllegalArgumentException if object is malformed
      */
     static Class<?> remoteType(Object obj) {
-        if (obj == null) {
-            throw new IllegalArgumentException("Remote object must not be null");
-        }
         return remoteTypeForClass(obj.getClass());
     }
 
