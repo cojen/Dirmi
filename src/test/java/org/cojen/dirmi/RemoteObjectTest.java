@@ -362,14 +362,23 @@ public class RemoteObjectTest {
 
     @Test
     public void disposeFromClientSession() throws Exception {
-        assertFalse(mSession.dispose("hello"));
-        assertFalse(mSession.dispose(null));
+        try {
+            Session.dispose("hello");
+            fail();
+        } catch (IllegalArgumentException e) {
+        }
+
+        try {
+            Session.dispose(null);
+            fail();
+        } catch (IllegalArgumentException e) {
+        }
 
         assertFalse(mServer.mDetached);
 
         R1 root = mSession.root();
 
-        assertTrue(mSession.dispose(root));
+        assertTrue(Session.dispose(root));
 
         try {
             root.c4();
@@ -514,7 +523,7 @@ public class RemoteObjectTest {
 
         @Override
         public boolean disposeSelf() {
-            return Session.current().dispose(this);
+            return Session.disposeServer(this);
         }
     }
 

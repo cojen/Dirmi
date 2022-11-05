@@ -71,12 +71,26 @@ public interface Session<R> extends Closeable, Link, Executor {
     }
 
     /**
-     * Explicitly dispose a client-side or server-side remote object from this session.
+     * Explicitly dispose a client-side remote object.
      *
-     * @throws IllegalStateException if object belongs to another session
+     * @throws IllegalArgumentException if not given a remote stub
+     * @return false if the object is already disposed
      * @see Disposer
      */
-    boolean dispose(Object obj);
+    static boolean dispose(Object obj) {
+        return CoreUtils.dispose(obj);
+    }
+
+    /**
+     * Explicitly dispose a server-side remote object implementation from the current session.
+     *
+     * @throws IllegalStateException if no current session
+     * @return false if the server is already disposed or if it's unknown to the current session
+     * @see Disposer
+     */
+    static boolean disposeServer(Object server) {
+        return CoreUtils.disposeServer(server);
+    }
 
     /**
      * Receives new connections from a {@link Connector Connector}.

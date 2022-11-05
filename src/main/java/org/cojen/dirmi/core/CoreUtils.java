@@ -52,7 +52,7 @@ public final class CoreUtils {
 
     static final Object MAKER_KEY = new Object();
 
-    static final ThreadLocal<Session> cCurrentSession = new ThreadLocal<>();
+    static final ThreadLocal<CoreSession> cCurrentSession = new ThreadLocal<>();
 
     public static void setOptions(Socket s) throws IOException {
         if (s.supportedOptions().contains(StandardSocketOptions.TCP_NODELAY)) {
@@ -80,6 +80,25 @@ public final class CoreUtils {
             throw new IllegalStateException();
         }
         return session;
+    }
+
+    public static boolean dispose(Object obj) {
+        if (!(obj instanceof Stub stub)) {
+            throw new IllegalArgumentException();
+        }
+        var support = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
+        if (support instanceof CoreStubSupport css) {
+            return css.session().stubDisposeAndNotify(stub, null);
+        }
+        return false;
+    }
+
+    public static boolean disposeServer(Object server) {
+        CoreSession session = cCurrentSession.get();
+        if (session == null) {
+            throw new IllegalStateException();
+        }
+        return session.serverDispose(server);
     }
 
     /**

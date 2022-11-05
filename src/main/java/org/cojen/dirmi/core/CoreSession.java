@@ -412,61 +412,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public boolean dispose(Object object) {
-        long id;
-        int command;
-
-        local: {
-            if (object instanceof Stub stub) {
-                var support = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
-                if (support instanceof CoreStubSupport css) {
-                    if (css.session() != this) {
-                        throw new IllegalStateException("Object belongs to another session");
-                    }
-                    id = stub.id;
-                    if (stubDispose(id, null)) {
-                        command = C_SKELETON_DISPOSE;
-                        break local;
-                    }
-                }
-            } else if (object != null) {
-                Skeleton skeleton = mSkeletons.removeServer(object);
-                if (skeleton != null) {
-                    id = skeleton.id;
-                    command = C_STUB_DISPOSE;
-                    break local;
-                }
-            }
-
-            return false;
-        }
-
-        // Notify the remote endpoint to dispose the object too.
-
-        mControlLock.lock();
-        try {
-            CorePipe pipe = controlPipe();
-            pipe.write(command);
-            pipe.writeLong(id);
-            pipe.flush();
-        } catch (IOException e) {
-            // Control connection is down and so the object will be disposed anyhow.
-        } finally {
-            mControlLock.unlock();
-        }
-
-        if (command == C_STUB_DISPOSE && object instanceof SessionAware sa) {
-            try {
-                sa.detached(this);
-            } catch (Throwable e) {
-                uncaughtException(e);
-            }
-        }
-
-        return true;
-    }
-
-    @Override
     public final State state() {
         return mState;
     }
@@ -760,7 +705,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         }
                         break;
                     case C_STUB_DISPOSE:
-                        stubDispose(pipe.readLong(), "Object is disposed by remote endpoint");
+                        id = pipe.readLong();
+                        stubDispose(id, "Object is disposed by remote endpoint");
+                        // Send the reply command. See the serverDispose method.
+                        mEngine.executeTask(() -> trySendCommandAndId(C_SKELETON_DISPOSE, id));
                         break;
                     default:
                         throw new IllegalStateException("Unknown command: " + command);
@@ -1061,13 +1009,27 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         factory = mStubFactories.putIfAbsent(factory);
 
         // Notify the other side that it can stop sending type info.
-        mEngine.tryExecuteTask(() -> notifyKnownType(typeId));
+        mEngine.tryExecuteTask(() -> trySendCommandAndId(C_KNOWN_TYPE, typeId));
 
         if (found) {
             mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
         return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+    }
+
+    private void trySendCommandAndId(int command, long id) {
+        mControlLock.lock();
+        try {
+            CorePipe pipe = controlPipe();
+            pipe.write(command);
+            pipe.writeLong(id);
+            pipe.flush();
+        } catch (IOException e) {
+            // Ignore.
+        } finally {
+            mControlLock.unlock();
+        }
     }
 
     final CoreStubSupport stubSupport() {
@@ -1102,24 +1064,40 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return true;
     }
 
-    final Class<?> loadClass(String name) throws ClassNotFoundException {
-        return Class.forName(name, false, root().getClass().getClassLoader());
+    final boolean stubDisposeAndNotify(Stub stub, String message) {
+        long id = stub.id;
+        if (stubDispose(id, message)) {
+            // Notify the remote side to dispose the associated skeleton. If the command cannot
+            // be sent, the skeleton will be disposed anyhow due to disconnect.
+            trySendCommandAndId(C_SKELETON_DISPOSE, id);
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    private void notifyKnownType(long typeId) {
-        try {
-            mControlLock.lock();
-            try {
-                CorePipe pipe = controlPipe();
-                pipe.write(C_KNOWN_TYPE);
-                pipe.writeLong(typeId);
-                pipe.flush();
-            } finally {
-                mControlLock.unlock();
-            }
-        } catch (IOException e) {
-            // Ignore.
+    final boolean serverDispose(Object server) {
+        Skeleton skeleton;
+        if (server == null || (skeleton = mSkeletons.skeletonFor(server, false)) == null) {
+            return false;
         }
+
+        // Notify the remote side to dispose the associated stub, and then it will send a reply
+        // command back to this side to dispose the skeleton. This helps prevent race
+        // conditions in which the remote side attempts to use a disposed object before it
+        // knows that it was disposed. When this happens, an uncaught NoSuchObjectException is
+        // generated on this side, and the remote side just gets a plain ClosedException.
+
+        // If the original command or reply cannot be sent, the stub and skeleton will be
+        // disposed anyhow due to disconnect.
+
+        trySendCommandAndId(C_STUB_DISPOSE, skeleton.id);
+
+        return true;
+    }
+
+    final Class<?> loadClass(String name) throws ClassNotFoundException {
+        return Class.forName(name, false, root().getClass().getClassLoader());
     }
 
     final long remoteTypeId(Class<?> type) {

@@ -63,27 +63,23 @@ final class SkeletonMap extends ItemMap<Skeleton> {
     synchronized Skeleton remove(long id) {
         Skeleton skeleton = super.remove(id);
         if (id >= 0 && skeleton != null) { // only remove server if id isn't an alias
-            doRemoveServer(skeleton.server());
+            removeServer(skeleton.server());
         }
         return skeleton;
     }
 
     /**
-     * Removes the skeleton instance for the given server object, returning null if not found.
+     * Returns the skeleton instance for the given server object, making it if necessary.
      */
-    synchronized Skeleton removeServer(Object server) {
-        Object skeletonOrLatch = doRemoveServer(server);
-        if (skeletonOrLatch instanceof Skeleton skeleton) {
-            return super.remove(skeleton.id);
-        }
-        return null;
+    <R> Skeleton<R> skeletonFor(R server) {
+        return skeletonFor(server, true);
     }
 
     /**
-     * Returns the skeleton instance for the given server object, making it if necessary.
+     * Returns the skeleton instance for the given server object, optionally making it.
      */
     @SuppressWarnings("unchecked")
-    <R> Skeleton<R> skeletonFor(R server) {
+    <R> Skeleton<R> skeletonFor(R server, boolean make) {
         int hash = System.identityHashCode(server);
 
         while (true) {
@@ -108,6 +104,10 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                             entry = e;
                             break find;
                         }
+                    }
+
+                    if (!make) {
+                        return null;
                     }
 
                     int size = mSize;
@@ -151,7 +151,7 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                     return skeleton;
                 } catch (Throwable e) {
                     synchronized (this) {
-                        doRemoveServer(server);
+                        removeServer(server);
                     }
                     throw e;
                 } finally {
@@ -176,10 +176,8 @@ final class SkeletonMap extends ItemMap<Skeleton> {
     /**
      * Removes the server entry, but doesn't remove the superclass entry. Caller must be
      * synchronized.
-     *
-     * @return skeletonOrLatch or null
      */
-    private Object doRemoveServer(Object server) {
+    private void removeServer(Object server) {
         Entry[] entries = mEntries;
         int slot = System.identityHashCode(server) & (entries.length - 1);
 
@@ -193,13 +191,11 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                 }
                 mSize--;
                 e.mNext = null;
-                return e.mSkeletonOrLatch;
+                return;
             }
             prev = e;
             e = next;
         }
-
-        return null;
     }
 
     private boolean grow() {
