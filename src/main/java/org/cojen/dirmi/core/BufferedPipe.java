@@ -856,7 +856,14 @@ class BufferedPipe implements Pipe {
                     } catch (Exception e) {
                     }
                 }
-                t = (Throwable) exClass.getConstructor(String.class).newInstance(message);
+                try {
+                    t = (Throwable) exClass.getConstructor(String.class).newInstance(message);
+                    break reconstruct;
+                } catch (Exception e) {
+                }
+                t = (Throwable) exClass.getConstructor(String.class, Throwable.class)
+                    .newInstance(message, cause);
+                cause = null;
             }
         } catch (Exception e) {
             // Construct a generic exception instead.
