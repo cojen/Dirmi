@@ -134,12 +134,8 @@ final class SkeletonMap extends ItemMap<Skeleton> {
                     Skeleton<R> skeleton = factory.newSkeleton
                         (id, mSession.mSkeletonSupport, server);
 
-                    if (server instanceof SessionAware) {
-                        try {
-                            ((SessionAware) server).attached(mSession);
-                        } catch (Throwable e) {
-                            mSession.uncaughtException(e);
-                        }
+                    if (server instanceof SessionAware sa) {
+                        mSession.attachNotify(sa);
                     }
 
                     VarHandle.storeStoreFence();

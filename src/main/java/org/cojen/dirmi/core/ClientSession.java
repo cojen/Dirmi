@@ -59,6 +59,8 @@ final class ClientSession<R> extends CoreSession<R> {
     {
         super(engine, settings);
 
+        mState = State.CONNECTED;
+
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
         controlPipe(CorePipe.newNullPipe(localAddr, remoteAttr));

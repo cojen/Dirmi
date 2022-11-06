@@ -60,8 +60,9 @@ import org.cojen.dirmi.Connector;
 import org.cojen.dirmi.Environment;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.RemoteException;
-import org.cojen.dirmi.Session;
 import org.cojen.dirmi.Serializer;
+import org.cojen.dirmi.Session;
+import org.cojen.dirmi.SessionAware;
 
 import org.cojen.dirmi.io.CaptureOutputStream;
 
@@ -339,6 +340,11 @@ public final class Engine implements Environment {
 
             session.controlPipe(pipe);
             session.startTasks();
+
+            if (session.root() instanceof SessionAware sa) {
+                // The root can be notified of attachment after the session is fully connected.
+                session.attachNotify(sa);
+            }
 
             return session;
         } catch (Throwable e) {

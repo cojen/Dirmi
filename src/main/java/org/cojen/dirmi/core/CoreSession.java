@@ -133,7 +133,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mControlLock = new ReentrantLock();
 
         mStateLock = new ReentrantLock();
-        mState = State.CONNECTED;
 
         initTypeCodeMap(TypeCodeMap.STANDARD);
     }
@@ -1115,14 +1114,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         SkeletonFactory factory = SkeletonMaker.factoryFor(type);
         var skeleton = factory.newSkeleton(aliasId, mSkeletonSupport, server);
 
-        if (server instanceof SessionAware) {
-            // Must call attached now, because as soon as the skeleton is put into the map, it
-            // becomes available to other threads.
-            try {
-                ((SessionAware) server).attached(this);
-            } catch (Throwable e) {
-                uncaughtException(e);
-            }
+        if (server instanceof SessionAware sa) {
+            // Must notify of attachment now, because as soon as the skeleton is put into the
+            // map, it becomes available to other threads.
+            attachNotify(sa);
         }
 
         Skeleton existing = mSkeletons.putIfAbsent(skeleton);
@@ -1238,6 +1233,22 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
             try {
                 sa.detached(this);
+            } catch (Throwable e) {
+                uncaughtException(e);
+            }
+        }
+    }
+
+    final void attachNotify(SessionAware sa) {
+        // Special handling is required for the ServerSession root, which is why the state is
+        // checked first. The skeleton is needed early, and it's assigned by the ServerSession
+        // constructor. The SkeletonMap then calls into this method, but the initial state is
+        // null to prevent a race condition with initTypeCodeMap. Only after the ServerSession
+        // is fully connected can a SessionAware root be notified of attachment. See
+        // ServerSession.accepted and Engine.accepted.
+        if (mState != null) {
+            try {
+                sa.attached(this);
             } catch (Throwable e) {
                 uncaughtException(e);
             }
