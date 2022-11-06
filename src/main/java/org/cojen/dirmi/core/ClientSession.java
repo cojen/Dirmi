@@ -224,7 +224,11 @@ final class ClientSession<R> extends CoreSession<R> {
             if (writer == null && !writers.containsKey(original)) {
                 type = RemoteExaminer.remoteType(stub);
                 RemoteInfo current = typeMap.get(type.getName());
-                writer = MethodIdWriterMaker.writerFor(original, current, false);
+                if (current == null) {
+                    writer = MethodIdWriter.Unimplemented.THE;
+                } else {
+                    writer = MethodIdWriterMaker.writerFor(original, current, false);
+                }
                 writers.put(original, writer);
             }
 

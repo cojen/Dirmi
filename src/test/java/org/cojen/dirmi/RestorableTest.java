@@ -285,7 +285,18 @@ public class RestorableTest {
     }
 
     @Test
-    public void interfaceChange2() throws Exception {
+    public void interfaceReplace() throws Exception {
+        // Define a completely new remote interface.
+        interfaceReplace(false);
+    }
+
+    @Test
+    public void interfaceReplaceDropR2() throws Exception {
+        // Define a completely new remote interface and also drop R2 from existence.
+        interfaceReplace(true);
+    }
+
+    private void interfaceReplace(boolean dropR2) throws Exception {
         R1 root = mSession.root();
         R2 r2 = root.a(123);
 
@@ -306,6 +317,10 @@ public class RestorableTest {
         // Define a completely new remote interface.
 
         var loader = new Loader();
+
+        if (dropR2) {
+            loader.drop(R2.class.getName());
+        }
 
         var cm1 = ClassMaker.beginExternal(R1.class.getName())
             .public_().interface_().implement(Remote.class);
@@ -384,14 +399,20 @@ public class RestorableTest {
                 var clazz = defineClass(name, bytes, 0, bytes.length);
                 mLocal.put(name, clazz);
                 return clazz;
-            } else {
+            } else if (local instanceof Class) {
                 return (Class) local;
+            } else {
+                throw new ClassNotFoundException(name);
             }
         }
 
         Class<?> finishLocal(String name, ClassMaker cm) throws ClassNotFoundException {
             mLocal.put(name, cm.finishBytes());
             return loadClass(name);
+        }
+
+        void drop(String name) {
+            mLocal.put(name, name);
         }
     };
 
