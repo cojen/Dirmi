@@ -152,6 +152,7 @@ public interface Environment extends Closeable, Executor {
      * Call to establish a new client-side session. A remote server must be accepting
      * connections, and it must also export the given named object.
      *
+     * @param type the type of the root object which is exported by the remote server
      * @param name the name of the root object which is exported by the remote server
      * @param host server host address to connect to
      * @param port server port to connect to
