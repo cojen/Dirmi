@@ -136,7 +136,7 @@ public class IdleTest {
         }
 
         int total = connector.mTotal.get();
-        assertTrue("" + total, 2 <= total && total <= 5);
+        assertTrue("" + total, 2 <= total && total <= 9);
 
         Thread.sleep(1000);
 
@@ -150,7 +150,7 @@ public class IdleTest {
         }
 
         int total2 = connector.mTotal.get();
-        assertTrue(total < total2 && total2 <= 9);
+        assertTrue(total < total2 && total2 <= total + 4);
     }
 
     public static interface Iface extends Remote {
