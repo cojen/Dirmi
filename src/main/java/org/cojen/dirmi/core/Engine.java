@@ -508,11 +508,14 @@ public final class Engine implements Environment {
             }
 
             void schedule() throws IOException {
-                // Adjust delay by ±10%.
-                int reconnectDelayMillis = settings.reconnectDelayMillis;
-                long jitter = mRnd.nextLong(reconnectDelayMillis / 5);
-                jitter -= reconnectDelayMillis / 10;
-                long delay = reconnectDelayMillis + jitter;
+                long delay = settings.reconnectDelayMillis;
+                long range = delay / 5;
+                if (range > 1) {
+                    // Adjust delay by ±10%.
+                    long jitter = mRnd.nextLong(range);
+                    jitter -= delay / 10;
+                    delay += jitter;
+                }
 
                 if (!scheduleMillis(this, delay)) {
                     checkClosed();
