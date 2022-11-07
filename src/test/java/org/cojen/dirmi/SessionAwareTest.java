@@ -54,6 +54,13 @@ public class SessionAwareTest {
 
     @Test
     public void basic() throws Exception {
+        for (int i=0; i<100; i++) {
+            if (mServer.mSession != null) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+
         assertNotNull(mServer.mSession);
         assertNotSame(mSession, mServer.mSession);
 
