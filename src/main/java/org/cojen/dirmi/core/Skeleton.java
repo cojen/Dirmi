@@ -78,13 +78,6 @@ public abstract class Skeleton<R> extends Item {
         return mException == null ? exception : mException;
     }
 
-    /**
-     * Same as checkException except returns null if this is a broken skeleton.
-     */
-    public final Throwable checkExceptionForDisposer(Throwable exception) {
-        return mException == null ? exception : null;
-    }
-
     public static void batchedResultCheck(Object server, String methodName, Object result) {
         if (result == null) {
             nullBatchedResult(server, methodName);

@@ -287,9 +287,9 @@ public class RemoteObjectTest {
             assertTrue(e.getMessage().contains("Cannot return null"));
         }
 
-        r2.dispose();
+        Session.dispose(r2);
 
-        r22.dispose();
+        Session.dispose(r22);
 
         try {
             r2.dispose();

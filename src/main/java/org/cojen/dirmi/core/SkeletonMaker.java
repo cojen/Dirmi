@@ -330,16 +330,7 @@ final class SkeletonMaker<R> {
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                boolean disposer = checkException(rm, exVar);
-
-                if (disposer) {
-                    // Ignore the exception if disposing a broken skeleton.
-                    Label cont = mm.label();
-                    exVar.ifNe(null, cont);
-                    contextVar.set(mm.invoke("batchInvokeSuccess", contextVar));
-                    mm.return_(contextVar);
-                    cont.here();
-                }
+                checkException(rm, exVar);
 
                 contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
 
@@ -368,14 +359,7 @@ final class SkeletonMaker<R> {
                 mm.return_(mm.field("STOP_READING"));
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-
-                if (checkException(rm, exVar)) {
-                    // Ignore the exception if disposing a broken skeleton.
-                    Label cont = mm.label();
-                    exVar.ifNe(null, cont);
-                    mm.return_(null);
-                    cont.here();
-                }
+                checkException(rm, exVar);
 
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
@@ -431,17 +415,11 @@ final class SkeletonMaker<R> {
                 }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                boolean disposer = checkException(rm, exVar);
+                checkException(rm, exVar);
 
                 if (rm.isNoReply()) {
-                    Label cont = mm.label();
-                    if (disposer) {
-                        // Ignore the exception if disposing a broken skeleton.
-                        exVar.ifEq(null, cont);
-                    }
                     var supportVar = mm.param(2);
                     supportVar.invoke("uncaughtException", exVar);
-                    cont.here();
                 } else {
                     if (rm.isBatchedImmediate()) {
                         // Even though invocation failed with an exception, match the behavior
@@ -464,18 +442,8 @@ final class SkeletonMaker<R> {
         return caseMap;
     }
 
-    /**
-     * @return true if method returns void and is a disposer, and the exception might be cleared
-     */
-    private boolean checkException(RemoteMethod rm, Variable exVar) {
-        MethodMaker mm = exVar.methodMaker();
-        if (rm.isDisposer() && rm.returnType().equals("V")) {
-            exVar.set(mm.invoke("checkExceptionForDisposer", exVar));
-            return true;
-        } else {
-            exVar.set(mm.invoke("checkException", exVar));
-            return false;
-        }
+    private void checkException(RemoteMethod rm, Variable exVar) {
+        exVar.set(exVar.methodMaker().invoke("checkException", exVar));
     }
 
     private static boolean needsSupport(RemoteMethod rm) {
