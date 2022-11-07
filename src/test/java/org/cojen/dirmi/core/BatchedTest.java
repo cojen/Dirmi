@@ -26,7 +26,6 @@ import org.junit.*;
 import static org.junit.Assert.*;
 
 import org.cojen.dirmi.Batched;
-import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Environment;
 import org.cojen.dirmi.NoReply;

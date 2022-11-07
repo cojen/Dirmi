@@ -53,7 +53,7 @@ public class SoftCacheTest {
         for (int i=0; i<values.length; i++) {
             int id = rnd.nextInt();
             replacements[i] = "r" + id;
-            assertTrue(values[i] == cache.put(new Key(id), replacements[i]));
+            assertSame(values[i], cache.put(new Key(id), replacements[i]));
         }
         
         rnd = new Random(8675309);

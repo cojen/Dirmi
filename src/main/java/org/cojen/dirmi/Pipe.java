@@ -24,13 +24,6 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
 
-import java.math.BigInteger;
-import java.math.BigDecimal;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 /**
  * A pipe is a bidirectional stream which supports basic object serialization. Only simple
  * types and collections can be serialized, and the original classes aren't necessarily

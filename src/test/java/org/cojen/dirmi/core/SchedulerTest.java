@@ -18,8 +18,6 @@ package org.cojen.dirmi.core;
 
 import java.util.Random;
 
-import java.util.concurrent.Executors;
-
 import org.junit.*;
 import static org.junit.Assert.*;
 

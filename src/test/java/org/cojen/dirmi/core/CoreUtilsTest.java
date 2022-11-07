@@ -23,7 +23,6 @@ import java.net.SocketException;
 import org.junit.*;
 import static org.junit.Assert.*;
 
-import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.RemoteException;
 
 import static org.cojen.dirmi.core.CoreUtils.*;

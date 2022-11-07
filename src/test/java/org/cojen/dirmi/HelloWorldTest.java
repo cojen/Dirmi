@@ -19,9 +19,7 @@ package org.cojen.dirmi;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
-import java.net.ProtocolFamily;
 import java.net.ServerSocket;
-import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 
