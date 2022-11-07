@@ -198,10 +198,10 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="block">Returns the current session state.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#stateListener(java.util.function.Consumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&gt;&nbsp;listener)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#stateListener(java.util.function.BiConsumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Set a listener which is immediately invoked (in the current thread), and is also invoked
- when the session state changes.</div>
+<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
+ state changes, or when a reconnect attempt fails.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
@@ -381,12 +381,12 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 </section>
 </li>
 <li>
-<section class="detail" id="stateListener(java.util.function.Consumer)">
+<section class="detail" id="stateListener(java.util.function.BiConsumer)">
 <h3>stateListener</h3>
-<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">stateListener</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;&gt;&nbsp;listener)</span></div>
-<div class="block">Set a listener which is immediately invoked (in the current thread), and is also invoked
- when the session state changes. The listener is invoked in a blocking fashion,
- preventing any state changes until the listener returns.</div>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">stateListener</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</span></div>
+<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
+ state changes, or when a reconnect attempt fails. The listener is invoked in a blocking
+ fashion, preventing any state changes until the listener returns.</div>
 </section>
 </li>
 <li>
