@@ -237,9 +237,7 @@ public final class Engine implements Environment {
             long serverSessionId = pipe.readLong();
 
             if (serverSessionId != 0) {
-                if (timeoutTask != null && !timeoutTask.cancel()) {
-                    throw new RemoteException("Timed out");
-                }
+                CloseTimeout.cancelOrFail(timeoutTask);
 
                 find: {
                     ItemMap<ServerSession> sessions = mServerSessions;
@@ -325,9 +323,7 @@ public final class Engine implements Environment {
             pipe.writeNull(); // optional metadata
             pipe.flush();
 
-            if (timeoutTask != null && !timeoutTask.cancel()) {
-                throw new RemoteException("Timed out");
-            }
+            CloseTimeout.cancelOrFail(timeoutTask);
 
             TypeCodeMap tcm = settings.mergeSerializerTypes
                 (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
@@ -423,9 +419,7 @@ public final class Engine implements Environment {
 
             Object metadata = pipe.readObject();
 
-            if (timeoutTask != null && !timeoutTask.cancel()) {
-                throw new RemoteException("Timed out");
-            }
+            CloseTimeout.cancelOrFail(timeoutTask);
 
             session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
@@ -453,23 +447,25 @@ public final class Engine implements Environment {
 
             return session;
         } catch (Throwable e) {
-            if (timeoutTask != null) {
-                timeoutTask.cancel();
+            try {
+                CloseTimeout.cancelOrFail(timeoutTask);
+            } catch (Throwable e2) {
+                e2.addSuppressed(e);
+                e = e2;
             }
             session.close();
             CoreUtils.closeQuietly(pipe);
-            throw e;
+            throw CoreUtils.rethrow(e);
         }
     }
 
     /**
      * Start a reconnect task. When reconnect succeeds, the given callback receives the
      * ClientSession instance, which isn't registered and no tasks have started. When a
-     * reconnect attempt fails, the callback is given null, and it can return false to stop the
-     * task. If reconnect cannot succeed, the callback is given an exception and no further
-     * attempts are made.
+     * reconnect attempt fails, the callback is given an exception, and it can return false to
+     * stop the task.
      *
-     * @param callback receives a ClientSession instance, null, or a terminal exception
+     * @param callback receives a ClientSession instance or an exception
      */
     void reconnect(Settings settings, Class<?> type, byte[] bname, SocketAddress addr,
                    Predicate<Object> callback)
@@ -480,25 +476,24 @@ public final class Engine implements Environment {
             @Override
             public void run() {
                 ClientSession<?> session = null;
+                Object result;
                 
                 try {
                     session = doConnect(settings, false, type, bname, addr);
+                    result = session;
                 } catch (Throwable e) {
                     try {
                         checkClosed();
                     } catch (Throwable e2) {
+                        // Is closed, so don't attempt again.
                         callback.test(e2);
                         return;
                     }
-
-                    if (!(e instanceof IOException)) {
-                        callback.test(e);
-                        return;
-                    }
+                    result = e;
                 }
 
                 try {
-                    if (!callback.test(session) || session != null) {
+                    if (!callback.test(result)) {
                         return;
                     }
                 } catch (Throwable e) {
@@ -509,6 +504,7 @@ public final class Engine implements Environment {
                 try {
                     schedule();
                 } catch (Throwable e) {
+                    // Can't schedule tasks for some reason, so don't attempt again.
                     callback.test(e);
                 }
             }
@@ -534,6 +530,7 @@ public final class Engine implements Environment {
         try {
             task.schedule();
         } catch (Throwable e) {
+            // Can't schedule tasks for some reason, so don't attempt again.
             callback.test(e);
         }
     }

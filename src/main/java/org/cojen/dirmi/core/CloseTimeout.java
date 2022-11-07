@@ -21,6 +21,8 @@ import java.io.Closeable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import org.cojen.dirmi.RemoteException;
+
 /**
  * A delayed task to close a connection.
  *
@@ -50,6 +52,15 @@ final class CloseTimeout extends Scheduled {
     boolean cancel() {
         Closeable con = mCon;
         return con != null && cConHandle.compareAndSet(this, con, null);
+    }
+
+    /**
+     * @throws RemoteException if task isn't null and unable to cancel in time
+     */
+    static void cancelOrFail(CloseTimeout task) throws RemoteException {
+        if (task != null && !task.cancel()) {
+            throw new RemoteException("Timed out");
+        }
     }
 
     @Override

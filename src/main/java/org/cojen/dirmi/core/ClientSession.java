@@ -103,7 +103,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     void close(int reason, CorePipe controlPipe) {
-        if (mSettings.reconnectDelayMillis < 0) {
+        if (mSettings.reconnectDelayMillis < 0 || mEngine.isClosed() || isClosed()) {
             reason |= R_CLOSED;
         }
 
@@ -125,7 +125,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @SuppressWarnings("unchecked")
     private boolean reconnectAttempt(Object result) {
-        if (isClosed()) {
+        if (mEngine.isClosed() || isClosed()) {
             if (result instanceof ClientSession) {
                 ((ClientSession) result).close(R_CLOSED, null);
             }
@@ -133,14 +133,10 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
-        if (result == null) {
-            // Keep trying to reconnect.
-            return true;
-        }
-
-        if (!(result instanceof ClientSession)) {
-            close(R_CLOSED, null);
-            return false;
+        if (result instanceof Throwable ex) {
+            reconnectFailureNotify(ex);
+            // Keep trying to reconnect unless the exception likely indicates an internal bug.
+            return result instanceof IOException;
         }
 
         var newSession = (ClientSession<R>) result;

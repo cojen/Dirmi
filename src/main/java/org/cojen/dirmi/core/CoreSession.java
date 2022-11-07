@@ -33,7 +33,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
@@ -111,7 +110,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     private int mClosed;
 
     final Lock mStateLock;
-    private volatile Consumer<Session<?>> mStateListener;
+    private volatile BiConsumer<Session<?>, Throwable> mStateListener;
     volatile State mState;
 
     // Used when reconnecting.
@@ -416,7 +415,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public final void stateListener(Consumer<Session<?>> listener) {
+    public final void stateListener(BiConsumer<Session<?>, Throwable> listener) {
         if (listener == null) {
             mStateListener = null;
         } else {
@@ -424,7 +423,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 mStateListener = listener;
                 try {
-                    listener.accept(this);
+                    listener.accept(this, null);
                 } catch (Throwable e) {
                     uncaughtException(e);
                 }
@@ -435,15 +434,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     // Caller must hold mStateLock.
-    private void setStateAnyNotify(State state) {
+    private void setStateAndNotify(State state) {
         if (mState != state) {
             mState = state;
 
-            Consumer<Session<?>> listener = mStateListener;
+            BiConsumer<Session<?>, Throwable> listener = mStateListener;
 
             if (listener != null) {
                 try {
-                    listener.accept(this);
+                    listener.accept(this, null);
                 } catch (Throwable e) {
                     uncaughtException(e);
                 }
@@ -455,10 +454,31 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         mStateLock.lock();
         try {
             if (mState == expect) {
-                setStateAnyNotify(newState);
+                setStateAndNotify(newState);
             }
         } finally {
             mStateLock.unlock();
+        }
+    }
+
+    void reconnectFailureNotify(Throwable ex) {
+        BiConsumer<Session<?>, Throwable> listener = mStateListener;
+
+        if (listener != null) {
+            mStateLock.lock();
+            try {
+                listener = mStateListener;
+
+                if (listener != null) {
+                    try {
+                        listener.accept(this, ex);
+                    } catch (Throwable e) {
+                        uncaughtException(e);
+                    }
+                }
+            } finally {
+                mStateLock.unlock();
+            }
         }
     }
 
@@ -495,7 +515,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 reason &= ~R_DISCONNECTED;
             }
 
-            setStateAnyNotify((reason & R_DISCONNECTED) != 0 ? State.DISCONNECTED : State.CLOSED);
+            setStateAndNotify((reason & R_DISCONNECTED) != 0 ? State.DISCONNECTED : State.CLOSED);
 
             conLockAcquire();
             try {
@@ -573,16 +593,16 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 // Reconnected too quickly, before the RECONNECTING state was set. The
                 // RECONNECTING state should always be observed by the listener before
                 // observing RECONNECTED, so set it now.
-                setStateAnyNotify(State.RECONNECTING);
+                setStateAndNotify(State.RECONNECTING);
             }
 
-            setStateAnyNotify(State.RECONNECTED);
+            setStateAndNotify(State.RECONNECTED);
 
             conLockAcquire();
             mClosed = 0;
             conLockRelease();
 
-            setStateAnyNotify(State.CONNECTED);
+            setStateAndNotify(State.CONNECTED);
         } finally {
             mStateLock.unlock();
         }
@@ -661,7 +681,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     int command = pipe.readUnsignedByte();
                     switch (command) {
                     case C_PING:
-                        mEngine.execute(pongTask);
+                        mEngine.executeTask(pongTask);
                         break;
                     case C_PONG:
                         cPipeClockHandle.setVolatile(pipe, 0);

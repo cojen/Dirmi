@@ -28,7 +28,7 @@ import java.util.Map;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.junit.*;
 import static org.junit.Assert.*;
@@ -88,11 +88,11 @@ public class RestorableTest {
             assertTrue(e.getMessage().contains("non-restorable parent"));
         }
 
-        var listener = new Consumer<Session<?>>() {
+        var listener = new BiConsumer<Session<?>, Throwable>() {
             final List<Session.State> states = new ArrayList<>();
 
             @Override
-            public void accept(Session<?> session) {
+            public void accept(Session<?> session, Throwable ex) {
                 states.add(session.state());
             }
         };
@@ -161,6 +161,62 @@ public class RestorableTest {
         mSession.close();
 
         assertEquals(List.of(Session.State.CLOSED), listener.states);
+    }
+
+    @Test
+    public void reconnectNotification() throws Exception {
+        var listener = new BiConsumer<Session<?>, Throwable>() {
+            volatile Throwable exception;
+
+            @Override
+            public void accept(Session<?> session, Throwable ex) {
+                exception = ex;
+            }
+        };
+
+        mSession.stateListener(listener);
+
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        R1 root = mSession.root();
+
+        Throwable ex = null;
+
+        for (int i=0; i<100; i++) {
+            try {
+                root.echo("hello");
+            } catch (RemoteException e) {
+            }
+
+            ex = listener.exception;
+
+            if (ex != null) {
+                break;
+            }
+
+            Thread.sleep(100);
+        }
+
+        assertTrue(ex instanceof RemoteException);
+        assertTrue(ex.getMessage().contains("Timed out"));
+
+        mAcceptor.resume();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    assertEquals("hello", root.echo("hello"));
+                    break check;
+                } catch (RemoteException e) {
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Didn't reconnect");
+        }
+
+        assertNull(listener.exception);
     }
 
     @Test
@@ -505,6 +561,8 @@ public class RestorableTest {
         R2 a(int param) throws RemoteException;
 
         R2 b(int param) throws RemoteException;
+
+        Object echo(Object param) throws RemoteException;
     }
 
     public static interface R2 extends Remote {
@@ -525,6 +583,11 @@ public class RestorableTest {
         @Override
         public R2 b(int param) {
             return new R2Server(param);
+        }
+
+        @Override
+        public Object echo(Object param) {
+            return param;
         }
     }
 
