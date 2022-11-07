@@ -1696,30 +1696,20 @@ class BufferedPipe implements Pipe {
         if (refMap == null) {
             return false;
         } else {
-            return tryWriteReferenceOrNull(refMap, v);
+            return tryWriteReference(refMap, v);
         }
     }
 
     /**
      * @param refMap must not be null
-     * @return true if an object reference or null was written
+     * @param v non-null
+     * @return true if an object reference was written
      */
-    private boolean tryWriteReferenceOrNull(ReferenceMap refMap, Object v) throws IOException {
+    private boolean tryWriteReference(ReferenceMap refMap, Object v) throws IOException {
         if (refMap.isDisabled()) {
-            if (v == null) {
-                writeShort((T_REF_MODE_OFF << 8) | T_NULL);
-                mOutRefMap = null;
-                return true;
-            } else {
-                write(T_REF_MODE_OFF);
-                mOutRefMap = null;
-                return false;
-            }
-        }
-
-        if (v == null) {
-            write(T_NULL);
-            return true;
+            write(T_REF_MODE_OFF);
+            mOutRefMap = null;
+            return false;
         }
 
         if (refMap.isEmpty()) {
