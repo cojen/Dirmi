@@ -491,25 +491,29 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * Close with a reason. When reason is R_DISCONNECTED and controlPipe isn't null, only
      * closes if the current control pipe matches. This guards against a race condition in
      * which a session is closed after it was reconnected. Pass null to force close.
+     *
+     * @return true if just moved to a closed state
      */
-    void close(int reason, CorePipe controlPipe) {
+    boolean close(int reason, CorePipe controlPipe) {
         if ((reason & (R_CLOSED | R_DISCONNECTED)) == 0) {
             reason |= R_CLOSED;
         }
 
         CorePipe first;
+        boolean justClosed = false;
 
         mStateLock.lock();
         try {
             if ((reason & R_DISCONNECTED) != 0
                 && controlPipe != null && mControlPipe != controlPipe)
             {
-                return;
+                return false;
             }
 
             int closed = mClosed;
             if (closed == 0) {
                 mClosed = reason;
+                justClosed = true;
             } else if ((closed & R_CLOSED) != 0) {
                 reason |= R_CLOSED;
                 reason &= ~R_DISCONNECTED;
@@ -571,6 +575,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
 
         mTypeWaitMap = null;
+
+        return justClosed;
     }
 
     private static void closePipes(CorePipe pipe) {

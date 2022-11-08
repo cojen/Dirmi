@@ -102,25 +102,31 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void close(int reason, CorePipe controlPipe) {
+    boolean close(int reason, CorePipe controlPipe) {
         if (mSettings.reconnectDelayMillis < 0 || mEngine.isClosed() || isClosed()) {
             reason |= R_CLOSED;
         }
 
         if ((reason & R_CLOSED) != 0) {
-            super.close(reason, null); // pass null to force close
+            boolean justClosed = super.close(reason, null); // pass null to force close
             mEngine.removeSession(this);
-            return;
+            return justClosed;
         }
 
         reason |= R_DISCONNECTED;
-        super.close(reason, controlPipe);
+        boolean justClosed = super.close(reason, controlPipe);
+
+        if (!justClosed) {
+            return false;
+        }
 
         mEngine.reconnect(mSettings, mRootType, mRootName, remoteAddress(), this::reconnectAttempt);
 
         // Must compare to the expected state first, in case the reconnect was quick and the
         // state has already changed.
         casStateAndNotify(State.DISCONNECTED, State.RECONNECTING);
+
+        return true;
     }
 
     @SuppressWarnings("unchecked")

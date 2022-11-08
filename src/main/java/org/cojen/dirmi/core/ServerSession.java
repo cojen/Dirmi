@@ -73,8 +73,8 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void close(int reason, CorePipe controlPipe) {
-        super.close(reason, null); // pass null to force close
+    boolean close(int reason, CorePipe controlPipe) {
+        boolean justClosed = super.close(reason, null); // pass null to force close
 
         mEngine.removeSession(this);
 
@@ -95,6 +95,8 @@ final class ServerSession<R> extends CoreSession<R> {
             waiter.unpark();
             waiter = waiter.mNext;
         }
+
+        return justClosed;
     }
 
     @Override
