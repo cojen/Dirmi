@@ -252,6 +252,11 @@ public final class Engine implements Environment {
                     throw new RemoteException("Unable to find existing session");
                 }
 
+                pipe.writeLong(CoreUtils.PROTOCOL_V2);
+                pipe.writeLong(clientSessionId);
+                pipe.writeLong(serverSessionId);
+                pipe.flush();
+
                 session.accepted(pipe);
                 return session;
             }

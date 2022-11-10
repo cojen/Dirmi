@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.cojen.dirmi.Pipe;
+import org.cojen.dirmi.RemoteException;
 
 /**
  * 
@@ -273,19 +274,55 @@ final class ClientSession<R> extends CoreSession<R> {
         pipe.initTypeCodeMap(mTypeCodeMap);
 
         long serverSessionId = (long) cServerSessionIdHandle.getAcquire(this);
+        long cid = 0;
 
         if (serverSessionId != 0) {
             // Established a new connection for an existing session.
+
             try {
+                int timeoutMillis = mSettings.pingTimeoutMillis;
+                CloseTimeout timeoutTask;
+                if (timeoutMillis < 0) {
+                    timeoutTask = null;
+                } else {
+                    timeoutTask = new CloseTimeout(pipe);
+                    mEngine.scheduleMillis(timeoutTask, timeoutMillis);
+                }
+
                 writeHeader(pipe, serverSessionId);
                 pipe.flush();
+
+                long version = pipe.readLong();
+                if (version != CoreUtils.PROTOCOL_V2) {
+                    throw new RemoteException("Unsupported protocol");
+                }
+
+                cid = pipe.readLong();
+
+                if (cid == 0) {
+                    throw new RemoteException("Unsupported protocol");
+                }
+
+                long sid = pipe.readLong();
+
+                if (sid != serverSessionId) {
+                    if (sid != 0) {
+                        throw new RemoteException("Unsupported protocol");
+                    }
+                    // Connection was rejected.
+                    Object message = pipe.readObject();
+                    throw new RemoteException(String.valueOf(message));
+
+                }
+
+                CloseTimeout.cancelOrFail(timeoutTask);
             } catch (IOException e) {
                 CoreUtils.closeQuietly(pipe);
                 throw e;
             }
         }
 
-        registerNewAvailableConnection(pipe);
+        registerNewAvailableConnection(pipe, cid);
     }
 
     @Override

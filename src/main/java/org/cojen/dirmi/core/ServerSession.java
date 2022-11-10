@@ -127,8 +127,8 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    void registerNewAvailableConnection(CorePipe pipe) throws RemoteException {
-        super.registerNewAvailableConnection(pipe);
+    void registerNewAvailableConnection(CorePipe pipe, long sessionId) throws RemoteException {
+        super.registerNewAvailableConnection(pipe, sessionId);
         notifyConnectWaiter();
     }
 

@@ -173,11 +173,18 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * Track a new connection as being available from the tryObtainConnection method.
      * If an exception is thrown, the pipe is closed as a side effect.
+     *
+     * @param sessionId if non-zero, must match the current local session id
      */
-    void registerNewAvailableConnection(CorePipe pipe) throws RemoteException {
+    void registerNewAvailableConnection(CorePipe pipe, long sessionId) throws RemoteException {
         conLockAcquire();
         try {
             checkClosed();
+
+            if (sessionId != 0 && sessionId != id) {
+                throw new RemoteException("Connection belongs to an old session");
+            }
+
             pipe.mSession = this;
             pipe.mClock = mConClock;
 
@@ -527,6 +534,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 mConFirst = null;
                 mConAvail = null;
                 mConLast = null;
+                markPipesClosed(first);
             } finally {
                 conLockRelease();
             }
@@ -579,6 +587,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         return justClosed;
     }
 
+    // Caller must hold mConLock.
+    private static void markPipesClosed(CorePipe pipe) {
+        for (; pipe != null; pipe = pipe.mConNext) {
+            pipe.mMode = CorePipe.M_CLOSED;
+        }
+    }
+
     private static void closePipes(CorePipe pipe) {
         while (pipe != null) {
             CorePipe next = pipe.mConNext;
@@ -629,6 +644,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mConFirst = from.mConFirst;
             mConAvail = from.mConAvail;
             mConLast = from.mConLast;
+            markPipesClosed(first);
         } finally {
             conLockRelease();
         }
@@ -1375,12 +1391,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             } catch (Throwable e) {
                 if (e instanceof UncaughtException) {
                     uncaughtException(e.getCause());
-                } else if (e instanceof NoSuchObjectException ||
-                           e instanceof ObjectStreamException ||
-                           e instanceof ClassNotFoundException ||
-                           !(e instanceof IOException))
-                {
-                    uncaughtException(e);
+                } else if (!isClosedOrDisconnected()) {
+                    if (e instanceof NoSuchObjectException ||
+                        e instanceof ObjectStreamException ||
+                        e instanceof ClassNotFoundException ||
+                        !(e instanceof IOException))
+                    {
+                        uncaughtException(e);
+                    }
                 }
                 CoreUtils.closeQuietly(mPipe);
             } finally {
