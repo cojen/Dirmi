@@ -279,13 +279,11 @@ final class ClientSession<R> extends CoreSession<R> {
         if (serverSessionId != 0) {
             // Established a new connection for an existing session.
 
+            int timeoutMillis = mSettings.pingTimeoutMillis;
+            CloseTimeout timeoutTask = timeoutMillis < 0 ? null : new CloseTimeout(pipe);
+
             try {
-                int timeoutMillis = mSettings.pingTimeoutMillis;
-                CloseTimeout timeoutTask;
-                if (timeoutMillis < 0) {
-                    timeoutTask = null;
-                } else {
-                    timeoutTask = new CloseTimeout(pipe);
+                if (timeoutTask != null) {
                     mEngine.scheduleMillis(timeoutTask, timeoutMillis);
                 }
 
@@ -316,7 +314,10 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
 
                 CloseTimeout.cancelOrFail(timeoutTask);
-            } catch (IOException e) {
+            } catch (Throwable e) {
+                if (timeoutTask != null) {
+                    timeoutTask.cancel();
+                }
                 CoreUtils.closeQuietly(pipe);
                 throw e;
             }
