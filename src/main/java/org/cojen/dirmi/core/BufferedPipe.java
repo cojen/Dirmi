@@ -405,6 +405,29 @@ class BufferedPipe implements Pipe {
                 chars[cpos++] = (char) (((c & 0x0f) << 12) | ((c2 & 0x3f) << 6) | (c3 & 0x3f));
                 break;
             }
+            case 15: {
+                bpos += 4;
+                if (bpos > endpos) {
+                    throw inputException(new UTFDataFormatException());
+                }
+                int c2 = bytes[bpos - 3];
+                int c3 = bytes[bpos - 2];
+                int c4 = bytes[bpos - 1];
+                if ((c2 & 0xc0) != 0x80 || (c3 & 0xc0) != 0x80 || (c4 & 0xc0) != 0x80) {
+                    throw inputException(new UTFDataFormatException());
+                }
+                int cp = ((c & 0x07) << 18) | ((c2 & 0x3f) << 12)
+                    | ((c3 & 0x3f) << 6) | (c4 & 0x3f);
+                if (cp >= 0x10000) {
+                    // Split into surrogate pair.
+                    cp -= 0x10000;
+                    chars[cpos++] = (char) (0xd800 | ((cp >> 10) & 0x3ff));
+                    chars[cpos++] = (char) (0xdc00 | (cp & 0x3ff));
+                } else {
+                    chars[cpos++] = (char) cp;
+                }
+                break;
+            }
             default:
                 throw inputException(new UTFDataFormatException());
             }
@@ -617,6 +640,31 @@ class BufferedPipe implements Pipe {
                         }
                         chars[cpos++] = (char)
                             (((c & 0x0f) << 12) | ((c2 & 0x3f) << 6) | (c3 & 0x3f));
+                        break;
+                    }
+                    case 15: {
+                        if (pos + 2 >= end) {
+                            // Need four bytes for this character. Backup and read some more.
+                            --pos;
+                            length += 3;
+                            break chunk;
+                        }
+                        int c2 = buf[pos++];
+                        int c3 = buf[pos++];
+                        int c4 = buf[pos++];
+                        if ((c2 & 0xc0) != 0x80 || (c3 & 0xc0) != 0x80 || (c4 & 0xc0) != 0x80) {
+                            throw inputException(new UTFDataFormatException());
+                        }
+                        int cp = ((c & 0x07) << 18) | ((c2 & 0x3f) << 12)
+                            | ((c3 & 0x3f) << 6) | (c4 & 0x3f);
+                        if (cp >= 0x10000) {
+                            // Split into surrogate pair.
+                            cp -= 0x10000;
+                            chars[cpos++] = (char) (0xd800 | ((cp >> 10) & 0x3ff));
+                            chars[cpos++] = (char) (0xdc00 | (cp & 0x3ff));
+                        } else {
+                            chars[cpos++] = (char) cp;
+                        }
                         break;
                     }
                     default:
@@ -1121,17 +1169,26 @@ class BufferedPipe implements Pipe {
     @Override
     public final void writeUTF(String v) throws IOException {
         int strLen = v.length();
-
-        if (strLen > 65535) {
-            throw new UTFDataFormatException();
-        }
-
         int utfLen = strLen;
 
         for (int i=0; i<strLen; i++) {
             int c = v.charAt(i);
-            if (c >= 0x80 || c == 0) {
-                utfLen += (c >= 0x800) ? 2 : 1;
+            if (c >= 0x80) {
+                if (c <= 0x7ff) {
+                    utfLen++;
+                } else {
+                    if (c >= 0xd800 && c <= 0xdbff) {
+                        // Found a high surrogate. Verify that surrogate pair is
+                        // well-formed. Low surrogate must follow high surrogate.
+                        if (i + 1 < strLen) {
+                            int c2 = v.charAt(i + 1);
+                            if (c2 >= 0xdc00 && c2 <= 0xdfff) {
+                                i++;
+                            }
+                        }
+                    }
+                    utfLen += 2;
+                }
             }
         }
 
@@ -1150,7 +1207,7 @@ class BufferedPipe implements Pipe {
             buf = mOutBuffer;
         }
 
-        int from = 0;
+        int pos = 0;
 
         while (utfLen > avail) {
             // Not enough space in the buffer, so write it out in chunks.
@@ -1161,8 +1218,8 @@ class BufferedPipe implements Pipe {
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
-                // Encode using a third of the available space, which is guaranteed to fit.
-                encodeUTF(v, from, from += (avail / 3));
+                // Encode using a quarter of the available space, which is guaranteed to fit.
+                pos = encodeUTF(v, pos, pos + (avail >> 2));
                 int newEnd = mOutEnd;
                 utfLen -= newEnd - end;
                 end = newEnd;
@@ -1170,39 +1227,61 @@ class BufferedPipe implements Pipe {
             }
         }
 
-        encodeUTF(v, from, strLen);
+        encodeUTF(v, pos, strLen);
     }
 
     /**
      * Note: Caller must ensure that mOutBuffer has enough space.
+     *
+     * @return updated from position
      */
-    private void encodeUTF(String v, int from, int to) {
+    private int encodeUTF(String v, int from, int to) {
         byte[] buf = mOutBuffer;
         int end = mOutEnd;
 
         for (; from < to; from++) {
             int c = v.charAt(from);
-            if (c >= 0x80 || c == 0) {
+            if (c >= 0x80) {
                 break;
             }
             buf[end++] = (byte) c;
         }
 
-        for (; from < to; from++) {
+        loop: for (; from < to; from++) {
             int c = v.charAt(from);
-            if (c < 0x80 && c != 0) {
+            if (c < 0x80) {
                 buf[end++] = (byte) c;
             } else if (c < 0x800) {
                 buf[end++] = (byte) (0xc0 | ((c >> 6) & 0x1f));
                 buf[end++] = (byte) (0x80 | (c & 0x3f));
             } else {
-                buf[end++] = (byte) (0xe0 | ((c >> 12) & 0x0f));
+                pair: {
+                    if (c >= 0xd800 && c <= 0xdbff) {
+                        // Found a high surrogate. Verify that surrogate pair is
+                        // well-formed. Low surrogate must follow high surrogate.
+                        if (from + 1 >= to) {
+                            // Don't span the chunk range.
+                            break loop;
+                        }
+                        int c2 = v.charAt(from + 1);
+                        if (c2 >= 0xdc00 && c2 <= 0xdfff) {
+                            c = 0x10000 + (((c & 0x3ff) << 10) | (c2 & 0x3ff));
+                            from++;
+                            buf[end++] = (byte) (0xf0 | (c >> 18));
+                            buf[end++] = (byte) (0x80 | ((c >> 12) & 0x3f));
+                            break pair;
+                        }
+                    }
+                    buf[end++] = (byte) (0xe0 | (c >> 12));
+                }
                 buf[end++] = (byte) (0x80 | ((c >> 6) & 0x3f));
                 buf[end++] = (byte) (0x80 | (c & 0x3f));
             }
         }
 
         mOutEnd = end;
+
+        return from;
     }
 
     @Override
@@ -1361,7 +1440,7 @@ class BufferedPipe implements Pipe {
         int strLen = v.length();
 
         if (strLen < 256) {
-            requireOutput(2 + strLen * 3);
+            requireOutput(2 + strLen * 4);
             byte[] buf = mOutBuffer;
             int end = mOutEnd;
             buf[end++] = T_STRING;
@@ -1374,7 +1453,7 @@ class BufferedPipe implements Pipe {
         byte[] buf = mOutBuffer;        
         int end = mOutEnd;
         long avail = buf.length - end;
-        long maxLen = 5L + strLen * 3L;
+        long maxLen = 5L + strLen * 4L;
 
         if (maxLen > avail && buf.length < MAX_BUFFER_SIZE) {
             expand(end, (int) Math.min(maxLen, MAX_BUFFER_SIZE));
@@ -1390,7 +1469,7 @@ class BufferedPipe implements Pipe {
         avail = buf.length - end;
         maxLen -= 5; // header is now finished
 
-        int from = 0;
+        int pos = 0;
 
         while (maxLen > avail) {
             // Not enough space in the buffer, so write it out in chunks.
@@ -1401,16 +1480,17 @@ class BufferedPipe implements Pipe {
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
-                // Encode using a third of the available space, which is guaranteed to fit.
-                int chunk = (int) (avail / 3);
-                encodeUTF(v, from, from += chunk);
-                maxLen -= chunk * 3;
+                // Encode using a quarter of the available space, which is guaranteed to fit.
+                int chunk = (int) (avail >> 2);
+                int start = pos;
+                pos = encodeUTF(v, pos, pos + chunk);
+                maxLen -= (pos - start) * 4;
                 end = mOutEnd;
                 avail = buf.length - end;
             }
         }
 
-        encodeUTF(v, from, strLen);
+        encodeUTF(v, pos, strLen);
     }
 
     /**

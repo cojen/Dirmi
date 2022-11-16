@@ -87,8 +87,9 @@ public class PipeTest {
         }
 
         try {
-            // Null characters are encoded using the double byte pattern.
-            pipe.writeUTF(new String(new char[32768]));
+            var chars = new char[65535];
+            chars[123] = '\u0800';
+            pipe.writeUTF(new String(chars));
             fail();
         } catch (UTFDataFormatException e) {
         }
