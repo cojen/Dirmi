@@ -93,7 +93,9 @@ public class RestorableTest {
 
             @Override
             public void accept(Session<?> session, Throwable ex) {
-                states.add(session.state());
+                if (ex == null) {
+                    states.add(session.state());
+                }
             }
         };
 
