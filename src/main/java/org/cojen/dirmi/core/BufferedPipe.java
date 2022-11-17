@@ -1218,8 +1218,8 @@ class BufferedPipe implements Pipe {
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
-                // Encode using a quarter of the available space, which is guaranteed to fit.
-                pos = encodeUTF(v, pos, pos + (avail >> 2));
+                // Encode using a third of the available space, which is guaranteed to fit.
+                pos = encodeUTF(v, pos, pos + (avail / 3));
                 int newEnd = mOutEnd;
                 utfLen -= newEnd - end;
                 end = newEnd;
@@ -1440,7 +1440,7 @@ class BufferedPipe implements Pipe {
         int strLen = v.length();
 
         if (strLen < 256) {
-            requireOutput(2 + strLen * 4);
+            requireOutput(2 + strLen * 3);
             byte[] buf = mOutBuffer;
             int end = mOutEnd;
             buf[end++] = T_STRING;
@@ -1453,7 +1453,7 @@ class BufferedPipe implements Pipe {
         byte[] buf = mOutBuffer;        
         int end = mOutEnd;
         long avail = buf.length - end;
-        long maxLen = 5L + strLen * 4L;
+        long maxLen = 5L + strLen * 3L;
 
         if (maxLen > avail && buf.length < MAX_BUFFER_SIZE) {
             expand(end, (int) Math.min(maxLen, MAX_BUFFER_SIZE));
@@ -1480,11 +1480,11 @@ class BufferedPipe implements Pipe {
                 mOutEnd = end = 0;
                 avail = buf.length;
             } else {
-                // Encode using a quarter of the available space, which is guaranteed to fit.
-                int chunk = (int) (avail >> 2);
+                // Encode using a third of the available space, which is guaranteed to fit.
+                int chunk = (int) (avail / 3);
                 int start = pos;
                 pos = encodeUTF(v, pos, pos + chunk);
-                maxLen -= (pos - start) * 4;
+                maxLen -= (pos - start) * 3;
                 end = mOutEnd;
                 avail = buf.length - end;
             }
