@@ -71,6 +71,6 @@ public interface Serializer {
      * @param descriptor an object which was provided by the {@link #descriptor} method
      */
     default Serializer adapt(Object descriptor) {
-        return this;
+        return descriptor == null ? this : null;
     }
 }
