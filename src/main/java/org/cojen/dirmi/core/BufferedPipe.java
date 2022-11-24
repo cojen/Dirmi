@@ -1326,9 +1326,7 @@ class BufferedPipe implements Pipe {
      * @param v non-null
      */
     final void writeBooleanObj(Boolean v) throws IOException {
-        if (!tryWriteReference(v)) {
-            write(v ? T_TRUE : T_FALSE);
-        }
+        write(v ? T_TRUE : T_FALSE);
     }
 
     /**
