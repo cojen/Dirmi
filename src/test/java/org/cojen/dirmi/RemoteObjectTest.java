@@ -75,7 +75,7 @@ public class RemoteObjectTest {
         try {
             r2.c2();
             fail();
-        } catch (ClosedException e) {
+        } catch (DisposedException e) {
             assertTrue(e.getMessage().contains("disposed"));
         }
 
@@ -143,7 +143,7 @@ public class RemoteObjectTest {
         try {
             r2.c2();
             fail();
-        } catch (ClosedException e) {
+        } catch (DisposedException e) {
             assertTrue(e.getMessage().contains("disposed"));
         }
     }
@@ -244,7 +244,7 @@ public class RemoteObjectTest {
         try {
             e.c2();
             fail();
-        } catch (ClosedException ex) {
+        } catch (DisposedException ex) {
             assertTrue(ex.getMessage().contains("disposed"));
         }
     }
@@ -322,7 +322,7 @@ public class RemoteObjectTest {
         try {
             self.selfString();
             fail();
-        } catch (ClosedException ex) {
+        } catch (DisposedException ex) {
             assertTrue(ex.getMessage().contains("disposed"));
         }
 
@@ -383,7 +383,7 @@ public class RemoteObjectTest {
         try {
             root.c4();
             fail();
-        } catch (ClosedException e) {
+        } catch (DisposedException e) {
             assertTrue(e.getMessage().contains("disposed"));
         }
 
@@ -419,7 +419,7 @@ public class RemoteObjectTest {
         try {
             root.c4();
             fail();
-        } catch (ClosedException e) {
+        } catch (DisposedException e) {
             assertTrue(e.getMessage().contains("disposed by remote endpoint"));
         }
     }
@@ -476,7 +476,7 @@ public class RemoteObjectTest {
             try {
                 callback.c3("world");
                 fail();
-            } catch (ClosedException e) {
+            } catch (DisposedException e) {
                 assertTrue(e.getMessage().contains("disposed"));
             }
         }

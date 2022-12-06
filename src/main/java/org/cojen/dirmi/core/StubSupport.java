@@ -30,6 +30,12 @@ import org.cojen.dirmi.Session;
 public interface StubSupport {
     Session session();
 
+    default void appendInfo(StringBuilder b) {
+        Session session = session();
+        b.append(", localAddress=").append(session.localAddress())
+            .append(", remoteAddress=").append(session.remoteAddress());
+    }
+
     /**
      * Called by unbatched methods to temporarily release a thread-local pipe.
      *

@@ -167,10 +167,12 @@ public class RestorableTest {
 
     @Test
     public void dispose() throws Exception {
-        // A disposed object cannot be restored.
+        // A disposed object cannot be restored, and neither can any objects that depend on it
+        // for restoration.
 
         R1 root = mSession.root();
         R2 r2 = root.a(123);
+        R1 a = r2.a();
         Session.dispose(r2);
 
         mAcceptor.suspend();
@@ -198,7 +200,7 @@ public class RestorableTest {
             } catch (DisconnectedException e) {
                 disconnected++;
                 anyFailures = true;
-            } catch (ClosedException e) {
+            } catch (DisposedException e) {
                 assertTrue(e.getMessage().contains("disposed"));
                 disposed = true;
             } catch (RemoteException e) {
@@ -219,10 +221,54 @@ public class RestorableTest {
             }
         }
 
-        mSession.close();
-
         assertTrue(disposed);
+
+        for (int i=1; i<=2; i++) {
+            try {
+                a.echo("hello");
+                fail();
+            } catch (DisposedException e) {
+                assertTrue(e.getMessage().contains("origin"));
+            }
+        }
+
+        assertFalse(Session.dispose(a));
+
+        mSession.close();
     }
+
+    @Test
+    public void disposeRoot() throws Exception {
+        // A disposed root object cannot be restored, and so the session won't reconnect.
+
+        R1 root = mSession.root();
+        Session.dispose(root);
+
+        assertEquals(Session.State.CONNECTED, mSession.state());
+
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        for (int i=0; i<10; i++) {
+            var state = mSession.state();
+            if (state == Session.State.CLOSED) {
+                break;
+            }
+            assertTrue(state == Session.State.CONNECTED);
+            Thread.sleep(1000);
+        }
+
+        assertEquals(Session.State.CLOSED, mSession.state());
+
+        try {
+            root.echo("hello");
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disposed"));
+        }
+
+        mSession.close();
+    }
+
 
     @Test
     public void reconnectNotification() throws Exception {

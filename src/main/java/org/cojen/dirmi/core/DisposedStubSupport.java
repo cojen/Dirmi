@@ -16,7 +16,7 @@
 
 package org.cojen.dirmi.core;
 
-import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.DisposedException;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 
@@ -26,7 +26,8 @@ import org.cojen.dirmi.Session;
  * @author Brian S O'Neill
  */
 final class DisposedStubSupport implements StubSupport {
-    static final DisposedStubSupport EXPLICIT = new DisposedStubSupport("Object is disposed");
+    static final String EXPLICIT_MESSAGE = "Object is disposed";
+    static final DisposedStubSupport EXPLICIT = new DisposedStubSupport(EXPLICIT_MESSAGE);
     static final DisposedStubSupport DISCONNECTED = new DisposedStubSupport
         ("Object is disposed due to session disconnect");
 
@@ -42,6 +43,11 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
+    public void appendInfo(StringBuilder b) {
+        b.append(", disposed=").append(true);
+    }
+
+    @Override
     public Pipe unbatch() {
         return null;
     }
@@ -52,7 +58,7 @@ final class DisposedStubSupport implements StubSupport {
 
     @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        throw CoreUtils.remoteException(remoteFailureException, new ClosedException(mMessage));
+        throw CoreUtils.remoteException(remoteFailureException, new DisposedException(mMessage));
     }
 
     @Override

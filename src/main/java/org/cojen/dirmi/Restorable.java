@@ -24,6 +24,10 @@ import java.lang.annotation.*;
  * the returned remote object so that they can be used again. To ensure that the restoration
  * works idempotently, the contents of any object parameters must not be modified.
  *
+ * <p>Objects which are {@link Disposer disposed} cannot be restored, and neither can objects
+ * which depend on non-restorable objects. If the {@link Session#root root} object is disposed,
+ * then the session will never attempt to reconnect, and thus no objects can be restored.
+ *
  * @author Brian S O'Neill
  */
 @Documented

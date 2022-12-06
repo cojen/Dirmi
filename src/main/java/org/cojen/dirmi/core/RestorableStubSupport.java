@@ -23,6 +23,7 @@ import java.lang.invoke.MethodHandle;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
+import org.cojen.dirmi.DisposedException;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 
@@ -44,6 +45,11 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     @Override
     public Session session() {
         return mSupport.session();
+    }
+
+    @Override
+    public void appendInfo(StringBuilder b) {
+        b.append(", unrestored=").append(true);
     }
 
     @Override
@@ -98,6 +104,24 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable e) {
+                if (e instanceof DisposedException) {
+                    String message = e.getMessage();
+                    String prefix = "Object and origin are disposed";
+                    if (message == null || !message.startsWith(prefix)) {
+                        if (message == null || message == DisposedStubSupport.EXPLICIT_MESSAGE) {
+                            message = prefix;
+                        } else {
+                            message = prefix + ": " + message;
+                        }
+                    }
+
+                    var de = new DisposedException(message);
+                    de.setStackTrace(e.getStackTrace());
+                    e = de;
+
+                    mSupport.session().stubDispose(stub.id, message);
+                }
+
                 throw CoreUtils.remoteException(remoteFailureException, e);
             } finally {
                 latch.countDown();

@@ -87,11 +87,7 @@ public class Stub extends Item implements Remote {
         b.append(name).append('@').append(Integer.toHexString(System.identityHashCode(this)))
             .append("{id=").append(id);
 
-        if (!(support instanceof DisposedStubSupport)) {
-            Session session = support.session();
-            b.append(", localAddress=").append(session.localAddress())
-                .append(", remoteAddress=").append(session.remoteAddress());
-        }
+        support.appendInfo(b);
 
         return b.append('}').toString();
     }

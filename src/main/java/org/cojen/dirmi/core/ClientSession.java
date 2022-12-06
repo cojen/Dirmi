@@ -104,7 +104,9 @@ final class ClientSession<R> extends CoreSession<R> {
 
     @Override
     boolean close(int reason, CorePipe controlPipe) {
-        if (mSettings.reconnectDelayMillis < 0 || mEngine.isClosed() || isClosed()) {
+        if (mSettings.reconnectDelayMillis < 0 || mEngine.isClosed() || isClosed() ||
+            isRootDisposed())
+        {
             reason |= R_CLOSED;
         }
 
@@ -128,6 +130,11 @@ final class ClientSession<R> extends CoreSession<R> {
         casStateAndNotify(State.DISCONNECTED, State.RECONNECTING);
 
         return true;
+    }
+
+    private boolean isRootDisposed() {
+        return mRoot instanceof Stub stub
+            && Stub.cSupportHandle.getAcquire(stub) instanceof DisposedStubSupport;
     }
 
     @SuppressWarnings("unchecked")

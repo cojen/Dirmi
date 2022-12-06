@@ -190,7 +190,8 @@ public interface Environment extends Closeable, Executor {
      * Set the reconnect delay for newly established client sessions (±10%). Client sessions
      * attempt to reconnect when the session is disconnected, and the delay is applied before
      * each attempt. The default reconnect delay is 1 second. Pass a negative delay to disable
-     * reconnect, and instead the session is closed when it's disconnected.
+     * reconnect, and instead the session is closed when it's disconnected. {@link
+     * Session#dispose Disposing} the {@link Session#root root} object also disables reconnect.
      */
     void reconnectDelayMillis(int millis);
 
