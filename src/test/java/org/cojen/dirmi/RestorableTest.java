@@ -166,6 +166,65 @@ public class RestorableTest {
     }
 
     @Test
+    public void dispose() throws Exception {
+        // A disposed object cannot be restored.
+
+        R1 root = mSession.root();
+        R2 r2 = root.a(123);
+        Session.dispose(r2);
+
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        int disconnected = 0;
+        boolean resumed = false;
+        boolean disposed;
+
+        while (true) {
+            boolean anyFailures = false;
+            disposed = false;
+
+            try {
+                root.a(123);
+            } catch (DisconnectedException e) {
+                disconnected++;
+                anyFailures = true;
+            } catch (RemoteException e) {
+                anyFailures = true;
+            }
+
+            try {
+                assertEquals("123:789", r2.b(789));
+            } catch (DisconnectedException e) {
+                disconnected++;
+                anyFailures = true;
+            } catch (ClosedException e) {
+                assertTrue(e.getMessage().contains("disposed"));
+                disposed = true;
+            } catch (RemoteException e) {
+                anyFailures = true;
+            }
+
+            Thread.sleep(1000);
+
+            if (!resumed) {
+                if (disconnected > 0) {
+                    mAcceptor.resume();
+                    resumed = true;
+                }
+            } else {
+                if (!anyFailures) {
+                    break;
+                }
+            }
+        }
+
+        mSession.close();
+
+        assertTrue(disposed);
+    }
+
+    @Test
     public void reconnectNotification() throws Exception {
         var listener = new BiConsumer<Session<?>, Throwable>() {
             volatile Throwable exception;
