@@ -117,7 +117,7 @@ class BufferedPipe implements Pipe {
         initTypeCodeMap(TypeCodeMap.STANDARD);
     }
 
-    void initTypeCodeMap(TypeCodeMap tcm) {
+    final void initTypeCodeMap(TypeCodeMap tcm) {
         mTypeCodeMap = tcm;
         VarHandle.storeStoreFence();
     }
@@ -304,7 +304,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public String readLine() throws IOException {
+    public final String readLine() throws IOException {
         // This method is unlikely to be called, so don't bother optimizing it.
 
         var chars = new char[32];
@@ -550,7 +550,7 @@ class BufferedPipe implements Pipe {
     /**
      * @return -1 if references aren't enabled
      */
-    int reserveReference() {
+    final int reserveReference() {
         ReferenceLookup refLookup = mInRefLookup;
         return refLookup == null ? - 1: refLookup.reserve();
     }
@@ -558,7 +558,7 @@ class BufferedPipe implements Pipe {
     /**
      * Does nothing if identifier is -1.
      */
-    void stashReference(int identifier, Object obj) {
+    final void stashReference(int identifier, Object obj) {
         if (identifier != -1) {
             mInRefLookup.stash(identifier, obj);
         }
@@ -1804,17 +1804,17 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public SocketAddress localAddress() {
+    public final SocketAddress localAddress() {
         return mLocalAddress;
     }
 
     @Override
-    public SocketAddress remoteAddress() {
+    public final SocketAddress remoteAddress() {
         return mRemoteAddress;
     }
 
     @Override
-    public void enableReferences() {
+    public final void enableReferences() {
         ReferenceMap refMap = mOutRefMap;
         if (refMap == null) {
             mOutRefMap = new ReferenceMap();
@@ -1824,7 +1824,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public boolean disableReferences() {
+    public final boolean disableReferences() {
         ReferenceMap refMap = mOutRefMap;
         if (refMap == null) {
             throw new IllegalStateException("Not enabled");
@@ -1859,7 +1859,7 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    void requireOutput(int required) throws IOException {
+    final void requireOutput(int required) throws IOException {
         int avail = mOutBuffer.length - mOutEnd;
         if (avail < required) {
             expandOrFlush(required);
@@ -1898,7 +1898,7 @@ class BufferedPipe implements Pipe {
         }
     }
 
-    void tryRecycle() {
+    final void tryRecycle() {
         // Not a perfect detection technique, but it should help identify bugs.
         if (available() != 0) {
             throw new IllegalStateException("Pipe has pending input");
@@ -1941,7 +1941,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         return "Pipe@" + Integer.toHexString(System.identityHashCode(this)) +
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
