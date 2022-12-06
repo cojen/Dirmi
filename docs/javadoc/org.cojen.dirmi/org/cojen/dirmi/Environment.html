@@ -440,7 +440,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="block">Set the reconnect delay for newly established client sessions (±10%). Client sessions
  attempt to reconnect when the session is disconnected, and the delay is applied before
  each attempt. The default reconnect delay is 1 second. Pass a negative delay to disable
- reconnect, and instead the session is closed when it's disconnected.</div>
+ reconnect, and instead the session is closed when it's disconnected. <a href="Session.html#dispose(java.lang.Object)"><code>Disposing</code></a> the <a href="Session.html#root()"><code>root</code></a> object also disables reconnect.</div>
 </section>
 </li>
 <li>

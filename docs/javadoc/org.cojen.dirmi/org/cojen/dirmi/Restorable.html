@@ -92,7 +92,11 @@ loadScripts(document, 'script');</script>
 <div class="block">Designates a remote method which returns a remote object which should be restored when a
  session reconnects. All of the parameters passed to the method are referenced internally by
  the returned remote object so that they can be used again. To ensure that the restoration
- works idempotently, the contents of any object parameters must not be modified.</div>
+ works idempotently, the contents of any object parameters must not be modified.
+
+ <p>Objects which are <a href="Disposer.html" title="annotation interface in org.cojen.dirmi"><code>disposed</code></a> cannot be restored, and neither can objects
+ which depend on non-restorable objects. If the <a href="Session.html#root()"><code>root</code></a> object is disposed,
+ then the session will never attempt to reconnect, and thus no objects can be restored.</div>
 </section>
 <section class="details" id="annotation-interface-element-detail"></section>
 <!-- ========= END OF CLASS DATA ========= -->
