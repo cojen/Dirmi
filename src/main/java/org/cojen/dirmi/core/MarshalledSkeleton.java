@@ -19,7 +19,7 @@ package org.cojen.dirmi.core;
 import java.io.Serializable;
 
 /**
- * used by CoreObjectOutputStream and CoreObjectInputStream.
+ * Used by CoreObjectOutputStream and CoreObjectInputStream.
  *
  * @author Brian S O'Neill
  */

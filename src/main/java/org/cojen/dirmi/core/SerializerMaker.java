@@ -422,14 +422,13 @@ public final class SerializerMaker {
             int c;
             while ((c = descriptor.charAt(ix2)) == '[') ix2++;
 
-            String desc;
             if (c == 'L') {
                 ix2 = descriptor.indexOf(';', ix2 + 1) + 1;
-                desc = descriptor.substring(ix, ix2);
             } else {
                 ix2++;
-                desc = descriptor.substring(ix, ix2);
             }
+
+            String desc = descriptor.substring(ix, ix2);
 
             map.put(name, desc);
 

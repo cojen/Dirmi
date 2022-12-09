@@ -395,7 +395,7 @@ public final class CoreUtils {
      *
      * @param ptypes consists of Class instances, Variables, or String descriptors
      */
-    static boolean anyObjectTypes(List<? extends Object> ptypes) {
+    static boolean anyObjectTypes(List<?> ptypes) {
         for (Object ptype : ptypes) {
             if (isObjectType(ptype)) {
                 return true;

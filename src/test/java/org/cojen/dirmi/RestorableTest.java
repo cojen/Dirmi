@@ -258,6 +258,8 @@ public class RestorableTest {
             Thread.sleep(1000);
         }
 
+        // Note: This has been observed to fail once because state is still CONNECTED. Unable
+        // to reproduce the failure.
         assertEquals(Session.State.CLOSED, mSession.state());
 
         try {

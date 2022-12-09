@@ -21,7 +21,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 import org.cojen.dirmi.Remote;
-import org.cojen.dirmi.Session;
 
 /**
  * Base class for remote stubs.

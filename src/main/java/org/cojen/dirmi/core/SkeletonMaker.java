@@ -330,7 +330,7 @@ final class SkeletonMaker<R> {
                 mm.return_(contextVar);
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                checkException(rm, exVar);
+                checkException(exVar);
 
                 contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
 
@@ -359,7 +359,7 @@ final class SkeletonMaker<R> {
                 mm.return_(mm.field("STOP_READING"));
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                checkException(rm, exVar);
+                checkException(exVar);
 
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
@@ -415,7 +415,7 @@ final class SkeletonMaker<R> {
                 }
 
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
-                checkException(rm, exVar);
+                checkException(exVar);
 
                 if (rm.isNoReply()) {
                     var supportVar = mm.param(2);
@@ -442,7 +442,7 @@ final class SkeletonMaker<R> {
         return caseMap;
     }
 
-    private void checkException(RemoteMethod rm, Variable exVar) {
+    private void checkException(Variable exVar) {
         exVar.set(exVar.methodMaker().invoke("checkException", exVar));
     }
 
