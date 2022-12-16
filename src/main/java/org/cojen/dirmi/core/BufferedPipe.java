@@ -162,6 +162,9 @@ class BufferedPipe implements Pipe {
                 if (len >= buf.length) {
                     return doRead(b, off, len);
                 }
+                if (len <= 0) {
+                    return 0;
+                }
                 avail = doRead(buf, 0, buf.length);
             } catch (IOException e) {
                 throw inputException(e);
