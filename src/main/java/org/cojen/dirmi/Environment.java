@@ -35,6 +35,7 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.cojen.dirmi.core.ClassLoaderResolver;
 import org.cojen.dirmi.core.CoreUtils;
@@ -82,7 +83,19 @@ public interface Environment extends Closeable, Executor {
      * @return an object which can be closed to stop accepting
      * @throws IllegalStateException if already accepting connections from the socket
      */
-    Closeable acceptAll(ServerSocket ss) throws IOException;
+    default Closeable acceptAll(ServerSocket ss) throws IOException {
+        return acceptAll(ss, null);
+    }
+
+    /**
+     * Accept all server-side connections from the given {@code ServerSocket}. As long as the
+     * acceptor is still running, the JVM won't exit.
+     *
+     * @param listener is called for each accepted socket; return false if socket is rejected
+     * @return an object which can be closed to stop accepting
+     * @throws IllegalStateException if already accepting connections from the socket
+     */
+    Closeable acceptAll(ServerSocket ss, Predicate<Socket> listener) throws IOException;
 
     /**
      * Accept all server-side connections from the given {@code ServerSocketChannel}. As long
@@ -91,7 +104,20 @@ public interface Environment extends Closeable, Executor {
      * @return an object which can be closed to stop accepting
      * @throws IllegalStateException if already accepting connections from the socket channel
      */
-    Closeable acceptAll(ServerSocketChannel ss) throws IOException;
+    default Closeable acceptAll(ServerSocketChannel ss) throws IOException {
+        return acceptAll(ss, null);
+    }
+
+    /**
+     * Accept all server-side connections from the given {@code ServerSocketChannel}. As long
+     * as the acceptor is still running, the JVM won't exit.
+     *
+     * @param listener is called for each accepted socket; return false if socket is rejected
+     * @return an object which can be closed to stop accepting
+     * @throws IllegalStateException if already accepting connections from the socket channel
+     */
+    Closeable acceptAll(ServerSocketChannel ss, Predicate<SocketChannel> listener)
+        throws IOException;
 
     /**
      * Call when a server-side connection has been explicitly accepted. Any exception thrown

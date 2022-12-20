@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 
@@ -28,11 +29,14 @@ import java.security.GeneralSecurityException;
 
 import java.util.Base64;
 
+import java.util.function.Predicate;
+
 import javax.net.ssl.*;
 
 import java.nio.file.Path;
 
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 
 import org.junit.*;
 import static org.junit.Assert.*;
@@ -49,10 +53,37 @@ public class HelloWorldTest {
 
     @Test
     public void inetSocket() throws Exception {
+        inetSocket(false);
+    }
+
+    @Test
+    public void inetSocketListen() throws Exception {
+        inetSocket(true);
+    }
+
+    private void inetSocket(boolean listen) throws Exception {
         var serverEnv = Environment.create();
         serverEnv.export("main", new ControlServer());
         var ss = new ServerSocket(0);
-        serverEnv.acceptAll(ss);
+
+        class Listener implements Predicate<Socket> {
+            volatile boolean called;
+
+            @Override
+            public boolean test(Socket s) {
+                called = true;
+                return true;
+            }
+        }
+
+        Listener listener = null;
+
+        if (!listen) {
+            serverEnv.acceptAll(ss);
+        } else {
+            listener = new Listener();
+            serverEnv.acceptAll(ss, listener);
+        }
 
         var clientEnv = Environment.create();
         var session = clientEnv.connect(Control.class, "main", "localhost", ss.getLocalPort());
@@ -60,6 +91,10 @@ public class HelloWorldTest {
 
         assertEquals("HelloWorld", control.call("Hello"));
         assertEquals("Hello!!! World", control.call("Hello!!! "));
+
+        if (listener != null) {
+            assertTrue(listener.called);
+        }
 
         try {
             control.call(null);
@@ -74,10 +109,37 @@ public class HelloWorldTest {
 
     @Test
     public void inetSocketChannel() throws Exception {
+        inetSocketChannel(false);
+    }
+
+    @Test
+    public void inetSocketChannelListen() throws Exception {
+        inetSocketChannel(true);
+    }
+
+    private void inetSocketChannel(boolean listen) throws Exception {
         var serverEnv = Environment.create();
         serverEnv.export("main", new ControlServer());
         var ss = ServerSocketChannel.open().bind(null);
-        serverEnv.acceptAll(ss);
+
+        class Listener implements Predicate<SocketChannel> {
+            volatile boolean called;
+
+            @Override
+            public boolean test(SocketChannel s) {
+                called = true;
+                return true;
+            }
+        }
+
+        Listener listener = null;
+
+        if (!listen) {
+            serverEnv.acceptAll(ss);
+        } else {
+            listener = new Listener();
+            serverEnv.acceptAll(ss, listener);
+        }
 
         var clientEnv = Environment.create();
         var session = clientEnv.connect(Control.class, "main", ss.getLocalAddress());

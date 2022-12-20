@@ -53,6 +53,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
@@ -152,18 +153,20 @@ public final class Engine implements Environment {
         }
     }
 
-    public Closeable acceptAll(ServerSocket ss) throws IOException {
+    public Closeable acceptAll(ServerSocket ss, Predicate<Socket> listener) throws IOException {
         if (!ss.isBound()) {
             throw new IllegalStateException("Socket isn't bound");
         }
-        return acceptAll(ss, new SocketAcceptor(ss));
+        return acceptAll(ss, new SocketAcceptor(ss, listener));
     }
 
-    public Closeable acceptAll(ServerSocketChannel ss) throws IOException {
+    public Closeable acceptAll(ServerSocketChannel ss, Predicate<SocketChannel> listener)
+        throws IOException
+    {
         if (ss.getLocalAddress() == null) {
             throw new IllegalStateException("Socket isn't bound");
         }
-        return acceptAll(ss, new ChannelAcceptor(ss));
+        return acceptAll(ss, new ChannelAcceptor(ss, listener));
     }
 
     @SuppressWarnings("deprecation")
@@ -906,9 +909,11 @@ public final class Engine implements Environment {
 
     private final class SocketAcceptor extends Acceptor {
         private final ServerSocket mSocket;
+        private final Predicate<Socket> mListener;
 
-        SocketAcceptor(ServerSocket socket) {
+        SocketAcceptor(ServerSocket socket, Predicate<Socket> listener) {
             mSocket = socket;
+            mListener = listener;
         }
 
         @Override
@@ -939,7 +944,11 @@ public final class Engine implements Environment {
         private void acceptedTask(Socket s) throws IOException {
             executeTask(() -> {
                 try {
-                    accepted(s);
+                    if (mListener == null || mListener.test(s)) {
+                        accepted(s);
+                    } else {
+                        CoreUtils.closeQuietly(s);
+                    }
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
                     if (!(e instanceof IOException)) {
@@ -957,10 +966,14 @@ public final class Engine implements Environment {
 
     private final class ChannelAcceptor extends Acceptor {
         private final ServerSocketChannel mChannel;
+        private final Predicate<SocketChannel> mListener;
 
-        ChannelAcceptor(ServerSocketChannel channel) throws IOException {
+        ChannelAcceptor(ServerSocketChannel channel, Predicate<SocketChannel> listener)
+            throws IOException
+        {
             mChannel = channel;
             channel.configureBlocking(true);
+            mListener = listener;
         }
 
         @Override
@@ -991,7 +1004,11 @@ public final class Engine implements Environment {
         private void acceptedTask(SocketChannel s) throws IOException {
             executeTask(() -> {
                 try {
-                    accepted(s);
+                    if (mListener == null || mListener.test(s)) {
+                        accepted(s);
+                    } else {
+                        CoreUtils.closeQuietly(s);
+                    }
                 } catch (Throwable e) {
                     CoreUtils.closeQuietly(s);
                     if (!(e instanceof IOException)) {
