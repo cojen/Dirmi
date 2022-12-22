@@ -247,9 +247,10 @@ final class StubMaker {
 
             mm.throws_(remoteFailureClass);
 
-            if (clientMethod == null) {
-                // Add annotations for methods which only exist on the server-side. This allows
-                // a RemoteInfo instance to be created later without the server interface.
+            {
+                // Repeat all the necessary annotations inherited by the remote interface. This
+                // allows RemoteInfo.examineStub to work properly without consulting the remote
+                // interface, which might not have all the server-side methods anyhow.
 
                 if (serverMethod.isDisposer()) {
                     mm.addAnnotation(Disposer.class, true);
