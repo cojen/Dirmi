@@ -133,6 +133,12 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     Object readObject() throws IOException;
 
     /**
+     * Read and return an object, and if it's a {@code Throwable} instance, a local stack
+     * trace is stitched in.
+     */
+    Object readThrowable() throws IOException;
+
+    /**
      * Write an object (or null) to the pipe.
      */
     @Override

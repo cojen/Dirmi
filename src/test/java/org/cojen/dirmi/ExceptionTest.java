@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi;
 
+import java.io.IOException;
+
 import java.lang.reflect.UndeclaredThrowableException;
 
 import org.junit.*;
@@ -59,6 +61,29 @@ public class ExceptionTest {
             assertEquals(expect, cause.getMessage());
         }
     }
+
+    @Test
+    public void pipe() throws Exception {
+        var env = Environment.create();
+        env.export("main", new ControlServer());
+        env.connector(Connector.local(env));
+        var session = env.connect(Control.class, "main", null);
+        Control c = session.root();
+
+        Pipe pipe = c.pipeException(null);
+        pipe.flush();
+        var ex = (Throwable) pipe.readThrowable();
+
+        StackTraceElement[] trace = ex.getStackTrace();
+
+        assertEquals(ControlServer.class.getName(), trace[0].getClassName());
+        assertEquals("SkeletonMaker", trace[1].getFileName());
+        assertEquals("no address", trace[2].getFileName());
+        assertEquals("readThrowable", trace[3].getMethodName());
+        assertEquals(getClass().getName(), trace[4].getClassName());
+
+        pipe.recycle();
+    }
  
     public static class BrokenEx extends Exception {
         // Cannot be reconstructed properly with an atypical constructor pattern.
@@ -71,6 +96,8 @@ public class ExceptionTest {
         void broken() throws Exception;
 
         void broken2() throws RemoteException, BrokenEx;
+
+        Pipe pipeException(Pipe pipe) throws IOException;
     }
 
     private static class ControlServer implements Control {
@@ -82,6 +109,14 @@ public class ExceptionTest {
         @Override
         public void broken2() throws BrokenEx {
             throw new BrokenEx(456);
+        }
+
+        @Override
+        public Pipe pipeException(Pipe pipe) throws IOException {
+            pipe.writeObject(new Exception("hello"));
+            pipe.flush();
+            pipe.recycle();
+            return null;
         }
     }
  }

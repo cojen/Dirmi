@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.2.0
+------
+* Added a feature to stitch a local stack trace when reading throwables.
+
 v2.1.0 (2023-01-06)
 ------
 * Fixed a bug when reading arrays of length zero when the input stream has no available bytes.

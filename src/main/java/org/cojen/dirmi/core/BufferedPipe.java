@@ -505,7 +505,7 @@ class BufferedPipe implements Pipe {
             case T_BIG_INTEGER:     simple = readBigInteger(readUnsignedByte()); break loop;
             case T_BIG_INTEGER_L:   simple = readBigInteger(readInt()); break loop;
             case T_BIG_DECIMAL:     simple = readBigDecimal(); break loop;
-            case T_THROWABLE:       return readThrowable();
+            case T_THROWABLE:       return doReadThrowable();
             case T_STACK_TRACE:     return readStackTraceElement();
             case T_CUSTOM_2:        return mTypeCodeMap.readCustom(this, readUnsignedShort());
             case T_CUSTOM_4:        return mTypeCodeMap.readCustom(this, readInt());
@@ -517,6 +517,15 @@ class BufferedPipe implements Pipe {
         stashReference(simple);
  
         return simple;
+    }
+
+    @Override
+    public final Object readThrowable() throws IOException {
+        Object obj = readObject();
+        if (obj instanceof Throwable e) {
+            CoreUtils.assignTrace(this, e);
+        }
+        return obj;
     }
 
     // CorePipe subclass must override this method.
@@ -881,7 +890,7 @@ class BufferedPipe implements Pipe {
         return new BigDecimal(unscaled, scale);
     }
 
-    private Throwable readThrowable() throws IOException {
+    private Throwable doReadThrowable() throws IOException {
         int format = readUnsignedByte();
         if (format != 1) {
             throw inputException(new InvalidObjectException("Unknown format: " + format));

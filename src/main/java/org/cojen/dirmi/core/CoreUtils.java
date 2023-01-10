@@ -24,6 +24,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 
 import java.nio.channels.SocketChannel;
@@ -38,6 +39,7 @@ import java.util.function.BiConsumer;
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Variable;
 
+import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
@@ -414,5 +416,80 @@ public final class CoreUtils {
             char first = ((String) type).charAt(0);
             return first == 'L' || first == '[';
         }
+    }
+
+    static void assignTrace(Pipe pipe, Throwable ex) {
+        // Augment the stack trace with a local trace.
+
+        StackTraceElement[] trace = ex.getStackTrace();
+        int traceLength = trace.length;
+
+        // Prune the local trace for all calls that occur before (and including) the skeleton.
+        String fileName = SkeletonMaker.class.getSimpleName();
+        for (int i=trace.length; --i>=0; ) {
+            StackTraceElement element = trace[i];
+            if (fileName.equals(element.getFileName())) {
+                traceLength = i;
+                break;
+            }
+        }
+
+        StackTraceElement[] stitch = stitch(pipe);
+
+        StackTraceElement[] local = new Throwable().getStackTrace();
+        int localStart = 0;
+
+        // Prune the local trace for all calls that occur after the stub, or else just prune
+        // this "assignTrace" method if no stub method is found.
+
+        if (local.length != 0) {
+            localStart = 1; // prune this method
+        }
+
+        fileName = StubMaker.class.getSimpleName();
+        for (int i=0; i<local.length; i++) {
+            StackTraceElement element = local[i];
+            if (fileName.equals(element.getFileName())) {
+                localStart = i;
+                break;
+            }
+        }
+
+        int localLength = local.length - localStart;
+
+        var combined = new StackTraceElement[traceLength + stitch.length + localLength];
+        System.arraycopy(trace, 0, combined, 0, traceLength);
+        System.arraycopy(stitch, 0, combined, traceLength, stitch.length);
+        System.arraycopy(local, localStart, combined, traceLength + stitch.length, localLength);
+
+        ex.setStackTrace(combined);
+    }
+
+    /**
+     * Returns pseudo traces which report the pipe's local and remote addresses.
+     */
+    private static StackTraceElement[] stitch(Pipe pipe) {
+        StackTraceElement remote = trace(pipe.remoteAddress());
+        StackTraceElement local = trace(pipe.localAddress());
+
+        if (remote == null) {
+            if (local == null) {
+                local = new StackTraceElement
+                    ("...remote method invocation..", "", "no address", -1);
+            }
+            return new StackTraceElement[] {local};
+        } else if (local == null) {
+            return new StackTraceElement[] {remote};
+        } else {
+            return new StackTraceElement[] {remote, local};
+        }
+    }
+
+    private static StackTraceElement trace(SocketAddress address) {
+        String str;
+        if (address == null || (str = address.toString()).isEmpty()) {
+            return null;
+        }
+        return new StackTraceElement("...remote method invocation..", "", str, -1);
     }
 }
