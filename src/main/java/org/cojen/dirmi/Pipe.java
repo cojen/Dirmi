@@ -80,8 +80,10 @@ import java.io.OutputStream;
  * pending input or unflushed output, and the pipe must not be used again directly. Closing the
  * pipe is safer, although it might force a new pipe connection to be established.
  *
- * <p>Note regarding UTF-8 encoding: The contract for {@code DataInput} and {@code DataOutput}
- * specifies a modified UTF-8 encoding, but pipes adhere to the standard UTF-8 format.
+ * <p>Note: The pipe implementation isn't strictly compatible with {@code DataInput} and {@code
+ * DataOutput}. The contract for those interfaces specifies a modified UTF-8 encoding, but
+ * pipes adhere to the standard UTF-8 format. Also, floating point values are written in their
+ * "raw" form, preserving non-canonical NaN values.
  *
  * @author Brian S O'Neill
  */
