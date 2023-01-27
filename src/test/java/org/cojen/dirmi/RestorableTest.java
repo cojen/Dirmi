@@ -258,8 +258,6 @@ public class RestorableTest {
             Thread.sleep(1000);
         }
 
-        // Note: This has been observed to fail once because state is still CONNECTED. Unable
-        // to reproduce the failure.
         assertEquals(Session.State.CLOSED, mSession.state());
 
         try {
@@ -585,7 +583,7 @@ public class RestorableTest {
         final Environment mEnv;
         final ServerSocket mServerSocket;
         volatile boolean mClosed;
-        boolean mAccepting;
+        boolean mDoSuspend;
         boolean mSuspended;
         Session mSession;
 
@@ -600,10 +598,14 @@ public class RestorableTest {
             try {
                 while (!mClosed) {
                     synchronized (this) {
-                        while (mSuspended) {
-                            wait();
+                        if (mDoSuspend) {
+                            mSuspended = true;
+                            notify();
+                            do {
+                                wait();
+                            } while (mDoSuspend);
+                            mSuspended = false;
                         }
-                        mAccepting = true;
                     }
 
                     Socket s;
@@ -611,11 +613,6 @@ public class RestorableTest {
                         s = mServerSocket.accept();
                     } catch (SocketTimeoutException e) {
                         continue;
-                    } finally {
-                        synchronized (this) {
-                            mAccepting = false;
-                            notify();
-                        }
                     }
 
                     try {
@@ -647,14 +644,14 @@ public class RestorableTest {
         }
 
         synchronized void suspend() throws InterruptedException {
-            mSuspended = true;
-            while (mAccepting) {
+            mDoSuspend = true;
+            while (!mSuspended) {
                 wait();
             }
         }
 
         synchronized void resume() {
-            mSuspended = false;
+            mDoSuspend = false;
             notify();
         }
 
