@@ -50,9 +50,9 @@ public final class LocalConnector implements Connector {
                 mEnv.accepted(null, null, serverIn, serverOut);
             } catch (Throwable e) {
                 if (session instanceof CoreSession) {
-                    ((CoreSession) session).uncaughtException(e);
+                    ((CoreSession) session).uncaught(e);
                 } else if (mEnv instanceof Engine) {
-                    ((Engine) mEnv).uncaughtException(null, e);
+                    ((Engine) mEnv).uncaught(null, e);
                 } else {
                     CoreUtils.rethrow(e);
                 }

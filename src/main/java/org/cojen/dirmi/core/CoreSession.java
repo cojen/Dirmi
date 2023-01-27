@@ -275,7 +275,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 startRequestProcessor(pipe);
             } catch (IOException e) {
                 if (!isClosedOrDisconnected()) {
-                    uncaughtException(e);
+                    uncaught(e);
                 }
             }
 
@@ -406,9 +406,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    @Override
-    public final void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h) {
+    @Override public final void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h) {
         mUncaughtExceptionHandler = h;
+    }
+
+    @Override
+    public final void uncaught(Throwable e) {
+        if (!CoreUtils.acceptException(mUncaughtExceptionHandler, this, e)) {
+            mEngine.uncaught(this, e);
+        }
     }
 
     @Override
@@ -432,7 +438,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 try {
                     listener.accept(this, null);
                 } catch (Throwable e) {
-                    uncaughtException(e);
+                    uncaught(e);
                 }
             } finally {
                 mStateLock.unlock();
@@ -451,7 +457,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 try {
                     listener.accept(this, null);
                 } catch (Throwable e) {
-                    uncaughtException(e);
+                    uncaught(e);
                 }
             }
         }
@@ -480,7 +486,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     try {
                         listener.accept(this, ex);
                     } catch (Throwable e) {
-                        uncaughtException(e);
+                        uncaught(e);
                     }
                 }
             } finally {
@@ -661,12 +667,6 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             ", localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
-    final void uncaughtException(Throwable e) {
-        if (!CoreUtils.acceptException(mUncaughtExceptionHandler, this, e)) {
-            mEngine.uncaughtException(this, e);
-        }
-    }
-
     final CorePipe controlPipe() {
         return (CorePipe) cControlPipeHandle.getAcquire(this);
     }
@@ -691,7 +691,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 sendByte(C_PONG);
             } catch (Throwable e) {
                 if (!(e instanceof IOException)) {
-                    uncaughtException(e);
+                    uncaught(e);
                 }
                 close(R_CONTROL_FAILURE, pipe);
             }
@@ -757,7 +757,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 }
             } catch (Throwable e) {
                 if (!(e instanceof IOException)) {
-                    uncaughtException(e);
+                    uncaught(e);
                 }
                 close(R_CONTROL_FAILURE, pipe);
             }
@@ -930,7 +930,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 try {
                     session.mEngine.scheduleNanos(this, mDelayNanos);
                 } catch (IOException e) {
-                    session.uncaughtException(e);
+                    session.uncaught(e);
                 }
             }
         }
@@ -1169,7 +1169,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 ((SessionAware) server).detached(this);
             } catch (Throwable e) {
-                uncaughtException(e);
+                uncaught(e);
             }
         }
 
@@ -1264,7 +1264,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                     try {
                         sa.detached(this);
                     } catch (Throwable e) {
-                        uncaughtException(e);
+                        uncaught(e);
                     }
                 };
 
@@ -1276,7 +1276,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 sa.detached(this);
             } catch (Throwable e) {
-                uncaughtException(e);
+                uncaught(e);
             }
         }
     }
@@ -1292,7 +1292,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             try {
                 sa.attached(this);
             } catch (Throwable e) {
-                uncaughtException(e);
+                uncaught(e);
             }
         }
     }
@@ -1390,14 +1390,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 } while (context != Skeleton.STOP_READING);
             } catch (Throwable e) {
                 if (e instanceof UncaughtException) {
-                    uncaughtException(e.getCause());
+                    uncaught(e.getCause());
                 } else if (!isClosedOrDisconnected()) {
                     if (e instanceof NoSuchObjectException ||
                         e instanceof ObjectStreamException ||
                         e instanceof ClassNotFoundException ||
                         !(e instanceof IOException))
                     {
-                        uncaughtException(e);
+                        uncaught(e);
                     }
                 }
                 CoreUtils.closeQuietly(mPipe);

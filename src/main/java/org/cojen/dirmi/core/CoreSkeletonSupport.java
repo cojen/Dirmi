@@ -61,7 +61,7 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
-    public void uncaughtException(Throwable e) {
-        mSession.uncaughtException(e);
+    public void uncaught(Throwable e) {
+        mSession.uncaught(e);
     }
 }

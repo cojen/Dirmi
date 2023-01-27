@@ -419,7 +419,7 @@ final class SkeletonMaker<R> {
 
                 if (rm.isNoReply()) {
                     var supportVar = mm.param(2);
-                    supportVar.invoke("uncaughtException", exVar);
+                    supportVar.invoke("uncaught", exVar);
                 } else {
                     if (rm.isBatchedImmediate()) {
                         // Even though invocation failed with an exception, match the behavior

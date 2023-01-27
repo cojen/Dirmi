@@ -137,6 +137,11 @@ public interface Session<R> extends Closeable, Link, Executor {
     void uncaughtExceptionHandler(BiConsumer<Session<?>, Throwable> h);
 
     /**
+     * Pass an uncaught exception directly to the uncaught exception handler.
+     */
+    void uncaught(Throwable e);
+
+    /**
      * Returns the current session state.
      */
     State state();

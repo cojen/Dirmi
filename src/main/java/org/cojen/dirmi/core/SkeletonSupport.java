@@ -52,5 +52,5 @@ public interface SkeletonSupport {
      */
     void dispose(Skeleton<?> skeleton);
 
-    void uncaughtException(Throwable e);
+    void uncaught(Throwable e);
 }

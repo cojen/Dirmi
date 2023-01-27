@@ -808,7 +808,7 @@ public final class Engine implements Environment {
                 if (task instanceof Closeable) {
                     CoreUtils.closeQuietly((Closeable) task);
                 }
-                uncaughtException(null, e);
+                uncaught(null, e);
                 return;
             }
         }
@@ -826,7 +826,7 @@ public final class Engine implements Environment {
         return cConnectorHandle.getAcquire(this) == null;
     }
 
-    void uncaughtException(Session<?> s, Throwable e) {
+    void uncaught(Session<?> s, Throwable e) {
         if (!CoreUtils.acceptException(mUncaughtExceptionHandler, s, e)) {
             try {
                 Thread t = Thread.currentThread();
@@ -842,7 +842,7 @@ public final class Engine implements Environment {
      */
     private void acceptFailed(Throwable e) {
         if (!isClosed()) {
-            uncaughtException(null, e);
+            uncaught(null, e);
         }
     }
 

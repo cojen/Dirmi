@@ -362,7 +362,7 @@ final class ClientSession<R> extends CoreSession<R> {
             recycleConnection(pipe);
         } catch (IOException e) {
             if (!isClosedOrDisconnected()) {
-                uncaughtException(e);
+                uncaught(e);
             }
         }
     }
