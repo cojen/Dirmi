@@ -796,6 +796,43 @@ public class PipeTest {
     }
 
     @Test
+    public void transferTo() throws Exception {
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), OutputStream.nullOutputStream());
+        var capture = new CaptureOutputStream();
+        assertEquals(0, pipe.transferTo(capture, 10));
+
+        var bin = new ByteArrayInputStream("hello".getBytes());
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        assertEquals(0, pipe.transferTo(capture, 0));
+        assertEquals(0, pipe.transferTo(capture, -1));
+
+        assertEquals(5, pipe.transferTo(capture, 10));
+        assertEquals(0, pipe.transferTo(capture, 10));
+
+        assertArrayEquals("hello".getBytes(), capture.getBytes());
+
+        bin = new ByteArrayInputStream("helloworld".getBytes());
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+        capture = new CaptureOutputStream();
+
+        assertEquals(5, pipe.transferTo(capture, 5));
+
+        assertArrayEquals("hello".getBytes(), capture.getBytes());
+
+        byte[] bytes = new byte[10000];
+        new Random().nextBytes(bytes);
+
+        bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+        capture = new CaptureOutputStream();
+
+        assertEquals(10000, pipe.transferTo(capture, 20000));
+
+        assertTrue(Arrays.equals(bytes, capture.getBytes()));
+    }
+
+    @Test
     public void fuzz() throws Exception {
         long seed = 8675309;
         for (int i=0; i<100; i++) {

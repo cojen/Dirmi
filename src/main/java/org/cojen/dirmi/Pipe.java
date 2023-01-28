@@ -150,4 +150,12 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
      * Write a null object reference.
      */
     void writeNull() throws IOException;
+
+    /**
+     * Reads up to n bytes from this pipe and writes them into the given stream. Fewer than n
+     * bytes are written if the pipe has no more input to read.
+     *
+     * @return the number of bytes transferred
+     */
+    long transferTo(OutputStream out, long n) throws IOException;
 }

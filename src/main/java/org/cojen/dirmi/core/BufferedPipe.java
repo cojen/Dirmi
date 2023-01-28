@@ -1777,6 +1777,43 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    @Override
+    public final long transferTo(OutputStream out, long n) throws IOException {
+        if (n <= 0) {
+            return 0;
+        }
+
+        int avail = available();
+
+        if (avail <= 0) {
+            avail = doRead(mInBuffer, 0, mInBuffer.length);
+            if (avail <= 0) {
+                return 0;
+            }
+            mInPos = 0;
+            mInEnd = avail;
+        }
+
+        long total = 0;
+
+        while (true) {
+            int len = (int) Math.min(avail, n);
+            out.write(mInBuffer, mInPos, len);
+            mInPos += len;
+            total += len;
+            n -= len;
+            if (n <= 0) {
+                return total;
+            }
+            avail = doRead(mInBuffer, 0, mInBuffer.length);
+            if (avail <= 0) {
+                return total;
+            }
+            mInPos = 0;
+            mInEnd = avail;
+        }
+    }
+
     /**
      * @param v non-null
      * @return true if an object reference was written
