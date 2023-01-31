@@ -108,6 +108,12 @@ final class CorePipe extends BufferedPipe {
     @Override
     public void recycle() throws IOException {
         try {
+            // Not a perfect detection technique, but it should help identify bugs. Note that
+            // this check isn't valid on the server side. If the peer client has already
+            // recycled the pipe, then input might be available already for the next request.
+            if (mMode == M_CLIENT && available() != 0) {
+                throw new IllegalStateException("Pipe has pending input");
+            }
             tryRecycle();
         } catch (IllegalStateException e) {
             try {

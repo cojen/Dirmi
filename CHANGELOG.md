@@ -3,6 +3,8 @@ Changelog
 
 v2.2.0
 ------
+* Relax the pipe recycling check to consider the case when the remote side has already sent the
+  next request. This prevents a bogus IllegalStateException from being thrown.
 * Added a feature to stitch a local stack trace when reading throwables.
 * Added a feature to pass an uncaught exception directly to the handler.
 * Added a feature to transfer bytes from a pipe to an OutputStream.

@@ -1949,9 +1949,6 @@ class BufferedPipe implements Pipe {
 
     final void tryRecycle() {
         // Not a perfect detection technique, but it should help identify bugs.
-        if (available() != 0) {
-            throw new IllegalStateException("Pipe has pending input");
-        }
         if (mOutEnd != 0) {
             throw new IllegalStateException("Pipe has unflushed output");
         }
