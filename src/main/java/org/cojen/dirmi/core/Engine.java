@@ -808,7 +808,9 @@ public final class Engine implements Environment {
                 if (task instanceof Closeable) {
                     CoreUtils.closeQuietly((Closeable) task);
                 }
-                uncaught(null, e);
+                if (!isClosed()) {
+                    uncaught(null, e);
+                }
                 return;
             }
         }
