@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.2.0
+v2.2.0 (2023-02-04)
 ------
 * Relax the pipe recycling check to consider the case when the remote side has already sent the
   next request. This prevents a bogus IllegalStateException from being thrown.
