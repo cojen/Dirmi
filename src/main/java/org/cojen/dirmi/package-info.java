@@ -15,12 +15,12 @@
  */
 
 /**
- * Bidirectional remote method invocation. For launching a server, {@link Environment#create
- * create} an {@code Environment}, {@link Environment#export export} a remote object, and start
- * {@link Environment#acceptAll accepting} connections. For connecting a client, create an
- * {@code Environment}, {@link Environment#connect connect} to the server, and obtain the
- * {@link Session#root root} object. Here is a very simple example, starting with the remote
- * interface:
+ * Dirmi is a framework for supporting bidirectional remote method invocation. For launching a
+ * server, {@link Environment#create create} an {@code Environment}, {@link Environment#export
+ * export} a remote object, and start {@link Environment#acceptAll accepting} connections. For
+ * connecting a client, create an {@code Environment}, {@link Environment#connect connect} to
+ * the server, and obtain the {@link Session#root root} object. Here is a very simple example,
+ * starting with the remote interface:
  *
  * {@snippet lang="java" :
  * import org.cojen.dirmi.Remote;
