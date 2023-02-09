@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.3.0
+------
+* Added a debug option to close pipes when they are recycled.
+
 v2.2.0 (2023-02-04)
 ------
 * Relax the pipe recycling check to consider the case when the remote side has already sent the

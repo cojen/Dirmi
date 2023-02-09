@@ -22,6 +22,8 @@ import java.io.OutputStream;
 
 import java.net.SocketAddress;
 
+import org.cojen.dirmi.Pipe;
+
 /**
  * Pipe implementation used by CoreSession.
  *
@@ -30,6 +32,14 @@ import java.net.SocketAddress;
 final class CorePipe extends BufferedPipe {
     // Values for mMode.
     static final int M_CLIENT = 1, M_SERVER = 2, M_CLOSED = 3;
+
+    // When true, calling recycle on a client-side pipe closes it instead. This feature is
+    // intended to help diagnose issues caused by incorrect pipe recycling.
+    private static final boolean RECYCLE_CLOSE;
+
+    static {
+        RECYCLE_CLOSE = Boolean.getBoolean(Pipe.class.getName() + ".RECYCLE_CLOSE");
+    }
 
     /**
      * Returns a pipe which is connected to null I/O streams.
@@ -107,6 +117,11 @@ final class CorePipe extends BufferedPipe {
 
     @Override
     public void recycle() throws IOException {
+        if (RECYCLE_CLOSE && mMode == M_CLIENT) {
+            close();
+            return;
+        }
+
         try {
             // Not a perfect detection technique, but it should help identify bugs. Note that
             // this check isn't valid on the server side. If the peer client has already
