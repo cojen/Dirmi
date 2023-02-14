@@ -134,9 +134,9 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">Session.</span><code><a href="../Session.html#stateListener(java.util.function.BiConsumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Session.</span><code><a href="../Session.html#addStateListener(java.util.function.BiPredicate)" class="member-name-link">addStateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiPredicate.html" title="class or interface in java.util.function" class="external-link">BiPredicate</a>&lt;<a href="../Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
+<div class="block">Add a listener which is immediately invoked (in the current thread), or when the session
  state changes, or when a reconnect attempt fails.</div>
 </div>
 <div class="col-first odd-row-color"><code>void</code></div>

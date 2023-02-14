@@ -91,6 +91,11 @@ loadScripts(document, 'script');</script>
 <div class="block">Adapts this serializer to conform to the given descriptor or else returns this instance
  if no adaptation is required.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#addStateListener(java.util.function.BiPredicate)" class="member-name-link">addStateListener(BiPredicate&lt;Session&lt;?&gt;, Throwable&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
+<dd>
+<div class="block">Add a listener which is immediately invoked (in the current thread), or when the session
+ state changes, or when a reconnect attempt fails.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html#attached(org.cojen.dirmi.Session)" class="member-name-link">attached(Session&lt;?&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/SessionAware.html" title="interface in org.cojen.dirmi">SessionAware</a></dt>
 <dd>
 <div class="block">Called when this object has been attached to a session and can be accessed remotely.</div>
@@ -473,11 +478,6 @@ loadScripts(document, 'script');</script>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#state()" class="member-name-link">state()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
 <dd>
 <div class="block">Returns the current session state.</div>
-</dd>
-<dt><a href="org.cojen.dirmi/org/cojen/dirmi/Session.html#stateListener(java.util.function.BiConsumer)" class="member-name-link">stateListener(BiConsumer&lt;Session&lt;?&gt;, Throwable&gt;)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Session.html" title="interface in org.cojen.dirmi">Session</a></dt>
-<dd>
-<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
- state changes, or when a reconnect attempt fails.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html#supportedTypes()" class="member-name-link">supportedTypes()</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></dt>
 <dd>

@@ -144,64 +144,64 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 <div class="block">Access the session that the given remote object is bound to.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#addStateListener(java.util.function.BiPredicate)" class="member-name-link">addStateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiPredicate.html" title="class or interface in java.util.function" class="external-link">BiPredicate</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Add a listener which is immediately invoked (in the current thread), or when the session
+ state changes, or when a reconnect attempt fails.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Closes all connections and immediately closes any future connections.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#connected(java.net.Socket)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/net/Socket.html" title="class or interface in java.net" class="external-link">Socket</a>&nbsp;s)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#connected(java.net.Socket)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/net/Socket.html" title="class or interface in java.net" class="external-link">Socket</a>&nbsp;s)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Receives new connections from a <a href="Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#connected(java.net.SocketAddress,java.net.SocketAddress,java.io.InputStream,java.io.OutputStream)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;localAddr,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#connected(java.net.SocketAddress,java.net.SocketAddress,java.io.InputStream,java.io.OutputStream)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;localAddr,
  <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;remoteAttr,
  <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a>&nbsp;in,
  <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a>&nbsp;out)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Receives new connections from a <a href="Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#connected(java.nio.channels.SocketChannel)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/nio/channels/SocketChannel.html" title="class or interface in java.nio.channels" class="external-link">SocketChannel</a>&nbsp;s)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#connected(java.nio.channels.SocketChannel)" class="member-name-link">connected</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/nio/channels/SocketChannel.html" title="class or interface in java.nio.channels" class="external-link">SocketChannel</a>&nbsp;s)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Receives new connections from a <a href="Connector.html" title="interface in org.cojen.dirmi"><code>Connector</code></a>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#current()" class="member-name-link">current</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#current()" class="member-name-link">current</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Returns the current thread-local session, which is available to a remote method
  implementation when it's invoked.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#dispose(java.lang.Object)" class="member-name-link">dispose</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;obj)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#dispose(java.lang.Object)" class="member-name-link">dispose</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;obj)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Explicitly dispose a client-side remote object.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#disposeServer(java.lang.Object)" class="member-name-link">disposeServer</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;server)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static boolean</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#disposeServer(java.lang.Object)" class="member-name-link">disposeServer</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;server)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Explicitly dispose a server-side remote object implementation from the current session.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#resolveClass(java.lang.String)" class="member-name-link">resolveClass</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;?&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#resolveClass(java.lang.String)" class="member-name-link">resolveClass</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Resolve a class using the default or custom <a href="ClassResolver.html" title="interface in org.cojen.dirmi"><code>ClassResolver</code></a>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the root object which was exported or imported.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Returns the current session state.</div>
-</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#stateListener(java.util.function.BiConsumer)" class="member-name-link">stateListener</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
-<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
- state changes, or when a reconnect attempt fails.</div>
+<div class="block">Returns the current session state.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaught(java.lang.Throwable)" class="member-name-link">uncaught</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;e)</code></div>
@@ -393,12 +393,13 @@ extends <a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/ja
 </section>
 </li>
 <li>
-<section class="detail" id="stateListener(java.util.function.BiConsumer)">
-<h3>stateListener</h3>
-<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">stateListener</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</span></div>
-<div class="block">Set a listener which is immediately invoked (in the current thread), or when the session
+<section class="detail" id="addStateListener(java.util.function.BiPredicate)">
+<h3>addStateListener</h3>
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">addStateListener</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/util/function/BiPredicate.html" title="class or interface in java.util.function" class="external-link">BiPredicate</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/19/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;listener)</span></div>
+<div class="block">Add a listener which is immediately invoked (in the current thread), or when the session
  state changes, or when a reconnect attempt fails. The listener is invoked in a blocking
- fashion, preventing any state changes until the listener returns.</div>
+ fashion, preventing any state changes until the listener returns. If it returns false,
+ the listener is removed.</div>
 </section>
 </li>
 <li>
