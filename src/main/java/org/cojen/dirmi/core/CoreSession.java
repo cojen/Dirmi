@@ -27,12 +27,18 @@ import java.lang.ref.WeakReference;
 
 import java.net.SocketAddress;
 
+import java.util.Objects;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.Map;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 
 import org.cojen.dirmi.ClassResolver;
 import org.cojen.dirmi.ClosedException;
@@ -110,7 +116,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     private int mClosed;
 
     final Lock mStateLock;
-    private volatile BiConsumer<Session<?>, Throwable> mStateListener;
+    private volatile Object mStateListeners;
     volatile State mState;
 
     // Used when reconnecting.
@@ -428,21 +434,42 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
-    public final void stateListener(BiConsumer<Session<?>, Throwable> listener) {
-        if (listener == null) {
-            mStateListener = null;
-        } else {
-            mStateLock.lock();
+    @SuppressWarnings("unchecked")
+    public final void addStateListener(BiPredicate<Session<?>, Throwable> listener) {
+        Objects.requireNonNull(listener);
+
+        mStateLock.lock();
+        try {
+            Object listeners = mStateListeners;
+
             try {
-                mStateListener = listener;
-                try {
-                    listener.accept(this, null);
-                } catch (Throwable e) {
-                    uncaught(e);
+                if (listeners == null) {
+                    mStateListeners = listener;
+                    if (!listener.test(this, null)) {
+                        mStateListeners = null;
+                    }
+                } else {
+                    Map<BiPredicate<Session<?>, Throwable>, Boolean> map;
+                    if (listeners instanceof Map) {
+                        map = (Map<BiPredicate<Session<?>, Throwable>, Boolean>) listeners;
+                    } else {
+                        map = new IdentityHashMap<BiPredicate<Session<?>, Throwable>, Boolean>();
+                        map.put((BiPredicate<Session<?>, Throwable>) listeners, true);
+                        mStateListeners = map;
+                    }
+                    map.put(listener, true);
+                    if (!listener.test(this, null)) {
+                        map.remove(listener);
+                        if (map.isEmpty()) {
+                            mStateListeners = null;
+                        }
+                    }
                 }
-            } finally {
-                mStateLock.unlock();
+            } catch (Throwable e) {
+                uncaught(e);
             }
+        } finally {
+            mStateLock.unlock();
         }
     }
 
@@ -450,16 +477,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     private void setStateAndNotify(State state) {
         if (mState != state) {
             mState = state;
-
-            BiConsumer<Session<?>, Throwable> listener = mStateListener;
-
-            if (listener != null) {
-                try {
-                    listener.accept(this, null);
-                } catch (Throwable e) {
-                    uncaught(e);
-                }
-            }
+            notifyListeners(null);
         }
     }
 
@@ -475,22 +493,44 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     void reconnectFailureNotify(Throwable ex) {
-        BiConsumer<Session<?>, Throwable> listener = mStateListener;
-
-        if (listener != null) {
+        if (mStateListeners != null) {
             mStateLock.lock();
             try {
-                listener = mStateListener;
-
-                if (listener != null) {
-                    try {
-                        listener.accept(this, ex);
-                    } catch (Throwable e) {
-                        uncaught(e);
-                    }
-                }
+                notifyListeners(ex);
             } finally {
                 mStateLock.unlock();
+            }
+        }
+    }
+
+    // Caller must hold mStateLock.
+    @SuppressWarnings("unchecked")
+    private void notifyListeners(Throwable ex) {
+        Object listeners = mStateListeners;
+        if (listeners instanceof Map) {
+            var map = (Map<BiPredicate<Session<?>, Throwable>, Boolean>) listeners;
+            Iterator<BiPredicate<Session<?>, Throwable>> it = map.keySet().iterator();
+            while (it.hasNext()) {
+                BiPredicate<Session<?>, Throwable> listener = it.next();
+                try {
+                    if (!listener.test(this, ex)) {
+                        it.remove();
+                    }
+                } catch (Throwable e) {
+                    uncaught(e);
+                }
+            }
+            if (map.isEmpty()) {
+                mStateListeners = null;
+            }
+        } else if (listeners != null) {
+            var listener = (BiPredicate<Session<?>, Throwable>) listeners;
+            try {
+                if (!listener.test(this, ex)) {
+                    mStateListeners = null;
+                }
+            } catch (Throwable e) {
+                uncaught(e);
             }
         }
     }

@@ -3,6 +3,7 @@ Changelog
 
 v2.3.0
 ------
+* Replaced the Session.stateListener method with addStateListener.
 * Added a debug option to close pipes when they are recycled.
 
 v2.2.0 (2023-02-04)

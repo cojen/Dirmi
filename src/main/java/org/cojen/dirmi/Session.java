@@ -30,6 +30,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.Executor;
 
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 
 import org.cojen.dirmi.core.CoreUtils;
 
@@ -147,11 +148,12 @@ public interface Session<R> extends Closeable, Link, Executor {
     State state();
 
     /**
-     * Set a listener which is immediately invoked (in the current thread), or when the session
+     * Add a listener which is immediately invoked (in the current thread), or when the session
      * state changes, or when a reconnect attempt fails. The listener is invoked in a blocking
-     * fashion, preventing any state changes until the listener returns.
+     * fashion, preventing any state changes until the listener returns. If it returns false,
+     * the listener is removed.
      */
-    void stateListener(BiConsumer<Session<?>, Throwable> listener);
+    void addStateListener(BiPredicate<Session<?>, Throwable> listener);
 
     /**
      * Closes all connections and immediately closes any future connections. All remote objects

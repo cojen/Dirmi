@@ -28,7 +28,7 @@ import java.util.Map;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 
 import org.junit.*;
 import static org.junit.Assert.*;
@@ -88,18 +88,19 @@ public class RestorableTest {
             assertTrue(e.getMessage().contains("non-restorable parent"));
         }
 
-        var listener = new BiConsumer<Session<?>, Throwable>() {
+        var listener = new BiPredicate<Session<?>, Throwable>() {
             final List<Session.State> states = new ArrayList<>();
 
             @Override
-            public void accept(Session<?> session, Throwable ex) {
+            public boolean test(Session<?> session, Throwable ex) {
                 if (ex == null) {
                     states.add(session.state());
                 }
+                return true;
             }
         };
 
-        mSession.stateListener(listener);
+        mSession.addStateListener(listener);
 
         R1 r1x = r2.a();
 
@@ -272,16 +273,17 @@ public class RestorableTest {
 
     @Test
     public void reconnectNotification() throws Exception {
-        var listener = new BiConsumer<Session<?>, Throwable>() {
+        var listener = new BiPredicate<Session<?>, Throwable>() {
             volatile Throwable exception;
 
             @Override
-            public void accept(Session<?> session, Throwable ex) {
+            public boolean test(Session<?> session, Throwable ex) {
                 exception = ex;
+                return true;
             }
         };
 
-        mSession.stateListener(listener);
+        mSession.addStateListener(listener);
 
         mAcceptor.suspend();
         mAcceptor.closeLastAccepted();
