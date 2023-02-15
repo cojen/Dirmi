@@ -245,9 +245,13 @@ final class StubMaker {
                 // The server doesn't implement the method.
                 Variable exVar = mm.var(Throwable.class)
                     .set(mm.new_(UnimplementedException.class, "Unimplemented on the remote side"));
-                exVar.set(mm.var(CoreUtils.class).invoke
-                          ("remoteException", remoteFailureClass, exVar));
-                throwException(exVar, remoteFailureClass, thrownClasses);
+                if (remoteFailureClass.isAssignableFrom(UnimplementedException.class)) {
+                    exVar.throw_();
+                } else {
+                    exVar.set(mm.var(CoreUtils.class).invoke
+                              ("remoteException", remoteFailureClass, exVar));
+                    throwException(exVar, remoteFailureClass, thrownClasses);
+                }
                 continue;
             }
 
