@@ -60,7 +60,6 @@ public interface StubSupport {
      */
     <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T;
 
-
     /**
      * Used by batched methods which return a Remote object. If the remote typeId is currently
      * unknown, then zero is returned.

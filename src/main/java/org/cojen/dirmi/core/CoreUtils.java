@@ -236,7 +236,9 @@ public final class CoreUtils {
     }
 
     @SuppressWarnings("unchecked")
-    static <T extends Throwable> T remoteException(Class<T> remoteFailureEx, Throwable cause) {
+    public static <T extends Throwable> T remoteException(Class<T> remoteFailureEx,
+                                                          Throwable cause)
+    {
         if (cause == null) {
             cause = new RemoteException();
         }

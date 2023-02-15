@@ -212,12 +212,6 @@ final class StubMaker {
 
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
 
-            if (serverMethod == null) {
-                // The server doesn't implement the method.
-                mm.new_(UnimplementedException.class, "Unimplemented on the remote side").throw_();
-                continue;
-            }
-
             Class<?> remoteFailureClass;
             List<Class<?>> thrownClasses = null;
 
@@ -246,6 +240,16 @@ final class StubMaker {
             }
 
             mm.throws_(remoteFailureClass);
+
+            if (serverMethod == null) {
+                // The server doesn't implement the method.
+                Variable exVar = mm.var(Throwable.class)
+                    .set(mm.new_(UnimplementedException.class, "Unimplemented on the remote side"));
+                exVar.set(mm.var(CoreUtils.class).invoke
+                          ("remoteException", remoteFailureClass, exVar));
+                throwException(exVar, remoteFailureClass, thrownClasses);
+                continue;
+            }
 
             {
                 // Repeat all the necessary annotations inherited by the remote interface. This
@@ -422,23 +426,37 @@ final class StubMaker {
                 exVar.set(thrownVar);
             }
 
-            // Throw the exception as-is if declared or unchecked. Otherwise, wrap it.
-
             throwIt.here();
-            Label reallyThrowIt = mm.label();
-            List<Class<?>> toCheck = CoreUtils.reduceExceptions(remoteFailureClass, thrownClasses);
-            for (Class<?> type : toCheck) {
-                exVar.instanceOf(type).ifTrue(reallyThrowIt);
-            }
-            var msgVar = exVar.invoke("getMessage");
-            exVar.set(mm.new_(UndeclaredThrowableException.class, exVar, msgVar));
-            reallyThrowIt.here();
-            exVar.throw_();
+            throwException(exVar, remoteFailureClass, thrownClasses);
 
             batchedImmediateMethodId = -1;
         }
 
         return mStubMaker.finish();
+    }
+
+    /**
+     * Throws an exception as-is if it's declared to be thrown, or if it's unchecked.
+     * Otherwise, wrap it.
+     *
+     * @param exVar must be type Throwable
+     * @param remoteFailureClass exception for reporting remote failures (usually RemoteException)
+     * @param thrownClasses optional list of additional checked exceptions declared to be
+     * thrown by the client method
+     */
+    private static void throwException(Variable exVar,
+                                       Class<?> remoteFailureClass, List<Class<?>> thrownClasses)
+    {
+        MethodMaker mm = exVar.methodMaker();
+        Label throwIt = mm.label();
+        List<Class<?>> toCheck = CoreUtils.reduceExceptions(remoteFailureClass, thrownClasses);
+        for (Class<?> type : toCheck) {
+            exVar.instanceOf(type).ifTrue(throwIt);
+        }
+        var msgVar = exVar.invoke("getMessage");
+        exVar.set(mm.new_(UndeclaredThrowableException.class, exVar, msgVar));
+        throwIt.here();
+        exVar.throw_();
     }
 
     private static boolean isVoid(Object returnType) {

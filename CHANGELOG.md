@@ -5,6 +5,8 @@ v2.3.0
 ------
 * Replaced the Session.stateListener method with addStateListener.
 * Added a debug option to close pipes when they are recycled.
+* Methods unimplemented on the server throw an exception only allowed by the RemoteFailure
+  annotation. Before, UnimplementedException would be thrown always.
 
 v2.2.0 (2023-02-04)
 ------

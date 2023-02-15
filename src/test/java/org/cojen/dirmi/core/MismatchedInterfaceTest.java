@@ -84,7 +84,8 @@ public class MismatchedInterfaceTest {
             ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(String.class, "b").public_().abstract_().throws_(RemoteException.class);
-            cm.addMethod(String.class, "c").public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(String.class, "c").public_().abstract_().throws_(MyException.class)
+                .addAnnotation(RemoteFailure.class, true).put("exception", MyException.class);
             iface1 = cm.finish();
 
             cm = ClassMaker.begin(null, iface1.getClassLoader()).implement(iface1).public_();
@@ -147,6 +148,8 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
+            assertTrue(cause instanceof MyException);
+            cause = cause.getCause();
             assertTrue(cause instanceof UnimplementedException);
         }
     }
@@ -329,6 +332,12 @@ public class MismatchedInterfaceTest {
             assertEquals("bob", ((Parent) remote).name());
             fail();
         } catch (UnimplementedException e) {
+        }
+    }
+
+    public static class MyException extends Exception {
+        public MyException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 
