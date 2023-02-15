@@ -51,7 +51,7 @@ loadScripts(document, 'script');</script>
 <div class="header">
 <h1>Index</h1>
 </div>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a>
 <h2 class="title" id="I:A">A</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#acceptAll(java.net.ServerSocket)" class="member-name-link">acceptAll(ServerSocket)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
@@ -296,6 +296,11 @@ loadScripts(document, 'script');</script>
 <div class="block">Specify which classes should be rejected or allowed by serialization.</div>
 </dd>
 </dl>
+<h2 class="title" id="I:G">G</h2>
+<dl class="index">
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html#getMessage()" class="member-name-link">getMessage()</a> - Method in exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></dt>
+<dd>&nbsp;</dd>
+</dl>
 <h2 class="title" id="I:I">I</h2>
 <dl class="index">
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html#idleConnectionMillis(int)" class="member-name-link">idleConnectionMillis(int)</a> - Method in interface org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/Environment.html" title="interface in org.cojen.dirmi">Environment</a></dt>
@@ -407,9 +412,17 @@ loadScripts(document, 'script');</script>
 <dd>
 <div class="block">Returns the remote link address, or null if unknown or not applicable.</div>
 </dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html#remoteAddress()" class="member-name-link">remoteAddress()</a> - Method in exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></dt>
+<dd>
+<div class="block">Returns the associated remote address, which can be null if unknown or not applicable.</div>
+</dd>
+<dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html#remoteAddress(java.net.SocketAddress)" class="member-name-link">remoteAddress(SocketAddress)</a> - Method in exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></dt>
+<dd>
+<div class="block">Assign the associated remote address.</div>
+</dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" class="type-name-link" title="class in org.cojen.dirmi">RemoteException</a> - Exception Class in <a href="org.cojen.dirmi/org/cojen/dirmi/package-summary.html">org.cojen.dirmi</a></dt>
 <dd>
-<div class="block">Default exception thrown to indicate a remote call failure.</div>
+<div class="block">Defines the default exception for indicating a remote call failure.</div>
 </dd>
 <dt><a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html#%3Cinit%3E()" class="member-name-link">RemoteException()</a> - Constructor for exception class org.cojen.dirmi.<a href="org.cojen.dirmi/org/cojen/dirmi/RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></dt>
 <dd>&nbsp;</dd>
@@ -552,7 +565,7 @@ the order they are declared.</div>
 <div class="block">Write an object (or null) to the pipe.</div>
 </dd>
 </dl>
-<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
+<a href="#I:A">A</a>&nbsp;<a href="#I:B">B</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes&nbsp;and&nbsp;Interfaces</a><span class="vertical-separator">|</span><a href="allpackages-index.html">All&nbsp;Packages</a><span class="vertical-separator">|</span><a href="serialized-form.html">Serialized&nbsp;Form</a></main>
 <footer role="contentinfo">
 <hr>
 <p class="legal-copy"><small>Copyright &#169; 2006&#x2013;2023 <a href="https://github.com/cojen">Cojen</a>. All rights reserved.</small></p>
