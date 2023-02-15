@@ -78,7 +78,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                 try {
                     existing.await();
                 } catch (InterruptedException e) {
-                    throw CoreUtils.remoteException(remoteFailureException, e);
+                    throw CoreUtils.remoteException(this, remoteFailureException, e);
                 }
                 newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
                 if (newSupport == this) {
@@ -122,7 +122,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                     mSupport.session().stubDispose(stub.id, message);
                 }
 
-                throw CoreUtils.remoteException(remoteFailureException, e);
+                throw CoreUtils.remoteException(this, remoteFailureException, e);
             } finally {
                 latch.countDown();
                 remove(stub, latch);

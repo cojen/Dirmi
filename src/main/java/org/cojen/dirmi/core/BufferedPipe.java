@@ -1992,9 +1992,11 @@ class BufferedPipe implements Pipe {
             "{localAddress=" + localAddress() + ", remoteAddress=" + remoteAddress() + '}';
     }
 
-    private static ClosedException noMoreInput() {
+    private ClosedException noMoreInput() {
         // Throw an exception which is more meaningful than EOFException.
-        return new ClosedException("Pipe is closed by remote endpoint");
+        var e = new ClosedException("Pipe is closed by remote endpoint");
+        e.remoteAddress(remoteAddress());
+        return e;
     }
 
     /**

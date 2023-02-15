@@ -7,6 +7,7 @@ v2.3.0
 * Added a debug option to close pipes when they are recycled.
 * Methods unimplemented on the server throw an exception only allowed by the RemoteFailure
   annotation. Before, UnimplementedException would be thrown always.
+* RemoteException now includes the remote address.
 
 v2.2.0 (2023-02-04)
 ------

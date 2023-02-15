@@ -188,7 +188,9 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             checkClosed();
 
             if (sessionId != 0 && sessionId != id) {
-                throw new RemoteException("Connection belongs to an old session");
+                var e = new RemoteException("Connection belongs to an old session");
+                e.remoteAddress(remoteAddress());
+                throw e;
             }
 
             pipe.mSession = this;
@@ -1066,12 +1068,22 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final Object objectFor(long id) throws IOException {
-        return mSkeletons.get(id).server();
+        try {
+            return mSkeletons.get(id).server();
+        } catch (NoSuchObjectException e) {
+            e.remoteAddress(remoteAddress());
+            throw e;
+        }
     }
 
     final Object objectFor(long id, long typeId) throws IOException {
-        StubFactory factory = mStubFactories.get(typeId);
-        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+        try {
+            StubFactory factory = mStubFactories.get(typeId);
+            return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+        } catch (NoSuchObjectException e) {
+            e.remoteAddress(remoteAddress());
+            throw e;
+        }
     }
 
     final Object objectFor(long id, long typeId, RemoteInfo info) {
@@ -1375,11 +1387,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
         String message = b.toString();
 
+        RemoteException e;
+
         if ((closed & R_DISCONNECTED) != 0) {
-            throw new DisconnectedException(message);
+            e = new DisconnectedException(message);
         } else {
-            throw new ClosedException(message);
+            e = new ClosedException(message);
         }
+
+        e.remoteAddress(remoteAddress());
+
+        throw e;
     }
 
     final void conLockAcquire() {
@@ -1432,10 +1450,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 if (e instanceof UncaughtException) {
                     uncaught(e.getCause());
                 } else if (!isClosedOrDisconnected()) {
-                    if (e instanceof NoSuchObjectException ||
-                        e instanceof ObjectStreamException ||
-                        e instanceof ClassNotFoundException ||
-                        !(e instanceof IOException))
+                    if (e instanceof NoSuchObjectException nsoe) {
+                        nsoe.remoteAddress(remoteAddress());
+                        uncaught(e);
+                    } else if (e instanceof ObjectStreamException ||
+                               e instanceof ClassNotFoundException ||
+                               !(e instanceof IOException))
                     {
                         uncaught(e);
                     }

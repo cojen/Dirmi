@@ -208,13 +208,13 @@ public final class Engine implements Environment {
     }
 
     @Override
-    public Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAttr,
+    public Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAddr,
                                InputStream in, OutputStream out)
         throws IOException
     {
         checkClosed();
 
-        var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_SERVER);
+        var pipe = new CorePipe(localAddr, remoteAddr, in, out, CorePipe.M_SERVER);
 
         var settings = mSettings;
         int timeoutMillis = settings.pingTimeoutMillis;
@@ -294,12 +294,19 @@ public final class Engine implements Environment {
             }
 
             try {
-                if (e instanceof RemoteException && clientSessionId != 0) {
-                    pipe.writeLong(CoreUtils.PROTOCOL_V2);
-                    pipe.writeLong(clientSessionId);
-                    pipe.writeLong(0); // server session id of zero indicates an error
-                    pipe.writeObject(e.getMessage());
-                    pipe.flush();
+                if (e instanceof RemoteException re) {
+                    // Capture the message before the remote address is appended to it.
+                    String message = re.getMessage();
+
+                    re.remoteAddress(remoteAddr);
+
+                    if (clientSessionId != 0) {
+                        pipe.writeLong(CoreUtils.PROTOCOL_V2);
+                        pipe.writeLong(clientSessionId);
+                        pipe.writeLong(0); // server session id of zero indicates an error
+                        pipe.writeObject(message);
+                        pipe.flush();
+                    }
                 }
 
                 pipe.close();
@@ -356,6 +363,9 @@ public final class Engine implements Environment {
                 timeoutTask.cancel();
             }
             CoreUtils.closeQuietly(session);
+            if (e instanceof RemoteException re) {
+                re.remoteAddress(remoteAddr);
+            }
             throw e;
         } finally {
             session.mStateLock.unlock();
@@ -463,6 +473,9 @@ public final class Engine implements Environment {
             }
             session.close();
             CoreUtils.closeQuietly(pipe);
+            if (e instanceof RemoteException re) {
+                re.remoteAddress(addr);
+            }
             throw CoreUtils.rethrow(e);
         }
     }

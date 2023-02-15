@@ -18,13 +18,17 @@ package org.cojen.dirmi;
 
 import java.io.IOException;
 
+import java.net.SocketAddress;
+
 /**
- * Default exception thrown to indicate a remote call failure.
+ * Defines the default exception for indicating a remote call failure.
  *
  * @author Brian S O'Neill
  * @see RemoteFailure
  */
 public class RemoteException extends IOException {
+    private SocketAddress mRemoteAddress;
+
     public RemoteException() {
     }
 
@@ -38,5 +42,29 @@ public class RemoteException extends IOException {
 
     public RemoteException(Throwable cause) {
         super(cause);
+    }
+
+    /**
+     * Returns the associated remote address, which can be null if unknown or not applicable.
+     */
+    public SocketAddress remoteAddress() {
+        return mRemoteAddress;
+    }
+
+    /**
+     * Assign the associated remote address.
+     */
+    public void remoteAddress(SocketAddress addr) {
+        mRemoteAddress = addr;
+    }
+
+    @Override
+    public String getMessage() {
+        String message = super.getMessage();
+        SocketAddress addr = mRemoteAddress;
+        if (addr != null) {
+            message = message + " (" + addr + ')';
+        }
+        return message;
     }
 }

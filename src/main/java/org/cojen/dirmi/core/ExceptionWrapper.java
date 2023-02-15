@@ -54,7 +54,11 @@ abstract class ExceptionWrapper {
         return wrapper;
     }
 
-    abstract <T extends Throwable> T wrap(Throwable cause);
+    /**
+     * @param extraMessage if non-null, is appended to the exception message (in parens) if
+     * possible
+     */
+    abstract <T extends Throwable> T wrap(Throwable cause, Object extraMessage);
 
     private static ExceptionWrapper makeWrapper(Class<?> exceptionType) {
         int style;
@@ -62,21 +66,21 @@ abstract class ExceptionWrapper {
         findCtor: {
             if (Modifier.isPublic(exceptionType.getModifiers())) {
                 try {
-                    exceptionType.getConstructor(Throwable.class);
+                    exceptionType.getConstructor(String.class, Throwable.class);
                     style = 1;
                     break findCtor;
                 } catch (NoSuchMethodException e) {
                 }
 
                 try {
-                    exceptionType.getConstructor(String.class, Throwable.class);
+                    exceptionType.getConstructor(String.class);
                     style = 2;
                     break findCtor;
                 } catch (NoSuchMethodException e) {
                 }
 
                 try {
-                    exceptionType.getConstructor(String.class);
+                    exceptionType.getConstructor(Throwable.class);
                     style = 3;
                     break findCtor;
                 } catch (NoSuchMethodException e) {
@@ -97,21 +101,23 @@ abstract class ExceptionWrapper {
         ClassMaker cm = ClassMaker.begin(null, MethodHandles.lookup());
         cm.extend(ExceptionWrapper.class).addConstructor();
 
-        MethodMaker mm = cm.addMethod(Throwable.class, "wrap", Throwable.class);
+        MethodMaker mm = cm.addMethod(Throwable.class, "wrap", Throwable.class, Object.class);
 
         switch (style) {
         case 1: {
-            mm.return_(mm.new_(exceptionType, mm.param(0)));
+            var messageVar = mm.var(String.class).invoke("valueOf", mm.param(0));
+            appendToMessage(messageVar, mm.param(1));
+            mm.return_(mm.new_(exceptionType, messageVar, mm.param(0)));
             break;
         }
         case 2: {
             var messageVar = mm.var(String.class).invoke("valueOf", mm.param(0));
-            mm.return_(mm.new_(exceptionType, messageVar, mm.param(0)));
+            appendToMessage(messageVar, mm.param(1));
+            initCauseAndReturn(mm.new_(exceptionType, messageVar));
             break;
         }
         case 3: {
-            var messageVar = mm.var(String.class).invoke("valueOf", mm.param(0));
-            initCauseAndReturn(mm.new_(exceptionType, messageVar));
+            mm.return_(mm.new_(exceptionType, mm.param(0)));
             break;
         }
         case 4: {
@@ -131,6 +137,14 @@ abstract class ExceptionWrapper {
         } catch (Throwable e) {
             throw new AssertionError(e);
         }
+    }
+
+    private static void appendToMessage(Variable messageVar, Variable extraMessageVar) {
+        MethodMaker mm = extraMessageVar.methodMaker();
+        Label noMessage = mm.label();
+        extraMessageVar.ifEq(null, noMessage);
+        messageVar.set(mm.concat(messageVar, " (", extraMessageVar, ')'));
+        noMessage.here();
     }
 
     private static void initCauseAndReturn(Variable exVar) {
@@ -155,7 +169,7 @@ abstract class ExceptionWrapper {
 
         @Override
         @SuppressWarnings("unchecked")
-        <T extends Throwable> T wrap(Throwable cause) {
+        <T extends Throwable> T wrap(Throwable cause, Object extraMessage) {
             return (T) cause;
         }
     }

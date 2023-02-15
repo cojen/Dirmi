@@ -235,23 +235,56 @@ public final class CoreUtils {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public static <T extends Throwable> T remoteException(Class<T> remoteFailureEx,
                                                           Throwable cause)
     {
+        return remoteException((SocketAddress) null, remoteFailureEx, cause);
+    }
+
+    public static <T extends Throwable> T remoteException(StubSupport support,
+                                                          Class<T> remoteFailureEx,
+                                                          Throwable cause)
+    {
+        Session session = support == null ? null : support.session();
+        return remoteException(session, remoteFailureEx, cause);
+    }
+
+    public static <T extends Throwable> T remoteException(Session session,
+                                                          Class<T> remoteFailureEx,
+                                                          Throwable cause)
+    {
+        SocketAddress remoteAddress = session == null ? null : session.remoteAddress();
+        return remoteException(remoteAddress, remoteFailureEx, cause);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Throwable> T remoteException(SocketAddress remoteAddress,
+                                                          Class<T> remoteFailureEx,
+                                                          Throwable cause)
+    {
         if (cause == null) {
-            cause = new RemoteException();
+            RemoteException re = new RemoteException();
+            if (remoteAddress != null) {
+                re.remoteAddress(remoteAddress);
+            }
+            cause = re;
         }
+
+        T actual;
 
         if (remoteFailureEx.isInstance(cause)) {
-            return (T) cause;
+            actual = (T) cause;
+        } else if (remoteFailureEx == RemoteException.class) {
+            actual = (T) new RemoteException(cause);
+        } else {
+            actual = ExceptionWrapper.forClass(remoteFailureEx).wrap(cause, remoteAddress);
         }
 
-        if (remoteFailureEx == RemoteException.class) {
-            return (T) new RemoteException(cause);
+        if (remoteAddress != null && actual instanceof RemoteException re) {
+            re.remoteAddress(remoteAddress);
         }
 
-        return ExceptionWrapper.forClass(remoteFailureEx).wrap(cause);
+        return actual;
     }
 
     /**

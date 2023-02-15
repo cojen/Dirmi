@@ -326,6 +326,9 @@ final class ClientSession<R> extends CoreSession<R> {
                     timeoutTask.cancel();
                 }
                 CoreUtils.closeQuietly(pipe);
+                if (e instanceof RemoteException re) {
+                    re.remoteAddress(remoteAddress());
+                }
                 throw e;
             }
         }

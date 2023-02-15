@@ -241,15 +241,19 @@ final class StubMaker {
 
             mm.throws_(remoteFailureClass);
 
+            var supportVar = mm.field("support").getAcquire();
+
             if (serverMethod == null) {
                 // The server doesn't implement the method.
-                Variable exVar = mm.var(Throwable.class)
-                    .set(mm.new_(UnimplementedException.class, "Unimplemented on the remote side"));
+                Variable exVar = mm.new_(UnimplementedException.class,
+                                         "Unimplemented on the remote side");
                 if (remoteFailureClass.isAssignableFrom(UnimplementedException.class)) {
+                    exVar.invoke("remoteAddress",
+                                 supportVar.invoke("session").invoke("remoteAddress"));
                     exVar.throw_();
                 } else {
-                    exVar.set(mm.var(CoreUtils.class).invoke
-                              ("remoteException", remoteFailureClass, exVar));
+                    exVar = mm.var(CoreUtils.class).invoke
+                        ("remoteException", supportVar, remoteFailureClass, exVar);
                     throwException(exVar, remoteFailureClass, thrownClasses);
                 }
                 continue;
@@ -292,8 +296,6 @@ final class StubMaker {
                 mm.new_(IncompatibleClassChangeError.class).throw_();
                 continue;
             }
-
-            var supportVar = mm.field("support").getAcquire();
 
             if (serverMethod.isDisposer()) {
                 mm.field("support").setRelease(supportVar.invoke("dispose", mm.this_()));

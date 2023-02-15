@@ -64,7 +64,7 @@ final class CoreStubSupport implements StubSupport {
         try {
             return mSession.connect();
         } catch (Throwable e) {
-            throw CoreUtils.remoteException(remoteFailureException, e);
+            throw CoreUtils.remoteException(mSession, remoteFailureException, e);
         }
     }
 
@@ -81,7 +81,7 @@ final class CoreStubSupport implements StubSupport {
         try {
             return mSession.objectFor(aliasId, typeId);
         } catch (Throwable e) {
-            throw CoreUtils.remoteException(remoteFailureException, e);
+            throw CoreUtils.remoteException(mSession, remoteFailureException, e);
         }
     }
 
@@ -129,7 +129,7 @@ final class CoreStubSupport implements StubSupport {
     {
         mLocalPipe.remove();
         CoreUtils.closeQuietly(pipe);
-        return CoreUtils.remoteException(remoteFailureException, cause);
+        return CoreUtils.remoteException(mSession, remoteFailureException, cause);
     }
 
     @Override
