@@ -140,7 +140,9 @@ final class StubMaker {
     }
 
     /**
-     * Returns a class which has a constructor that accepts a StubSupport instance.
+     * Returns a Stub subclass which can be constructed with:
+     *
+     *   (long id, StubSupport support, MethodIdWriter miw)
      *
      * @throws NoClassDefFoundError if the remote failure class isn't found or if the batched
      * remote object class isn't found

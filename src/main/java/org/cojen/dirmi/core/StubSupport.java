@@ -124,8 +124,7 @@ public interface StubSupport {
     <T extends Throwable> T failed(Class<T> remoteFailureException, Pipe pipe, Throwable cause);
 
     /**
-     * Disposes the given stub and returns a StubSupport instance which throws
-     * NoSuchObjectException for all of the above methods.
+     * Disposes the given stub and returns a DisposedStubSupport instance.
      */
     StubSupport dispose(Stub stub);
 }
