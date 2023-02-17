@@ -145,6 +145,11 @@ final class MethodIdWriterMaker {
 
         mm.new_(UnimplementedException.class, "Unimplemented on the remote side").throw_();
 
+        // Delegate writes for synthetic method ids to the regular write method. If no new
+        // mappings exist for such methods, it will throw UnimplementedException as before.
+        mm = cm.addMethod(null, "writeSyntheticMethodId", Pipe.class, int.class).public_();
+        mm.invoke("writeMethodId", mm.param(0), mm.param(1));
+
         MethodHandles.Lookup lookup = cm.finishHidden();
 
         try {

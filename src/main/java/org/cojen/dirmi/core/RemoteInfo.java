@@ -22,6 +22,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -284,45 +285,53 @@ final class RemoteInfo {
      */
     int[] methodIdMap(RemoteInfo to) {
         int[] mapping = new int[mRemoteMethods.size()];
+        Arrays.fill(mapping, Integer.MIN_VALUE);
 
-        Iterator<RemoteMethod> itFrom = mRemoteMethods.iterator();
-        Iterator<RemoteMethod> itTo = to.mRemoteMethods.iterator();
+        var it = new JoinedIterator<>(mRemoteMethods, to.mRemoteMethods);
 
-        RemoteMethod methodTo = null;
-        int idTo = -1;
+        RemoteMethod lastFromMethod = null;
+        int fromMethodId = -1;
 
-        outer: for (int i=0; i<mapping.length; i++) {
-            RemoteMethod methodFrom = itFrom.next();
+        RemoteMethod lastToMethod = null;
+        int toMethodId = -1;
 
-            while (true) {
-                if (methodTo == null) {
-                    if (!itTo.hasNext()) {
-                        for (; i<mapping.length; i++) {
-                            mapping[i] = Integer.MIN_VALUE;
-                        }
-                        break outer;
+        // Determine what the synthetic id mappings should start from by counting up the number
+        // of originally non-synthetic mappings.
+        int fromSyntheticMethodId = -1;
+        for (RemoteMethod m : mRemoteMethods) {
+            if (!m.isUnimplemented()) {
+                fromSyntheticMethodId++;
+            }
+        }
+
+        while (it.hasNext()) {
+            JoinedIterator.Pair<RemoteMethod> pair = it.next();
+
+            RemoteMethod fromMethod = pair.a;
+
+            if (fromMethod != lastFromMethod && fromMethod != null) {
+                if (fromMethod.isUnimplemented()) {
+                    if (fromMethod.isBatched()) {
+                        // Create a gap to make room for the batched immediate variant.
+                        fromSyntheticMethodId++;
                     }
-                    methodTo = itTo.next();
-                    idTo++;
+                    fromSyntheticMethodId++;
+                } else {
+                    fromMethodId++;
+                    lastFromMethod = fromMethod;
                 }
+            }
 
-                int cmp = methodFrom.compareTo(methodTo);
+            RemoteMethod toMethod = pair.b;
 
-                if (cmp == 0) {
-                    // Matched mapping.
-                    mapping[i] = idTo;
-                    methodTo = null;
-                    continue outer;
-                }
+            if (toMethod != lastToMethod && toMethod != null) {
+                toMethodId++;
+                lastToMethod = toMethod;
+            }
 
-                if (cmp < 0) {
-                    // Method on the "from" side doesn't exist on the "to" side.
-                    mapping[i] = Integer.MIN_VALUE;
-                    continue outer;
-                }
-
-                // Method on the "to" side doesn't exist on the "from" side, so skip it.
-                methodTo = null;
+            if (fromMethod != null && toMethod != null && fromMethod.isCompatibleWith(toMethod)) {
+                int fromId = fromMethod.isUnimplemented() ? fromSyntheticMethodId : fromMethodId;
+                mapping[fromId] = toMethodId;
             }
         }
 

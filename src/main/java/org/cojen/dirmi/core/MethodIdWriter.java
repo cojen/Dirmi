@@ -33,6 +33,17 @@ public interface MethodIdWriter {
      */
     void writeMethodId(Pipe pipe, int id) throws IOException;
 
+    /**
+     * Called by a stub method which is annotated as Unimplemented. The method id that's passed
+     * in doesn't match any method id available on the remote side at the time the stub class
+     * was generated.
+     *
+     * @throws UnimplementedException by default
+     */
+    default void writeSyntheticMethodId(Pipe pipe, int id) throws IOException {
+        throw new UnimplementedException("Unimplemented on the remote side");
+    }
+
     static class Unimplemented implements MethodIdWriter {
         static final Unimplemented THE = new Unimplemented();
 

@@ -159,6 +159,7 @@ final class StubMaker {
         RemoteMethod lastServerMethod = null;
         int serverMethodId = -1;
         int batchedImmediateMethodId = -1;
+        int syntheticMethodId = mServerInfo.remoteMethods().size();
 
         while (it.hasNext()) {
             JoinedIterator.Pair<RemoteMethod> pair = it.next();
@@ -243,22 +244,23 @@ final class StubMaker {
 
             mm.throws_(remoteFailureClass);
 
-            var supportVar = mm.field("support").getAcquire();
+            RemoteMethod method = serverMethod;
+            int methodId = serverMethodId;
 
-            if (serverMethod == null) {
-                // The server doesn't implement the method.
-                Variable exVar = mm.new_(UnimplementedException.class,
-                                         "Unimplemented on the remote side");
-                if (remoteFailureClass.isAssignableFrom(UnimplementedException.class)) {
-                    exVar.invoke("remoteAddress",
-                                 supportVar.invoke("session").invoke("remoteAddress"));
-                    exVar.throw_();
-                } else {
-                    exVar = mm.var(CoreUtils.class).invoke
-                        ("remoteException", supportVar, remoteFailureClass, exVar);
-                    throwException(exVar, remoteFailureClass, thrownClasses);
+            if (method == null) {
+                // If the server method isn't implemented, use the client definition as a best
+                // guess for now.
+                method = clientMethod;
+
+                mm.addAnnotation(Unimplemented.class, true);
+
+                if (method.isBatched()) {
+                    // Create a gap to make room for the batched immediate variant.
+                    syntheticMethodId++;
                 }
-                continue;
+
+                methodId = syntheticMethodId;
+                syntheticMethodId++;
             }
 
             {
@@ -266,46 +268,48 @@ final class StubMaker {
                 // allows RemoteInfo.examineStub to work properly without consulting the remote
                 // interface, which might not have all the server-side methods anyhow.
 
-                if (serverMethod.isDisposer()) {
+                if (method.isDisposer()) {
                     mm.addAnnotation(Disposer.class, true);
                 }
 
-                if (serverMethod.isBatched()) {
+                if (method.isBatched()) {
                     mm.addAnnotation(Batched.class, true);
-                } else if (serverMethod.isUnbatched()) {
+                } else if (method.isUnbatched()) {
                     mm.addAnnotation(Unbatched.class, true);
                 }
 
-                if (serverMethod.isRestorable()) {
+                if (method.isRestorable()) {
                     mm.addAnnotation(Restorable.class, true);
                 }
 
                 if (remoteFailureClass == RemoteException.class) {
-                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                    if (method.isRemoteFailureExceptionUndeclared()) {
                         mm.addAnnotation(RemoteFailure.class, true).put("declared", false);
                     }
                 } else {
                     AnnotationMaker am = mm.addAnnotation(RemoteFailure.class, true);
                     am.put("exception", remoteFailureClass);
-                    if (serverMethod.isRemoteFailureExceptionUndeclared()) {
+                    if (method.isRemoteFailureExceptionUndeclared()) {
                         am.put("declared", false);
                     }
                 }
             }
 
-            if (clientMethod != null && clientMethod.isPiped() != serverMethod.isPiped()) {
+            if (clientMethod != null && clientMethod.isPiped() != method.isPiped()) {
                 // Not expected.
                 mm.new_(IncompatibleClassChangeError.class).throw_();
                 continue;
             }
 
-            if (serverMethod.isDisposer()) {
+            var supportVar = mm.field("support").getAcquire();
+
+            if (method.isDisposer()) {
                 mm.field("support").setRelease(supportVar.invoke("dispose", mm.this_()));
             }
 
             Variable batchedPipeVar;
             Label unbatchedStart;
-            if (serverMethod.isUnbatched()) {
+            if (method.isUnbatched()) {
                 batchedPipeVar = supportVar.invoke("unbatch");
                 unbatchedStart = mm.label().here();
             } else {
@@ -326,7 +330,7 @@ final class StubMaker {
             Variable typeIdVar = null;
             Variable aliasIdVar = null;
 
-            if (serverMethod.isBatched() && !isVoid(returnType)) {
+            if (method.isBatched() && !isVoid(returnType)) {
                 var returnClass = classFor(returnType);
                 typeIdVar = supportVar.invoke("remoteTypeId", returnClass);
                 aliasIdVar = supportVar.invoke("newAliasId");
@@ -337,7 +341,7 @@ final class StubMaker {
 
                     // Must call the immediate variant.
 
-                    writeParams(mm, pipeVar, serverMethod, batchedImmediateMethodId, ptypes);
+                    writeParams(mm, pipeVar, method, batchedImmediateMethodId, ptypes);
                     pipeVar.invoke("writeLong", aliasIdVar);
                     pipeVar.invoke("flush");
 
@@ -364,9 +368,9 @@ final class StubMaker {
                 }
             }
 
-            writeParams(mm, pipeVar, serverMethod, serverMethodId, ptypes);
+            writeParams(mm, pipeVar, method, methodId, ptypes);
 
-            if (serverMethod.isPiped()) {
+            if (method.isPiped()) {
                 supportVar.invoke("finishBatch", pipeVar).ifFalse(invokeEnd);
                 pipeVar.invoke("flush");
                 thrownVar = supportVar.invoke("readResponse", pipeVar);
@@ -374,7 +378,7 @@ final class StubMaker {
                 thrownVar.ifNe(null, throwException);
                 invokeEnd.here();
                 mm.return_(pipeVar);
-            } else if (serverMethod.isBatched()) {
+            } else if (method.isBatched()) {
                 invokeEnd.here();
                 supportVar.invoke("batched", pipeVar);
                 if (isVoid(returnType)) {
@@ -395,7 +399,7 @@ final class StubMaker {
                 thrownVar.ifNe(null, throwException);
                 noBatch.here();
 
-                if (!serverMethod.isNoReply()) {
+                if (!method.isNoReply()) {
                     thrownVar.set(supportVar.invoke("readResponse", pipeVar));
                     thrownVar.ifNe(null, throwException);
                 }
@@ -406,7 +410,7 @@ final class StubMaker {
                     mm.return_();
                 } else {
                     Variable inVar = pipeVar;
-                    if (serverMethod.isSerialized() && CoreUtils.isObjectType(returnType)) {
+                    if (method.isSerialized() && CoreUtils.isObjectType(returnType)) {
                         inVar = mm.new_(CoreObjectInputStream.class, pipeVar);
                         ObjectInputFilter filter = clientMethod.objectInputFilter();
                         var filterVar = mm.var(ObjectInputFilter.class).setExact(filter);
@@ -471,10 +475,16 @@ final class StubMaker {
         return returnType == void.class || returnType.equals("V");
     }
 
-    private static void writeParams(MethodMaker mm, Variable pipeVar,
-                                    RemoteMethod method, int methodId, Object[] ptypes)
+    private void writeParams(MethodMaker mm, Variable pipeVar,
+                             RemoteMethod method, int methodId, Object[] ptypes)
     {
-        mm.field("miw").getAcquire().invoke("writeMethodId", pipeVar, methodId);
+        String writeName = "writeMethodId";
+
+        if (methodId >= mServerInfo.remoteMethods().size()) {
+            writeName = "writeSyntheticMethodId";
+        }
+
+        mm.field("miw").getAcquire().invoke(writeName, pipeVar, methodId);
 
         if (ptypes.length <= 0) {
             return;

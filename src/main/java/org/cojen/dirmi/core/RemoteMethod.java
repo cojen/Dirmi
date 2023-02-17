@@ -48,7 +48,7 @@ import org.cojen.dirmi.Unbatched;
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
         F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64,
-        F_SERIALIZED = 128;
+        F_SERIALIZED = 128, F_UNIMPLEMENTED = 256;
 
     private final int mFlags;
     private final String mName;
@@ -104,6 +104,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         }
         if ((serializedAnn = m.getAnnotation(Serialized.class)) != null) {
             flags |= F_SERIALIZED;
+        }
+        if (m.isAnnotationPresent(Unimplemented.class) && !m.getDeclaringClass().isInterface()) {
+            flags |= F_UNIMPLEMENTED;
         }
 
         if ((flags & F_BATCHED) != 0 && (flags & F_UNBATCHED) != 0) {
@@ -362,6 +365,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * @see Unimplemented
+     */
+    boolean isUnimplemented() {
+        return (mFlags & F_UNIMPLEMENTED) != 0;
+    }
+
+    /**
      * Returns the name of this method.
      */
     String name() {
@@ -394,6 +404,15 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
      */
     Set<String> exceptionTypes() {
         return mExceptionTypes;
+    }
+
+    /**
+     * Given another method with the same signature, returns true if the annotations match well
+     * enough such that wire protocol matches.
+     */
+    boolean isCompatibleWith(RemoteMethod other) {
+        int mask = F_BATCHED | F_NOREPLY | F_SERIALIZED;
+        return (mFlags & mask) == (other.mFlags & mask);
     }
 
     void conflictCheck(Method m, RemoteMethod other) {

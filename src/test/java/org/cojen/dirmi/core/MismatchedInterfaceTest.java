@@ -34,8 +34,11 @@ import org.cojen.dirmi.Environment;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
+import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.UnimplementedException;
+
+import org.cojen.dirmi.RestorableTest.Acceptor;
 
 /**
  * 
@@ -333,6 +336,128 @@ public class MismatchedInterfaceTest {
             fail();
         } catch (UnimplementedException e) {
         }
+    }
+
+    @Test
+    public void restoreUnimplementedMethod() throws Exception {
+        // Initially, the remote interface defines three methods, but the server only
+        // implements two of them. When the server restarts, it defines all three methods.
+        // Verify that a restorable object now has access to all three methods.
+
+        Class<?> ifaceFull, serverFull;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT5", new Loader(), null)
+                .public_().interface_().implement(Remote.class);
+            cm.addMethod(int.class, "a", int.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(String.class, "b", String.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(cm, "r", String.class)
+                .public_().abstract_().throws_(RemoteException.class)
+                .addAnnotation(Restorable.class, true);
+            ifaceFull = cm.finish();
+
+            cm = ClassMaker.begin(null, ifaceFull.getClassLoader()).implement(ifaceFull).public_();
+            cm.addField(String.class, "prefix").private_().final_();
+            MethodMaker mm = cm.addConstructor(String.class).public_();
+            mm.invokeSuperConstructor();
+            mm.field("prefix").set(mm.param(0));
+            mm = cm.addMethod(int.class, "a", int.class).public_();
+            mm.return_(mm.param(0).neg());
+            mm = cm.addMethod(String.class, "b", String.class).public_();
+            mm.return_(mm.concat(mm.field("prefix"), ':', mm.param(0)));
+            mm = cm.addMethod(ifaceFull, "r", String.class).public_();
+            mm.return_(mm.new_(cm, mm.param(0)));
+            serverFull = cm.finish();
+        }
+
+        Class<?> ifacePartial, serverPartial;
+        {
+            // The partial variant omits the "a" method.
+
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT5", new Loader(), null)
+                .public_().interface_().implement(Remote.class);
+            cm.addMethod(String.class, "b", String.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(cm, "r", String.class)
+                .public_().abstract_().throws_(RemoteException.class)
+                .addAnnotation(Restorable.class, true);
+            ifacePartial = cm.finish();
+
+            cm = ClassMaker.begin(null, ifacePartial.getClassLoader())
+                .implement(ifacePartial).public_();
+            cm.addField(String.class, "prefix").private_().final_();
+            MethodMaker mm = cm.addConstructor(String.class).public_();
+            mm.invokeSuperConstructor();
+            mm.field("prefix").set(mm.param(0));
+            mm = cm.addMethod(String.class, "b", String.class).public_();
+            mm.return_(mm.concat(mm.field("prefix"), ':', mm.param(0)));
+            mm = cm.addMethod(ifacePartial, "r", String.class).public_();
+            mm.return_(mm.new_(cm, mm.param(0)));
+            serverPartial = cm.finish();
+        }
+
+        Environment serverEnv = Environment.create();
+        var ss = new ServerSocket(0);
+        var acceptor = new Acceptor(serverEnv, ss);
+        serverEnv.execute(acceptor);
+
+        serverEnv.export("test", serverPartial.getConstructor(String.class).newInstance("hello"));
+
+        var client = mEnv.connect(ifaceFull, "test", "localhost", ss.getLocalPort()).root();
+
+        Method a = client.getClass().getMethod("a", int.class);
+        Method b = client.getClass().getMethod("b", String.class);
+        Method r = client.getClass().getMethod("r", String.class);
+
+        // Replace the client with an explicitly restorable instance.
+        client = r.invoke(client, "world");
+
+        try {
+            a.invoke(client, 10);
+            fail();
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof UnimplementedException);
+        }
+
+        assertEquals("world:stuff", b.invoke(client, "stuff"));
+        assertTrue(ifaceFull.isInstance(r.invoke(client, "test")));
+
+        // Now close the server session and replace with the full server.
+
+        acceptor.suspend();
+        acceptor.closeLastAccepted();
+
+        serverEnv.export("test", serverFull.getConstructor(String.class).newInstance("hello!"));
+
+        acceptor.resume();
+
+        attempt: {
+            Throwable cause = null;
+
+            for (int i=0; i<100; i++) {
+                try {
+                    // This method should work now.
+                    assertEquals(-10, a.invoke(client, 10));
+                    break attempt;
+                } catch (InvocationTargetException e) {
+                    cause = e.getCause();
+                    assertTrue(cause instanceof RemoteException);
+                    // Wait and try again.
+                    Thread.sleep(100);
+                }
+            }
+
+            fail("" + cause);
+        }
+
+        // All other methods should still work fine.
+        assertEquals("world:stuff", b.invoke(client, "stuff"));
+        assertTrue(ifaceFull.isInstance(r.invoke(client, "test")));
+
+        serverEnv.close();
+        acceptor.close();
     }
 
     public static class MyException extends Exception {

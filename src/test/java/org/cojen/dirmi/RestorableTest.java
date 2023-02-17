@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import java.net.ServerSocket;
@@ -581,7 +582,7 @@ public class RestorableTest {
         }
     };
 
-    private static class Acceptor implements Runnable {
+    public static class Acceptor implements Runnable, Closeable {
         final Environment mEnv;
         final ServerSocket mServerSocket;
         volatile boolean mClosed;
@@ -589,7 +590,7 @@ public class RestorableTest {
         boolean mSuspended;
         Session mSession;
 
-        Acceptor(Environment env, ServerSocket ss) throws IOException {
+        public Acceptor(Environment env, ServerSocket ss) throws IOException {
             mEnv = env;
             mServerSocket = ss;
             ss.setSoTimeout(10);
@@ -634,7 +635,7 @@ public class RestorableTest {
             }
         }
 
-        void closeLastAccepted() {
+        public void closeLastAccepted() {
             Session session;
             synchronized (this) {
                 session = mSession;
@@ -645,19 +646,20 @@ public class RestorableTest {
             }
         }
 
-        synchronized void suspend() throws InterruptedException {
+        public synchronized void suspend() throws InterruptedException {
             mDoSuspend = true;
             while (!mSuspended) {
                 wait();
             }
         }
 
-        synchronized void resume() {
+        public synchronized void resume() {
             mDoSuspend = false;
             notify();
         }
 
-        void close() {
+        @Override
+        public void close() {
             mClosed = true;
             CoreUtils.closeQuietly(mServerSocket);
             resume();
