@@ -23,6 +23,8 @@ import java.net.ServerSocket;
 
 import java.util.Iterator;
 
+import java.util.function.BiPredicate;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
@@ -404,7 +406,8 @@ public class MismatchedInterfaceTest {
 
         serverEnv.export("test", serverPartial.getConstructor(String.class).newInstance("hello"));
 
-        var client = mEnv.connect(ifaceFull, "test", "localhost", ss.getLocalPort()).root();
+        Session<?> session = mEnv.connect(ifaceFull, "test", "localhost", ss.getLocalPort());
+        var client = session.root();
 
         Method a = client.getClass().getMethod("a", int.class);
         Method b = client.getClass().getMethod("b", String.class);
@@ -431,26 +434,36 @@ public class MismatchedInterfaceTest {
 
         serverEnv.export("test", serverFull.getConstructor(String.class).newInstance("hello!"));
 
-        acceptor.resume();
+        var listener = new BiPredicate<Session<?>, Throwable>() {
+            private static boolean mReady;
 
-        attempt: {
-            Throwable cause = null;
-
-            for (int i=0; i<100; i++) {
-                try {
-                    // This method should work now.
-                    assertEquals(-10, a.invoke(client, 10));
-                    break attempt;
-                } catch (InvocationTargetException e) {
-                    cause = e.getCause();
-                    assertTrue(cause instanceof RemoteException);
-                    // Wait and try again.
-                    Thread.sleep(100);
+            @Override
+            public synchronized boolean test(Session<?> session, Throwable ex) {
+                if (session.state() == Session.State.CONNECTED) {
+                    mReady = true;
+                    notify();
+                    return false;
                 }
+                return true;
             }
 
-            fail("" + cause);
-        }
+            synchronized boolean waitUntilReady(long timeout) throws InterruptedException {
+                long end = System.currentTimeMillis() + timeout;
+                while (System.currentTimeMillis() < end && !mReady) {
+                    wait(timeout);
+                }
+                return mReady;
+            }
+        };
+
+        session.addStateListener(listener);
+
+        acceptor.resume();
+
+        assertTrue(listener.waitUntilReady(30_000));
+
+        // This method should work now.
+        assertEquals(-10, a.invoke(client, 10));
 
         // All other methods should still work fine.
         assertEquals("world:stuff", b.invoke(client, "stuff"));
