@@ -256,11 +256,10 @@ final class StubMaker {
 
                 if (method.isBatched()) {
                     // Create a gap to make room for the batched immediate variant.
-                    syntheticMethodId++;
+                    batchedImmediateMethodId = syntheticMethodId++;
                 }
 
-                methodId = syntheticMethodId;
-                syntheticMethodId++;
+                methodId = syntheticMethodId++;
             }
 
             {

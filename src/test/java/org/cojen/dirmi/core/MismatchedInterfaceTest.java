@@ -434,28 +434,7 @@ public class MismatchedInterfaceTest {
 
         serverEnv.export("test", serverFull.getConstructor(String.class).newInstance("hello!"));
 
-        var listener = new BiPredicate<Session<?>, Throwable>() {
-            private static boolean mReady;
-
-            @Override
-            public synchronized boolean test(Session<?> session, Throwable ex) {
-                if (session.state() == Session.State.CONNECTED) {
-                    mReady = true;
-                    notify();
-                    return false;
-                }
-                return true;
-            }
-
-            synchronized boolean waitUntilReady(long timeout) throws InterruptedException {
-                long end = System.currentTimeMillis() + timeout;
-                while (System.currentTimeMillis() < end && !mReady) {
-                    wait(timeout);
-                }
-                return mReady;
-            }
-        };
-
+        var listener = new Listener();
         session.addStateListener(listener);
 
         acceptor.resume();
@@ -468,6 +447,98 @@ public class MismatchedInterfaceTest {
         // All other methods should still work fine.
         assertEquals("world:stuff", b.invoke(client, "stuff"));
         assertTrue(ifaceFull.isInstance(r.invoke(client, "test")));
+
+        serverEnv.close();
+        acceptor.close();
+    }
+
+    @Test
+    public void restoreUnimplementedMethod2() throws Exception {
+        // Similar to restoreUnimplementedMethod except with a batched method and a root
+        // object restore.
+
+        Class<?> ifaceFull, serverFull;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT6", new Loader(), null)
+                .public_().interface_().implement(Remote.class);
+            cm.addMethod(Parent.class, "a", String.class)
+                .public_().abstract_().throws_(RemoteException.class)
+                .addAnnotation(Batched.class, true);
+            cm.addMethod(int.class, "b", int.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            ifaceFull = cm.finish();
+
+            cm = ClassMaker.begin(null, ifaceFull.getClassLoader()).implement(ifaceFull).public_();
+            MethodMaker mm = cm.addConstructor().public_();
+            mm.invokeSuperConstructor();
+            mm = cm.addMethod(Parent.class, "a", String.class).public_();
+            mm.return_(mm.new_(ServerParent.class, mm.param(0)));
+            mm = cm.addMethod(int.class, "b", int.class).public_();
+            mm.return_(mm.param(0).neg());
+            serverFull = cm.finish();
+        }
+
+        Class<?> ifacePartial, serverPartial;
+        {
+            // The partial variant omits the "a" method.
+
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT6", new Loader(), null)
+                .public_().interface_().implement(Remote.class);
+            cm.addMethod(int.class, "b", int.class)
+                .public_().abstract_().throws_(RemoteException.class);
+            ifacePartial = cm.finish();
+
+            cm = ClassMaker.begin(null, ifacePartial.getClassLoader())
+                .implement(ifacePartial).public_();
+            MethodMaker mm = cm.addConstructor().public_();
+            mm.invokeSuperConstructor();
+            mm = cm.addMethod(int.class, "b", int.class).public_();
+            mm.return_(mm.param(0).neg());
+            serverPartial = cm.finish();
+        }
+
+        Environment serverEnv = Environment.create();
+        var ss = new ServerSocket(0);
+        var acceptor = new Acceptor(serverEnv, ss);
+        serverEnv.execute(acceptor);
+
+        serverEnv.export("test", serverPartial.getConstructor().newInstance());
+
+        Session<?> session = mEnv.connect(ifaceFull, "test", "localhost", ss.getLocalPort());
+        var client = session.root();
+
+        Method a = client.getClass().getMethod("a", String.class);
+        Method b = client.getClass().getMethod("b", int.class);
+
+        try {
+            a.invoke(client, "hello");
+            fail();
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            assertTrue(cause instanceof UnimplementedException);
+        }
+
+        assertEquals(-10, b.invoke(client, 10));
+
+        // Now close the server session and replace with the full server.
+
+        acceptor.suspend();
+        acceptor.closeLastAccepted();
+
+        serverEnv.export("test", serverFull.getConstructor().newInstance());
+
+        var listener = new Listener();
+        session.addStateListener(listener);
+
+        acceptor.resume();
+
+        assertTrue(listener.waitUntilReady(30_000));
+
+        // This method should work now.
+        assertEquals("hello", ((Parent) a.invoke(client, "hello")).name());
+
+        // All other methods should still work fine.
+        assertEquals(-10, b.invoke(client, 10));
 
         serverEnv.close();
         acceptor.close();
@@ -487,5 +558,39 @@ public class MismatchedInterfaceTest {
 
     public static interface Parent extends Remote {
         String name() throws Exception;
+    }
+
+    public static class ServerParent implements Parent {
+        private final String mName;
+
+        public ServerParent(String name) {
+            mName = name;
+        }
+
+        public String name() {
+            return mName;
+        }
+    }
+
+    static class Listener implements BiPredicate<Session<?>, Throwable> {
+        private static boolean mReady;
+
+        @Override
+        public synchronized boolean test(Session<?> session, Throwable ex) {
+            if (session.state() == Session.State.CONNECTED) {
+                mReady = true;
+                notify();
+                return false;
+            }
+            return true;
+        }
+
+        synchronized boolean waitUntilReady(long timeout) throws InterruptedException {
+            long end = System.currentTimeMillis() + timeout;
+            while (System.currentTimeMillis() < end && !mReady) {
+                wait(timeout);
+            }
+            return mReady;
+        }
     }
 }

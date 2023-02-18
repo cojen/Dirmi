@@ -311,10 +311,6 @@ final class RemoteInfo {
 
             if (fromMethod != lastFromMethod && fromMethod != null) {
                 if (fromMethod.isUnimplemented()) {
-                    if (fromMethod.isBatched()) {
-                        // Create a gap to make room for the batched immediate variant.
-                        fromSyntheticMethodId++;
-                    }
                     fromSyntheticMethodId++;
                 } else {
                     fromMethodId++;
