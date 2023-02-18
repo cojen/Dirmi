@@ -573,7 +573,7 @@ public class MismatchedInterfaceTest {
     }
 
     static class Listener implements BiPredicate<Session<?>, Throwable> {
-        private static boolean mReady;
+        private boolean mReady;
 
         @Override
         public synchronized boolean test(Session<?> session, Throwable ex) {
