@@ -436,10 +436,11 @@ public class MismatchedInterfaceTest {
 
         var listener = new Listener();
         session.addStateListener(listener);
+        assertTrue(listener.waitFor(Session.State.RECONNECTING, 30_000));
 
         acceptor.resume();
 
-        assertTrue(listener.waitUntilReady(30_000));
+        assertTrue(listener.waitFor(Session.State.CONNECTED, 30_000));
 
         // This method should work now.
         assertEquals(-10, a.invoke(client, 10));
@@ -529,10 +530,11 @@ public class MismatchedInterfaceTest {
 
         var listener = new Listener();
         session.addStateListener(listener);
+        assertTrue(listener.waitFor(Session.State.RECONNECTING, 30_000));
 
         acceptor.resume();
 
-        assertTrue(listener.waitUntilReady(30_000));
+        assertTrue(listener.waitFor(Session.State.CONNECTED, 30_000));
 
         // This method should work now.
         assertEquals("hello", ((Parent) a.invoke(client, "hello")).name());
@@ -573,24 +575,29 @@ public class MismatchedInterfaceTest {
     }
 
     static class Listener implements BiPredicate<Session<?>, Throwable> {
-        private boolean mReady;
+        private Session.State mState;
 
         @Override
         public synchronized boolean test(Session<?> session, Throwable ex) {
-            if (session.state() == Session.State.CONNECTED) {
-                mReady = true;
-                notify();
-                return false;
-            }
+            mState = session.state();
+            notify();
             return true;
         }
 
-        synchronized boolean waitUntilReady(long timeout) throws InterruptedException {
+        synchronized boolean waitFor(Session.State state, long timeout)
+            throws InterruptedException
+        {
             long end = System.currentTimeMillis() + timeout;
-            while (System.currentTimeMillis() < end && !mReady) {
+            while (true) {
+                Session.State currentState = mState;
+                if (state == currentState) {
+                    return true;
+                }
+                if (System.currentTimeMillis() >= end) {
+                    return false;
+                }
                 wait(timeout);
             }
-            return mReady;
         }
     }
 }
