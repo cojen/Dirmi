@@ -63,7 +63,11 @@ public class RemoteException extends IOException {
         String message = super.getMessage();
         SocketAddress addr = mRemoteAddress;
         if (addr != null) {
-            message = message + " (" + addr + ')';
+            if (message == null) {
+                message = "(" + addr + ')';
+            } else {
+                message = message + " (" + addr + ')';
+            }
         }
         return message;
     }
