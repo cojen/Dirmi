@@ -55,6 +55,13 @@ public interface StubSupport {
         throws T;
 
     /**
+     * Checks if the stub support instance is the correct after connecting. If so, true is
+     * returned. Otherwise, the caller should obtain the support instance again, and then call
+     * connect again.
+     */
+    boolean validate(Stub stub, Pipe pipe);
+
+    /**
      * Used by batched methods which return a Remote object. If the remote typeId is currently
      * unknown, then zero is returned.
      *
@@ -118,7 +125,7 @@ public interface StubSupport {
     <T extends Throwable> T failed(Class<T> remoteFailureException, Pipe pipe, Throwable cause);
 
     /**
-     * Disposes the given stub and returns a DisposedStubSupport instance.
+     * Disposes the given stub.
      */
-    StubSupport dispose(Stub stub);
+    void dispose(Stub stub);
 }

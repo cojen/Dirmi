@@ -64,6 +64,25 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
+    public boolean validate(Stub stub, Pipe pipe) {
+        if (Stub.cSupportHandle.getAcquire(stub) == this) {
+            return true;
+        } else {
+            discard(pipe);
+            return false;
+        }
+    }
+
+    private void discard(Pipe pipe) {
+        if (mLocalPipe.get() == pipe) {
+            mLocalPipe.remove();
+            CoreUtils.closeQuietly(pipe);
+        } else {
+            finished(pipe);
+        }
+    }
+
+    @Override
     public long remoteTypeId(Class<?> type) {
         return mSession.remoteTypeId(type);
     }
@@ -128,7 +147,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public StubSupport dispose(Stub stub) {
-        return mSession.stubDispose(stub);
+    public void dispose(Stub stub) {
+        Stub.cSupportHandle.setRelease(stub, mSession.stubDispose(stub));
     }
 }

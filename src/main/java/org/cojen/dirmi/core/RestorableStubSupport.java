@@ -36,15 +36,15 @@ import org.cojen.dirmi.Session;
 final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch>
     implements StubSupport
 {
-    private final CoreStubSupport mSupport;
+    private final CoreStubSupport mNewSupport;
 
     RestorableStubSupport(CoreStubSupport support) {
-        mSupport = support;
+        mNewSupport = support;
     }
 
     @Override
     public Session session() {
-        return mSupport.session();
+        return mNewSupport.session();
     }
 
     @Override
@@ -54,21 +54,29 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
 
     @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        StubSupport newSupport = newSupport(stub, remoteFailureException);
-        return newSupport.connect(stub, remoteFailureException);
+        restore(stub, remoteFailureException);
+        // Returning null is fine because the stub must immediately call validate.
+        return null;
     }
 
     @Override
     public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
         throws T
     {
-        StubSupport newSupport = newSupport(stub, remoteFailureException);
-        return newSupport.connectUnbatched(stub, remoteFailureException);
+        restore(stub, remoteFailureException);
+        // Returning null is fine because the stub must immediately call validate.
+        return null;
+    }
+
+    @Override
+    public boolean validate(Stub stub, Pipe pipe) {
+        // Always return false, forcing the stub to obtain the restored support instance.
+        return false;
     }
 
     @Override
     public long remoteTypeId(Class<?> type) {
-        return mSupport.remoteTypeId(type);
+        throw new IllegalStateException();
     }
 
     @Override
@@ -76,48 +84,48 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                                                      long aliasId, long typeId)
         throws T
     {
-        return mSupport.newAliasStub(remoteFailureException, aliasId, typeId);
+        throw new IllegalStateException();
     }
 
     @Override
     public boolean isBatching(Pipe pipe) {
-        return mSupport.isBatching(pipe);
+        throw new IllegalStateException();
     }
 
     @Override
     public boolean finishBatch(Pipe pipe) {
-        return mSupport.finishBatch(pipe);
+        throw new IllegalStateException();
     }
 
     @Override
     public Throwable readResponse(Pipe pipe) throws IOException {
-        return mSupport.readResponse(pipe);
+        throw new IllegalStateException();
     }
 
     @Override
     public void finished(Pipe pipe) {
-        mSupport.finished(pipe);
+        throw new IllegalStateException();
     }
 
     @Override
     public void batched(Pipe pipe) {
-        mSupport.batched(pipe);
+        throw new IllegalStateException();
     }
 
     @Override
     public <T extends Throwable> T failed(Class<T> remoteFailureException,
                                           Pipe pipe, Throwable cause)
     {
-        return mSupport.failed(remoteFailureException, pipe, cause);
+        throw new IllegalStateException();
     }
 
     @Override
-    public StubSupport dispose(Stub stub) {
-        return mSupport.dispose(stub);
+    public void dispose(Stub stub) {
+        throw new IllegalStateException();
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends Throwable> StubSupport newSupport(Stub stub, Class<T> remoteFailureException)
+    private <T extends Throwable> void restore(Stub stub, Class<T> remoteFailureException)
         throws T
     {
         // Use a latch in order for only one thread to attempt the stub restore. Other threads
@@ -140,14 +148,14 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                     // The restore by another thread was aborted, so try again.
                     continue;
                 }
-                return newSupport;
+                return;
             }
 
             var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
 
             try {
                 var newStub = (Stub) origin.invoke();
-                mSupport.session().mStubs.stealIdentity(stub, newStub);
+                mNewSupport.session().mStubs.stealIdentity(stub, newStub);
                 newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
                 // Use CAS to detect if the stub has called dispose.
                 var result = (StubSupport) Stub.cSupportHandle
@@ -156,7 +164,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                     // Locally dispose the restored stub.
                     dispose(stub);
                 }
-                return newSupport;
+                return;
             } catch (RuntimeException | Error e) {
                 throw e;
             } catch (Throwable e) {
@@ -175,7 +183,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                     de.setStackTrace(e.getStackTrace());
                     e = de;
 
-                    mSupport.session().stubDispose(stub.id, message);
+                    mNewSupport.session().stubDispose(stub.id, message);
                 }
 
                 throw CoreUtils.remoteException(this, remoteFailureException, e);

@@ -60,6 +60,11 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
+    public boolean validate(Stub stub, Pipe pipe) {
+        throw new IllegalStateException();
+    }
+
+    @Override
     public long remoteTypeId(Class<?> type) {
         throw new IllegalStateException();
     }
@@ -103,7 +108,7 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public StubSupport dispose(Stub stub) {
-        return this;
+    public void dispose(Stub stub) {
+        Stub.cSupportHandle.setRelease(stub, this);
     }
 }

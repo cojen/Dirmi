@@ -300,15 +300,27 @@ final class StubMaker {
                 continue;
             }
 
+            Label obtainSupport = mm.label().here();
             var supportVar = mm.field("support").getAcquire();
 
-            if (method.isDisposer()) {
-                mm.field("support").setRelease(supportVar.invoke("dispose", mm.this_()));
-            }
+            Label connectStart = method.isDisposer() ? mm.label().here() : null;
 
             String connectMethod = method.isUnbatched() ? "connectUnbatched" : "connect";
-
             var pipeVar = supportVar.invoke(connectMethod, mm.this_(), remoteFailureClass);
+
+            if (method.isDisposer()) {
+                // If cannot connect, this stub should still be disposed as a side-effect.
+                mm.catch_(connectStart, Throwable.class, exVar -> {
+                    supportVar.invoke("dispose", mm.this_());
+                    exVar.throw_();
+                });
+            }
+
+            supportVar.invoke("validate", mm.this_(), pipeVar).ifFalse(obtainSupport);
+
+            if (method.isDisposer()) {
+                supportVar.invoke("dispose", mm.this_());
+            }
 
             Label invokeStart = mm.label().here();
             Label invokeEnd = mm.label();

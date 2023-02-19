@@ -4,6 +4,7 @@ Changelog
 v2.3.0
 ------
 * Fixed a bug when a restored object has access to a method which wasn't originally implemented.
+* Fixed a few race conditions during object restoration.
 * Replaced the Session.stateListener method with addStateListener.
 * Added a debug option to close pipes when they are recycled.
 * Methods unimplemented on the server throw an exception only allowed by the RemoteFailure
