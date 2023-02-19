@@ -217,6 +217,8 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
+        Stub.cSupportHandle.setRelease(mRoot, newSupport);
+
         // For all restorable stubs, update the MethodIdWriter and set a support object that
         // allows them to restore on demand.
 
