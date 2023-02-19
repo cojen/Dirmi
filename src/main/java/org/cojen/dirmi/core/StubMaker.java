@@ -306,17 +306,9 @@ final class StubMaker {
                 mm.field("support").setRelease(supportVar.invoke("dispose", mm.this_()));
             }
 
-            Variable batchedPipeVar;
-            Label unbatchedStart;
-            if (method.isUnbatched()) {
-                batchedPipeVar = supportVar.invoke("unbatch");
-                unbatchedStart = mm.label().here();
-            } else {
-                batchedPipeVar = null;
-                unbatchedStart = null;
-            }
+            String connectMethod = method.isUnbatched() ? "connectUnbatched" : "connect";
 
-            var pipeVar = supportVar.invoke("connect", mm.this_(), remoteFailureClass);
+            var pipeVar = supportVar.invoke(connectMethod, mm.this_(), remoteFailureClass);
 
             Label invokeStart = mm.label().here();
             Label invokeEnd = mm.label();
@@ -426,10 +418,6 @@ final class StubMaker {
             var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
             exVar.set(supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar));
             Label throwIt = mm.label().goto_();
-
-            if (batchedPipeVar != null) {
-                mm.finally_(unbatchedStart, () -> supportVar.invoke("rebatch", batchedPipeVar));
-            }
 
             if (thrownVar != null) {
                 throwException.here();

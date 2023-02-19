@@ -37,21 +37,6 @@ public interface StubSupport {
     }
 
     /**
-     * Called by unbatched methods to temporarily release a thread-local pipe.
-     *
-     * @return null if no batch is in progress
-     */
-    Pipe unbatch();
-
-    /**
-     * Called by unbatched methods to reinstate a thread-local pipe.
-     *
-     * @param pipe pipe returned by unbatch; can be null
-     * @throws IllegalStateException if a thread-local pipe already exists
-     */
-    void rebatch(Pipe pipe);
-
-    /**
      * Returns a new or existing connection. Caller chooses to flush the output after arguments
      * are written and then reads from the pipe.
      *
@@ -59,6 +44,15 @@ public interface StubSupport {
      * @return pipe for writing arguments and reading response
      */
     <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T;
+
+    /**
+     * Variant which never returns the thread-local pipe used by batched calls.
+     *
+     * @param stub the stub requesting a connection
+     * @return pipe for writing arguments and reading response
+     */
+    <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+        throws T;
 
     /**
      * Used by batched methods which return a Remote object. If the remote typeId is currently

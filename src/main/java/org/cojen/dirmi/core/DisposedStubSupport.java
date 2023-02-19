@@ -48,17 +48,15 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public Pipe unbatch() {
-        return null;
-    }
-
-    @Override
-    public void rebatch(Pipe pipe) {
-    }
-
-    @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
         throw CoreUtils.remoteException(remoteFailureException, new DisposedException(mMessage));
+    }
+
+    @Override
+    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        return connect(stub, remoteFailureException);
     }
 
     @Override

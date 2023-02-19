@@ -40,27 +40,22 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public Pipe unbatch() {
-        Pipe pipe = mLocalPipe.get();
-        if (pipe != null) {
-            mLocalPipe.remove();
-        }
-        return pipe;
-    }
-
-    @Override
-    public void rebatch(Pipe pipe) {
-        if (pipe != null) {
-            mLocalPipe.set(pipe);
-        }
-    }
-
-    @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
         Pipe pipe = mLocalPipe.get();
         if (pipe != null) {
             return pipe;
         }
+        try {
+            return mSession.connect();
+        } catch (Throwable e) {
+            throw CoreUtils.remoteException(mSession, remoteFailureException, e);
+        }
+    }
+
+    @Override
+    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
         try {
             return mSession.connect();
         } catch (Throwable e) {

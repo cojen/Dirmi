@@ -53,85 +53,17 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     }
 
     @Override
-    public Pipe unbatch() {
-        return mSupport.unbatch();
-    }
-
-    @Override
-    public void rebatch(Pipe pipe) {
-        mSupport.rebatch(pipe);
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        // Use a latch in order for only one thread to attempt the stub restore. Other threads
-        // that come along must wait for the restore to complete.
-        var latch = new CountDownLatch(1);
-
-        StubSupport newSupport;
-
-        while (true) {
-            CountDownLatch existing = putIfAbsent(stub, latch);
-
-            if (existing != null) {
-                try {
-                    existing.await();
-                } catch (InterruptedException e) {
-                    throw CoreUtils.remoteException(this, remoteFailureException, e);
-                }
-                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
-                if (newSupport == this) {
-                    // The restore by another thread was aborted, so try again.
-                    continue;
-                }
-                break;
-            }
-
-            var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
-
-            try {
-                var newStub = (Stub) origin.invoke();
-                mSupport.session().mStubs.stealIdentity(stub, newStub);
-                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
-                // Use CAS to detect if the stub has called dispose.
-                var result = (StubSupport) Stub.cSupportHandle
-                    .compareAndExchange(stub, this, newSupport);
-                if (result != newSupport && result instanceof DisposedStubSupport) {
-                    // Locally dispose the restored stub.
-                    dispose(stub);
-                }
-            } catch (RuntimeException | Error e) {
-                throw e;
-            } catch (Throwable e) {
-                if (e instanceof DisposedException) {
-                    String message = e.getMessage();
-                    String prefix = "Object and origin are disposed";
-                    if (message == null || !message.startsWith(prefix)) {
-                        if (message == null || message == DisposedStubSupport.EXPLICIT_MESSAGE) {
-                            message = prefix;
-                        } else {
-                            message = prefix + ": " + message;
-                        }
-                    }
-
-                    var de = new DisposedException(message);
-                    de.setStackTrace(e.getStackTrace());
-                    e = de;
-
-                    mSupport.session().stubDispose(stub.id, message);
-                }
-
-                throw CoreUtils.remoteException(this, remoteFailureException, e);
-            } finally {
-                latch.countDown();
-                remove(stub, latch);
-            }
-
-            break;
-        }
-
+        StubSupport newSupport = newSupport(stub, remoteFailureException);
         return newSupport.connect(stub, remoteFailureException);
+    }
+
+    @Override
+    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        StubSupport newSupport = newSupport(stub, remoteFailureException);
+        return newSupport.connectUnbatched(stub, remoteFailureException);
     }
 
     @Override
@@ -182,5 +114,75 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     @Override
     public StubSupport dispose(Stub stub) {
         return mSupport.dispose(stub);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T extends Throwable> StubSupport newSupport(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        // Use a latch in order for only one thread to attempt the stub restore. Other threads
+        // that come along must wait for the restore to complete.
+        var latch = new CountDownLatch(1);
+
+        StubSupport newSupport;
+
+        while (true) {
+            CountDownLatch existing = putIfAbsent(stub, latch);
+
+            if (existing != null) {
+                try {
+                    existing.await();
+                } catch (InterruptedException e) {
+                    throw CoreUtils.remoteException(this, remoteFailureException, e);
+                }
+                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
+                if (newSupport == this) {
+                    // The restore by another thread was aborted, so try again.
+                    continue;
+                }
+                return newSupport;
+            }
+
+            var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
+
+            try {
+                var newStub = (Stub) origin.invoke();
+                mSupport.session().mStubs.stealIdentity(stub, newStub);
+                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
+                // Use CAS to detect if the stub has called dispose.
+                var result = (StubSupport) Stub.cSupportHandle
+                    .compareAndExchange(stub, this, newSupport);
+                if (result != newSupport && result instanceof DisposedStubSupport) {
+                    // Locally dispose the restored stub.
+                    dispose(stub);
+                }
+                return newSupport;
+            } catch (RuntimeException | Error e) {
+                throw e;
+            } catch (Throwable e) {
+                if (e instanceof DisposedException) {
+                    String message = e.getMessage();
+                    String prefix = "Object and origin are disposed";
+                    if (message == null || !message.startsWith(prefix)) {
+                        if (message == null || message == DisposedStubSupport.EXPLICIT_MESSAGE) {
+                            message = prefix;
+                        } else {
+                            message = prefix + ": " + message;
+                        }
+                    }
+
+                    var de = new DisposedException(message);
+                    de.setStackTrace(e.getStackTrace());
+                    e = de;
+
+                    mSupport.session().stubDispose(stub.id, message);
+                }
+
+                throw CoreUtils.remoteException(this, remoteFailureException, e);
+            } finally {
+                latch.countDown();
+                remove(stub, latch);
+            }
+        }
     }
 }
