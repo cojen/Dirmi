@@ -69,11 +69,14 @@ public class MissingInterfaceTest {
         public Object createRemote() throws Exception {
             // Create a new remote interface and server implementation.
 
-            ClassMaker cm = ClassMaker.begin().public_().interface_().implement(Remote.class);
+            var key = new Object();
+
+            ClassMaker cm = ClassMaker.begin(null, null, key).public_().interface_()
+                .implement(Remote.class);
             cm.addMethod(String.class, "a").public_().abstract_().throws_(RemoteException.class);
             Class iface = cm.finish();
 
-            cm = ClassMaker.begin().public_().implement(iface);
+            cm = ClassMaker.begin(null, null, key).public_().implement(iface);
             cm.addConstructor().public_();
             cm.addMethod(String.class, "a").public_().return_("hello");
             Class<?> clazz = cm.finish();

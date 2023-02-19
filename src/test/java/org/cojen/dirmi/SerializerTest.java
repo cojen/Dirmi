@@ -283,8 +283,10 @@ public class SerializerTest {
         var classes = new Class[250];
         var serializers = new Serializer[classes.length];
 
+        var key = new Object();
+
         for (int i=0; i<classes.length; i++) {
-            ClassMaker cm = ClassMaker.begin().public_();
+            ClassMaker cm = ClassMaker.begin(null, null, key).public_();
             cm.addField(int.class, String.valueOf((char) ('a' + i))).public_().final_();
             cm.asRecord();
             classes[i] = cm.finish();
@@ -313,7 +315,9 @@ public class SerializerTest {
     public void bigEnum() throws Exception {
         final int count = 300;
 
-        ClassMaker cm = ClassMaker.begin().public_().enum_().extend(Enum.class);
+        var key = new Object();
+
+        ClassMaker cm = ClassMaker.begin(null, null, key).public_().enum_().extend(Enum.class);
 
         MethodMaker ctor = cm.addConstructor(String.class, int.class).private_();
         ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1));
@@ -360,7 +364,8 @@ public class SerializerTest {
         Class<?> rec1Class;
         Constructor<?> rec1Ctor;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "rec1").public_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_();
             cm.addField(int.class, "a");
             cm.addField(double[].class, "c");
             cm.addField(String.class, "d");
@@ -372,7 +377,8 @@ public class SerializerTest {
 
         Class<?> rec2Class;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "rec2").public_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_();
             cm.addField(String[].class, "c");
             cm.addField(String.class, "b");
             cm.addField(int.class, "a");
@@ -411,7 +417,8 @@ public class SerializerTest {
 
         Class<?> rec1Class;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "class1").public_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_();
             cm.addField(int.class, "a").public_();
             cm.addField(double[].class, "c").public_();
             cm.addField(String.class, "d").public_();
@@ -421,7 +428,8 @@ public class SerializerTest {
 
         Class<?> rec2Class;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "class2").public_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_();
             cm.addField(String[].class, "c").public_();
             cm.addField(String.class, "b").public_();
             cm.addField(int.class, "a").public_();
@@ -464,7 +472,8 @@ public class SerializerTest {
 
         Class<?> enum1Class;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "enum1").public_().enum_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_().enum_();
             cm.extend(Enum.class);
 
             cm.addField(cm, "A").public_().static_().final_();
@@ -491,7 +500,8 @@ public class SerializerTest {
 
         Class<?> enum2Class;
         {
-            ClassMaker cm = ClassMaker.beginExplicit(name, null, "enum2").public_().enum_();
+            var key = new Object();
+            ClassMaker cm = ClassMaker.beginExplicit(name, null, key).public_().enum_();
             cm.extend(Enum.class);
 
             cm.addField(cm, "B").public_().static_().final_();

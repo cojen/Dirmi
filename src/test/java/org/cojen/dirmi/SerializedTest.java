@@ -292,7 +292,9 @@ public class SerializedTest {
 
         @Override
         public Object custom() throws Exception {
-            ClassMaker cm = ClassMaker.begin().public_().implement(Serializable.class);
+            var key = new Object();
+            ClassMaker cm = ClassMaker.begin(null, null, key).public_()
+                .implement(Serializable.class);
             cm.addConstructor().public_();
             Class<?> clazz = cm.finish();
             custom = clazz;

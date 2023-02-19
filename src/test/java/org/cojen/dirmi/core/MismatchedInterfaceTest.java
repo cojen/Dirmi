@@ -166,7 +166,7 @@ public class MismatchedInterfaceTest {
 
         Class<?> iface, server;
         {
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT2", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(String.class, "foo").public_().abstract_().throws_(RemoteException.class);
             cm.addMethod(cm, "me").public_().abstract_().throws_(RemoteException.class);
@@ -217,7 +217,7 @@ public class MismatchedInterfaceTest {
 
         Class<?> iface, server;
         {
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT3", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Parent.class);
             MethodMaker mm = cm.addMethod(Parent.class, "option", int.class)
                 .public_().abstract_().throws_(RemoteException.class);
@@ -301,7 +301,7 @@ public class MismatchedInterfaceTest {
             cm.addMethod(int.class, "name").public_().abstract_().throws_(RemoteException.class);
             Class<?> parent = cm.finish();
 
-            cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT4", parent.getClassLoader(), null)
+            cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", parent.getClassLoader(), null)
                 .public_().interface_().implement(parent);
             cm.addMethod(String.class, "extraName")
                 .public_().abstract_().throws_(RemoteException.class);
@@ -348,7 +348,7 @@ public class MismatchedInterfaceTest {
 
         Class<?> ifaceFull, serverFull;
         {
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT5", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(int.class, "a", int.class)
                 .public_().abstract_().throws_(RemoteException.class);
@@ -377,7 +377,7 @@ public class MismatchedInterfaceTest {
         {
             // The partial variant omits the "a" method.
 
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT5", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(String.class, "b", String.class)
                 .public_().abstract_().throws_(RemoteException.class);
@@ -460,7 +460,7 @@ public class MismatchedInterfaceTest {
 
         Class<?> ifaceFull, serverFull;
         {
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT6", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(Parent.class, "a", String.class)
                 .public_().abstract_().throws_(RemoteException.class)
@@ -483,7 +483,7 @@ public class MismatchedInterfaceTest {
         {
             // The partial variant omits the "a" method.
 
-            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT6", new Loader(), null)
+            ClassMaker cm = ClassMaker.beginExplicit("org.cojen.dirmi.MIT", new Loader(), null)
                 .public_().interface_().implement(Remote.class);
             cm.addMethod(int.class, "b", int.class)
                 .public_().abstract_().throws_(RemoteException.class);
