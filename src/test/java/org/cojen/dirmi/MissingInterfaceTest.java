@@ -52,6 +52,8 @@ public class MissingInterfaceTest {
             fail();
         } catch (AssertionError e) {
         }
+
+        env.close();
     }
 
     public static interface Control extends Remote {

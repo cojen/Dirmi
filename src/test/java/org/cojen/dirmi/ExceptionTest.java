@@ -60,6 +60,8 @@ public class ExceptionTest {
             assertFalse(cause instanceof BrokenEx);
             assertEquals(expect, cause.getMessage());
         }
+
+        env.close();
     }
 
     @Test
@@ -83,6 +85,8 @@ public class ExceptionTest {
         assertEquals(getClass().getName(), trace[4].getClassName());
 
         pipe.recycle();
+
+        env.close();
     }
  
     public static class BrokenEx extends Exception {
