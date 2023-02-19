@@ -16,6 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
 import java.lang.ref.ReferenceQueue;
@@ -27,6 +30,22 @@ import java.lang.ref.SoftReference;
  * @author Brian S O'Neill
  */
 final class SoftCache<K, V> extends ReferenceQueue<Object> {
+    private static final MethodHandle START_VIRTUAL_THREAD;
+
+    static {
+        MethodHandle mh;
+        try {
+            var mt = MethodType.methodType(Thread.class, Runnable.class);
+            mh = MethodHandles.lookup().findStatic(Thread.class, "startVirtualThread", mt);
+            // Test if feature is enabled.
+            var t = (Thread) mh.invokeExact((Runnable) () -> { });
+        } catch (Throwable e) {
+            mh = null;
+        }
+
+        START_VIRTUAL_THREAD = mh;
+    }
+
     private Entry<K, V>[] mEntries;
     private int mSize;
 
@@ -34,6 +53,23 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> {
     public SoftCache() {
         // Initial capacity must be a power of 2.
         mEntries = new Entry[2];
+
+        if (START_VIRTUAL_THREAD != null) {
+            try {
+                var t = (Thread) START_VIRTUAL_THREAD.invokeExact((Runnable) () -> {
+                    try {
+                        while (true) {
+                            Object ref = remove();
+                            synchronized (SoftCache.this) {
+                                cleanup(ref);
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                    }
+                });
+            } catch (Throwable e) {
+            }
+        }
     }
 
     public synchronized int size() {
