@@ -346,7 +346,8 @@ public final class SerializerMaker {
             name = '$' + name;
         }
 
-        ClassMaker cm = ClassMaker.begin(name, mType.getClassLoader()).implement(Serializer.class);
+        ClassMaker cm = ClassMaker.begin(name, mType.getClassLoader(), CoreUtils.MAKER_KEY)
+            .implement(Serializer.class);
 
         Class thisClass = getClass();
         var thisModule = thisClass.getModule();
