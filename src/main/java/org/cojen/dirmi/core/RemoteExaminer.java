@@ -24,8 +24,6 @@ import java.lang.reflect.Modifier;
  * @author Brian S O'Neill
  */
 final class RemoteExaminer {
-    private static final SoftCache<Class<?>, Class<?>> cCache = new SoftCache<>();
-
     /**
      * Returns the remote interface implemented by the given remote object.
      *
@@ -40,37 +38,31 @@ final class RemoteExaminer {
      * @throws IllegalArgumentException if object is null or malformed
      */
     static Class<?> remoteTypeForClass(Class<?> clazz) {
-        Class<?> theOne = cCache.get(clazz);
-        if (theOne != null) {
-            return theOne;
-        }
+        // Only consider the one that implements Remote.
 
-        synchronized (cCache) {
-            theOne = cCache.get(clazz);
-            if (theOne != null) {
-                return theOne;
-            }
+        // Note when considering result caching: Stub classes refer to the remote type already
+        // because they implement it. Therefore, the cache must support weak/soft keys and not
+        // just weak/soft values. The call to getInterfaces is already cached (other than the
+        // array clone), and so additional caching might not be worth the trouble.
 
-            // Only consider the one that implements Remote.
+        Class<?> theOne = null;
 
-            for (Class<?> iface : clazz.getInterfaces()) {
-                if (Modifier.isPublic(iface.getModifiers()) && CoreUtils.isRemote(iface)) {
-                    if (theOne != null) {
-                        throw new IllegalArgumentException
-                            ("At most one Remote interface may be directly implemented: " +
-                             clazz.getName());
-                    }
-                    theOne = iface;
+        for (Class<?> iface : clazz.getInterfaces()) {
+            if (Modifier.isPublic(iface.getModifiers()) && CoreUtils.isRemote(iface)) {
+                if (theOne != null) {
+                    throw new IllegalArgumentException
+                        ("At most one Remote interface may be directly implemented: " +
+                         clazz.getName());
                 }
+                theOne = iface;
             }
-
-            if (theOne == null) {
-                throw new IllegalArgumentException
-                    ("No Remote types directly implemented: " + clazz.getName());
-            }
-
-            cCache.put(clazz, theOne);
-            return theOne;
         }
+
+        if (theOne == null) {
+            throw new IllegalArgumentException
+                ("No Remote types directly implemented: " + clazz.getName());
+        }
+
+        return theOne;
     }
 }
