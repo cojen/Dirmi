@@ -364,16 +364,23 @@ final class SkeletonMaker<R> {
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
                 var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
+
                 Label invokeStart = mm.label();
-                // If the batch result is less than 0, then no batch was in progress.
-                batchResultVar.ifLt(0, invokeStart);
-                if (rm.isNoReply()) {
-                    pipeVar.invoke("flush"); // flush the batch response
-                }
                 Label finished = mm.label();
-                // If the batch result isn't 0, then the batch finished with an exception, and
-                // so this method should be skipped.
-                batchResultVar.ifNe(0, finished);
+
+                if (rm.isNoReply()) {
+                    // If the batch result is less than 0, then no batch was in progress.
+                    batchResultVar.ifLt(0, invokeStart);
+                    pipeVar.invoke("flush"); // flush the batch response
+                    // If the batch result isn't 0, then the batch finished with an exception,
+                    // and so this method should be skipped.
+                    batchResultVar.ifNe(0, finished);
+                } else {
+                    // If the method will write a reply, there's no immediate flush step, and
+                    // so the check against batchResultVar can be simplified. Only jump ahead
+                    // if there was an exception.
+                    batchResultVar.ifGt(0, finished);
+                }
 
                 invokeStart.here();
                 var serverVar = mm.field("server").get();
