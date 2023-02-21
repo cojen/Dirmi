@@ -116,8 +116,11 @@ public final class PipedOutputStream extends OutputStream {
     // Caller must hold mLock.
     private void waitForWriteCompletion() throws IOException {
         try {
-            while (mData != null) {
+            if (mData != null) while (true) {
                 mWriteCondition.await();
+                if (mData == null) {
+                    break;
+                }
                 checkConnected();
             }
         } catch (InterruptedException e) {
