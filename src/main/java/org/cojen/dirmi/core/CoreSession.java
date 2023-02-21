@@ -113,7 +113,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     private volatile BiConsumer<Session<?>, Throwable> mUncaughtExceptionHandler;
 
-    private int mClosed;
+    private volatile int mClosed;
 
     final Lock mStateLock;
     private volatile Object mStateListeners;
@@ -667,9 +667,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
             setStateAndNotify(State.RECONNECTED);
 
-            conLockAcquire();
             mClosed = 0;
-            conLockRelease();
 
             setStateAndNotify(State.CONNECTED);
         } finally {
@@ -1350,17 +1348,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     final boolean isClosed() {
-        conLockAcquire();
-        int closed = mClosed;
-        conLockRelease();
-        return (closed & R_CLOSED) != 0;
+        return (mClosed & R_CLOSED) != 0;
     }
 
     final boolean isClosedOrDisconnected() {
-        conLockAcquire();
-        int closed = mClosed;
-        conLockRelease();
-        return closed != 0;
+        return mClosed != 0;
     }
 
     final void checkClosed() throws RemoteException {
