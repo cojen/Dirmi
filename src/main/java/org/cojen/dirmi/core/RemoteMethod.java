@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -437,6 +438,9 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             hash = hash * 31 + mReturnType.hashCode();
             hash = hash * 31 + mParameterTypes.hashCode();
             hash = hash * 31 + mExceptionTypes.hashCode();
+            if (mObjectInputFilter != null) {
+                hash = hash * 31 + mObjectInputFilter.hashCode();
+            }
             mHashCode = hash;
         }
         return hash;
@@ -452,7 +456,8 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
                 && mRemoteFailureException.equals(other.mRemoteFailureException)
                 && mReturnType.equals(other.mReturnType)
                 && mParameterTypes.equals(other.mParameterTypes)
-                && mExceptionTypes.equals(other.mExceptionTypes);
+                && mExceptionTypes.equals(other.mExceptionTypes)
+                && Objects.equals(mObjectInputFilter, other.mObjectInputFilter);
         }
         return false;
     }
