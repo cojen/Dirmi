@@ -151,7 +151,10 @@ public class TimeoutTest {
         try {
             setup(true);
             fail();
+        } catch (ClosedException e) {
+            // Was closed by the remote side due to timeout.
         } catch (RemoteException e) {
+            // Was closed by the local side due to timeout.
             assertTrue(e.getMessage().contains("Timed out"));
         } finally {
             mServerOut.unlock();
