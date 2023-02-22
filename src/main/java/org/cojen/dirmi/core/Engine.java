@@ -255,8 +255,14 @@ public final class Engine implements Environment {
                     throw new RemoteException("Unable to find existing session");
                 }
 
+                // Capture the clientSessionId and unset it before writing to the pipe, in case
+                // a RemoteException is thrown. This prevents the exception handler below from
+                // writing the header to the pipe a second time.
+                long csid = clientSessionId;
+                clientSessionId = 0;
+
                 pipe.writeLong(CoreUtils.PROTOCOL_V2);
-                pipe.writeLong(clientSessionId);
+                pipe.writeLong(csid);
                 pipe.writeLong(serverSessionId);
                 pipe.flush();
 
