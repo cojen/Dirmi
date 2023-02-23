@@ -76,9 +76,9 @@ class TypeCodes {
         T_CUSTOM_2 = 53,
         T_CUSTOM_4 = 54,
 
-        // Define new standard types here. This doesn't cause client-server compatibility
-        // issues with custom types because both sides exchange their custom type codes.
-        // See Settings.writeSerializerTypes, et al.
+        // Define new standard types here and bump up T_FIRST_CUSTOM. This doesn't cause
+        // client-server compatibility issues with custom types because both sides exchange
+        // their custom type codes. See Settings.writeSerializerTypes, et al.
 
         T_FIRST_CUSTOM = T_CUSTOM_4 + 1;
 }
