@@ -83,8 +83,8 @@ final class Settings implements Cloneable {
     }
 
     /**
-     * Writes the first custom type code and then the class names. If aren't any serializers,
-     * then only 0 is written.
+     * Writes the first custom type code and then the class names. If there aren't any
+     * serializers, then only 0 is written.
      *
      * @return a new map with the types and descriptors that were written, or null if none
      */
