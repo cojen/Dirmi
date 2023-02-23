@@ -195,12 +195,14 @@ final class ClientSession<R> extends CoreSession<R> {
             waitMap.put(RemoteExaminer.remoteType(root).getName(), newServerRootInfo);
 
             mStubs.forEach(stub -> {
-                Class<?> type = RemoteExaminer.remoteType(stub);
-                if (waitMap.add(type.getName())) {
-                    try {
-                        sendInfoRequest(type);
-                    } catch (IOException e) {
-                        throw CoreUtils.rethrow(e);
+                if (Stub.isRestorable(stub)) {
+                    Class<?> type = RemoteExaminer.remoteType(stub);
+                    if (waitMap.add(type.getName())) {
+                        try {
+                            sendInfoRequest(type);
+                        } catch (IOException e) {
+                            throw CoreUtils.rethrow(e);
+                        }
                     }
                 }
             });
