@@ -277,7 +277,7 @@ final class StubMaker {
                     mm.addAnnotation(Unbatched.class, true);
                 }
 
-                if (method.isRestorable()) {
+                if (isClientMethodRestorable(clientMethod)) {
                     mm.addAnnotation(Restorable.class, true);
                 }
 
@@ -516,8 +516,12 @@ final class StubMaker {
         }
     }
 
-    private void returnResult(MethodMaker mm, RemoteMethod method, Variable resultVar) {
-        if (method != null && method.isRestorable()) {
+    private static boolean isClientMethodRestorable(RemoteMethod clientMethod) {
+        return clientMethod != null && clientMethod.isRestorable();
+    }
+
+    private void returnResult(MethodMaker mm, RemoteMethod clientMethod, Variable resultVar) {
+        if (isClientMethodRestorable(clientMethod)) {
             // Unless already set, assign a fully bound MethodHandle instance to the inherited
             // origin field. No attempt is made to prevent multiple threads from assigning it,
             // because it won't affect the outcome.
@@ -536,9 +540,9 @@ final class StubMaker {
             originStub[0] = resultVar.cast(Stub.class);
             originField.getAcquire().ifNe(null, finished);
 
-            Class<?> returnType = classFor(method.returnType());
+            Class<?> returnType = classFor(clientMethod.returnType());
 
-            List<String> pnames = method.parameterTypes();
+            List<String> pnames = clientMethod.parameterTypes();
             var ptypes = new Class[pnames.size()];
             int i = 0;
             for (String pname : pnames) {
@@ -548,7 +552,7 @@ final class StubMaker {
             MethodType mt = MethodType.methodType(returnType, ptypes);
 
             var mhVar = mm.var(CoreUtils.class).condy("findVirtual", mType, mt)
-                .invoke(MethodHandle.class, method.name());
+                .invoke(MethodHandle.class, clientMethod.name());
 
             var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
             paramVars.aset(0, mm.this_());
