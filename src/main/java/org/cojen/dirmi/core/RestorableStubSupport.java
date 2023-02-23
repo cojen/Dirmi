@@ -63,9 +63,22 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
         throws T
     {
-        restore(stub, remoteFailureException);
-        // Returning null is fine because the stub must immediately call validate.
-        return null;
+        return connect(stub, remoteFailureException);
+    }
+
+    @Override
+    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        return connect(stub, remoteFailureException);
+    }
+
+    @Override
+    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+                                                          Class<T> remoteFailureException)
+        throws T
+    {
+        return tryConnect(stub, remoteFailureException);
     }
 
     @Override
@@ -84,6 +97,11 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                                                      long aliasId, long typeId)
         throws T
     {
+        throw new IllegalStateException();
+    }
+
+    @Override
+    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
         throw new IllegalStateException();
     }
 

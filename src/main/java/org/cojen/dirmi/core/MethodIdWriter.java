@@ -31,7 +31,7 @@ public interface MethodIdWriter {
     /**
      * @throws UnimplementedException if the remote side doesn't implement the method
      */
-    void writeMethodId(Pipe pipe, int id) throws IOException;
+    void writeMethodId(Pipe pipe, int id, String name) throws IOException;
 
     /**
      * Called by a stub method which is annotated as Unimplemented. The method id that's passed
@@ -40,7 +40,7 @@ public interface MethodIdWriter {
      *
      * @throws UnimplementedException by default
      */
-    default void writeSyntheticMethodId(Pipe pipe, int id) throws IOException {
+    default void writeSyntheticMethodId(Pipe pipe, int id, String name) throws IOException {
         throw new UnimplementedException("Unimplemented on the remote side");
     }
 
@@ -51,8 +51,8 @@ public interface MethodIdWriter {
         }
 
         @Override
-        public void writeMethodId(Pipe pipe, int id) throws IOException {
-            throw new UnimplementedException("Unimplemented on the remote side");
+        public void writeMethodId(Pipe pipe, int id, String name) throws IOException {
+            throw new UnimplementedException("Unimplemented on the remote side: " + name);
         }
     }
 }

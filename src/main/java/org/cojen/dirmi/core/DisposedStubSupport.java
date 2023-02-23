@@ -28,18 +28,39 @@ import org.cojen.dirmi.Session;
 final class DisposedStubSupport implements StubSupport {
     static final String EXPLICIT_MESSAGE = "Object is disposed";
     static final DisposedStubSupport EXPLICIT = new DisposedStubSupport(EXPLICIT_MESSAGE);
-    static final DisposedStubSupport DISCONNECTED = new DisposedStubSupport
-        ("Object is disposed due to session disconnect");
 
+    static DisposedStubSupport newDisconnected(CoreSession<?> session, Throwable cause) {
+        String message = "Object is disposed due to session disconnect";
+        return new DisposedStubSupport(session, message, cause);
+    }
+
+    private final CoreSession<?> mSession;
     private final String mMessage;
+    private final Throwable mCause;
 
     DisposedStubSupport(String message) {
+        this(null, message, null);
+    }
+
+    private DisposedStubSupport(String message, Throwable cause) {
+        this(null, message, cause);
+    }
+
+    /**
+     * @param session pass null if object is permanently disposed
+     */
+    private DisposedStubSupport(CoreSession<?> session, String message, Throwable cause) {
+        mSession = session;
         mMessage = message;
+        mCause = cause;
     }
 
     @Override
-    public Session session() {
-        throw new IllegalStateException(mMessage);
+    public CoreSession<?> session() {
+        if (mSession == null) {
+            throw new IllegalStateException(mMessage);
+        }
+        return mSession;
     }
 
     @Override
@@ -49,7 +70,17 @@ final class DisposedStubSupport implements StubSupport {
 
     @Override
     public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
-        throw CoreUtils.remoteException(remoteFailureException, new DisposedException(mMessage));
+        DisposedException ex;
+        if (mCause == null) {
+            ex = new DisposedException(mMessage);
+        } else {
+            String causeMessage = mCause.getMessage();
+            if (causeMessage == null || causeMessage.isEmpty()) {
+                causeMessage = mCause.toString();
+            }
+            ex = new DisposedException(mMessage + " (" + causeMessage + ')', mCause);
+        }
+        throw CoreUtils.remoteException(remoteFailureException, ex);
     }
 
     @Override
@@ -60,8 +91,24 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
+    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        // When null is returned, the caller is expected to then call newDisconnectedStub.
+        return mSession == null ? connect(stub, remoteFailureException) : null;
+    }
+
+    @Override
+    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+                                                          Class<T> remoteFailureException)
+        throws T
+    {
+        return tryConnect(stub, remoteFailureException);
+    }
+
+    @Override
     public boolean validate(Stub stub, Pipe pipe) {
-        throw new IllegalStateException();
+        return true;
     }
 
     @Override
@@ -74,6 +121,11 @@ final class DisposedStubSupport implements StubSupport {
                                                      long aliasId, long typeId)
     {
         throw new IllegalStateException();
+    }
+
+    @Override
+    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+        return session().newDisconnectedStub(type, cause);
     }
 
     @Override

@@ -48,7 +48,7 @@ public class MethodIdWriterTest {
         MethodIdWriter writer = MethodIdWriterMaker.writerFor(info, info, true);
 
         try {
-            writer.writeMethodId(null, 0);
+            writer.writeMethodId(null, 0, null);
             fail();
         } catch (UnimplementedException e) {
         }
@@ -66,11 +66,11 @@ public class MethodIdWriterTest {
         var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
         for (int i=0; i<3; i++) {
-            writer.writeMethodId(pipe, i);
+            writer.writeMethodId(pipe, i, null);
         }
 
         try {
-            writer.writeMethodId(pipe, 4);
+            writer.writeMethodId(pipe, 4, null);
             fail();
         } catch (UnimplementedException e) {
         }
@@ -96,7 +96,7 @@ public class MethodIdWriterTest {
 
         for (int i=0; i<3; i++) {
             try {
-                writer.writeMethodId(null, i);
+                writer.writeMethodId(null, i, null);
                 fail();
             } catch (UnimplementedException e) {
             }
@@ -112,11 +112,11 @@ public class MethodIdWriterTest {
         var capture = new CaptureOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
-        writer.writeMethodId(pipe, 0);
-        writer.writeMethodId(pipe, 1);
+        writer.writeMethodId(pipe, 0, null);
+        writer.writeMethodId(pipe, 1, null);
 
         try {
-            writer.writeMethodId(pipe, 2);
+            writer.writeMethodId(pipe, 2, null);
             fail();
         } catch (UnimplementedException e) {
         }
@@ -142,17 +142,17 @@ public class MethodIdWriterTest {
         var capture = new CaptureOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
 
-        writer.writeMethodId(pipe, 1);
+        writer.writeMethodId(pipe, 1, null);
 
         try {
-            writer.writeMethodId(pipe, 0);
+            writer.writeMethodId(pipe, 0, null);
             fail();
         } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("Unimplemented"));
         }
 
         try {
-            writer.writeMethodId(pipe, 2);
+            writer.writeMethodId(pipe, 2, null);
             fail();
         } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("Unimplemented"));

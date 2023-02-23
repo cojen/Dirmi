@@ -41,7 +41,6 @@ import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.RemoteFailure;
 import org.cojen.dirmi.Restorable;
 import org.cojen.dirmi.Unbatched;
-import org.cojen.dirmi.UnimplementedException;
 
 /**
  * 
@@ -305,7 +304,13 @@ final class StubMaker {
 
             Label connectStart = method.isDisposer() ? mm.label().here() : null;
 
-            String connectMethod = method.isUnbatched() ? "connectUnbatched" : "connect";
+            String connectMethod;
+            if (isClientMethodRestorableLenient(clientMethod)) {
+                connectMethod = method.isUnbatched() ? "tryConnectUnbatched" : "tryConnect";
+            } else {
+                connectMethod = method.isUnbatched() ? "connectUnbatched" : "connect";
+            }
+
             var pipeVar = supportVar.invoke(connectMethod, mm.this_(), remoteFailureClass);
 
             if (method.isDisposer()) {
@@ -317,6 +322,18 @@ final class StubMaker {
             }
 
             supportVar.invoke("validate", mm.this_(), pipeVar).ifFalse(obtainSupport);
+
+            Variable returnVar = isVoid(returnType) ? null : mm.var(returnType);
+            Label hasResult = null;
+
+            if (returnVar != null && isClientMethodRestorableLenient(clientMethod)) {
+                Label connected = mm.label();
+                pipeVar.ifNe(null, connected);
+                returnVar.set(supportVar.invoke("newDisconnectedStub", returnVar.classType(), null)
+                              .cast(returnType));
+                hasResult = mm.label().goto_();
+                connected.here();
+            }
 
             if (method.isDisposer()) {
                 supportVar.invoke("dispose", mm.this_());
@@ -333,7 +350,7 @@ final class StubMaker {
             Variable typeIdVar = null;
             Variable aliasIdVar = null;
 
-            if (method.isBatched() && !isVoid(returnType)) {
+            if (method.isBatched() && returnVar != null) {
                 var returnClass = classFor(returnType);
                 typeIdVar = supportVar.invoke("remoteTypeId", returnClass);
                 aliasIdVar = supportVar.invoke("newAliasId");
@@ -359,13 +376,12 @@ final class StubMaker {
                     thrownVar.set(supportVar.invoke("readResponse", pipeVar));
                     thrownVar.ifNe(null, throwException);
 
-                    var returnVar = mm.var(returnType);
                     CoreUtils.readParam(pipeVar, returnVar);
                     Label done = mm.label();
                     isBatchingVar.ifTrue(done);
                     supportVar.invoke("batched", pipeVar);
                     done.here();
-                    returnResult(mm, clientMethod, returnVar);
+                    returnResult(mm, clientMethod, hasResult, returnVar);
 
                     hasType.here();
                 }
@@ -384,13 +400,14 @@ final class StubMaker {
             } else if (method.isBatched()) {
                 invokeEnd.here();
                 supportVar.invoke("batched", pipeVar);
-                if (isVoid(returnType)) {
+                if (returnVar == null) {
                     mm.return_();
                 } else {
                     pipeVar.invoke("writeLong", aliasIdVar);
                     var stubVar = supportVar.invoke
                         ("newAliasStub", remoteFailureClass, aliasIdVar, typeIdVar);
-                    returnResult(mm, clientMethod, stubVar.cast(returnType));
+                    returnVar.set(stubVar.cast(returnType));
+                    returnResult(mm, clientMethod, hasResult, returnVar);
                 }
             } else {
                 pipeVar.invoke("flush");
@@ -407,7 +424,7 @@ final class StubMaker {
                     thrownVar.ifNe(null, throwException);
                 }
 
-                if (isVoid(returnType)) {
+                if (returnVar == null) {
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
                     mm.return_();
@@ -419,15 +436,21 @@ final class StubMaker {
                         var filterVar = mm.var(ObjectInputFilter.class).setExact(filter);
                         inVar.invoke("setObjectInputFilter", filterVar);
                     }
-                    var returnVar = mm.var(returnType);
                     CoreUtils.readParam(inVar, returnVar);
                     invokeEnd.here();
                     supportVar.invoke("finished", pipeVar);
-                    returnResult(mm, clientMethod, returnVar);
+                    returnResult(mm, clientMethod, hasResult, returnVar);
                 }
             }
 
             var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+
+            if (returnVar != null && isClientMethodRestorableLenient(clientMethod)) {
+                returnVar.set(supportVar.invoke("newDisconnectedStub", returnVar.classType(), exVar)
+                              .cast(returnType));
+                hasResult.goto_();
+            }
+
             exVar.set(supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar));
             Label throwIt = mm.label().goto_();
 
@@ -483,7 +506,8 @@ final class StubMaker {
             writeName = "writeSyntheticMethodId";
         }
 
-        mm.field("miw").getAcquire().invoke(writeName, pipeVar, methodId);
+
+        mm.field("miw").getAcquire().invoke(writeName, pipeVar, methodId, method.name());
 
         if (ptypes.length <= 0) {
             return;
@@ -520,7 +544,13 @@ final class StubMaker {
         return clientMethod != null && clientMethod.isRestorable();
     }
 
-    private void returnResult(MethodMaker mm, RemoteMethod clientMethod, Variable resultVar) {
+    private static boolean isClientMethodRestorableLenient(RemoteMethod clientMethod) {
+        return isClientMethodRestorable(clientMethod) && clientMethod.isLenient();
+    }
+
+    private void returnResult(MethodMaker mm, RemoteMethod clientMethod,
+                              Label hasResult, Variable resultVar)
+    {
         if (isClientMethodRestorable(clientMethod)) {
             // Unless already set, assign a fully bound MethodHandle instance to the inherited
             // origin field. No attempt is made to prevent multiple threads from assigning it,
@@ -528,6 +558,10 @@ final class StubMaker {
 
             Label finished = mm.label();
             resultVar.ifEq(null, finished);
+
+            if (hasResult != null) {
+                hasResult.here();
+            }
 
             Object[] originStub = {mm.this_()};
             Field originField = mm.access(Stub.cOriginHandle, originStub);

@@ -49,7 +49,7 @@ import org.cojen.dirmi.Unbatched;
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
         F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64,
-        F_SERIALIZED = 128, F_UNIMPLEMENTED = 256;
+        F_SERIALIZED = 128, F_UNIMPLEMENTED = 256, F_LENIENT = 512;
 
     private final int mFlags;
     private final String mName;
@@ -97,8 +97,12 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         if (m.isAnnotationPresent(Unbatched.class)) {
             flags |= F_UNBATCHED;
         }
-        if (m.isAnnotationPresent(Restorable.class)) {
+        Restorable restorableAnn = m.getAnnotation(Restorable.class);
+        if (restorableAnn != null) {
             flags |= F_RESTORABLE;
+            if (restorableAnn.lenient()) {
+                flags |= F_LENIENT;
+            }
         }
         if (m.isAnnotationPresent(NoReply.class)) {
             flags |= F_NOREPLY;
@@ -178,9 +182,15 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
                     ("Batched method must return void or a remote object: " + m);
             }
 
-            if ((flags & F_RESTORABLE) != 0 && !CoreUtils.isRemote(returnType)) {
-                throw new IllegalArgumentException
-                    ("Restorable method must return a remote object: " + m);
+            if ((flags & F_RESTORABLE) != 0) {
+                if (!CoreUtils.isRemote(returnType)) {
+                    throw new IllegalArgumentException
+                        ("Restorable method must return a remote object: " + m);
+                }
+                if ((flags & (F_DISPOSER | F_LENIENT)) == (F_DISPOSER | F_LENIENT)) {
+                    throw new IllegalArgumentException
+                        ("Lenient restorable method cannot also be a disposer: " + m);
+                }
             }
 
             if ((flags & F_NOREPLY) != 0 && returnType != void.class) {
@@ -334,6 +344,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
      */
     boolean isRestorable() {
         return (mFlags & F_RESTORABLE) != 0;
+    }
+
+    /**
+     * @see Restorable
+     */
+    boolean isLenient() {
+        return (mFlags & F_LENIENT) != 0;
     }
 
     /**

@@ -64,11 +64,44 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
+    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+        throws T
+    {
+        Pipe pipe = mLocalPipe.get();
+        if (pipe != null) {
+            return pipe;
+        }
+        try {
+            return mSession.connect();
+        } catch (IOException e) {
+            return null;
+        } catch (Throwable e) {
+            throw CoreUtils.remoteException(mSession, remoteFailureException, e);
+        }
+    }
+
+    @Override
+    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+                                                          Class<T> remoteFailureException)
+        throws T
+    {
+        try {
+            return mSession.connect();
+        } catch (IOException e) {
+            return null;
+        } catch (Throwable e) {
+            throw CoreUtils.remoteException(mSession, remoteFailureException, e);
+        }
+    }
+
+    @Override
     public boolean validate(Stub stub, Pipe pipe) {
         if (Stub.cSupportHandle.getAcquire(stub) == this) {
             return true;
         } else {
-            discard(pipe);
+            if (pipe != null) {
+                discard(pipe);
+            }
             return false;
         }
     }
@@ -97,6 +130,11 @@ final class CoreStubSupport implements StubSupport {
         } catch (Throwable e) {
             throw CoreUtils.remoteException(mSession, remoteFailureException, e);
         }
+    }
+
+    @Override
+    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+        return mSession.newDisconnectedStub(type, cause);
     }
 
     @Override

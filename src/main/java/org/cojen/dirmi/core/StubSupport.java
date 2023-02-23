@@ -55,6 +55,23 @@ public interface StubSupport {
         throws T;
 
     /**
+     * Variant which returns null if a connection cannot be established.
+     *
+     * @param stub the stub requesting a connection
+     * @return pipe for writing arguments and reading response
+     */
+    <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException) throws T;
+
+    /**
+     * Variant which returns null if a connection cannot be established.
+     *
+     * @param stub the stub requesting a connection
+     * @return pipe for writing arguments and reading response
+     */
+    <T extends Throwable> Pipe tryConnectUnbatched(Stub stub, Class<T> remoteFailureException)
+        throws T;
+
+    /**
      * Checks if the stub support instance is the correct after connecting. If so, true is
      * returned. Otherwise, the caller should obtain the support instance again, and then call
      * connect again.
@@ -85,6 +102,14 @@ public interface StubSupport {
      */
     <T extends Throwable> Object newAliasStub(Class<T> remoteFailureException,
                                               long aliasId, long typeId) throws T;
+
+    /**
+     * Returns a stub which doesn't actually work. Used by lenient restorable methods when the
+     * connect attempt fails.
+     *
+     * @param cause optional
+     */
+    Stub newDisconnectedStub(Class<?> type, Throwable cause);
 
     /**
      * Returns true if a batch sequence is in progress.

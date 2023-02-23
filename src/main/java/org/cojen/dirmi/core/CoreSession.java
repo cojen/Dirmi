@@ -605,13 +605,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         } else {
             assert (reason & R_DISCONNECTED) != 0;
 
+            DisposedStubSupport support = DisposedStubSupport.newDisconnected(this, null);
+
             mStubs.forEachToRemove(stub -> {
                 if (Stub.cOriginHandle.getAcquire(stub) != null || stub == root()) {
                     // Keep the restorable stubs and tag them with the new StubSupport.
                     Stub.cSupportHandle.setRelease(stub, newSupport);
                     return false;
                 }
-                Stub.cSupportHandle.setRelease(stub, DisposedStubSupport.DISCONNECTED);
+                Stub.cSupportHandle.setRelease(stub, support);
                 return true;
             });
 
@@ -1121,6 +1123,21 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         } finally {
             mControlLock.unlock();
         }
+    }
+
+    final Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+        StubFactory factory = mStubFactoriesByClass.get(type);
+
+        if (factory == null) {
+            // The server-side info isn't known, so use the client info instead. When the stub
+            // reconnects, the method ids will be remapped if necessary.
+            factory = StubMaker.factoryFor(type, 0, RemoteInfo.examine(type));
+        }
+
+        long id = IdGenerator.nextNegative();
+        Stub stub = factory.newStub(id, DisposedStubSupport.newDisconnected(this, cause));
+        mStubs.put(stub);
+        return stub;
     }
 
     final CoreStubSupport stubSupport() {

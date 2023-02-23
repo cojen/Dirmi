@@ -349,58 +349,7 @@ public class RestorableTest {
         }
 
         // Define new remote interfaces, with some slight changes.
-
-        var loader = new Loader();
-
-        var cm1 = ClassMaker.beginExternal(R1.class.getName())
-            .public_().interface_().implement(Remote.class);
-        var cm2 = ClassMaker.beginExternal(R2.class.getName())
-            .public_().interface_().implement(Remote.class);
-
-        // Drop method "b" for the new R1 and add method "Z".
-        cm1.addAnnotation(RemoteFailure.class, true).put("declared", false);
-        cm1.addMethod(cm2, "a", int.class).public_().abstract_()
-            .addAnnotation(Restorable.class, true);
-        cm1.addMethod(int.class, "Z").public_().abstract_();
-
-        // Drop method "a" for the new R2 and add method "d".
-        cm2.addAnnotation(RemoteFailure.class, true).put("declared", false);
-        cm2.addMethod(String.class, "b", int.class).public_().abstract_();
-        cm2.addMethod(int.class, "c").public_().abstract_();
-        cm2.addMethod(int.class, "d", String.class).public_().abstract_();
-
-        Class<?> face1 = loader.finishLocal(R1.class.getName(), cm1);
-        Class<?> face2 = loader.finishLocal(R2.class.getName(), cm2);
-
-        String name1 = R1.class.getName() + "$$$";
-        String name2 = R2.class.getName() + "$$$";
-
-        cm2 = ClassMaker.beginExternal(name2).public_().implement(face2);
-        cm2.addField(int.class, "param").final_();
-        MethodMaker mm = cm2.addConstructor(int.class).public_();
-        mm.invokeSuperConstructor();
-        mm.field("param").set(mm.param(0));
-
-        mm = cm2.addMethod(String.class, "b", int.class).public_().override();
-        mm.return_(mm.concat(mm.field("param"), "->", mm.param(0)));
-        mm = cm2.addMethod(int.class, "c").public_().override();
-        mm.return_(mm.field("param"));
-        mm = cm2.addMethod(int.class, "d", String.class).public_().override();
-        mm.return_(mm.var(Integer.class).invoke("parseInt", mm.param(0)));
-
-        cm1 = ClassMaker.beginExternal(name1).public_().implement(face1);
-        cm1.addConstructor().public_();
-
-        mm = cm1.addMethod(face2, "a", int.class).public_().override();
-        mm.return_(mm.new_(cm2, mm.param(0)));
-
-        cm1.addMethod(int.class, "Z").public_().override().return_(888);
-
-        Class<?> rem1 = loader.finishLocal(name1, cm1);
-        Class<?> rem2 = loader.finishLocal(name2, cm2);
-
-        Object obj1 = rem1.getConstructor().newInstance();
-        assertNotNull(mEnv.export("main", obj1));
+        changeRemoteInterfaces(true);
 
         mAcceptor.resume();
 
@@ -448,6 +397,69 @@ public class RestorableTest {
         } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("remote side"));
         }
+    }
+
+    private void changeRemoteInterfaces(boolean withAz) throws Exception {
+        var loader = new Loader();
+
+        var cm1 = ClassMaker.beginExternal(R1.class.getName())
+            .public_().interface_().implement(Remote.class);
+        var cm2 = ClassMaker.beginExternal(R2.class.getName())
+            .public_().interface_().implement(Remote.class);
+
+        // Drop method "b" for the new R1 and add method "Z".
+        cm1.addAnnotation(RemoteFailure.class, true).put("declared", false);
+        cm1.addMethod(cm2, "a", int.class).public_().abstract_()
+            .addAnnotation(Restorable.class, true);
+        if (withAz) {
+            cm1.addMethod(cm2, "az", int.class).public_().abstract_()
+                .addAnnotation(Restorable.class, true);
+        }
+        cm1.addMethod(int.class, "Z").public_().abstract_();
+
+        // Drop method "a" for the new R2 and add method "d".
+        cm2.addAnnotation(RemoteFailure.class, true).put("declared", false);
+        cm2.addMethod(String.class, "b", int.class).public_().abstract_();
+        cm2.addMethod(int.class, "c").public_().abstract_();
+        cm2.addMethod(int.class, "d", String.class).public_().abstract_();
+
+        Class<?> face1 = loader.finishLocal(R1.class.getName(), cm1);
+        Class<?> face2 = loader.finishLocal(R2.class.getName(), cm2);
+
+        String name1 = R1.class.getName() + "$$$";
+        String name2 = R2.class.getName() + "$$$";
+
+        cm2 = ClassMaker.beginExternal(name2).public_().implement(face2);
+        cm2.addField(int.class, "param").final_();
+        MethodMaker mm = cm2.addConstructor(int.class).public_();
+        mm.invokeSuperConstructor();
+        mm.field("param").set(mm.param(0));
+
+        mm = cm2.addMethod(String.class, "b", int.class).public_().override();
+        mm.return_(mm.concat(mm.field("param"), "->", mm.param(0)));
+        mm = cm2.addMethod(int.class, "c").public_().override();
+        mm.return_(mm.field("param"));
+        mm = cm2.addMethod(int.class, "d", String.class).public_().override();
+        mm.return_(mm.var(Integer.class).invoke("parseInt", mm.param(0)));
+
+        cm1 = ClassMaker.beginExternal(name1).public_().implement(face1);
+        cm1.addConstructor().public_();
+
+        mm = cm1.addMethod(face2, "a", int.class).public_().override();
+        mm.return_(mm.new_(cm2, mm.param(0)));
+
+        if (withAz) {
+            mm = cm1.addMethod(face2, "az", int.class).public_().override();
+            mm.return_(mm.new_(cm2, mm.param(0)));
+        }
+
+        cm1.addMethod(int.class, "Z").public_().override().return_(888);
+
+        Class<?> rem1 = loader.finishLocal(name1, cm1);
+        Class<?> rem2 = loader.finishLocal(name2, cm2);
+
+        Object obj1 = rem1.getConstructor().newInstance();
+        assertNotNull(mEnv.export("main", obj1));
     }
 
     @Test
@@ -549,6 +561,185 @@ public class RestorableTest {
             fail();
         } catch (UnimplementedException e) {
             assertTrue(e.getMessage().contains("remote side"));
+        }
+    }
+
+    @Test
+    public void lenient() throws Exception {
+        lenient(false);
+    }
+
+    @Test
+    public void lenientWithKnownRemoteType() throws Exception {
+        lenient(true);
+    }
+
+    private void lenient(boolean withKnownType) throws Exception {
+        R2 r2 = withKnownType ? mSession.root().az(10) : null;
+
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        r2 = mSession.root().az(10);
+
+        try {
+            r2.b(123);
+            fail();
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disconnect"));
+        }
+
+        mAcceptor.resume();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    assertEquals("10:123", r2.b(123));
+                    break check;
+                } catch (RemoteException e) {
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Didn't reconnect");
+        }
+
+        r2 = mSession.root().az(20);
+        assertEquals("20:123", r2.b(123));
+    }
+
+    @Test
+    public void lenientChain() throws Exception {
+        lenientChain(false);
+    }
+
+    @Test
+    public void lenientChainFlipped() throws Exception {
+        lenientChain(true);
+    }
+
+    private void lenientChain(boolean flippedRestore) throws Exception {
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        R2 r2 = mSession.root().az(10);
+        R1 r1 = r2.az();
+
+        try {
+            r2.b(123);
+            fail();
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disconnect"));
+        }
+
+        try {
+            r1.echo("hello");
+            fail();
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disconnect"));
+        }
+
+        mAcceptor.resume();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    if (flippedRestore) {
+                        assertEquals("hello", r1.echo("hello"));
+                        assertEquals("10:123", r2.b(123));
+                    } else {
+                        assertEquals("10:123", r2.b(123));
+                        assertEquals("hello", r1.echo("hello"));
+                    }
+                    break check;
+                } catch (RemoteException e) {
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Didn't reconnect");
+        }
+
+        r2 = mSession.root().az(20);
+        r1 = r2.az();
+        assertEquals("20:123", r2.b(123));
+        assertEquals("world", r1.echo("world"));
+    }
+
+    @Test
+    public void lenientWithInterfaceChange() throws Exception {
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        R2 r2 = mSession.root().az(10);
+
+        try {
+            r2.b(123);
+            fail();
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disconnect"));
+        }
+
+        // Define new remote interfaces, with some slight changes.
+        changeRemoteInterfaces(true);
+
+        mAcceptor.resume();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    assertEquals("10->123", r2.b(123));
+                    assertEquals(10, r2.c());
+                    break check;
+                } catch (RemoteException e) {
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Didn't reconnect");
+        }
+
+        r2 = mSession.root().az(20);
+        assertEquals("20->123", r2.b(123));
+        assertEquals(20, r2.c());
+    }
+
+    @Test
+    public void lenientWithInterfaceChangeBroken() throws Exception {
+        mAcceptor.suspend();
+        mAcceptor.closeLastAccepted();
+
+        R2 r2 = mSession.root().az(10);
+
+        try {
+            r2.b(123);
+            fail();
+        } catch (DisposedException e) {
+            assertTrue(e.getMessage().contains("disconnect"));
+        }
+
+        // Define new remote interfaces, with some slight changes. Without an az method,
+        // restore isn't possible.
+        changeRemoteInterfaces(false);
+
+        mAcceptor.resume();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    r2.b(123);
+                    fail();
+                } catch (RemoteException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof UnimplementedException) {
+                        assertTrue(cause.getMessage().contains(": az"));
+                        break check;
+                    }
+                }
+                Thread.sleep(100);
+            }
+
+            fail("Didn't detect method was unimplemented");
         }
     }
 
@@ -670,6 +861,9 @@ public class RestorableTest {
         @Restorable
         R2 a(int param) throws RemoteException;
 
+        @Restorable(lenient=true)
+        R2 az(int param) throws RemoteException;
+
         R2 b(int param) throws RemoteException;
 
         Object echo(Object param) throws RemoteException;
@@ -678,6 +872,9 @@ public class RestorableTest {
     public static interface R2 extends Remote {
         @Restorable
         R1 a() throws RemoteException;
+
+        @Restorable(lenient=true)
+        R1 az() throws RemoteException;
 
         String b(int param) throws RemoteException;
 
@@ -688,6 +885,11 @@ public class RestorableTest {
         @Override
         public R2 a(int param) {
             return new R2Server(param);
+        }
+
+        @Override
+        public R2 az(int param) {
+            return a(param);
         }
 
         @Override
@@ -711,6 +913,11 @@ public class RestorableTest {
         @Override
         public R1 a() {
             return new R1Server();
+        }
+
+        @Override
+        public R1 az() {
+            return a();
         }
 
         @Override

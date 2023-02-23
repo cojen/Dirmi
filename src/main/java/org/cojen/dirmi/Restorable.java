@@ -34,4 +34,10 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Restorable {
+    /**
+     * A restorable method which is lenient allows an object to be returned by a method even if
+     * the session is currenly disconnected. Such an object will be in a disposed state and
+     * won't be fully functional until the session reconnects.
+     */
+    boolean lenient() default false;
 }

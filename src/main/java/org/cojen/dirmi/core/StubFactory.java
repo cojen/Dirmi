@@ -50,7 +50,7 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
         }
 
         @Override
-        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+        public void writeMethodId(Pipe pipe, int methodId, String name) throws IOException {
             pipe.writeByte(methodId);
         }
     }
@@ -64,7 +64,7 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
         }
 
         @Override
-        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+        public void writeMethodId(Pipe pipe, int methodId, String name) throws IOException {
             pipe.writeShort(methodId);
         }
     }
@@ -78,7 +78,7 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
         }
 
         @Override
-        public void writeMethodId(Pipe pipe, int methodId) throws IOException {
+        public void writeMethodId(Pipe pipe, int methodId, String name) throws IOException {
             pipe.writeInt(methodId);
         }
     }
