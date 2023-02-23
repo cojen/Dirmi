@@ -277,7 +277,10 @@ final class StubMaker {
                 }
 
                 if (isClientMethodRestorable(clientMethod)) {
-                    mm.addAnnotation(Restorable.class, true);
+                    AnnotationMaker am = mm.addAnnotation(Restorable.class, true);
+                    if (clientMethod.isLenient()) {
+                        am.put("lenient", true);
+                    }
                 }
 
                 if (remoteFailureClass == RemoteException.class) {
