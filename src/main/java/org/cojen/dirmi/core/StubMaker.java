@@ -454,17 +454,13 @@ final class StubMaker {
                 hasResult.goto_();
             }
 
-            exVar.set(supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar));
-            Label throwIt = mm.label().goto_();
+            supportVar.invoke("failed", remoteFailureClass, pipeVar, exVar).throw_();
 
             if (thrownVar != null) {
                 throwException.here();
                 supportVar.invoke("finished", pipeVar);
-                exVar.set(thrownVar);
+                throwException(thrownVar, remoteFailureClass, thrownClasses);
             }
-
-            throwIt.here();
-            throwException(exVar, remoteFailureClass, thrownClasses);
 
             batchedImmediateMethodId = -1;
         }
@@ -474,7 +470,8 @@ final class StubMaker {
 
     /**
      * Throws an exception as-is if it's declared to be thrown, or if it's unchecked.
-     * Otherwise, wrap it.
+     * Otherwise, wrap it. This should only be used for exceptions which originated from the
+     * remote side and weren't caused by a communication failure.
      *
      * @param exVar must be type Throwable
      * @param remoteFailureClass exception for reporting remote failures (usually RemoteException)

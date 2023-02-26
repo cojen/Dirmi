@@ -20,6 +20,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
 import java.lang.reflect.Modifier;
+import java.lang.reflect.UndeclaredThrowableException;
 
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
@@ -30,8 +31,9 @@ import org.cojen.maker.Variable;
  * Wraps an exception using a hidden class, in order to provide a clean stack trace. If using
  * reflection, a few extra traces would be added which expose the reflection classes.
  *
- * <p>If the wrapped exception type isn't public or doesn't have an appropriate constructor, then
- * no wrapping occurs and instead original exception is returned as-is.
+ * <p>If the wrapped exception type isn't public or doesn't have an appropriate constructor:
+ * If it's an unchecked exception, then no wrapping occurs and instead the original exception
+ * is returned as-is. Otherwise, the exception is wrapped with UndeclaredThrowableException.
  *
  * @author Brian S O'Neill
  */
@@ -94,7 +96,7 @@ abstract class ExceptionWrapper {
                 }
             }
 
-            // Give up and always return the cause anyhow, possibly unchecked.
+            // Rethrow the original exception or wrap it with UndeclaredThrowableException.
             return Rethrow.THE;
         }
 
@@ -170,7 +172,14 @@ abstract class ExceptionWrapper {
         @Override
         @SuppressWarnings("unchecked")
         <T extends Throwable> T wrap(Throwable cause, Object extraMessage) {
-            return (T) cause;
+            if (cause instanceof RuntimeException | cause instanceof Error) {
+                return (T) cause;
+            }
+            String message = cause.toString();
+            if (extraMessage != null) {
+                message = message + " (" + extraMessage + ')';
+            }
+            return (T) new UndeclaredThrowableException(cause, message);
         }
     }
 }

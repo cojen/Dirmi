@@ -18,6 +18,8 @@ package org.cojen.dirmi.core;
 
 import java.io.IOException;
 
+import java.lang.reflect.UndeclaredThrowableException;
+
 import java.net.SocketException;
 
 import org.junit.*;
@@ -63,12 +65,16 @@ public class CoreUtilsTest {
 
         // MyEx0 doesn't have an appropriate constructor.
         e = remoteException(MyEx0.class, null);
-        assertTrue(e instanceof RemoteException);
-        assertNull(e.getCause());
+        assertTrue(e instanceof UndeclaredThrowableException);
+        assertTrue(e.getCause() instanceof RemoteException);
 
         // MyEx1 isn't public.
         e = remoteException(MyEx1.class, null);
-        assertTrue(e instanceof RemoteException);
+        assertTrue(e instanceof UndeclaredThrowableException);
+        assertTrue(e.getCause() instanceof RemoteException);
+
+        e = remoteException(MyEx1.class, new IllegalStateException());
+        assertTrue(e instanceof IllegalStateException);
         assertNull(e.getCause());
 
         // Exception is a super class of RemoteException.
