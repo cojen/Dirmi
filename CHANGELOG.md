@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.3.0
+v2.3.0 (2023-03-04)
 ------
 * Fixed a bug when a restored object has access to a method which wasn't originally implemented.
 * Fixed a few race conditions during object restoration.
