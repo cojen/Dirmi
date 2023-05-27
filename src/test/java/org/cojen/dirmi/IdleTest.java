@@ -150,7 +150,7 @@ public class IdleTest {
         }
 
         int total2 = connector.mTotal.get();
-        assertTrue(total < total2 && total2 <= total + 4);
+        assertTrue("" + total + ", " + total2, total < total2 && total2 <= total + 4);
     }
 
     public static interface Iface extends Remote {
