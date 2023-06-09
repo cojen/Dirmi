@@ -601,6 +601,7 @@ public class RestorableTest {
                 Thread.sleep(100);
             }
 
+            // FIXME: Sometimes fails (when withKnownType is true).
             fail("Didn't reconnect");
         }
 
