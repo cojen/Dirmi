@@ -16,9 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
 import java.lang.ref.ReferenceQueue;
@@ -29,25 +26,7 @@ import java.lang.ref.SoftReference;
  *
  * @author Brian S O'Neill
  */
-final class SoftCache<K, V> extends ReferenceQueue<Object> implements Runnable {
-    private static final MethodHandle START_VIRTUAL_THREAD;
-
-    static {
-        MethodHandle mh;
-        if (Runtime.version().feature() < 21) {
-            mh = null;
-        } else {
-            try {
-                var mt = MethodType.methodType(Thread.class, Runnable.class);
-                mh = MethodHandles.lookup().findStatic(Thread.class, "startVirtualThread", mt);
-            } catch (Throwable e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
-
-        START_VIRTUAL_THREAD = mh;
-    }
-
+final class SoftCache<K, V> extends ReferenceQueue<Object> {
     private Entry<K, V>[] mEntries;
     private int mSize;
 
@@ -55,13 +34,6 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> implements Runnable {
     public SoftCache() {
         // Initial capacity must be a power of 2.
         mEntries = new Entry[2];
-
-        if (START_VIRTUAL_THREAD != null) {
-            try {
-                var t = (Thread) START_VIRTUAL_THREAD.invokeExact((Runnable) this);
-            } catch (Throwable e) {
-            }
-        }
     }
 
     public synchronized int size() {
@@ -177,19 +149,6 @@ final class SoftCache<K, V> extends ReferenceQueue<Object> implements Runnable {
                 }
             }
         } while ((ref = poll()) != null);
-    }
-
-    @Override
-    public void run() {
-        try {
-            while (true) {
-                Object ref = remove();
-                synchronized (this) {
-                    cleanup(ref);
-                }
-            }
-        } catch (InterruptedException e) {
-        }
     }
 
     private static final class Entry<K, V> extends SoftReference<V> {
