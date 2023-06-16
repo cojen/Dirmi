@@ -195,7 +195,7 @@ final class ClientSession<R> extends CoreSession<R> {
             waitMap.put(RemoteExaminer.remoteType(root).getName(), newServerRootInfo);
 
             mStubs.forEach(stub -> {
-                if (Stub.isRestorable(stub)) {
+                if (stub.isRestorable()) {
                     Class<?> type = RemoteExaminer.remoteType(stub);
                     if (waitMap.add(type.getName())) {
                         try {
@@ -229,7 +229,7 @@ final class ClientSession<R> extends CoreSession<R> {
         var restorableSupport = new RestorableStubSupport(newSupport);
 
         mStubs.forEach(stub -> {
-            if (!Stub.isRestorable(stub) && stub != mRoot) {
+            if (!stub.isRestorable() && stub != mRoot) {
                 return;
             }
 

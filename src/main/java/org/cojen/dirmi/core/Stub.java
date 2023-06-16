@@ -46,16 +46,11 @@ public class Stub extends Item implements Remote {
     }
 
     /**
-     * Set the root origin such that isRestorable(root) always returns false. The root must be
+     * Set the root origin such that isRestorable always returns false. The root must be
      * restored specially.
      */
     static void setRootOrigin(Stub root) {
         cOriginHandle.setRelease(root, cRootOrigin);
-    }
-
-    static boolean isRestorable(Stub stub) {
-        var origin = (MethodHandle) cOriginHandle.getAcquire(stub);
-        return origin != null && origin != cRootOrigin;
     }
 
     protected StubSupport support;
@@ -69,6 +64,20 @@ public class Stub extends Item implements Remote {
         this.support = support;
         this.miw = miw;
         VarHandle.storeStoreFence();
+    }
+
+    /**
+     * Returns true if this stub is restorable following a disconnect.
+     *
+     * @see #setRootOrigin
+     */
+    final boolean isRestorable() {
+        var origin = (MethodHandle) cOriginHandle.getAcquire(this);
+        if (origin == null) {
+            return ((StubSupport) cSupportHandle.getAcquire(this)).isLenientRestorable();
+        } else {
+            return origin != cRootOrigin;
+        }
     }
 
     @Override

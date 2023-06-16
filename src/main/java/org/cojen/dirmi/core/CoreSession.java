@@ -605,10 +605,10 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         } else {
             assert (reason & R_DISCONNECTED) != 0;
 
-            DisposedStubSupport support = DisposedStubSupport.newDisconnected(this, null);
+            DisposedStubSupport support = DisposedStubSupport.newDisconnected(this);
 
             mStubs.forEachToRemove(stub -> {
-                if (Stub.cOriginHandle.getAcquire(stub) != null || stub == root()) {
+                if (stub.isRestorable() || stub == root()) {
                     // Keep the restorable stubs and tag them with the new StubSupport.
                     Stub.cSupportHandle.setRelease(stub, newSupport);
                     return false;

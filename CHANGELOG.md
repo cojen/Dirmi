@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.3.1
+------
+* Fixed a race condition which prevented lenient restorable methods from being restored.
+
 v2.3.0 (2023-03-04)
 ------
 * Fixed a bug when a restored object has access to a method which wasn't originally implemented.

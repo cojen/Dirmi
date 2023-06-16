@@ -29,6 +29,16 @@ final class DisposedStubSupport implements StubSupport {
     static final String EXPLICIT_MESSAGE = "Object is disposed";
     static final DisposedStubSupport EXPLICIT = new DisposedStubSupport(EXPLICIT_MESSAGE);
 
+    static DisposedStubSupport newDisconnected(CoreSession<?> session) {
+        return newDisconnected(session, null);
+    }
+
+    /**
+     * To be called by stubs which are lenient restorable.
+     *
+     * @param session must not be null
+     * @param cause must not be null
+     */
     static DisposedStubSupport newDisconnected(CoreSession<?> session, Throwable cause) {
         String message = "Object is disposed due to session disconnect";
         return new DisposedStubSupport(session, message, cause);
@@ -61,6 +71,11 @@ final class DisposedStubSupport implements StubSupport {
             throw new IllegalStateException(mMessage);
         }
         return mSession;
+    }
+
+    @Override
+    public boolean isLenientRestorable() {
+        return mSession != null && mCause != null;
     }
 
     @Override

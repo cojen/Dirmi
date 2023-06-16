@@ -585,7 +585,7 @@ public class RestorableTest {
         try {
             r2.b(123);
             fail();
-        } catch (DisposedException e) {
+        } catch (DisposedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("disconnect"));
         }
 
@@ -601,7 +601,6 @@ public class RestorableTest {
                 Thread.sleep(100);
             }
 
-            // FIXME: Sometimes fails (when withKnownType is true).
             fail("Didn't reconnect");
         }
 

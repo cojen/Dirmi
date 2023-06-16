@@ -30,6 +30,10 @@ import org.cojen.dirmi.Session;
 public interface StubSupport {
     Session session();
 
+    public default boolean isLenientRestorable() {
+        return false;
+    }
+
     default void appendInfo(StringBuilder b) {
         Session session = session();
         b.append(", localAddress=").append(session.localAddress())
