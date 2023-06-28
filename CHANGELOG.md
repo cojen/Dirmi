@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.3.1
+v2.3.1 (2023-06-28)
 ------
 * Fixed a race condition which prevented lenient restorable objects from being restored.
 
