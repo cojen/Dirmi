@@ -1135,7 +1135,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
 
         long id = IdGenerator.nextNegative();
-        Stub stub = factory.newStub(id, DisposedStubSupport.newDisconnected(this, cause));
+        Stub stub = factory.newStub(id, DisposedStubSupport.newLenientRestorable(this, cause));
         mStubs.put(stub);
         return stub;
     }

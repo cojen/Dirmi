@@ -27,42 +27,51 @@ import org.cojen.dirmi.Session;
  */
 final class DisposedStubSupport implements StubSupport {
     static final String EXPLICIT_MESSAGE = "Object is disposed";
+
+    // Defines a permanently disposed stub with a generic message.
     static final DisposedStubSupport EXPLICIT = new DisposedStubSupport(EXPLICIT_MESSAGE);
 
+    /**
+     * @param session must not be null
+     */
     static DisposedStubSupport newDisconnected(CoreSession<?> session) {
-        return newDisconnected(session, null);
+        String message = "Object is disposed due to session disconnect";
+        return new DisposedStubSupport(session, message, null, false);
     }
 
     /**
      * To be called by stubs which are lenient restorable.
      *
      * @param session must not be null
-     * @param cause must not be null
+     * @param cause optional
      */
-    static DisposedStubSupport newDisconnected(CoreSession<?> session, Throwable cause) {
+    static DisposedStubSupport newLenientRestorable(CoreSession<?> session, Throwable cause) {
         String message = "Object is disposed due to session disconnect";
-        return new DisposedStubSupport(session, message, cause);
+        return new DisposedStubSupport(session, message, cause, true);
     }
 
     private final CoreSession<?> mSession;
     private final String mMessage;
     private final Throwable mCause;
+    private final boolean mRestorable;
 
+    /**
+     * Construct a permanently disposed stub with a custom message.
+     */
     DisposedStubSupport(String message) {
-        this(null, message, null);
-    }
-
-    private DisposedStubSupport(String message, Throwable cause) {
-        this(null, message, cause);
+        this(null, message, null, false);
     }
 
     /**
      * @param session pass null if object is permanently disposed
      */
-    private DisposedStubSupport(CoreSession<?> session, String message, Throwable cause) {
+    private DisposedStubSupport(CoreSession<?> session, String message, Throwable cause,
+                                boolean restorable)
+    {
         mSession = session;
         mMessage = message;
         mCause = cause;
+        mRestorable = restorable;
     }
 
     @Override
@@ -75,7 +84,7 @@ final class DisposedStubSupport implements StubSupport {
 
     @Override
     public boolean isLenientRestorable() {
-        return mSession != null && mCause != null;
+        return mSession != null && mRestorable;
     }
 
     @Override

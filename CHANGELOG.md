@@ -3,7 +3,7 @@ Changelog
 
 v2.3.2
 ------
-* Updated dependencies.
+* More lenient restorable object race condition fixes.
 
 v2.3.1 (2023-06-28)
 ------
