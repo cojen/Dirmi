@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.3.2
+v2.3.2 (2023-07-30)
 ------
 * More lenient restorable object race condition fixes.
 
