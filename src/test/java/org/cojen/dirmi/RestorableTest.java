@@ -571,6 +571,7 @@ public class RestorableTest {
 
     @Test
     public void lenientWithKnownRemoteType() throws Exception {
+        // FIXME: Sometimes fails: java.lang.AssertionError: Didn't reconnect
         lenient(true);
     }
 
