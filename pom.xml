@@ -159,7 +159,11 @@
           <reportOutputDirectory>${basedir}/docs</reportOutputDirectory>
           <destDir>javadoc</destDir>
           <excludePackageNames>org.cojen.dirmi.core:org.cojen.dirmi.io</excludePackageNames>
-          <!-- <additionalOptions>-Xdoclint:none</additionalOptions> -->
+          <quiet>true</quiet>
+          <additionalOptions>-Xdoclint:accessibility</additionalOptions>
+          <additionalOptions>-Xdoclint:html</additionalOptions>
+          <additionalOptions>-Xdoclint:reference</additionalOptions>
+          <additionalOptions>-Xdoclint:syntax</additionalOptions>
         </configuration>
         <executions>
           <execution>
