@@ -23,7 +23,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -501,7 +500,7 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
         return Boolean.compare(other.isBatchedImmediate(), isBatchedImmediate());
     }
 
-    static <E extends Comparable<E>> int compare(Collection<E> a, Collection<E> b) {
+    private static <E extends Comparable<E>> int compare(List<E> a, List<E> b) {
         int sizea = a.size();
         int sizeb = b.size();
 

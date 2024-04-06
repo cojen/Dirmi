@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v2.3.3
+------
+* Fixed a bug when comparing the client and server remote interfaces. Remote methods which
+  differed only by their annotations or exceptions would sometimes be treated as equal, leading
+  to mismatched code generation on the client and server sides.
+
 v2.3.2 (2023-07-30)
 ------
 * More lenient restorable object race condition fixes.

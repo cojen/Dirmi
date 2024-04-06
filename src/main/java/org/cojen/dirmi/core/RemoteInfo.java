@@ -357,9 +357,38 @@ final class RemoteInfo {
             return mFlags == other.mFlags && mName.equals(other.mName)
                 && mRemoteFailureException.equals(other.mRemoteFailureException)
                 && mInterfaceNames.equals(other.mInterfaceNames)
-                && mRemoteMethods.equals(other.mRemoteMethods);
+                && equals(mRemoteMethods, other.mRemoteMethods);
         }
         return false;
+    }
+
+    /**
+     * Performs a strict equality check of two sets which have the same order, by calling the
+     * equals method instead of the compareTo method. The RemoteMethod.compareTo method isn't
+     * as exhaustive as the RemoteMethod.equals method.
+     */
+    private static <E> boolean equals(SortedSet<E> a, SortedSet<E> b) {
+        if (a == b) {
+            return true;
+        }
+
+        int size = a.size();
+
+        if (size != b.size()) {
+            return false;
+        }
+
+        if (size != 0) {
+            Iterator<E> ita = a.iterator();
+            Iterator<E> itb = b.iterator();
+            for (int i=0; i<size; i++) {
+                if (!ita.next().equals(itb.next())) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     void writeTo(Pipe pipe) throws IOException {
