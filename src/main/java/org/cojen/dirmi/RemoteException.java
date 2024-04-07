@@ -23,6 +23,10 @@ import java.net.SocketAddress;
 /**
  * Defines the default exception for indicating a remote call failure.
  *
+ * <p>Note: For compatibility with interfaces designed for use with Java RMI, remote methods
+ * can declare throwing {@link java.rmi.RemoteException java.rmi.RemoteException}, but none of
+ * its specialized subclasses will be used.
+ *
  * @author Brian S O'Neill
  * @see RemoteFailure
  */

@@ -19,6 +19,9 @@ package org.cojen.dirmi;
 /**
  * Marker for designating a remote interface.
  *
+ * <p>Note: For compatibility with interfaces designed for use with Java RMI, {@link
+ * java.rmi.Remote java.rmi.Remote} can also be used.
+ *
  * @author Brian S O'Neill
  */
 public interface Remote {

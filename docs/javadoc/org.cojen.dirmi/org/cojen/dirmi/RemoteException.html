@@ -106,7 +106,11 @@ loadScripts(document, 'script');</script>
 <hr>
 <div class="type-signature"><span class="modifiers">public class </span><span class="element-name type-name-label">RemoteException</span>
 <span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Defines the default exception for indicating a remote call failure.</div>
+<div class="block">Defines the default exception for indicating a remote call failure.
+
+ <p>Note: For compatibility with interfaces designed for use with Java RMI, remote methods
+ can declare throwing <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.rmi/java/rmi/RemoteException.html" title="class or interface in java.rmi" class="external-link"><code>java.rmi.RemoteException</code></a>, but none of
+ its specialized subclasses will be used.</div>
 <dl class="notes">
 <dt>See Also:</dt>
 <dd>
