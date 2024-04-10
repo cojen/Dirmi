@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.3.3
+v2.3.3 (2024-04-10)
 ------
 * Fixed a bug when comparing the client and server remote interfaces. Remote methods which
   differed only by their annotations or exceptions would sometimes be treated as equal, leading
