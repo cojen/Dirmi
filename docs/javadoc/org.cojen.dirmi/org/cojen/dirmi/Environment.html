@@ -138,7 +138,7 @@ extends <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/ja
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="interface in org.cojen.dirmi">Session</a><wbr>&lt;?&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#accepted(java.net.SocketAddress,java.net.SocketAddress,java.io.InputStream,java.io.OutputStream)" class="member-name-link">accepted</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;localAddr,
- <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;remoteAttr,
+ <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;remoteAddr,
  <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a>&nbsp;in,
  <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a>&nbsp;out)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
@@ -406,13 +406,16 @@ extends <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/ja
 <h3>accepted</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;</span>&nbsp;<span class="element-name">accepted</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;localAddr,
- <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;remoteAttr,
+ <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/net/SocketAddress.html" title="class or interface in java.net" class="external-link">SocketAddress</a>&nbsp;remoteAddr,
  <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a>&nbsp;in,
  <a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/OutputStream.html" title="class or interface in java.io" class="external-link">OutputStream</a>&nbsp;out)</span>
              throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Call when a server-side connection has been explicitly accepted. Any exception thrown
  from this method closes the socket.</div>
 <dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>localAddr</code> - local link address, or null if unknown or not applicable</dd>
+<dd><code>remoteAddr</code> - remote link address, or null if unknown or not applicable</dd>
 <dt>Returns:</dt>
 <dd>new or existing server-side session instance</dd>
 <dt>Throws:</dt>
