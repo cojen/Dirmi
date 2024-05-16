@@ -105,7 +105,7 @@ final class ServerSession<R> extends CoreSession<R> {
     }
 
     @Override
-    public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+    public void connected(SocketAddress localAddr, SocketAddress remoteAddr,
                           InputStream in, OutputStream out)
     {
         throw new UnsupportedOperationException();

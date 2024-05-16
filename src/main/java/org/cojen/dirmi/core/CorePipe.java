@@ -44,8 +44,8 @@ final class CorePipe extends BufferedPipe {
     /**
      * Returns a pipe which is connected to null I/O streams.
      */
-    static CorePipe newNullPipe(SocketAddress localAddr, SocketAddress remoteAttr) {
-        return new CorePipe(localAddr, remoteAttr,
+    static CorePipe newNullPipe(SocketAddress localAddr, SocketAddress remoteAddr) {
+        return new CorePipe(localAddr, remoteAddr,
                             InputStream.nullInputStream(), OutputStream.nullOutputStream(),
                             M_CLOSED);
     }
@@ -60,10 +60,10 @@ final class CorePipe extends BufferedPipe {
 
     int mMode;
 
-    CorePipe(SocketAddress localAddr, SocketAddress remoteAttr,
+    CorePipe(SocketAddress localAddr, SocketAddress remoteAddr,
              InputStream in, OutputStream out, int mode)
     {
-        super(localAddr, remoteAttr, in, out);
+        super(localAddr, remoteAddr, in, out);
         mMode = mode;
     }
 

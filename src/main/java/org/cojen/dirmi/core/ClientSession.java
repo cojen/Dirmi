@@ -56,7 +56,7 @@ final class ClientSession<R> extends CoreSession<R> {
     private R mRoot;
 
     ClientSession(Engine engine, Settings settings,
-                  SocketAddress localAddr, SocketAddress remoteAttr)
+                  SocketAddress localAddr, SocketAddress remoteAddr)
     {
         super(engine, settings);
 
@@ -64,7 +64,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         // Start with a fake control connection in order for the addresses to be available to
         // the Connector.
-        controlPipe(CorePipe.newNullPipe(localAddr, remoteAttr));
+        controlPipe(CorePipe.newNullPipe(localAddr, remoteAddr));
     }
 
     /**
@@ -277,11 +277,11 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     @Override
-    public void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+    public void connected(SocketAddress localAddr, SocketAddress remoteAddr,
                           InputStream in, OutputStream out)
         throws IOException
     {
-        var pipe = new CorePipe(localAddr, remoteAttr, in, out, CorePipe.M_CLIENT);
+        var pipe = new CorePipe(localAddr, remoteAddr, in, out, CorePipe.M_CLIENT);
         pipe.initTypeCodeMap(mTypeCodeMap);
 
         long serverSessionId = (long) cServerSessionIdHandle.getAcquire(this);

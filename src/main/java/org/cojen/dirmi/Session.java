@@ -117,9 +117,11 @@ public interface Session<R> extends Closeable, Link, Executor {
     /**
      * Receives new connections from a {@link Connector Connector}.
      *
+     * @param localAddr local link address, or null if unknown or not applicable
+     * @param remoteAddr remote link address, or null if unknown or not applicable
      * @throws UnsupportedOperationException if not supported by this session
      */
-    void connected(SocketAddress localAddr, SocketAddress remoteAttr,
+    void connected(SocketAddress localAddr, SocketAddress remoteAddr,
                    InputStream in, OutputStream out)
         throws IOException;
 

@@ -101,11 +101,11 @@ class BufferedPipe implements Pipe {
         this(null, null, in, out);
     }
 
-    BufferedPipe(SocketAddress localAddr, SocketAddress remoteAttr,
+    BufferedPipe(SocketAddress localAddr, SocketAddress remoteAddr,
                  InputStream in, OutputStream out)
     {
         mLocalAddress = localAddr;
-        mRemoteAddress = remoteAttr;
+        mRemoteAddress = remoteAddr;
         Objects.requireNonNull(in);
         Objects.requireNonNull(out);
         mSourceIn = in;

@@ -151,11 +151,13 @@ public interface Environment extends Closeable, Executor {
      * Call when a server-side connection has been explicitly accepted. Any exception thrown
      * from this method closes the socket.
      *
+     * @param localAddr local link address, or null if unknown or not applicable
+     * @param remoteAddr remote link address, or null if unknown or not applicable
      * @return new or existing server-side session instance
      * @throws IOException if a communication failure or if the client is requesting an object
      * which isn't exported
      */
-    Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAttr,
+    Session<?> accepted(SocketAddress localAddr, SocketAddress remoteAddr,
                         InputStream in, OutputStream out)
         throws IOException;
 
