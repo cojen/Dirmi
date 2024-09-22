@@ -160,7 +160,13 @@ class BufferedPipe implements Pipe {
         if (avail <= 0) {
             try {
                 if (len >= buf.length) {
-                    return doRead(b, off, len);
+                    // Note: Don't call doRead since it can expand the wrong buffer.
+                    int amt = mSourceIn.read(b, off, len);
+                    if (amt == len && buf.length < MAX_BUFFER_SIZE) {
+                        // Filled the buffer, so try to expand it for the next time.
+                        expandInBuffer(buf);
+                    }
+                    return amt;
                 }
                 if (len <= 0) {
                     return 0;
