@@ -833,6 +833,62 @@ public class PipeTest {
     }
 
     @Test
+    public void encodeDecode() throws Exception {
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
+
+        pipe.write(1);
+
+        pipe.writeEncode("hello", 1 + 5, (str, len, buf, off) -> {
+            assertEquals(1 + 5, len);
+            byte[] bytes = str.getBytes("UTF-8");
+            assertEquals(5, bytes.length);
+            buf[off++] = (byte) bytes.length;
+            System.arraycopy(bytes, 0, buf, off, bytes.length);
+            off += bytes.length;
+            return off;
+        });
+
+        var huge = new byte[100_000];
+        var rnd = new Random(8675309);
+        rnd.nextBytes(huge);
+
+        pipe.writeInt(huge.length);
+
+        pipe.writeEncode(huge, huge.length, (obj, len, buf, off) -> {
+            assertEquals(huge.length, len);
+            System.arraycopy(obj, 0, buf, off, obj.length);
+            return off + obj.length;
+        });
+
+        pipe.flush();
+        byte[] bytes = capture.getBytes();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        assertEquals(1, pipe.read());
+
+        String str = pipe.readDecode("xxx", 1 + 5, (obj, len, buf, off) -> {
+            assertEquals("xxx", obj);
+            assertEquals(1 + 5, len);
+            assertEquals(5, buf[off++]);
+            return new String(buf, off, 5, "UTF-8");
+        });
+
+        assertEquals("hello", str);
+
+        assertEquals(huge.length, pipe.readInt());
+
+        byte[] readHuge = pipe.readDecode(null, huge.length, (obj, len, buf, off) -> {
+            assertEquals(null, obj);
+            assertEquals(huge.length, len);
+            return Arrays.copyOfRange(buf, off, off + len);
+        });
+
+        assertArrayEquals(huge, readHuge);
+    }
+
+    @Test
     public void fuzz() throws Exception {
         long seed = 8675309;
         for (int i=0; i<100; i++) {

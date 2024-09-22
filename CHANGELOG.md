@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.4.0
+------
+* Added pipe methods for efficiently encoding and decoding complex objects.
+
 v2.3.3 (2024-04-10)
 ------
 * Fixed a bug when comparing the client and server remote interfaces. Remote methods which

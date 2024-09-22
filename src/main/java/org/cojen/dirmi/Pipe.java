@@ -158,4 +158,94 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
      * @return the number of bytes transferred
      */
     long transferTo(OutputStream out, long n) throws IOException;
+
+    /**
+     * Support for efficiently reading complex objects from a pipe.
+     *
+     * @see Pipe#readDecode
+     */
+    @FunctionalInterface
+    public static interface Decoder<T> {
+        /**
+         * Called to decode an object.
+         *
+         * @param object object which was passed to the {@link Pipe#readDecode readDecode}
+         * method
+         * @param length requested buffer length
+         * @param buffer buffer to decode from
+         * @param offset buffer offset to start reading from
+         * @return the actual decoded object
+         */
+        T decode(T object, int length, byte[] buffer, int offset) throws IOException;
+
+        /**
+         * Called to decode an object when the requested length was too large. By default, a
+         * temporary buffer is allocated and then the regular decode method is called.
+         *
+         * @param object object which was passed to the {@link Pipe#readDecode readDecode}
+         * method
+         * @param length requested buffer length
+         * @param pipe pipe to read from
+         */
+        default T decode(T object, int length, Pipe pipe) throws IOException {
+            var buffer = new byte[length];
+            pipe.readFully(buffer);
+            return decode(object, length, buffer, 0);
+        }
+    }
+
+    /**
+     * Read a complex object from the pipe by invoking a decoder, which can be more efficient
+     * than reading from the pipe multiple times.
+     *
+     * @param object passed directly to the decoder
+     * @param length exact buffer length to pass to the decoder
+     * @param decoder called to perform decoding against a buffer
+     */
+    <T> T readDecode(T object, int length, Decoder<T> decoder) throws IOException;
+
+    /**
+     * Support for efficiently writing complex objects to a pipe.
+     *
+     * @see Pipe#writeEncode
+     */
+    @FunctionalInterface
+    public static interface Encoder<T> {
+        /**
+         * Called to encode an object.
+         *
+         * @param object object which was passed to the {@link Pipe#writeEncode writeEncode}
+         * method
+         * @param length requested buffer length
+         * @param buffer buffer to encode into
+         * @param offset buffer offset to start writing into
+         * @return the updated offset
+         */
+        int encode(T object, int length, byte[] buffer, int offset) throws IOException;
+
+        /**
+         * Called to encode an object when the requested length was too large. By default, a
+         * temporary buffer is allocated and then the regular encode method is called.
+         *
+         * @param object object which was passed to the {@link Pipe#writeEncode writeEncode}
+         * method
+         * @param length requested buffer length
+         * @param pipe pipe to write to
+         */
+        default void encode(T object, int length, Pipe pipe) throws IOException {
+            var buffer = new byte[length];
+            int end = encode(object, length, buffer, 0);
+            pipe.write(buffer, 0, end);
+        }
+    }
+
+    /**
+     * Write a complex object to the pipe by invoking an encoder, which can be more efficient
+     * than writing to the pipe multiple times.
+     *
+     * @param object passed directly to the encoder
+     * @param length minimum buffer length to pass to the encoder
+     * @param encoder called to perform encoding against a buffer
+     */
+    <T> void writeEncode(T object, int length, Encoder<T> encoder) throws IOException;
 }

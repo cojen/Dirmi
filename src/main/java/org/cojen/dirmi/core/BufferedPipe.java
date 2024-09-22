@@ -989,6 +989,18 @@ class BufferedPipe implements Pipe {
         return trace;
     }
 
+    @Override
+    public <T> T readDecode(T object, int length, Decoder<T> decoder) throws IOException {
+        if (length <= MAX_BUFFER_SIZE) {
+            requireInput(length);
+            object = decoder.decode(object, length, mInBuffer, mInPos);
+            mInPos += length;
+            return object;
+        } else {
+            return decoder.decode(object, length, this);
+        }
+    }
+
     // CorePipe subclass must override this method.
     Class<?> loadClass(String name) throws ClassNotFoundException {
         return Class.forName(name);
@@ -1780,6 +1792,16 @@ class BufferedPipe implements Pipe {
         } else {
             writeShort((T_REF_MODE_OFF << 8) | T_NULL);
             mOutRefMap = null;
+        }
+    }
+
+    @Override
+    public <T> void writeEncode(T object, int length, Encoder<T> encoder) throws IOException {
+        if (length <= MAX_BUFFER_SIZE) {
+            requireOutput(length);
+            mOutEnd = encoder.encode(object, length, mOutBuffer, mOutEnd);
+        } else {
+            encoder.encode(object, length, this);
         }
     }
 
