@@ -712,38 +712,109 @@ class BufferedPipe implements Pipe {
 
     private boolean[] readBooleanArray(int length) throws IOException {
         var array = new boolean[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readBoolean();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(1);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = buf[pos++] != 0;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if (--avail <= 0) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private char[] readCharArray(int length) throws IOException {
         var array = new char[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readChar();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(2);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = (char) (short) cShortArrayBEHandle.get(buf, pos);
+                pos += 2;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 2) < 2) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private float[] readFloatArray(int length) throws IOException {
         var array = new float[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readFloat();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(4);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = Float.intBitsToFloat((int) cIntArrayBEHandle.get(buf, pos));
+                pos += 4;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 4) < 4) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private double[] readDoubleArray(int length) throws IOException {
         var array = new double[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readDouble();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(8);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = Double.longBitsToDouble((long) cLongArrayBEHandle.get(buf, pos));
+                pos += 8;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 8) < 8) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private byte[] readByteArray(int length) throws IOException {
@@ -754,29 +825,83 @@ class BufferedPipe implements Pipe {
 
     private short[] readShortArray(int length) throws IOException {
         var array = new short[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readShort();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(2);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = (short) cShortArrayBEHandle.get(buf, pos);
+                pos += 2;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 2) < 2) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private int[] readIntArray(int length) throws IOException {
         var array = new int[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readInt();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(4);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = (int) cIntArrayBEHandle.get(buf, pos);
+                pos += 4;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 4) < 4) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private long[] readLongArray(int length) throws IOException {
         var array = new long[length];
-        // TODO: Optimize by reading chunks.
-        for (int i=0; i<array.length; i++) {
-            array[i] = readLong();
+
+        if (length == 0) {
+            return array;
         }
-        return array;
+
+        for (int off = 0;;) {
+            requireInput(8);
+            byte[] buf = mInBuffer;
+            int pos = mInPos;
+            int avail = mInEnd - pos;
+            while (true) {
+                array[off++] = (long) cLongArrayBEHandle.get(buf, pos);
+                pos += 8;
+                if (off >= array.length) {
+                    mInPos = pos;
+                    return array;
+                }
+                if ((avail -= 8) < 8) {
+                    mInPos = pos;
+                    break;
+                }
+            }
+        }
     }
 
     private Object[] readObjectArray(int length) throws IOException {
@@ -1527,9 +1652,22 @@ class BufferedPipe implements Pipe {
     final void writeBooleanA(boolean[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_BOOLEAN_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeBoolean(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(1);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    buf[end++] = v[off++] ? (byte) 1 : (byte) 0;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 1 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1540,9 +1678,23 @@ class BufferedPipe implements Pipe {
     final void writeCharA(char[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_CHAR_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeChar(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(2);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cShortArrayBEHandle.set(buf, end, (short) v[off++]);
+                    end += 2;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 2 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1553,9 +1705,23 @@ class BufferedPipe implements Pipe {
     final void writeFloatA(float[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_FLOAT_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeFloat(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(4);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cIntArrayBEHandle.set(buf, end, Float.floatToRawIntBits(v[off++]));
+                    end += 4;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 4 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1566,9 +1732,23 @@ class BufferedPipe implements Pipe {
     final void writeDoubleA(double[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_DOUBLE_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeDouble(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(8);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cLongArrayBEHandle.set(buf, end, Double.doubleToRawLongBits(v[off++]));
+                    end += 8;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 8 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1589,9 +1769,23 @@ class BufferedPipe implements Pipe {
     final void writeShortA(short[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_SHORT_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeShort(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(2);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cShortArrayBEHandle.set(buf, end, v[off++]);
+                    end += 2;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 2 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1602,9 +1796,23 @@ class BufferedPipe implements Pipe {
     final void writeIntA(int[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_INT_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeInt(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(4);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cIntArrayBEHandle.set(buf, end, v[off++]);
+                    end += 4;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 4 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1615,9 +1823,23 @@ class BufferedPipe implements Pipe {
     final void writeLongA(long[] v) throws IOException {
         if (!tryWriteReference(v)) {
             writeVarTypeCode(T_LONG_ARRAY, v.length);
-            // TODO: Optimize by writing chunks.
-            for (int i=0; i<v.length; i++) {
-                writeLong(v[i]);
+
+            if (v.length > 0) for (int off = 0;;) {
+                requireOutput(8);
+                byte[] buf = mOutBuffer;
+                int end = mOutEnd;
+                while (true) {
+                    cLongArrayBEHandle.set(buf, end, v[off++]);
+                    end += 8;
+                    if (off >= v.length) {
+                        mOutEnd = end;
+                        return;
+                    }
+                    if (end + 8 > buf.length) {
+                        mOutEnd = end;
+                        break;
+                    }
+                }
             }
         }
     }
