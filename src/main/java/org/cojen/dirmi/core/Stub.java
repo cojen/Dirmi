@@ -23,7 +23,8 @@ import java.lang.invoke.VarHandle;
 import org.cojen.dirmi.Remote;
 
 /**
- * Base class for remote stubs.
+ * Base class for remote stubs. It must not declare any new public instance methods because
+ * they can conflict with user-specified remote methods which have the same signature.
  *
  * @author Brian S O'Neill
  */
@@ -68,6 +69,9 @@ public class Stub extends Item implements Remote {
 
     /**
      * Returns true if this stub is restorable following a disconnect.
+     *
+     * Note: This method must not be public or else it can conflict with a user-specified
+     * remote method which has the same signature.
      *
      * @see #setRootOrigin
      */

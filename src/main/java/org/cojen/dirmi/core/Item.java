@@ -23,6 +23,10 @@ import java.lang.invoke.VarHandle;
  * Base class for objects which are associated with an identifier. They can be stored within a
  * single ItemMap instance.
  *
+ * <p>This class is subclassed by Stub and so it must not declare any new public instance
+ * methods because they can conflict with user-specified remote methods which have the same
+ * signature.
+ *
  * @author Brian S O'Neill
  * @see ItemMap
  * @see IdGenerator

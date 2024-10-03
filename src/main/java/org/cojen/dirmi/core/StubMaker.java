@@ -506,7 +506,6 @@ final class StubMaker {
             writeName = "writeSyntheticMethodId";
         }
 
-
         mm.field("miw").getAcquire().invoke(writeName, pipeVar, methodId, method.name());
 
         if (ptypes.length <= 0) {
