@@ -153,113 +153,118 @@ public class HelloDirmiClient {
 <div class="summary-table two-column-summary">
 <div class="table-header col-first">Class</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color class-summary class-summary-tab6"><a href="Batched.html" title="annotation interface in org.cojen.dirmi">Batched</a></div>
+<div class="col-first even-row-color class-summary class-summary-tab6"><a href="AutoDispose.html" title="annotation interface in org.cojen.dirmi">AutoDispose</a></div>
 <div class="col-last even-row-color class-summary class-summary-tab6">
+<div class="block">Designates a remote interface as supporting automatic disposal when the client-side object
+ is reclaimed by the garbage collector.</div>
+</div>
+<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="Batched.html" title="annotation interface in org.cojen.dirmi">Batched</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab6">
 <div class="block">Designates a remote method as being batched, which can be used to reduce transport
  overhead.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="ClassResolver.html" title="interface in org.cojen.dirmi">ClassResolver</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="ClassResolver.html" title="interface in org.cojen.dirmi">ClassResolver</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Defines a custom class loading scheme.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab5"><a href="ClosedException.html" title="class in org.cojen.dirmi">ClosedException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="ClosedException.html" title="class in org.cojen.dirmi">ClosedException</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
 <div class="block">Generic exception indicating that a resource is closed.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Connector.html" title="interface in org.cojen.dirmi">Connector</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Defines a function which is called whenever client-side socket connections need to be
  established.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab5"><a href="DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="DisconnectedException.html" title="class in org.cojen.dirmi">DisconnectedException</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
 <div class="block">Exception which indicates that a session is disconnected, but a reconnect is in progress.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="DisposedException.html" title="class in org.cojen.dirmi">DisposedException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="col-first even-row-color class-summary class-summary-tab5"><a href="DisposedException.html" title="class in org.cojen.dirmi">DisposedException</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
 <div class="block">Thrown when attempting to invoke a method against a disposed object.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab6"><a href="Disposer.html" title="annotation interface in org.cojen.dirmi">Disposer</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab6">
+<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="Disposer.html" title="annotation interface in org.cojen.dirmi">Disposer</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab6">
 <div class="block">Designates a remote method as being a <a href="Remote.html" title="interface in org.cojen.dirmi"><code>Remote</code></a> object disposer, allowing memory to be
  freed on the remote side.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Sharable environment for connecting and accepting remote sessions.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Link.html" title="interface in org.cojen.dirmi">Link</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab1">
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Link.html" title="interface in org.cojen.dirmi">Link</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Represents an established connection between two endpoints.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="NoReply.html" title="annotation interface in org.cojen.dirmi">NoReply</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab6">
+<div class="col-first even-row-color class-summary class-summary-tab6"><a href="NoReply.html" title="annotation interface in org.cojen.dirmi">NoReply</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab6">
 <div class="block">Designates a remote method which doesn't block reading a reply or acknowledgment.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab5"><a href="NoSuchObjectException.html" title="class in org.cojen.dirmi">NoSuchObjectException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="NoSuchObjectException.html" title="class in org.cojen.dirmi">NoSuchObjectException</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
 <div class="block">Thrown when attempting to invoke a method against an object that is unknown to a <a href="Session.html" title="interface in org.cojen.dirmi"><code>session</code></a>.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">A pipe is a bidirectional stream which supports basic object serialization.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Pipe.Decoder.html" title="interface in org.cojen.dirmi">Pipe.Decoder</a>&lt;T&gt;</div>
-<div class="col-last even-row-color class-summary class-summary-tab1">
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Pipe.Decoder.html" title="interface in org.cojen.dirmi">Pipe.Decoder</a>&lt;T&gt;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Support for efficiently reading complex objects from a pipe.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Pipe.Encoder.html" title="interface in org.cojen.dirmi">Pipe.Encoder</a>&lt;T&gt;</div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Pipe.Encoder.html" title="interface in org.cojen.dirmi">Pipe.Encoder</a>&lt;T&gt;</div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Support for efficiently writing complex objects to a pipe.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Remote.html" title="interface in org.cojen.dirmi">Remote</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab1">
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Remote.html" title="interface in org.cojen.dirmi">Remote</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Marker for designating a remote interface.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="col-first even-row-color class-summary class-summary-tab5"><a href="RemoteException.html" title="class in org.cojen.dirmi">RemoteException</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
 <div class="block">Defines the default exception for indicating a remote call failure.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab6"><a href="RemoteFailure.html" title="annotation interface in org.cojen.dirmi">RemoteFailure</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab6">
+<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="RemoteFailure.html" title="annotation interface in org.cojen.dirmi">RemoteFailure</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab6">
 <div class="block">Annotate a remote method or interface to specify what exception is to be used for indicating
  a remote call failure.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="Restorable.html" title="annotation interface in org.cojen.dirmi">Restorable</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab6">
+<div class="col-first even-row-color class-summary class-summary-tab6"><a href="Restorable.html" title="annotation interface in org.cojen.dirmi">Restorable</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab6">
 <div class="block">Designates a remote method which returns a remote object which should be restored when a
  session reconnects.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab6"><a href="Serialized.html" title="annotation interface in org.cojen.dirmi">Serialized</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab6">
+<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="Serialized.html" title="annotation interface in org.cojen.dirmi">Serialized</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab6">
 <div class="block">Indicates that a remote method should use Java object serialization for the parameters and
  return value.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Supports writing and reading of object instances to/from a pipe.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab1"><a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;R&gt;</div>
-<div class="col-last even-row-color class-summary class-summary-tab1">
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;R&gt;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Manages a client-side or server-side remote session, which establishes new socket
  connections as needed.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab3"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab3">
+<div class="col-first even-row-color class-summary class-summary-tab3"><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab3">
 <div class="block">Indicates the session's current connection state.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab1"><a href="SessionAware.html" title="interface in org.cojen.dirmi">SessionAware</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab1">
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="SessionAware.html" title="interface in org.cojen.dirmi">SessionAware</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Remote objects implementing this interface are notified when they are attached and detached
  from sessions.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab6"><a href="Unbatched.html" title="annotation interface in org.cojen.dirmi">Unbatched</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab6">
+<div class="col-first even-row-color class-summary class-summary-tab6"><a href="Unbatched.html" title="annotation interface in org.cojen.dirmi">Unbatched</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab6">
 <div class="block">Designates a remote method which should never be included in a <a href="Batched.html" title="annotation interface in org.cojen.dirmi"><code>batched</code></a>
  request.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab5"><a href="UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="UnimplementedException.html" title="class in org.cojen.dirmi">UnimplementedException</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
 <div class="block">Thrown when attempting to invoke a method which is unimplemented on the remote side.</div>
 </div>
 </div>
