@@ -16,10 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-
 import org.cojen.dirmi.Remote;
 
 /**
@@ -28,61 +24,14 @@ import org.cojen.dirmi.Remote;
  *
  * @author Brian S O'Neill
  */
-public class Stub extends Item implements Remote {
-    static final VarHandle cSupportHandle, cWriterHandle, cOriginHandle;
-
-    private static final MethodHandle cRootOrigin;
-
-    static {
-        try {
-            var lookup = MethodHandles.lookup();
-            cSupportHandle = lookup.findVarHandle(Stub.class, "support", StubSupport.class);
-            cWriterHandle = lookup.findVarHandle(Stub.class, "miw", MethodIdWriter.class);
-            cOriginHandle = lookup.findVarHandle(Stub.class, "origin", MethodHandle.class);
-        } catch (Throwable e) {
-            throw CoreUtils.rethrow(e);
-        }
-
-        cRootOrigin = MethodHandles.constant(Stub.class, null);
-    }
-
-    /**
-     * Set the root origin such that isRestorable always returns false. The root must be
-     * restored specially.
-     */
-    static void setRootOrigin(Stub root) {
-        cOriginHandle.setRelease(root, cRootOrigin);
-    }
-
-    protected StubSupport support;
-    protected MethodIdWriter miw;
-
-    // Is set when this stub has become restorable.
-    protected MethodHandle origin;
-
-    public Stub(long id, StubSupport support, MethodIdWriter miw) {
+public abstract sealed class Stub extends Item implements Remote permits StubInvoker, StubWrapper {
+    protected Stub(long id) {
         super(id);
-        this.support = support;
-        this.miw = miw;
-        VarHandle.storeStoreFence();
     }
 
-    /**
-     * Returns true if this stub is restorable following a disconnect.
-     *
-     * Note: This method must not be public or else it can conflict with a user-specified
-     * remote method which has the same signature.
-     *
-     * @see #setRootOrigin
-     */
-    final boolean isRestorable() {
-        var origin = (MethodHandle) cOriginHandle.getAcquire(this);
-        if (origin == null) {
-            return ((StubSupport) cSupportHandle.getAcquire(this)).isLenientRestorable();
-        } else {
-            return origin != cRootOrigin;
-        }
-    }
+    abstract StubSupport support();
+
+    abstract StubInvoker invoker();
 
     @Override
     public String toString() {
@@ -99,7 +48,7 @@ public class Stub extends Item implements Remote {
         b.append(name).append('@').append(Integer.toHexString(System.identityHashCode(this)))
             .append("{id=").append(id);
 
-        support.appendInfo(b);
+        support().appendInfo(b);
 
         return b.append('}').toString();
     }

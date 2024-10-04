@@ -4,6 +4,7 @@ Changelog
 v2.4.0
 ------
 * Added pipe methods for efficiently encoding and decoding complex objects.
+* Added support for automatic remote object disposal.
 * Optimize reading and writing primitive arrays.
 
 v2.3.3 (2024-04-10)

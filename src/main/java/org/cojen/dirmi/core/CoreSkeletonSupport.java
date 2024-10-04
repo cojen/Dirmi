@@ -56,6 +56,11 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     }
 
     @Override
+    public void acknowledged(Skeleton<?> skeleton) {
+        mSession.acknowledged(skeleton);
+    }
+
+    @Override
     public void dispose(Skeleton<?> skeleton) {
         mSession.removeSkeleton(skeleton);
     }

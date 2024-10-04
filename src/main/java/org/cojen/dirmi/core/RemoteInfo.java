@@ -33,6 +33,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.cojen.dirmi.AutoDispose;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
@@ -44,7 +45,7 @@ import org.cojen.dirmi.RemoteFailure;
  * @author Brian S O'Neill
  */
 final class RemoteInfo {
-    private static final int F_UNDECLARED_EX = 1;
+    private static final int F_UNDECLARED_EX = 1, F_AUTO_DISPOSE = 2;
 
     private static final SoftCache<Class<?>, RemoteInfo> cCache = new SoftCache<>();
     private static final CanonicalSet<RemoteInfo> cCanonical = new CanonicalSet<>();
@@ -61,9 +62,11 @@ final class RemoteInfo {
      * @param stub non-null stub to examine
      * @throws IllegalArgumentException if stub type is malformed
      */
-    public static RemoteInfo examineStub(Object stub) {
-        RemoteExaminer.remoteType(stub); // verify that object is a stub
-        return examine(stub.getClass(), false);
+    public static RemoteInfo examineStub(Stub stub) {
+        // Only the invoker is required to have all the annotations, so examine that.
+        StubInvoker invoker = stub.invoker();
+        RemoteExaminer.remoteType(invoker); // perform basic validation
+        return examine(invoker.getClass(), false);
     }
 
     private static RemoteInfo examine(Class<?> type, boolean strict) {
@@ -115,6 +118,10 @@ final class RemoteInfo {
             if (!ann.declared() || CoreUtils.isUnchecked(remoteFailureException)) {
                 flags |= F_UNDECLARED_EX;
             }
+        }
+
+        if (type.isAnnotationPresent(AutoDispose.class)) {
+            flags |= F_AUTO_DISPOSE;
         }
 
         Map<RemoteMethod, RemoteMethod> methodMap = new TreeMap<>();
@@ -220,6 +227,13 @@ final class RemoteInfo {
      */
     boolean isRemoteFailureExceptionUndeclared() {
         return (mFlags & F_UNDECLARED_EX) != 0;
+    }
+
+    /**
+     * @see AutoDispose
+     */
+    boolean isAutoDispose() {
+        return (mFlags & F_AUTO_DISPOSE) != 0;
     }
 
     /**

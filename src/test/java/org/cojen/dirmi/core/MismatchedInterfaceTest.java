@@ -261,7 +261,7 @@ public class MismatchedInterfaceTest {
         assertEquals("bob", ((Parent) remote).name());
 
         RemoteInfo info1 = RemoteInfo.examine(iface);
-        RemoteInfo info2 = RemoteInfo.examineStub(remote);
+        RemoteInfo info2 = RemoteInfo.examineStub((Stub) remote);
 
         Iterator<RemoteMethod> it1 = info1.remoteMethods().iterator();
         Iterator<RemoteMethod> it2 = info2.remoteMethods().iterator();

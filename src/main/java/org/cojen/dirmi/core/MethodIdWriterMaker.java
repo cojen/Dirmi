@@ -35,7 +35,7 @@ final class MethodIdWriterMaker {
     private static final SoftCache<IntArrayKey, MethodIdWriter> cCache = new SoftCache<>();
 
     /**
-     * @param original server-side RemoteInfo that a Stub is coded to use
+     * @param original server-side RemoteInfo that a StubInvoker is coded to use
      * @param current server-side RemoteInfo provided by the remote side
      * @param force when false, return null if no mapping is needed
      */

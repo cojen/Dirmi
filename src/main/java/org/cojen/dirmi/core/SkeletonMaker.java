@@ -195,6 +195,10 @@ final class SkeletonMaker<R> {
 
             CaseInfo ci = caseMap.get(cases[i]);
 
+            if (ci.serverMethod.isUnacknowledged() && mServerInfo.isAutoDispose()) {
+                supportVar.invoke("acknowledged", mm.this_());
+            }
+
             if (!ci.serverMethod.isDisposer()) {
                 mm.return_(ci.invoke(mm, pipeVar, contextVar, supportVar));
             } else {

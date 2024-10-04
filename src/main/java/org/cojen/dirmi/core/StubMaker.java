@@ -22,6 +22,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
+import java.lang.ref.Reference;
+
 import java.lang.reflect.UndeclaredThrowableException;
 
 import java.util.ArrayList;
@@ -85,6 +87,7 @@ final class StubMaker {
     private final RemoteInfo mServerInfo;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mStubMaker;
+    private final ClassMaker mWrapperMaker;
 
     private StubMaker(Class<?> type, RemoteInfo info) {
         mType = type;
@@ -111,7 +114,28 @@ final class StubMaker {
         CoreUtils.allowAccess(mFactoryMaker);
 
         mStubMaker = mFactoryMaker.another(type.getName())
-            .public_().extend(Stub.class).implement(type).final_().sourceFile(sourceFile);
+            .public_().implement(type).final_().sourceFile(sourceFile);
+
+        if (!info.isAutoDispose()) {
+            mStubMaker.extend(StubInvoker.class);
+            mWrapperMaker = null;
+        } else {
+            mWrapperMaker = mFactoryMaker.another(type.getName())
+                .public_().extend(StubWrapper.class).implement(type)
+                .final_().sourceFile(sourceFile);
+
+            boolean needsCountedRef = false;
+
+            for (RemoteMethod m : mServerInfo.remoteMethods()) {
+                if (m.isUnacknowledged()) {
+                    needsCountedRef = true;
+                    break;
+                }
+            }
+
+            mStubMaker.extend(needsCountedRef ? StubInvoker.WithCountedRef.class
+                              : StubInvoker.WithBasicRef.class);
+        }
     }
 
     /**
@@ -125,7 +149,7 @@ final class StubMaker {
         MethodMaker mm = mFactoryMaker.addConstructor(long.class);
         mm.invokeSuperConstructor(mm.param(0));
 
-        mm = mFactoryMaker.addMethod(Stub.class, "newStub", long.class, StubSupport.class);
+        mm = mFactoryMaker.addMethod(StubInvoker.class, "newStub", long.class, StubSupport.class);
         mm.public_().return_(mm.new_(mStubMaker, mm.param(0), mm.param(1), mm.this_()));
 
         MethodHandles.Lookup lookup = mFactoryMaker.finishLookup();
@@ -139,7 +163,7 @@ final class StubMaker {
     }
 
     /**
-     * Returns a Stub subclass which can be constructed with:
+     * Returns a StubInvoker subclass which can be constructed with:
      *
      *   (long id, StubSupport support, MethodIdWriter miw)
      *
@@ -147,10 +171,23 @@ final class StubMaker {
      * remote object class isn't found
      */
     private Class<?> finishStub() {
-        {
-            MethodMaker mm = mStubMaker.addConstructor
-                (long.class, StubSupport.class, MethodIdWriter.class);
-            mm.invokeSuperConstructor(mm.param(0), mm.param(1), mm.param(2));
+        MethodMaker ctor = mStubMaker.addConstructor
+            (long.class, StubSupport.class, MethodIdWriter.class);
+
+        StubWrapper.Factory wrapperFactory;
+
+        if (mWrapperMaker == null) {
+            wrapperFactory = null;
+            ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2));
+        } else {
+            // Cannot call init until the wrapper class is defined, but it cannot be defined
+            // until the invoker is defined. There's a cyclic dependency.
+            wrapperFactory = new StubWrapper.Factory();
+            var factoryVar = ctor.var(StubWrapper.Factory.class).setExact(wrapperFactory);
+            ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2), factoryVar);
+
+            MethodMaker mm = mWrapperMaker.addConstructor(mStubMaker);
+            mm.invokeSuperConstructor(mm.param(0));
         }
 
         var it = new JoinedIterator<>(mClientInfo.remoteMethods(), mServerInfo.remoteMethods());
@@ -170,9 +207,9 @@ final class StubMaker {
                 lastServerMethod = serverMethod;
             }
 
-            Object returnType;
-            String methodName;
-            Object[] ptypes;
+            final Object returnType;
+            final String methodName;
+            final Object[] ptypes;
 
             if (serverMethod != null && serverMethod.isBatchedImmediate()) {
                 // No stub method is actually generated for this variant. The skeleton variant
@@ -214,6 +251,34 @@ final class StubMaker {
 
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
 
+            MethodMaker mm2;
+            if (mWrapperMaker == null) {
+                mm2 = null;
+            } else {
+                // Delegate to the actual invoker.
+                mm2 = mWrapperMaker.addMethod(returnType, methodName, ptypes).public_();
+
+                Label start = mm2.label().here();
+
+                var params = new Object[ptypes.length];
+                for (int i=0; i<params.length; i++) {
+                    params[i] = mm2.param(i);
+                }
+
+                Object result = mm2.field("invoker").cast(mStubMaker).invoke(methodName, params);
+
+                if (isVoid(returnType)) {
+                    mm2.return_();
+                } else {
+                    mm2.return_(result);
+                }
+
+                // Prevent the weakly referenced wrapper from being GC'd too soon.
+                mm2.finally_(start, () -> {
+                    mm2.var(Reference.class).invoke("reachabilityFence", mm2.this_());
+                });
+            }
+
             Class<?> remoteFailureClass;
             List<Class<?>> thrownClasses = null;
 
@@ -236,12 +301,18 @@ final class StubMaker {
                             }
                             thrownClasses.add(exClass);
                             mm.throws_(exClass);
+                            if (mm2 != null) {
+                                mm2.throws_(exClass);
+                            }
                         }
                     }
                 }
             }
 
             mm.throws_(remoteFailureClass);
+            if (mm2 != null) {
+                mm2.throws_(remoteFailureClass);
+            }
 
             RemoteMethod method = serverMethod;
             int methodId = serverMethodId;
@@ -344,6 +415,14 @@ final class StubMaker {
 
             Label invokeStart = mm.label().here();
             Label invokeEnd = mm.label();
+
+            if (mWrapperMaker != null && method.isUnacknowledged()) {
+                // The wrapper cannot be GC'd until after the server has replied back with
+                // decRefCount, indicating acknowledgment. If there's an IOException writing
+                // over the pipe, then auto disposal won't work, but it doesn't need to. The
+                // session will close, effectively disposing the stub.
+                mm.field("ref").invoke("incRefCount");
+            }
 
             pipeVar.invoke("writeLong", mm.field("id"));
 
@@ -465,7 +544,20 @@ final class StubMaker {
             batchedImmediateMethodId = -1;
         }
 
-        return mStubMaker.finish();
+        Class<?> stubClass = mStubMaker.finish();
+
+        if (mWrapperMaker != null) {
+            MethodHandles.Lookup lookup = mWrapperMaker.finishHidden();
+            try {
+                wrapperFactory.init
+                    (lookup.findConstructor
+                     (lookup.lookupClass(), MethodType.methodType(void.class, stubClass)));
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
+
+        return stubClass;
     }
 
     /**
@@ -563,14 +655,14 @@ final class StubMaker {
             }
 
             Object[] originStub = {mm.this_()};
-            Field originField = mm.access(Stub.cOriginHandle, originStub);
+            Field originField = mm.access(StubInvoker.cOriginHandle, originStub);
             Label parentHasOrigin = mm.label();
             originField.getAcquire().ifNe(null, parentHasOrigin);
             mm.new_(IllegalStateException.class,
                     "Cannot make a restorable object from a non-restorable parent").throw_();
             parentHasOrigin.here();
 
-            originStub[0] = resultVar.cast(Stub.class);
+            originStub[0] = resultVar.cast(StubInvoker.class);
             originField.getAcquire().ifNe(null, finished);
 
             Class<?> returnType = classFor(clientMethod.returnType());

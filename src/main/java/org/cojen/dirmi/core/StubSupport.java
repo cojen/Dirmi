@@ -22,7 +22,7 @@ import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.Session;
 
 /**
- * Object passed to a Stub instance in order for it to communicate with a remote object.
+ * Object passed to a StubInvoker instance in order for it to communicate with a remote object.
  *
  * @author Brian S O'Neill
  * @see StubFactory
@@ -47,7 +47,7 @@ public interface StubSupport {
      * @param stub the stub requesting a connection
      * @return pipe for writing arguments and reading response
      */
-    <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T;
+    <T extends Throwable> Pipe connect(StubInvoker stub, Class<T> remoteFailureException) throws T;
 
     /**
      * Variant which never returns the thread-local pipe used by batched calls.
@@ -55,7 +55,7 @@ public interface StubSupport {
      * @param stub the stub requesting a connection
      * @return pipe for writing arguments and reading response
      */
-    <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+    <T extends Throwable> Pipe connectUnbatched(StubInvoker stub, Class<T> remoteFailureException)
         throws T;
 
     /**
@@ -64,7 +64,8 @@ public interface StubSupport {
      * @param stub the stub requesting a connection
      * @return pipe for writing arguments and reading response
      */
-    <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException) throws T;
+    <T extends Throwable> Pipe tryConnect(StubInvoker stub, Class<T> remoteFailureException)
+        throws T;
 
     /**
      * Variant which returns null if a connection cannot be established.
@@ -72,7 +73,8 @@ public interface StubSupport {
      * @param stub the stub requesting a connection
      * @return pipe for writing arguments and reading response
      */
-    <T extends Throwable> Pipe tryConnectUnbatched(Stub stub, Class<T> remoteFailureException)
+    <T extends Throwable> Pipe tryConnectUnbatched(StubInvoker stub,
+                                                   Class<T> remoteFailureException)
         throws T;
 
     /**
@@ -80,7 +82,7 @@ public interface StubSupport {
      * returned. Otherwise, the caller should obtain the support instance again, and then call
      * connect again.
      */
-    boolean validate(Stub stub, Pipe pipe);
+    boolean validate(StubInvoker stub, Pipe pipe);
 
     /**
      * Used by batched methods which return a Remote object. If the remote typeId is currently
@@ -113,7 +115,7 @@ public interface StubSupport {
      *
      * @param cause optional
      */
-    Stub newDisconnectedStub(Class<?> type, Throwable cause);
+    StubInvoker newDisconnectedStub(Class<?> type, Throwable cause);
 
     /**
      * Returns true if a batch sequence is in progress.
@@ -156,5 +158,5 @@ public interface StubSupport {
     /**
      * Disposes the given stub.
      */
-    void dispose(Stub stub);
+    void dispose(StubInvoker stub);
 }

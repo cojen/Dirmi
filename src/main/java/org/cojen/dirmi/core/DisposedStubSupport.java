@@ -18,7 +18,6 @@ package org.cojen.dirmi.core;
 
 import org.cojen.dirmi.DisposedException;
 import org.cojen.dirmi.Pipe;
-import org.cojen.dirmi.Session;
 
 /**
  * 
@@ -93,7 +92,9 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
+    public <T extends Throwable> Pipe connect(StubInvoker stub, Class<T> remoteFailureException)
+        throws T
+    {
         DisposedException ex;
         if (mCause == null) {
             ex = new DisposedException(mMessage);
@@ -108,14 +109,15 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe connectUnbatched(StubInvoker stub,
+                                                       Class<T> remoteFailureException)
         throws T
     {
         return connect(stub, remoteFailureException);
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe tryConnect(StubInvoker stub, Class<T> remoteFailureException)
         throws T
     {
         // When null is returned, the caller is expected to then call newDisconnectedStub.
@@ -123,7 +125,7 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+    public <T extends Throwable> Pipe tryConnectUnbatched(StubInvoker stub,
                                                           Class<T> remoteFailureException)
         throws T
     {
@@ -131,7 +133,7 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public boolean validate(Stub stub, Pipe pipe) {
+    public boolean validate(StubInvoker stub, Pipe pipe) {
         return true;
     }
 
@@ -148,7 +150,7 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+    public StubInvoker newDisconnectedStub(Class<?> type, Throwable cause) {
         return session().newDisconnectedStub(type, cause);
     }
 
@@ -184,7 +186,7 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
-    public void dispose(Stub stub) {
-        Stub.cSupportHandle.setRelease(stub, this);
+    public void dispose(StubInvoker stub) {
+        StubInvoker.cSupportHandle.setRelease(stub, this);
     }
 }

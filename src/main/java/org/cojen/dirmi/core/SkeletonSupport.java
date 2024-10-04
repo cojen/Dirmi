@@ -47,6 +47,12 @@ public interface SkeletonSupport {
         throws IOException;
 
     /**
+     * Immediately called by a method for which RemoteMethod.isUnacknowledged is true and the
+     * RemoteInfo it belongs to isAutoDispose.
+     */
+    void acknowledged(Skeleton<?> skeleton);
+
+    /**
      * Called by a disposer method when finished executing. This method itself should not throw
      * any exceptions.
      */

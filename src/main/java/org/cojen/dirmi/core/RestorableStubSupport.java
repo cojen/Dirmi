@@ -33,7 +33,7 @@ import org.cojen.dirmi.Session;
  *
  * @author Brian S O'Neill
  */
-final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch>
+final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDownLatch>
     implements StubSupport
 {
     private final CoreStubSupport mNewSupport;
@@ -53,28 +53,31 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     }
 
     @Override
-    public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
+    public <T extends Throwable> Pipe connect(StubInvoker stub, Class<T> remoteFailureException)
+        throws T
+    {
         restore(stub, remoteFailureException);
         // Returning null is fine because the stub must immediately call validate.
         return null;
     }
 
     @Override
-    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe connectUnbatched(StubInvoker stub,
+                                                       Class<T> remoteFailureException)
         throws T
     {
         return connect(stub, remoteFailureException);
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe tryConnect(StubInvoker stub, Class<T> remoteFailureException)
         throws T
     {
         return connect(stub, remoteFailureException);
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+    public <T extends Throwable> Pipe tryConnectUnbatched(StubInvoker stub,
                                                           Class<T> remoteFailureException)
         throws T
     {
@@ -82,7 +85,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     }
 
     @Override
-    public boolean validate(Stub stub, Pipe pipe) {
+    public boolean validate(StubInvoker stub, Pipe pipe) {
         // Always return false, forcing the stub to obtain the restored support instance.
         return false;
     }
@@ -101,7 +104,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     }
 
     @Override
-    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+    public StubInvoker newDisconnectedStub(Class<?> type, Throwable cause) {
         throw new IllegalStateException();
     }
 
@@ -138,12 +141,12 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
     }
 
     @Override
-    public void dispose(Stub stub) {
+    public void dispose(StubInvoker stub) {
         throw new IllegalStateException();
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends Throwable> void restore(Stub stub, Class<T> remoteFailureException)
+    private <T extends Throwable> void restore(StubInvoker stub, Class<T> remoteFailureException)
         throws T
     {
         // Use a latch in order for only one thread to attempt the stub restore. Other threads
@@ -161,7 +164,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                 } catch (InterruptedException e) {
                     throw CoreUtils.remoteException(this, remoteFailureException, e);
                 }
-                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
+                newSupport = (StubSupport) StubInvoker.cSupportHandle.getAcquire(stub);
                 if (newSupport == this) {
                     // The restore by another thread was aborted, so try again.
                     continue;
@@ -169,14 +172,14 @@ final class RestorableStubSupport extends ConcurrentHashMap<Stub, CountDownLatch
                 return;
             }
 
-            var origin = (MethodHandle) Stub.cOriginHandle.getAcquire(stub);
+            var origin = (MethodHandle) StubInvoker.cOriginHandle.getAcquire(stub);
 
             try {
-                var newStub = (Stub) origin.invoke();
+                var newStub = (StubInvoker) origin.invoke();
                 mNewSupport.session().mStubs.stealIdentity(stub, newStub);
-                newSupport = (StubSupport) Stub.cSupportHandle.getAcquire(newStub);
+                newSupport = (StubSupport) StubInvoker.cSupportHandle.getAcquire(newStub);
                 // Use CAS to detect if the stub has called dispose.
-                var result = (StubSupport) Stub.cSupportHandle
+                var result = (StubSupport) StubInvoker.cSupportHandle
                     .compareAndExchange(stub, this, newSupport);
                 if (result != newSupport && result instanceof DisposedStubSupport) {
                     // Locally dispose the restored stub.

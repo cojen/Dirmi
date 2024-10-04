@@ -61,14 +61,14 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     static final int
         C_PING = 1, C_PONG = 2, C_MESSAGE = 3, C_KNOWN_TYPE = 4, C_REQUEST_CONNECTION = 5,
         C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9,
-        C_SKELETON_DISPOSE = 10, C_STUB_DISPOSE = 11;
+        C_SKELETON_DISPOSE = 10, C_STUB_DISPOSE = 11, C_ACKNOWLEDGED_S = 12, C_ACKNOWLEDGED_L = 13;
 
     static final int R_CLOSED = 1, R_DISCONNECTED = 2, R_PING_FAILURE = 4, R_CONTROL_FAILURE = 8;
 
     private static final int SPIN_LIMIT;
 
     private static final VarHandle cStubSupportHandle,
-        cControlPipeHandle, cConLockHandle, cPipeClockHandle;
+        cControlPipeHandle, cConLockHandle, cPipeClockHandle, cAcknowledgedMapHandle;
 
     static {
         SPIN_LIMIT = Runtime.getRuntime().availableProcessors() > 1 ? 1 << 10 : 1;
@@ -81,6 +81,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 (CoreSession.class, "mControlPipe", CorePipe.class);
             cConLockHandle = lookup.findVarHandle(CoreSession.class, "mConLock", int.class);
             cPipeClockHandle = lookup.findVarHandle(CorePipe.class, "mClock", int.class);
+            cAcknowledgedMapHandle = lookup.findVarHandle
+                (CoreSession.class, "mAcknowledgedMap", CounterMap.class);
         } catch (Throwable e) {
             throw CoreUtils.rethrow(e);
         }
@@ -88,7 +90,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
 
     final Engine mEngine;
     final Settings mSettings;
-    final ItemMap<Stub> mStubs;
+    final StubMap mStubs;
     final ItemMap<StubFactory> mStubFactories;
     final ConcurrentHashMap<Class<?>, StubFactory> mStubFactoriesByClass;
     final SkeletonMap mSkeletons;
@@ -122,11 +124,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     // Used when reconnecting.
     volatile WaitMap<String, RemoteInfo> mTypeWaitMap;
 
+    private volatile CounterMap mAcknowledgedMap;
+
     CoreSession(Engine engine, Settings settings) {
         super(IdGenerator.next());
         mEngine = engine;
         mSettings = settings;
-        mStubs = new ItemMap<Stub>();
+        mStubs = new StubMap();
         mStubFactories = new ItemMap<StubFactory>();
         mStubFactoriesByClass = new ConcurrentHashMap<>();
         mSkeletons = new SkeletonMap(this);
@@ -610,18 +614,18 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mStubs.forEachToRemove(stub -> {
                 if (stub.isRestorable() || stub == root()) {
                     // Keep the restorable stubs and tag them with the new StubSupport.
-                    Stub.cSupportHandle.setRelease(stub, newSupport);
+                    StubInvoker.cSupportHandle.setRelease(stub, newSupport);
                     return false;
                 }
-                Stub.cSupportHandle.setRelease(stub, support);
+                StubInvoker.cSupportHandle.setRelease(stub, support);
                 return true;
             });
 
             R root = root();
-            if (root instanceof Stub) {
+            if (root instanceof StubInvoker) {
                 // In case the root origin has changed, replace it with the standard root
                 // origin. It needs to restored specially upon reconnect anyhow.
-                Stub.setRootOrigin((Stub) root);
+                StubInvoker.setRootOrigin((StubInvoker) root);
             }
         }
 
@@ -793,6 +797,12 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         // Send the reply command. See the serverDispose method.
                         mEngine.executeTask(() -> trySendCommandAndId(C_SKELETON_DISPOSE, id));
                         break;
+                    case C_ACKNOWLEDGED_S:
+                        stubDecRefCount(pipe.readLong(), pipe.readShort() & 0xffffL);
+                        break;
+                    case C_ACKNOWLEDGED_L:
+                        stubDecRefCount(pipe.readLong(), pipe.readLong());
+                        break;
                     default:
                         throw new IllegalStateException("Unknown command: " + command);
                     }
@@ -833,6 +843,27 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             CorePipe pipe = controlPipe();
             pipe.write(which);
             pipe.flush();
+        } finally {
+            mControlLock.unlock();
+        }
+    }
+
+    /**
+     * Note: Doesn't flush the pipe.
+     */
+    private void sendAcknowledgement(long id, long amount) throws IOException {
+        mControlLock.lock();
+        try {
+            CorePipe pipe = controlPipe();
+            if (amount < 65536) {
+                pipe.write(C_ACKNOWLEDGED_S);
+                pipe.writeLong(id);
+                pipe.writeShort((short) amount);
+            } else {
+                pipe.write(C_ACKNOWLEDGED_L);
+                pipe.writeLong(id);
+                pipe.writeLong(amount);
+            }
         } finally {
             mControlLock.unlock();
         }
@@ -1002,6 +1033,13 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             cPipeClockHandle.setVolatile(pipe, 1);
 
             try {
+                CounterMap map = session.mAcknowledgedMap;
+                if (map != null) {
+                    for (CounterMap.Entry e = map.drain(); e != null; e = e.next) {
+                        session.sendAcknowledgement(e.id, e.counter);
+                    }
+                }
+
                 session.sendByte(C_PING);
             } catch (IOException e) {
                 session.close(R_CONTROL_FAILURE, pipe);
@@ -1079,7 +1117,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final Object objectFor(long id, long typeId) throws IOException {
         try {
             StubFactory factory = mStubFactories.get(typeId);
-            return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+            return mStubs.putAndSelectStub(factory.newStub(id, stubSupport()));
         } catch (NoSuchObjectException e) {
             e.remoteAddress(remoteAddress());
             throw e;
@@ -1108,16 +1146,22 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
-        return mStubs.putIfAbsent(factory.newStub(id, stubSupport()));
+        return mStubs.putAndSelectStub(factory.newStub(id, stubSupport()));
     }
 
     private void trySendCommandAndId(int command, long id) {
+        trySendCommandAndId(command, id, true);
+    }
+
+    private void trySendCommandAndId(int command, long id, boolean flush) {
         mControlLock.lock();
         try {
             CorePipe pipe = controlPipe();
             pipe.write(command);
             pipe.writeLong(id);
-            pipe.flush();
+            if (flush) {
+                pipe.flush();
+            }
         } catch (IOException e) {
             // Ignore.
         } finally {
@@ -1125,7 +1169,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    final Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+    final StubInvoker newDisconnectedStub(Class<?> type, Throwable cause) {
         StubFactory factory = mStubFactoriesByClass.get(type);
 
         if (factory == null) {
@@ -1135,7 +1179,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
 
         long id = IdGenerator.nextNegative();
-        Stub stub = factory.newStub(id, DisposedStubSupport.newLenientRestorable(this, cause));
+        StubInvoker stub = factory.newStub
+            (id, DisposedStubSupport.newLenientRestorable(this, cause));
         mStubs.put(stub);
         return stub;
     }
@@ -1148,13 +1193,16 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         cStubSupportHandle.setRelease(this, support);
     }
 
-    final StubSupport stubDispose(Stub stub) {
+    final StubSupport stubDispose(StubInvoker stub) {
         mStubs.remove(stub);
         return DisposedStubSupport.EXPLICIT;
     }
 
+    /**
+     * @param message optional
+     */
     final boolean stubDispose(long id, String message) {
-        Stub removed = mStubs.remove(id);
+        StubInvoker removed = mStubs.remove(id);
 
         if (removed == null) {
             return false;
@@ -1167,20 +1215,34 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             disposed = new DisposedStubSupport(message);
         }
 
-        Stub.cSupportHandle.setRelease(removed, disposed);
+        StubInvoker.cSupportHandle.setRelease(removed, disposed);
 
         return true;
     }
 
-    final boolean stubDisposeAndNotify(Stub stub, String message) {
+    /**
+     * @param message optional
+     */
+    final boolean stubDisposeAndNotify(Stub stub, String message, boolean flush) {
         long id = stub.id;
         if (stubDispose(id, message)) {
             // Notify the remote side to dispose the associated skeleton. If the command cannot
             // be sent, the skeleton will be disposed anyhow due to disconnect.
-            trySendCommandAndId(C_SKELETON_DISPOSE, id);
+            trySendCommandAndId(C_SKELETON_DISPOSE, id, flush);
             return true;
         } else {
             return false;
+        }
+    }
+
+    private void stubDecRefCount(long id, long amount) {
+        try {
+            StubInvoker invoker = mStubs.get(id).invoker();
+            if (invoker instanceof StubInvoker.WithCountedRef counted) {
+                // Launch a task to prevent blocking the control thread.
+                mEngine.tryExecuteTask(() -> counted.decRefCount(amount));
+            }
+        } catch (NoSuchObjectException e) {
         }
     }
 
@@ -1346,6 +1408,20 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 uncaught(e);
             }
         }
+    }
+
+    void acknowledged(Skeleton<?> skeleton) {
+        CounterMap map = mAcknowledgedMap;
+
+        if (map == null) {
+            map = new CounterMap();
+            var existing = (CounterMap) cAcknowledgedMapHandle.compareAndExchange(this, null, map);
+            if (existing != null) {
+                map = existing;
+            }
+        }
+
+        map.increment(skeleton.id);
     }
 
     final void attachNotify(SessionAware sa) {

@@ -40,7 +40,9 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe connect(Stub stub, Class<T> remoteFailureException) throws T {
+    public <T extends Throwable> Pipe connect(StubInvoker stub, Class<T> remoteFailureException)
+        throws T
+    {
         Pipe pipe = mLocalPipe.get();
         if (pipe != null) {
             return pipe;
@@ -53,7 +55,8 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe connectUnbatched(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe connectUnbatched(StubInvoker stub,
+                                                       Class<T> remoteFailureException)
         throws T
     {
         try {
@@ -64,7 +67,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnect(Stub stub, Class<T> remoteFailureException)
+    public <T extends Throwable> Pipe tryConnect(StubInvoker stub, Class<T> remoteFailureException)
         throws T
     {
         Pipe pipe = mLocalPipe.get();
@@ -81,7 +84,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public <T extends Throwable> Pipe tryConnectUnbatched(Stub stub,
+    public <T extends Throwable> Pipe tryConnectUnbatched(StubInvoker stub,
                                                           Class<T> remoteFailureException)
         throws T
     {
@@ -95,8 +98,8 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public boolean validate(Stub stub, Pipe pipe) {
-        if (Stub.cSupportHandle.getAcquire(stub) == this) {
+    public boolean validate(StubInvoker stub, Pipe pipe) {
+        if (StubInvoker.cSupportHandle.getAcquire(stub) == this) {
             return true;
         } else {
             if (pipe != null) {
@@ -133,7 +136,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public Stub newDisconnectedStub(Class<?> type, Throwable cause) {
+    public StubInvoker newDisconnectedStub(Class<?> type, Throwable cause) {
         return mSession.newDisconnectedStub(type, cause);
     }
 
@@ -185,7 +188,7 @@ final class CoreStubSupport implements StubSupport {
     }
 
     @Override
-    public void dispose(Stub stub) {
-        Stub.cSupportHandle.setRelease(stub, mSession.stubDispose(stub));
+    public void dispose(StubInvoker stub) {
+        StubInvoker.cSupportHandle.setRelease(stub, mSession.stubDispose(stub));
     }
 }

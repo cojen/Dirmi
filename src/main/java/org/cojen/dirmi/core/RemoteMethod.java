@@ -389,6 +389,13 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * Returns true if this method doesn't block waiting for a reply from the pipe.
+     */
+    boolean isUnacknowledged() {
+        return (mFlags & (F_BATCHED | F_PIPED | F_NOREPLY)) != 0;
+    }
+
+    /**
      * Returns the name of this method.
      */
     String name() {

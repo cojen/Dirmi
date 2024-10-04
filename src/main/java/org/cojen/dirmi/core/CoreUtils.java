@@ -73,7 +73,7 @@ public final class CoreUtils {
         if (!(obj instanceof Stub stub)) {
             throw new IllegalArgumentException();
         }
-        return ((StubSupport) Stub.cSupportHandle.getAcquire(stub)).session();
+        return stub.support().session();
     }
 
     public static Session currentSession() {
@@ -88,9 +88,8 @@ public final class CoreUtils {
         if (!(obj instanceof Stub stub)) {
             throw new IllegalArgumentException();
         }
-        var support = (StubSupport) Stub.cSupportHandle.getAcquire(stub);
-        if (support instanceof CoreStubSupport css) {
-            return css.session().stubDisposeAndNotify(stub, null);
+        if (stub.support() instanceof CoreStubSupport css) {
+            return css.session().stubDisposeAndNotify(stub, null, true);
         }
         return false;
     }

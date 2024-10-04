@@ -21,9 +21,9 @@ import java.io.IOException;
 import org.cojen.dirmi.Pipe;
 
 /**
- * Produces new Stub instances for client-side Remote objects. A Stub instance marshals
- * requests to a remote {@link Skeleton} which in turn calls the real method. Any response is
- * marshaled back for the Stub to decode.
+ * Produces new StubInvoker instances for client-side Remote objects. A StubInvoker instance
+ * marshals requests to a remote {@link Skeleton} which in turn calls the real method. Any
+ * response is marshaled back for the StubInvoker to decode.
  *
  * @author Brian S O'Neill
  */
@@ -39,7 +39,7 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
      * @param id remote object identifier
      * @param support for invoking remote methods
      */
-    protected abstract Stub newStub(long id, StubSupport support);
+    protected abstract StubInvoker newStub(long id, StubSupport support);
 
     /**
      * Writes byte methodIds.

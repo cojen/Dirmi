@@ -95,11 +95,11 @@ final class ClientSession<R> extends CoreSession<R> {
 
         mStubFactoriesByClass.putIfAbsent(rootType, factory);
 
-        Stub root = factory.newStub(rootId, stubSupport());
+        StubInvoker root = factory.newStub(rootId, stubSupport());
         mStubs.put(root);
-        mRoot = (R) root;
+        mRoot = (R) root.init();
 
-        Stub.setRootOrigin(root);
+        StubInvoker.setRootOrigin(root);
     }
 
     @Override
@@ -133,8 +133,8 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     private boolean isRootDisposed() {
-        return mRoot instanceof Stub stub
-            && Stub.cSupportHandle.getAcquire(stub) instanceof DisposedStubSupport;
+        return mRoot instanceof StubInvoker stub
+            && StubInvoker.cSupportHandle.getAcquire(stub) instanceof DisposedStubSupport;
     }
 
     @SuppressWarnings("unchecked")
@@ -161,7 +161,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         mEngine.changeIdentity(this, newSession.id);
 
-        var newRoot = (Stub) newSession.mRoot;
+        var newRoot = (StubInvoker) newSession.mRoot;
         Object removed = newSession.mStubs.remove(newRoot);
         assert newRoot == removed;
         assert newSession.mStubs.size() == 0;
@@ -176,7 +176,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         cServerSessionIdHandle.setRelease(this, newSession.mServerSessionId);
 
-        var root = (Stub) mRoot;
+        var root = (StubInvoker) mRoot;
         mStubs.changeIdentity(root, newRoot.id);
 
         Map<String, RemoteInfo> typeMap;
@@ -219,7 +219,7 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
-        Stub.cSupportHandle.setRelease(mRoot, newSupport);
+        StubInvoker.cSupportHandle.setRelease(mRoot, newSupport);
 
         // For all restorable stubs, update the MethodIdWriter and set a support object that
         // allows them to restore on demand.
@@ -249,7 +249,7 @@ final class ClientSession<R> extends CoreSession<R> {
             }
 
             if (writer != null) {
-                Stub.cWriterHandle.setRelease(stub, writer);
+                StubInvoker.cWriterHandle.setRelease(stub, writer);
             } else {
                 // Although no remote methods changed, the current StubFactory is preferred.
                 if (type == null) {
@@ -257,12 +257,12 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
                 StubFactory factory = mStubFactoriesByClass.get(type);
                 if (factory != null) {
-                    Stub.cWriterHandle.setRelease(stub, factory);
+                    StubInvoker.cWriterHandle.setRelease(stub, factory);
                 }
             }
 
             if (stub != mRoot) {
-                Stub.cSupportHandle.setRelease(stub, restorableSupport);
+                StubInvoker.cSupportHandle.setRelease(stub, restorableSupport);
             }
         });
 

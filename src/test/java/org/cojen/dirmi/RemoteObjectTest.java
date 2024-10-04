@@ -135,7 +135,7 @@ public class RemoteObjectTest {
 
         Object[] result = root.c3(r2);
         assertEquals(3, result.length);
-        assertTrue(result[0] instanceof org.cojen.dirmi.core.Stub);
+        assertTrue(result[0] instanceof org.cojen.dirmi.core.StubInvoker);
         assertEquals(R2Server.class.getName(), result[1]);
         assertEquals("hello 123", result[2]);
 

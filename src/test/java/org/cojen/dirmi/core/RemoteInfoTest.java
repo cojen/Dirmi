@@ -744,17 +744,20 @@ public class RemoteInfoTest {
     @Test
     public void brokenStub() {
         try {
-            RemoteInfo.examineStub(R1.class);
+            RemoteInfo.examineStub(new StubInvoker(0, null, null));
             fail();
         } catch (IllegalArgumentException e) {
             confirm(e, "No Remote types");
         }
 
-        class Stub implements R1, R2 {
+        class Broken extends StubInvoker implements R1, R2 {
+            Broken() {
+                super(0, null, null);
+            }
         }
 
         try {
-            RemoteInfo.examineStub(new Stub());
+            RemoteInfo.examineStub(new Broken());
             fail();
         } catch (IllegalArgumentException e) {
             confirm(e, "At most one");
