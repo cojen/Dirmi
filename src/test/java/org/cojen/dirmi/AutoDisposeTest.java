@@ -99,6 +99,8 @@ public class AutoDisposeTest {
 
     @Test
     public void noReply() throws Exception {
+        R2Server.mDetached = 0;
+
         R1 root = mSession.root();
         R2 r2 = root.r2();
 
@@ -120,6 +122,8 @@ public class AutoDisposeTest {
 
         int sleep = 100;
 
+        assertEquals(0, R2Server.mDetached);
+
         while (true) {
             System.gc();
 
@@ -130,6 +134,7 @@ public class AutoDisposeTest {
 
             if (newId != id) {
                 // Original remote object was disposed and a new one was created.
+                assertEquals(1, R2Server.mDetached);
                 break;
             }
 
@@ -207,7 +212,9 @@ public class AutoDisposeTest {
         }
     }
 
-    private static class R2Server implements R2 {
+    private static class R2Server implements R2, SessionAware {
+        static volatile int mDetached;
+
         private volatile String mMessage;
 
         @Override
@@ -218,6 +225,15 @@ public class AutoDisposeTest {
         @Override
         public String getMessage() {
             return mMessage;
+        }
+
+        @Override
+        public void attached(Session<?> s) {
+        }
+
+        @Override
+        public void detached(Session<?> s) {
+            mDetached++;
         }
     }
 }
