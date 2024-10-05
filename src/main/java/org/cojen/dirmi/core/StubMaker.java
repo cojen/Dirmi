@@ -662,7 +662,7 @@ final class StubMaker {
                     "Cannot make a restorable object from a non-restorable parent").throw_();
             parentHasOrigin.here();
 
-            originStub[0] = resultVar.cast(StubInvoker.class);
+            originStub[0] = mm.var(CoreUtils.class).invoke("invoker", resultVar);
             originField.getAcquire().ifNe(null, finished);
 
             Class<?> returnType = classFor(clientMethod.returnType());

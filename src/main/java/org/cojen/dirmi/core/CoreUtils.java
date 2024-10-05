@@ -102,6 +102,12 @@ public final class CoreUtils {
         return session.serverDispose(server);
     }
 
+    // Is called by generated code. See StubMaker. It cannot be generated directly by StubMaker
+    // because the Stub.invoker method must not be public.
+    public static StubInvoker invoker(Object obj) {
+        return ((Stub) obj).invoker();
+    }
+
     /**
      * Grants the given maker access to the core package.
      */

@@ -164,6 +164,7 @@ public class AutoDisposeTest {
 
         String echo(String msg) throws RemoteException;
 
+        @Restorable
         R2 r2() throws RemoteException;
     }
 
