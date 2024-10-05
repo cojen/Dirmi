@@ -34,19 +34,25 @@ public abstract sealed class Stub extends Item implements Remote permits StubInv
     abstract StubInvoker invoker();
 
     @Override
-    public String toString() {
-        String name = getClass().getName();
+    public final int hashCode() {
+        return Long.hashCode(id);
+    }
 
-        // Prune off the generated suffix.
-        int ix = name.lastIndexOf('-');
-        if (ix > 0) {
-            name = name.substring(0, ix);
-        }
-
+    @Override
+    public final String toString() {
         var b = new StringBuilder();
 
-        b.append(name).append('@').append(Integer.toHexString(System.identityHashCode(this)))
-            .append("{id=").append(id);
+        String name = getClass().getName();
+
+        int ix = name.lastIndexOf('-');
+        if (ix < 0) {
+            b.append(name);
+        } else {
+            // Prune off the generated suffix.
+            b.append(name, 0, ix);
+        }
+
+        b.append("{id=").append(id);
 
         support().appendInfo(b);
 
