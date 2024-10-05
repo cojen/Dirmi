@@ -20,8 +20,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
-import org.cojen.dirmi.Remote;
-
 /**
  * Base class for remote stubs which actually invoke the remote methods over the pipe. This
  * class must not declare any new public instance methods because they can conflict with
