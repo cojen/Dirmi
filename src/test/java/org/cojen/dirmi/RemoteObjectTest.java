@@ -425,6 +425,9 @@ public class RemoteObjectTest {
     }
 
     public static interface R1 extends Remote {
+        static void notRemote() {
+        }
+
         R2 c1(int param) throws RemoteException;
 
         void c2(R3 callback) throws RemoteException;

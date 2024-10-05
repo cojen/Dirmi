@@ -129,7 +129,9 @@ final class RemoteInfo {
         SortedSet<RemoteMethod> methodSet = null;
 
         for (Method m : type.getMethods()) {
-            if (isObjectMethod(m) || (strict && !m.getDeclaringClass().isInterface())) {
+            if (Modifier.isStatic(m.getModifiers()) || isObjectMethod(m) ||
+                (strict && !m.getDeclaringClass().isInterface()))
+            {
                 continue;
             }
 

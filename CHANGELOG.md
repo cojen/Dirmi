@@ -3,6 +3,7 @@ Changelog
 
 v2.4.0
 ------
+* Ignore static methods in remote interfaces.
 * Added pipe methods for efficiently encoding and decoding complex objects.
 * Added support for automatic remote object disposal.
 * Optimize reading and writing primitive arrays.
