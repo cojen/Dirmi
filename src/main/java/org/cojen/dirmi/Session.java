@@ -158,7 +158,8 @@ public interface Session<R> extends Closeable, Link, Executor {
     void addStateListener(BiPredicate<Session<?>, Throwable> listener);
 
     /**
-     * Closes all connections and initiates a reconnect.
+     * Closes all connections and initiates a reconnect. Operation has no effect if the session
+     * is closed.
      */
     void reconnect();
 

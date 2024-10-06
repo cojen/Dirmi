@@ -210,6 +210,16 @@ public class RestorableTest {
         }
 
         assertTrue(listener.reconnected);
+
+        mSession.close();
+
+        mSession.reconnect();
+
+        try {
+            r1x.echo("world");
+            fail();
+        } catch (ClosedException e) {
+        }
     }
 
     @Test
