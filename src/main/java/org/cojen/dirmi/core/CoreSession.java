@@ -542,6 +542,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     @Override
+    public final void reconnect() {
+        close(R_DISCONNECTED, null);
+    }
+
+    @Override
     public final void close() {
         close(R_CLOSED, null);
     }

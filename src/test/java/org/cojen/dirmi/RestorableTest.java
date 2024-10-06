@@ -168,6 +168,51 @@ public class RestorableTest {
     }
 
     @Test
+    public void explicitReconnect() throws Exception {
+        assertEquals(Session.State.CONNECTED, mSession.state());
+
+        R1 root = mSession.root();
+        R2 r2 = root.a(123);
+
+        R1 r1x = r2.a();
+
+        assertEquals("hello", r1x.echo("hello"));
+
+        var listener = new BiPredicate<Session<?>, Throwable>() {
+            volatile boolean reconnected;
+
+            @Override
+            public boolean test(Session<?> session, Throwable ex) {
+                if (session.state() == Session.State.RECONNECTED) {
+                    reconnected = true;
+                }
+                return true;
+            }
+        };
+
+
+        mSession.addStateListener(listener);
+
+        mSession.reconnect();
+
+        check: {
+            for (int i=0; i<100; i++) {
+                try {
+                    assertEquals("world", r1x.echo("world"));
+                    break check;
+                } catch (DisconnectedException e) {
+                }
+
+                Thread.sleep(100);
+            }
+
+            fail("Not restored: " + mSession.state());
+        }
+
+        assertTrue(listener.reconnected);
+    }
+
+    @Test
     public void dispose() throws Exception {
         // A disposed object cannot be restored, and neither can any objects that depend on it
         // for restoration.

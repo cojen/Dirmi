@@ -6,6 +6,7 @@ v2.4.0
 * Ignore static methods in remote interfaces.
 * Added pipe methods for efficiently encoding and decoding complex objects.
 * Added support for automatic remote object disposal.
+* Added a session reconnect method.
 * Optimize reading and writing primitive arrays.
 
 v2.3.3 (2024-04-10)
