@@ -33,10 +33,8 @@ public abstract sealed class Stub extends Item implements Remote permits StubInv
 
     abstract StubInvoker invoker();
 
-    @Override
-    public final int hashCode() {
-        return Long.hashCode(id);
-    }
+    // The hashCode implementation should just be the one inherited from Object. Don't rely on
+    // the stub id because it can change after a session reconnect.
 
     @Override
     public final String toString() {
@@ -52,7 +50,8 @@ public abstract sealed class Stub extends Item implements Remote permits StubInv
             b.append(name, 0, ix);
         }
 
-        b.append("{id=").append(id);
+        b.append('@').append(Integer.toHexString(System.identityHashCode(this)))
+            .append("{id=").append(id);
 
         support().appendInfo(b);
 
