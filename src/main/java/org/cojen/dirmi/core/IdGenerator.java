@@ -16,6 +16,9 @@
 
 package org.cojen.dirmi.core;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 import java.security.SecureRandom;
 
 /**
@@ -27,26 +30,31 @@ import java.security.SecureRandom;
 final class IdGenerator {
     private static final long sequenceMask;
     private static long sequence;
+    private static final VarHandle sequenceHandle;
 
     static {
         var rnd = new SecureRandom();
         sequenceMask = rnd.nextLong();
         sequence = rnd.nextLong();
+
+        try {
+            var lookup = MethodHandles.lookup();
+            sequenceHandle = lookup.findStaticVarHandle(IdGenerator.class, "sequence", long.class);
+        } catch (Throwable e) {
+            throw CoreUtils.rethrow(e);
+        }
     }
 
     /**
      * Returns any 64-bit value other than zero.
      */
     static long next() {
-        long id;
-        do {
-            synchronized (IdGenerator.class) {
-                id = sequence;
-                sequence = id + 1;
+        while (true) {
+            long id = scramble((long) sequenceHandle.getAndAdd(1)) ^ sequenceMask;
+            if (id != 0) {
+                return id;
             }
-            id = scramble(id) ^ sequenceMask;
-        } while (id == 0);
-        return id;
+        }
     }
 
     /**
