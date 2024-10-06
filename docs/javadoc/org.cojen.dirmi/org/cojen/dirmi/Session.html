@@ -79,6 +79,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#uncaught(java.lang.Throwable)" tabindex="0">uncaught(Throwable)</a></li>
 <li><a href="#state()" tabindex="0">state()</a></li>
 <li><a href="#addStateListener(java.util.function.BiPredicate)" tabindex="0">addStateListener(BiPredicate)</a></li>
+<li><a href="#reconnect()" tabindex="0">reconnect()</a></li>
 <li><a href="#close()" tabindex="0">close()</a></li>
 </ol>
 </li>
@@ -192,29 +193,34 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Explicitly dispose a server-side remote object implementation from the current session.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a><wbr>&lt;?&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#resolveClass(java.lang.String)" class="member-name-link">resolveClass</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#reconnect()" class="member-name-link">reconnect</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Closes all connections and initiates a reconnect.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a><wbr>&lt;?&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#resolveClass(java.lang.String)" class="member-name-link">resolveClass</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Resolve a class using the default or custom <a href="ClassResolver.html" title="interface in org.cojen.dirmi"><code>ClassResolver</code></a>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.html" title="type parameter in Session">R</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#root()" class="member-name-link">root</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the root object which was exported or imported.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="Session.State.html" title="enum class in org.cojen.dirmi">Session.State</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#state()" class="member-name-link">state</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Returns the current session state.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaught(java.lang.Throwable)" class="member-name-link">uncaught</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;e)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaught(java.lang.Throwable)" class="member-name-link">uncaught</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;e)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Pass an uncaught exception directly to the uncaught exception handler.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this session
  instance.</div>
 </div>
@@ -432,6 +438,15 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
  state changes, or when a reconnect attempt fails. The listener is invoked in a blocking
  fashion, preventing any state changes until the listener returns. If it returns false,
  the listener is removed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="reconnect()">
+<h3>reconnect</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">reconnect</span>()</div>
+<div class="block">Closes all connections and initiates a reconnect.</div>
 </div>
 </section>
 </li>
