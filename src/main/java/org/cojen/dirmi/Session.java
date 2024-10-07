@@ -159,7 +159,8 @@ public interface Session<R> extends Closeable, Link, Executor {
 
     /**
      * Closes all connections and initiates a reconnect. Operation has no effect if the session
-     * is closed.
+     * is closed. If this is a server-side session, calling reconnect is effectively the same
+     * as calling close. The client-side session detects this and performs the reconnect.
      */
     void reconnect();
 
