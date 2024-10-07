@@ -67,6 +67,16 @@ public class RestorableTest {
         mSession = mEnv.connect(R1.class, "main", "localhost", mServerSocket.getLocalPort());
     }
 
+    private void setupLocal() throws Exception {
+        mEnv = Environment.create();
+        mEnv.connector(Connector.local(mEnv));
+        mEnv.export("main", new R1Server());
+        mEnv.reconnectDelayMillis(100);
+        mEnv.pingTimeoutMillis(1000);
+
+        mSession = mEnv.connect(R1.class, "main", null);
+    }
+
     @After
     public void teardown() throws Exception {
         if (mAcceptor != null) {
@@ -169,6 +179,20 @@ public class RestorableTest {
 
     @Test
     public void explicitReconnect() throws Exception {
+        explicitReconnect(false);
+    }
+
+    @Test
+    public void explicitReconnectLocal() throws Exception {
+        explicitReconnect(true);
+    }
+
+    private void explicitReconnect(boolean local) throws Exception {
+        if (local) {
+            teardown();
+            setupLocal();
+        }
+
         assertEquals(Session.State.CONNECTED, mSession.state());
 
         R1 root = mSession.root();
