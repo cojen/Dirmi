@@ -447,7 +447,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">reconnect</span>()</div>
 <div class="block">Closes all connections and initiates a reconnect. Operation has no effect if the session
- is closed.</div>
+ is closed. If this is a server-side session, calling reconnect is effectively the same
+ as calling close. The client-side session detects this and performs the reconnect.</div>
 </div>
 </section>
 </li>
