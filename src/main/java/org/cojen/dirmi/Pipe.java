@@ -123,6 +123,10 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
      * Attempt to recycle the connection instead of closing it. The caller must ensure that the
      * pipe has no pending input or unflushed output.
      *
+     * <p>When the {@systemProperty org.cojen.dirmi.Pipe.RECYCLE_CLOSE} system propery is set
+     * to true, calling recycle on a client-side pipe closes it instead. This feature is
+     * intended to help diagnose issues caused by incorrect pipe recycling.
+     *
      * @throws IllegalStateException if it's detected that the pipe isn't in a recyclable state
      */
     void recycle() throws IOException;
