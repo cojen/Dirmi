@@ -1,1 +1,1 @@
-tagSearchIndex = [{"l":"Serialized Form","h":"","u":"serialized-form.html"}];updateSearchResults();
+tagSearchIndex = [{"l":"org.cojen.dirmi.Pipe.RECYCLE_CLOSE","h":"org.cojen.dirmi.Pipe.recycle()","d":"System Property","u":"org.cojen.dirmi/org/cojen/dirmi/Pipe.html#org.cojen.dirmi.Pipe.RECYCLE_CLOSE"},{"l":"Serialized Form","h":"","u":"serialized-form.html"},{"l":"System Properties","h":"","u":"system-properties.html"}];updateSearchResults();
