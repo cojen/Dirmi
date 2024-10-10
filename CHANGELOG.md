@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.4.0
+v2.4.0 (2024-10-10)
 ------
 * Ignore static methods in remote interfaces.
 * Added pipe methods for efficiently encoding and decoding complex objects.
