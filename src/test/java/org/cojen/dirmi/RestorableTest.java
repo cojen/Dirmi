@@ -707,14 +707,14 @@ public class RestorableTest {
         try {
             r2.b(123);
             fail();
-        } catch (DisposedException e) {
+        } catch (DisposedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("disconnect"));
         }
 
         try {
             r1.echo("hello");
             fail();
-        } catch (DisposedException e) {
+        } catch (DisposedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("disconnect"));
         }
 
@@ -755,7 +755,7 @@ public class RestorableTest {
         try {
             r2.b(123);
             fail();
-        } catch (DisposedException e) {
+        } catch (DisposedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("disconnect"));
         }
 
@@ -793,7 +793,7 @@ public class RestorableTest {
         try {
             r2.b(123);
             fail();
-        } catch (DisposedException e) {
+        } catch (DisposedException | DisconnectedException e) {
             assertTrue(e.getMessage().contains("disconnect"));
         }
 
