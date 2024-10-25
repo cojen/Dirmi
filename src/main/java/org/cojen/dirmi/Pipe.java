@@ -24,6 +24,8 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.OutputStream;
 
+import java.nio.channels.ByteChannel;
+
 /**
  * A pipe is a bidirectional stream which supports basic object serialization. Only simple
  * types and collections can be serialized, and the original classes aren't necessarily
@@ -87,7 +89,7 @@ import java.io.OutputStream;
  *
  * @author Brian S O'Neill
  */
-public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, Link {
+public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, Link, ByteChannel {
     /**
      * Enables tracking of object references as they are written, for correctly serializing
      * object graphs, and to potentially reduce the overall encoding size. This mode has higher

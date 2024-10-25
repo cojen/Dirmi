@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 
 import java.net.SocketAddress;
 
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import java.util.ArrayList;
@@ -1126,6 +1127,20 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    @Override
+    public int read(ByteBuffer dst) throws IOException {
+        int amt = dst.remaining();
+        if (amt <= 0) {
+            return 0;
+        }
+        requireInput(1);
+        int pos = mInPos;
+        amt = Math.min(amt, mInEnd - pos);
+        dst.put(mInBuffer, pos, amt);
+        mInPos = pos + amt;
+        return amt;
+    }
+
     // CorePipe subclass must override this method.
     Class<?> loadClass(String name) throws ClassNotFoundException {
         return Class.forName(name);
@@ -2064,6 +2079,36 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    @Override
+    public int write(ByteBuffer src) throws IOException {
+        int amt = src.remaining();
+        if (amt <= 0) {
+            return amt;
+        }
+
+        while (true) {
+            byte[] buf = mOutBuffer;
+            int end = mOutEnd;
+            int avail = buf.length - end;
+
+            if (amt < avail) {
+                src.get(buf, end, amt);
+                mOutEnd = end + amt;
+                return amt;
+            }
+
+            if (amt > avail && buf.length < MAX_BUFFER_SIZE) {
+                expand(end, amt - avail);
+                continue;
+            }
+
+            src.get(buf, end, avail);
+            sourceWrite(buf, 0, buf.length);
+            mOutEnd = 0;
+            return avail;
+        }
+    }
+
     /**
      * @param v non-null
      * @return true if an object reference was written
@@ -2234,6 +2279,12 @@ class BufferedPipe implements Pipe {
         if (ex != null) {
             throw ex;
         }
+    }
+
+    @Override
+    // CorePipe subclass must override this method.
+    public boolean isOpen() {
+        return true;
     }
 
     @Override

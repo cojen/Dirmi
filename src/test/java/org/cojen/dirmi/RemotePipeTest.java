@@ -58,11 +58,14 @@ public class RemotePipeTest {
         R1 root = mSession.root();
 
         Pipe p1 = root.echo(10, null, "hello");
+        assertTrue(p1.isOpen());
         p1.flush();
         assertEquals(10, p1.readInt());
         assertEquals("hello", p1.readObject());
         String pipeName = (String) p1.readObject();
         p1.recycle();
+
+        assertTrue(p1.isOpen());
 
         // The pipe was recycled, and so it should be chosen again.
         Pipe p2 = root.echo(123, null, "world");
@@ -72,6 +75,8 @@ public class RemotePipeTest {
         assertEquals("world", p2.readObject());
         assertEquals(pipeName, p2.readObject());
         p2.recycle();
+
+        assertTrue(p1.isOpen());
     }
 
     @Test
@@ -79,10 +84,13 @@ public class RemotePipeTest {
         R1 root = mSession.root();
 
         Pipe p1 = root.failedRecycle(10, null);
+        assertTrue(p1.isOpen());
         p1.flush();
         assertEquals(10, p1.readInt());
         String pipeName = (String) p1.readObject();
         p1.recycle();
+
+        assertTrue(p1.isOpen());
 
         // The pipe was recycled, and so it should be chosen again. It won't work correctly
         // because the remote side recycled the pipe when it still had unflushed data.
@@ -94,6 +102,8 @@ public class RemotePipeTest {
             fail();
         } catch (IOException e) {
         }
+
+        assertFalse(p1.isOpen());
     }
 
     @Test
@@ -101,6 +111,7 @@ public class RemotePipeTest {
         R1 root = mSession.root();
 
         Pipe p1 = root.failedRecycle(10, null);
+        assertTrue(p1.isOpen());
         p1.flush();
         assertEquals(10, p1.readInt());
         String pipeName = (String) p1.readObject();
@@ -111,6 +122,8 @@ public class RemotePipeTest {
         } catch (IllegalStateException e) {
             assertTrue(e.getMessage().contains("unflushed"));
         }
+
+        assertFalse(p1.isOpen());
 
         // The pipe was recycled incorrectly on both sides, and so it was closed.
         Pipe p2 = root.echo(123, null, "hello");
@@ -127,6 +140,7 @@ public class RemotePipeTest {
         R1 root = mSession.root();
 
         Pipe p1 = root.echo(10, null, "hello");
+        assertTrue(p1.isOpen());
         p1.flush();
         assertEquals(10, p1.readInt());
         assertEquals("hello", p1.readObject());
@@ -138,6 +152,8 @@ public class RemotePipeTest {
         } catch (IllegalStateException e) {
             assertTrue(e.getMessage().contains("unflushed"));
         }
+
+        assertFalse(p1.isOpen());
 
         // The pipe was recycled incorrectly on the client side, and so it was closed.
         Pipe p2 = root.echo(123, null, "hello");

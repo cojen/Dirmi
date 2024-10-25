@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.4.1
+------
+* The Pipe interface also implements ByteChannel now.
+
 v2.4.0 (2024-10-10)
 ------
 * Ignore static methods in remote interfaces.

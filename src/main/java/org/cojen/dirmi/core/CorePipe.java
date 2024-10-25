@@ -179,4 +179,10 @@ final class CorePipe extends BufferedPipe {
             // Ignore.
         }
     }
+
+    @Override
+    public boolean isOpen() {
+        CoreSession session = mSession;
+        return session == null ? super.isOpen() : session.isConnectionOpen(this);
+    }
 }

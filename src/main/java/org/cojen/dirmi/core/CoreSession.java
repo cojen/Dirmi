@@ -388,6 +388,11 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         pipe.mConNext = null;
     }
 
+    final boolean isConnectionOpen(CorePipe pipe) {
+        VarHandle.acquireFence();
+        return pipe.mMode != CorePipe.M_CLOSED;
+    }
+
     @Override
     public final SocketAddress localAddress() {
         CorePipe pipe = controlPipe();

@@ -28,6 +28,8 @@ import java.lang.reflect.Array;
 import java.math.BigInteger;
 import java.math.BigDecimal;
 
+import java.nio.ByteBuffer;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -895,6 +897,84 @@ public class PipeTest {
         });
 
         assertArrayEquals(huge, readHuge);
+    }
+
+    @Test
+    public void byteBuffer() throws Exception {
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
+        assertTrue(pipe.isOpen());
+
+        ByteBuffer bb = ByteBuffer.allocate(20_000);
+
+        bb.limit(0);
+        assertEquals(0, pipe.write(bb));
+
+        int expect = 0;
+
+        bb.limit(1);
+        bb.put((byte) 12);
+        bb.flip();
+        assertEquals(1, pipe.write(bb));
+        expect += 1;
+
+        bb.clear();
+        var rnd = new Random(8675309);
+        var data1 = new byte[1000];
+        rnd.nextBytes(data1);
+        bb.put(data1);
+        bb.flip();
+        assertEquals(data1.length, pipe.write(bb));
+        expect += data1.length;
+
+        bb.clear();
+        var data2 = new byte[23];
+        rnd.nextBytes(data2);
+        bb.put(data2);
+        bb.flip();
+        assertEquals(data2.length, pipe.write(bb));
+        expect += data2.length;
+
+        bb.clear();
+        var data3 = new byte[10_000];
+        rnd.nextBytes(data3);
+        bb.put(data3);
+        bb.flip();
+        int amt = 0;
+        do {
+            amt += pipe.write(bb);
+        } while (bb.remaining() > 0);
+        assertEquals(data3.length, amt);
+        expect += data3.length;
+
+        pipe.flush();
+
+        byte[] bytes = capture.getBytes();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        bb.limit(0);
+        assertEquals(0, pipe.read(bb));
+
+        bb.clear();
+        amt = 0;
+        do {
+            amt += pipe.read(bb);
+        } while (amt < expect);
+
+        assertEquals(expect, amt);
+        assertEquals(-1, pipe.read());
+
+        byte[] result = new byte[amt];
+        bb.flip();
+        bb.get(result);
+
+        int pos = 0;
+        assertEquals(12, result[pos++]);
+        assertTrue(Arrays.equals(data1, 0, data1.length, result, pos, pos += data1.length));
+        assertTrue(Arrays.equals(data2, 0, data2.length, result, pos, pos += data2.length));
+        assertTrue(Arrays.equals(data3, 0, data3.length, result, pos, pos += data3.length));
+        assertEquals(pos, amt);
     }
 
     @Test
