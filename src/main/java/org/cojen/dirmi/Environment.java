@@ -33,6 +33,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Objects;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -48,18 +49,32 @@ import org.cojen.dirmi.core.Engine;
  */
 public interface Environment extends Closeable, Executor {
     /**
-     * Returns a new {@code Environment} instance which uses a default {@link Executor}.
+     * Returns a new {@code Environment} instance which uses a default {@link Executor}. When
+     * the {@code Environment} is closed, the {@code Executor} is also closed.
      */
     static Environment create() {
-        return new Engine();
+        return new Engine(null, true);
+    }
+
+    /**
+     * Returns a new {@code Environment} instance which uses the given {@link Executor}. When
+     * the {@code Environment} is closed, the {@code Executor} is not closed.
+     */
+    static Environment create(Executor executor) {
+        return create(executor, false);
     }
 
     /**
      * Returns a new {@code Environment} instance which uses the given {@link Executor}.
+     *
+     * @param closeExecutor when true, the {@code Executor} is closed when the {@code
+     * Environment} is closed
+     * @throws IllegalArgumentException if {@code closeExecutor} is true and the given {@code
+     * Executor} doesn't implement {@link Closeable} or {@link ExecutorService}
      */
-    static Environment create(Executor executor) {
+    static Environment create(Executor executor, boolean closeExecutor) {
         Objects.requireNonNull(executor);
-        return new Engine(executor);
+        return new Engine(executor, closeExecutor);
     }
 
     /**

@@ -33,7 +33,7 @@ public class SchedulerTest {
 
     @Before
     public void setup() {
-        mEngine = new Engine();
+        mEngine = new Engine(null, true);
     }
 
     @After

@@ -78,7 +78,7 @@ public final class Engine implements Environment {
     private volatile Settings mSettings;
 
     private final Executor mExecutor;
-    private final boolean mOwnsExecutor;
+    private final boolean mCloseExecutor;
 
     private final Lock mSchedulerLock;
     private final Condition mSchedulerCondition;
@@ -107,22 +107,24 @@ public final class Engine implements Environment {
         }
     }
 
-    public Engine() {
-        this(null);
-    }
-
-    public Engine(Executor executor) {
+    /**
+     * @param executor pass null to use a default
+     */
+    public Engine(Executor executor, boolean closeExecutor) {
         mMainLock = new ReentrantLock();
 
         mSettings = new Settings();
 
         if (executor == null) {
-            mExecutor = Executors.newCachedThreadPool(TFactory.THE);
-            mOwnsExecutor = true;
-        } else {
-            mExecutor = executor;
-            mOwnsExecutor = false;
+            executor = Executors.newCachedThreadPool(TFactory.THE);
+        } else if (closeExecutor) {
+            if (!(executor instanceof Closeable) && !(executor instanceof ExecutorService)) {
+                throw new IllegalArgumentException();
+            }
         }
+
+        mExecutor = executor;
+        mCloseExecutor = closeExecutor;
 
         mSchedulerLock = new ReentrantLock();
         mSchedulerCondition = mSchedulerLock.newCondition();
@@ -691,8 +693,12 @@ public final class Engine implements Environment {
         closeAll(serverSessions);
         closeAll(clientSessions);
 
-        if (mOwnsExecutor && mExecutor instanceof ExecutorService) {
-            ((ExecutorService) mExecutor).shutdown();
+        if (mCloseExecutor) {
+            if (mExecutor instanceof ExecutorService es) {
+                es.shutdown();
+            } else if (mExecutor instanceof Closeable c) {
+                CoreUtils.closeQuietly(c);
+            }
         }
     }
 
@@ -736,8 +742,8 @@ public final class Engine implements Environment {
         try {
             mExecutor.execute(task);
         } catch (Throwable e) {
-            if (task instanceof Closeable) {
-                CoreUtils.closeQuietly((Closeable) task);
+            if (task instanceof Closeable c) {
+                CoreUtils.closeQuietly(c);
             }
             checkClosed();
             throw new RemoteException(e);
@@ -753,8 +759,8 @@ public final class Engine implements Environment {
             mExecutor.execute(task);
             return true;
         } catch (Throwable e) {
-            if (task instanceof Closeable) {
-                CoreUtils.closeQuietly((Closeable) task);
+            if (task instanceof Closeable c) {
+                CoreUtils.closeQuietly(c);
             }
             return false;
         }
@@ -824,8 +830,8 @@ public final class Engine implements Environment {
             try {
                 mExecutor.execute(task);
             } catch (Throwable e) {
-                if (task instanceof Closeable) {
-                    CoreUtils.closeQuietly((Closeable) task);
+                if (task instanceof Closeable c) {
+                    CoreUtils.closeQuietly(c);
                 }
                 if (!isClosed()) {
                     uncaught(null, e);
