@@ -67,6 +67,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#create()" tabindex="0">create()</a></li>
 <li><a href="#create(java.util.concurrent.Executor)" tabindex="0">create(Executor)</a></li>
+<li><a href="#create(java.util.concurrent.Executor,boolean)" tabindex="0">create(Executor, boolean)</a></li>
 <li><a href="#export(java.lang.Object,java.lang.Object)" tabindex="0">export(Object, Object)</a></li>
 <li><a href="#acceptAll(java.net.ServerSocket)" tabindex="0">acceptAll(ServerSocket)</a></li>
 <li><a href="#acceptAll(java.net.ServerSocket,java.util.function.Predicate)" tabindex="0">acceptAll(ServerSocket, Predicate)</a></li>
@@ -206,35 +207,41 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1">
 <div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#customSerializers(org.cojen.dirmi.Serializer...)" class="member-name-link">customSerializers</a><wbr>(<a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a>...&nbsp;serializers)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1"><code>static <a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#create(java.util.concurrent.Executor,boolean)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link">Executor</a>&nbsp;executor,
+ boolean&nbsp;closeExecutor)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
+<div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#customSerializers(org.cojen.dirmi.Serializer...)" class="member-name-link">customSerializers</a><wbr>(<a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a>...&nbsp;serializers)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Provide custom serializers for newly established sessions.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#export(java.lang.Object,java.lang.Object)" class="member-name-link">export</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;name,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#export(java.lang.Object,java.lang.Object)" class="member-name-link">export</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;obj)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Export a named server-side object.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#idleConnectionMillis(int)" class="member-name-link">idleConnectionMillis</a><wbr>(int&nbsp;millis)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#idleConnectionMillis(int)" class="member-name-link">idleConnectionMillis</a><wbr>(int&nbsp;millis)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the maximum idle connection time for newly established sessions (±33%).</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#pingTimeoutMillis(int)" class="member-name-link">pingTimeoutMillis</a><wbr>(int&nbsp;millis)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#pingTimeoutMillis(int)" class="member-name-link">pingTimeoutMillis</a><wbr>(int&nbsp;millis)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the ping timeout for newly established sessions (±33%).</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#reconnectDelayMillis(int)" class="member-name-link">reconnectDelayMillis</a><wbr>(int&nbsp;millis)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#reconnectDelayMillis(int)" class="member-name-link">reconnectDelayMillis</a><wbr>(int&nbsp;millis)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the reconnect delay for newly established client sessions (±10%).</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#uncaughtExceptionHandler(java.util.function.BiConsumer)" class="member-name-link">uncaughtExceptionHandler</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/BiConsumer.html" title="class or interface in java.util.function" class="external-link">BiConsumer</a>&lt;<a href="Session.html" title="interface in org.cojen.dirmi">Session</a>&lt;?&gt;,<wbr><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&gt;&nbsp;h)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Set the handler which is invoked for any uncaught exceptions within this environment
  instance.</div>
 </div>
@@ -260,7 +267,8 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
 <h3>create</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></span>&nbsp;<span class="element-name">create</span>()</div>
-<div class="block">Returns a new <code>Environment</code> instance which uses a default <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
+<div class="block">Returns a new <code>Environment</code> instance which uses a default <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>. When
+ the <code>Environment</code> is closed, the <code>Executor</code> is also closed.</div>
 </div>
 </section>
 </li>
@@ -269,7 +277,26 @@ extends <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/ja
 <h3>create</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link">Executor</a>&nbsp;executor)</span></div>
+<div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>. When
+ the <code>Environment</code> is closed, the <code>Executor</code> is not closed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="create(java.util.concurrent.Executor,boolean)">
+<h3>create</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Environment.html" title="interface in org.cojen.dirmi">Environment</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link">Executor</a>&nbsp;executor,
+ boolean&nbsp;closeExecutor)</span></div>
 <div class="block">Returns a new <code>Environment</code> instance which uses the given <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/Executor.html" title="class or interface in java.util.concurrent" class="external-link"><code>Executor</code></a>.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>closeExecutor</code> - when true, the <code>Executor</code> is closed when the <code>
+ Environment</code> is closed</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if <code>closeExecutor</code> is true and the given <code>
+ Executor</code> doesn't implement <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/Closeable.html" title="class or interface in java.io" class="external-link"><code>Closeable</code></a> or <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/concurrent/ExecutorService.html" title="class or interface in java.util.concurrent" class="external-link"><code>ExecutorService</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
