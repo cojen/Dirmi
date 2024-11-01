@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.4.1
+v2.4.1 (2024-11-01)
 ------
 * The Pipe interface also implements ByteChannel now.
 
