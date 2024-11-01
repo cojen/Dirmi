@@ -1,4 +1,4 @@
-[![Maven Central](https://img.shields.io/maven-central/v/org.cojen/cojen-dirmi.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22org.cojen%22%20AND%20a:%22cojen-dirmi%22)
+[![Maven Central](https://img.shields.io/maven-central/v/org.cojen/cojen-dirmi.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/org.cojen/cojen-dirmi)
 
 Dirmi is a replacement for Java RMI which supports bidirectional remote objects.
 
