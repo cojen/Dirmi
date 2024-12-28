@@ -297,12 +297,11 @@ public final class CoreUtils {
      * not. Use as follows: {@code throw rethrow(e)}
      */
     public static RuntimeException rethrow(Throwable e) {
-        CoreUtils.<RuntimeException>castAndThrow(e);
-        return null;
+        throw CoreUtils.<RuntimeException>castAndThrow(e);
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void castAndThrow(Throwable e) throws T {
+    private static <T extends Throwable> RuntimeException castAndThrow(Throwable e) throws T {
         throw (T) e;
     }
 
