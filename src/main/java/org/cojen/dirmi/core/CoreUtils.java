@@ -114,7 +114,7 @@ public final class CoreUtils {
     static void allowAccess(ClassMaker cm) {
         var thisModule = CoreUtils.class.getModule();
         var thatModule = cm.classLoader().getUnnamedModule();
-        thisModule.addExports("org.cojen.dirmi.core", thatModule);
+        thisModule.addExports(CoreUtils.class.getPackageName(), thatModule);
     }
 
     static boolean isRemote(Class<?> clazz) {
