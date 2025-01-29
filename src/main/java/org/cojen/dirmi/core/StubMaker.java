@@ -676,8 +676,8 @@ final class StubMaker {
 
             MethodType mt = MethodType.methodType(returnType, ptypes);
 
-            var mhVar = mm.var(CoreUtils.class).condy("findVirtual", mType, mt)
-                .invoke(MethodHandle.class, clientMethod.name());
+            var mhVar = mm.var(MethodHandles.class).invoke("lookup")
+                .invoke("findVirtual", mType, clientMethod.name(), mt);
 
             var paramVars = mm.new_(Object[].class, 1 + ptypes.length);
             paramVars.aset(0, mm.this_());

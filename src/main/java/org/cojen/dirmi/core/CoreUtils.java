@@ -19,10 +19,6 @@ package org.cojen.dirmi.core;
 import java.io.Closeable;
 import java.io.IOException;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
@@ -303,22 +299,6 @@ public final class CoreUtils {
     @SuppressWarnings("unchecked")
     private static <T extends Throwable> RuntimeException castAndThrow(Throwable e) throws T {
         throw (T) e;
-    }
-
-    /**
-     * Condy bootstrap method for finding a MethodHandle which refers to a virtual method.
-     * This technique is used to obtain a lookup object which has more access.
-     *
-     * @param name method name
-     * @param clazz enclosing class
-     * @param mt parameters and return type
-     * @see StubMaker
-     */
-    public static MethodHandle findVirtual(MethodHandles.Lookup lookup, String name, Class type,
-                                           Class clazz, MethodType mt)
-        throws NoSuchMethodException, IllegalAccessException
-    {
-        return lookup.findVirtual(clazz, name, mt);
     }
 
     static void writeParam(Variable pipeVar, Variable paramVar) {

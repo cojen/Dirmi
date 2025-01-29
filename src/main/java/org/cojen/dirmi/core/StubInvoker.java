@@ -156,7 +156,7 @@ public non-sealed class StubInvoker extends Stub {
         private AutoDisposer.BasicRef ref;
 
         public WithBasicRef(long id, StubSupport support, MethodIdWriter miw,
-                              StubWrapper.Factory wrapperFactory)
+                            StubWrapper.Factory wrapperFactory)
         {
             super(id, support, miw, wrapperFactory);
         }
