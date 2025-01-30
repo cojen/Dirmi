@@ -110,6 +110,7 @@ public final class SerializerMaker {
     private Variable mWritePipeVar, mWriteObjectVar;
     private MethodMaker mReadMaker;
     private Variable mReadPipeVar;
+    private Variable mSkipPipeVar;
     private StringBuilder mDescriptorBuilder;
     private String mEffectiveDescriptor;
 
@@ -200,6 +201,7 @@ public final class SerializerMaker {
                 String name = comp.getName();
                 CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.invoke(name));
                 CoreUtils.readParam(mReadPipeVar, readParamVars[i]);
+                CoreUtils.skipParam(mSkipPipeVar, paramTypes[i]);
                 appendToDescriptor(name, comp.getType());
             }
         }
@@ -239,6 +241,7 @@ public final class SerializerMaker {
                 String name = field.getName();
                 CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.field(name));
                 CoreUtils.readParam(mReadPipeVar, readObjectVar.field(name));
+                CoreUtils.skipParam(mSkipPipeVar, field.getType());
                 appendToDescriptor(name, field.getType());
             }
         }
@@ -321,9 +324,10 @@ public final class SerializerMaker {
             CoreUtils.writeIntId(mWritePipeVar, enums.length, numberVar);
         }
 
-        // Make the read method.
+        // Make the read and skip methods.
         {
             var numberVar = CoreUtils.readIntId(mReadPipeVar, enums.length);
+            CoreUtils.skipIntId(mSkipPipeVar, enums.length);
 
             Label end = mReadMaker.label();
             numberVar.switch_(end, readCases, readLabels);
@@ -365,6 +369,8 @@ public final class SerializerMaker {
 
         mReadMaker = mMaker.addMethod(Object.class, "read", Pipe.class).public_();
         mReadPipeVar = mReadMaker.param(0);
+
+        mSkipPipeVar = mMaker.addMethod(null, "skip", Pipe.class).public_().param(0);
 
         mDescriptorBuilder = new StringBuilder();
     }

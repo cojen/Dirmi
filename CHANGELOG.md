@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.4.2
+------
+* Added a pipe method for skipping a fixed amount of bytes, and added a method to skip objects.
+
 v2.4.1 (2024-11-01)
 ------
 * The Pipe interface also implements ByteChannel now.

@@ -147,6 +147,21 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     Object readThrowable() throws IOException;
 
     /**
+     * Skips over and discards exactly n bytes of data from this pipe. If n is less than or
+     * equal to zero, then no bytes are skipped.
+     *
+     * @throws ClosedException if the pipe is closed by the remote endpoint before n bytes are
+     * skipped
+     */
+    void skipNBytes(long n) throws IOException;
+
+    /**
+     * Skip an object instead of reading it. If references are enabled, the object is still
+     * read and remembered, in case it's referenced later.
+     */
+    void skipObject() throws IOException;
+
+    /**
      * Write an object (or null) to the pipe.
      */
     @Override

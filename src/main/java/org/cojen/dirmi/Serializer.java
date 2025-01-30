@@ -56,6 +56,13 @@ public interface Serializer {
     Object read(Pipe pipe) throws IOException;
 
     /**
+     * Skip an object instead of reading it.
+     */
+    default void skip(Pipe pipe) throws IOException {
+        read(pipe);
+    }
+
+    /**
      * Returns an opaque serializable object describing the encoding format. The descriptor
      * type itself can only depend on built-in serializers and is typically a string.
      */

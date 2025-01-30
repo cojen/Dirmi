@@ -21,6 +21,7 @@ import java.lang.invoke.VarHandle;
 
 import java.lang.reflect.Array;
 
+import java.io.EOFException;
 import java.io.InputStream;
 import java.io.InvalidObjectException;
 import java.io.IOException;
@@ -212,6 +213,34 @@ class BufferedPipe implements Pipe {
             return mSourceIn.skip(n);
         } catch (IOException e) {
             throw inputException(e);
+        }
+    }
+
+    @Override
+    public final void skipNBytes(long n) throws IOException {
+        if (n > 0) {
+            int avail = available();
+
+            if (avail > 0) {
+                if (n >= avail) {
+                    mInPos = 0;
+                    mInEnd = 0;
+                    if ((n -= avail) <= 0) {
+                        return;
+                    }
+                } else {
+                    mInPos += (int) n;
+                    return;
+                }
+            }
+
+            try {
+                mSourceIn.skipNBytes(n);
+            } catch (EOFException e) {
+                throw inputException(noMoreInput());
+            } catch (IOException e) {
+                throw inputException(e);
+            }
         }
     }
 
@@ -448,13 +477,11 @@ class BufferedPipe implements Pipe {
 
     @Override
     public final Object readObject() throws IOException {
-        int typeCode;
-
         // Simple objects cannot reference themselves.
         Object simple;
 
         loop: while (true) {
-            typeCode = readUnsignedByte();
+            int typeCode = readUnsignedByte();
             switch (typeCode) {
             case T_REF_MODE_ON:     mInRefLookup = new ReferenceLookup(); continue;
             case T_REF_MODE_OFF:    mInRefLookup = null; continue;
@@ -533,6 +560,74 @@ class BufferedPipe implements Pipe {
             CoreUtils.assignTrace(this, e);
         }
         return obj;
+    }
+
+    @Override
+    public final void skipObject() throws IOException {
+        if (mInRefLookup != null) {
+            requireInput(1);
+            int pos = mInPos;
+            if (mInBuffer[pos] != T_REF_MODE_OFF) {
+                readObject();
+                return;
+            }
+            mInRefLookup = null; 
+            mInPos = pos + 1;
+        }
+
+        while (true) {
+            int typeCode = readUnsignedByte();
+            switch (typeCode) {
+            case T_REF_MODE_ON:  mInRefLookup = new ReferenceLookup(); readObject(); return;
+            case T_REF_MODE_OFF: mInRefLookup = null; continue; // not expected
+            case T_REFERENCE: case T_BYTE: skipNBytes(1); return;
+            case T_REFERENCE_L: case T_FLOAT: case T_INT: skipNBytes(4); return;
+
+            case T_REMOTE: case T_DOUBLE: case T_LONG: skipNBytes(8); return;
+            case T_REMOTE_T: skipNBytes(16); return;
+
+            // Note: There's no RemoteInfo.skipFrom method because RemoteInfo is written with
+            // references enabled.
+            case T_REMOTE_TI: skipNBytes(16); RemoteInfo.readFrom(this); return;
+
+            case T_NULL: case T_VOID: case T_OBJECT: case T_TRUE: case T_FALSE: return;
+            case T_CHAR: case T_SHORT: skipNBytes(2); return;
+            case T_STRING: skipString(readUnsignedByte()); return;
+            case T_STRING_L: skipString(readInt()); return;
+            case T_BOOLEAN_ARRAY: case T_BYTE_ARRAY: case T_BIG_INTEGER:
+                skipNBytes(readUnsignedByte()); return;
+            case T_BOOLEAN_ARRAY_L: case T_BYTE_ARRAY_L: case T_BIG_INTEGER_L:
+                skipNBytes(readInt()); return;
+            case T_CHAR_ARRAY: case T_SHORT_ARRAY: skipNBytes(readUnsignedByte() << 1L); return;
+            case T_CHAR_ARRAY_L: case T_SHORT_ARRAY_L: skipNBytes(readInt() << 1L); return;
+            case T_FLOAT_ARRAY: case T_INT_ARRAY: skipNBytes(readUnsignedByte() << 2L); return;
+            case T_FLOAT_ARRAY_L: case T_INT_ARRAY_L: skipNBytes(readInt() << 2L); return;
+            case T_DOUBLE_ARRAY: case T_LONG_ARRAY: skipNBytes(readUnsignedByte() << 3L); return;
+            case T_DOUBLE_ARRAY_L: case T_LONG_ARRAY_L: skipNBytes(readInt() << 3L); return;
+            case T_OBJECT_ARRAY: skipObjectArray(readUnsignedByte()); return;
+            case T_OBJECT_ARRAY_L: skipObjectArray(readInt()); return;
+            case T_LIST: case T_SET: skipObjects(readUnsignedByte()); return;
+            case T_LIST_L: case T_SET_L: skipObjects(readInt()); return;
+            case T_MAP: skipObjects(readUnsignedByte() << 1L); return;
+            case T_MAP_L: skipObjects(readInt() << 1L); return;
+            case T_BIG_DECIMAL: skipNBytes(4); skipObject(); return;
+
+            // Note: This case isn't expected because Throwables and StackTraceElements are
+            // written with references enabled.
+            case T_THROWABLE: case T_STACK_TRACE: readObject(); return;
+
+            case T_CUSTOM_2: mTypeCodeMap.skipCustom(this, readUnsignedShort()); return;
+            case T_CUSTOM_4: mTypeCodeMap.skipCustom(this, readInt()); return;
+
+            default: mTypeCodeMap.skipCustom(this, typeCode); return;
+            }
+        }
+    }
+
+    void skipObjects(long amount) throws IOException {
+        for (int i=0; i<amount; i++) {
+            skipObject();
+        }
     }
 
     // CorePipe subclass must override this method.
@@ -709,6 +804,123 @@ class BufferedPipe implements Pipe {
         mInPos = pos;
 
         return new String(chars);
+    }
+
+    /**
+     * @param length number of characters to skip
+     */
+    private void skipString(int length) throws IOException {
+        if (length <= 0) {
+            return;
+        }
+
+        // Because the length encodes the number of characters, the exact number of bytes to
+        // skip is unknown. This method ends up looking nearly the same as readString.
+
+        final int clength = length;
+        int cpos = 0;
+        int pos;
+
+        while (true) {
+            requireInput(Math.min(length, MAX_BUFFER_SIZE));
+
+            final byte[] buf = mInBuffer;
+            pos = mInPos;
+            final int end = mInEnd;
+            final int cstart = cpos;
+
+            chunk: {
+                int c;
+                while ((c = buf[pos++] & 0xff) <= 127) {
+                    cpos++;
+                    if (cpos >= clength) {
+                        mInPos = pos;
+                        return;
+                    }
+                    if (pos >= end) {
+                        break chunk;
+                    }
+                }
+
+                while (true) {
+                    switch (c >> 4) {
+                    case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7: {
+                        cpos++;
+                        break;
+                    }
+                    case 12: case 13: {
+                        if (pos >= end) {
+                            // Need two bytes for this character. Backup and read some more.
+                            --pos;
+                            length++;
+                            break chunk;
+                        }
+                        int c2 = buf[pos++];
+                        if ((c2 & 0xc0) != 0x80) {
+                            throw inputException(new UTFDataFormatException());
+                        }
+                        cpos++;
+                        break;
+                    }
+                    case 14: {
+                        if (pos + 1 >= end) {
+                            // Need three bytes for this character. Backup and read some more.
+                            --pos;
+                            length += 2;
+                            break chunk;
+                        }
+                        int c2 = buf[pos++];
+                        int c3 = buf[pos++];
+                        if ((c2 & 0xc0) != 0x80 || (c3 & 0xc0) != 0x80) {
+                            throw inputException(new UTFDataFormatException());
+                        }
+                        cpos++;
+                        break;
+                    }
+                    case 15: {
+                        if (pos + 2 >= end) {
+                            // Need four bytes for this character. Backup and read some more.
+                            --pos;
+                            length += 3;
+                            break chunk;
+                        }
+                        int c2 = buf[pos++];
+                        int c3 = buf[pos++];
+                        int c4 = buf[pos++];
+                        if ((c2 & 0xc0) != 0x80 || (c3 & 0xc0) != 0x80 || (c4 & 0xc0) != 0x80) {
+                            throw inputException(new UTFDataFormatException());
+                        }
+                        int cp = ((c & 0x07) << 18) | ((c2 & 0x3f) << 12)
+                            | ((c3 & 0x3f) << 6) | (c4 & 0x3f);
+                        if (cp >= 0x10000) {
+                            // Split into surrogate pair.
+                            //cp -= 0x10000;
+                            cpos += 2;
+                        } else {
+                            cpos++;
+                        }
+                        break;
+                    }
+                    default:
+                        throw inputException(new UTFDataFormatException());
+                    }
+
+                    if (cpos >= clength) {
+                        mInPos = pos;
+                        return;
+                    }
+
+                    if (pos >= end) {
+                        break chunk;
+                    }
+
+                    c = buf[pos++] & 0xff;
+                }
+            }
+
+            mInPos = pos;
+            length -= cpos - cstart;
+        }
     }
 
     private boolean[] readBooleanArray(int length) throws IOException {
@@ -969,6 +1181,15 @@ class BufferedPipe implements Pipe {
         }
 
         return array;
+    }
+
+    private void skipObjectArray(int length) throws IOException {
+        int componentTypeCode = readTypeCode();
+        if (componentTypeCode == T_OBJECT_ARRAY || componentTypeCode == T_OBJECT_ARRAY_L) {
+            readTypeCode(); // componentTypeCode
+            skipNBytes(1); // extraDims
+        }
+        skipObjects(length);
     }
 
     private int readTypeCode() throws IOException {

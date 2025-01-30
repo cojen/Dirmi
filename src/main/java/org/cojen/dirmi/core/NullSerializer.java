@@ -28,7 +28,7 @@ import org.cojen.dirmi.Serializer;
  *
  * @author Brian S O'Neill
  */
-class NullSerializer implements Serializer {
+final class NullSerializer implements Serializer {
     static final NullSerializer THE = new NullSerializer();
 
     private NullSerializer() {

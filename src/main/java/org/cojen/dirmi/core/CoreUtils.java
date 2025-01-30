@@ -366,6 +366,28 @@ public final class CoreUtils {
         }
     }
 
+    static void skipParam(Variable pipeVar, Class<?> type) {
+        if (type == null || !type.isPrimitive()) {
+            pipeVar.invoke("skipObject");
+        } else {
+            int amount;
+            if (type == int.class || type == float.class) {
+                amount = 4;
+            } else if (type == long.class || type == double.class) {
+                amount = 8;
+            } else if (type == boolean.class || type == byte.class) {
+                amount = 1;
+            } else if (type == char.class || type == short.class) {
+                amount = 2;
+            } else if (type == void.class) {
+                return;
+            } else {
+                throw new AssertionError();
+            }
+            pipeVar.invoke("skipNBytes", amount);
+        }
+    }
+
     /**
      * @param max maximum possible id
      */
@@ -395,6 +417,23 @@ public final class CoreUtils {
         }
 
         return methodIdVar;
+    }
+
+    /**
+     * @param max maximum possible id
+     * @return a new int variable with the id
+     */
+    static void skipIntId(Variable pipeVar, int max) {
+        int amount;
+        if (max < 256) {
+            amount = 1;
+        } else if (max < 65536) {
+            amount = 2;
+        } else {
+            amount = 4;
+        }
+
+        pipeVar.invoke("skipNBytes", amount);
     }
 
     /**

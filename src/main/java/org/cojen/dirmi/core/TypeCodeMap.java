@@ -204,6 +204,19 @@ final class TypeCodeMap {
     }
 
     /**
+     * Note: Should only be called when reference mode is off.
+     *
+     * @param typeCode must be a custom type code
+     */
+    void skipCustom(BufferedPipe pipe, int typeCode) throws IOException {
+        try {
+            mCustomSerializers[typeCode - T_FIRST_CUSTOM].skip(pipe);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new InvalidObjectException("Unknown type: " + typeCode);
+        }
+    }
+
+    /**
      * @param obj non-null object to write to the pipe
      */
     @SuppressWarnings("unchecked")
@@ -341,17 +354,13 @@ final class TypeCodeMap {
         return newEntry;
     }
 
-    private abstract static class Entry {
+    private abstract static sealed class Entry {
         final int mTypeCode;
 
         Entry mNext;
 
         Entry(int typeCode) {
             mTypeCode = typeCode;
-        }
-
-        Object read(BufferedPipe pipe) throws IOException {
-            throw new UnsupportedOperationException();
         }
 
         /**
@@ -423,7 +432,7 @@ final class TypeCodeMap {
         }
     }
 
-    private abstract static class Custom extends Entry {
+    private abstract static non-sealed class Custom extends Entry {
         final Class mClass;
         final Serializer mSerializer;
 
@@ -438,12 +447,15 @@ final class TypeCodeMap {
             return mClass;
         }
 
-        @Override
         Object read(BufferedPipe pipe) throws IOException {
             int identifier = pipe.reserveReference();
             Object obj = mSerializer.read(pipe);
             pipe.stashReference(identifier, obj);
             return obj;
+        }
+
+        void skip(BufferedPipe pipe) throws IOException {
+            mSerializer.skip(pipe);
         }
 
         @Override

@@ -45,6 +45,7 @@ import org.junit.*;
 import static org.junit.Assert.*;
 
 import org.cojen.dirmi.ClosedException;
+import org.cojen.dirmi.Serializer;
 
 import org.cojen.dirmi.io.CaptureOutputStream;
 
@@ -975,6 +976,146 @@ public class PipeTest {
         assertTrue(Arrays.equals(data2, 0, data2.length, result, pos, pos += data2.length));
         assertTrue(Arrays.equals(data3, 0, data3.length, result, pos, pos += data3.length));
         assertEquals(pos, amt);
+    }
+
+    @Test
+    public void skipObjects() throws Exception {
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
+        var rnd = new Random(8675309);
+
+        int num = 0;
+
+        pipe.writeObject(null); num++;
+        pipe.writeObject(void.class); num++;
+        pipe.writeObject(new Object()); num++;
+        pipe.writeObject(true); num++;
+        pipe.writeObject(false); num++;
+        pipe.writeObject('c'); num++;
+        pipe.writeObject(1.0f); num++;
+        pipe.writeObject(2.0d); num++;
+        pipe.writeObject((byte) 3); num++;
+        pipe.writeObject((short) 4); num++;
+        pipe.writeObject(5); num++;
+        pipe.writeObject(6L); num++;
+        pipe.writeObject(""); num++;
+        pipe.writeObject("hello"); num++;
+        pipe.writeObject(randomString(rnd, 1000, 1000)); num++;
+        pipe.writeObject(new boolean[10]); num++;
+        pipe.writeObject(new boolean[300]); num++;
+        pipe.writeObject(new char[10]); num++;
+        pipe.writeObject(new char[300]); num++;
+        pipe.writeObject(new float[10]); num++;
+        pipe.writeObject(new float[300]); num++;
+        pipe.writeObject(new double[10]); num++;
+        pipe.writeObject(new double[300]); num++;
+        pipe.writeObject(new byte[10]); num++;
+        pipe.writeObject(new byte[300]); num++;
+        pipe.writeObject(new short[10]); num++;
+        pipe.writeObject(new short[300]); num++;
+        pipe.writeObject(new int[10]); num++;
+        pipe.writeObject(new int[300]); num++;
+        pipe.writeObject(new long[10]); num++;
+        pipe.writeObject(new long[300]); num++;
+        pipe.writeObject(new Object[10]); num++;
+        pipe.writeObject(new Object[300]); num++;
+        pipe.writeObject(new Object[10][10]); num++;
+        pipe.writeObject(new Exception()); num++;
+        pipe.writeObject(randomList(rnd, 10, 10)); num++;
+        pipe.writeObject(randomList(rnd, 300, 300)); num++;
+        pipe.writeObject(randomSet(rnd, 10, 10)); num++;
+        pipe.writeObject(randomSet(rnd, 300, 300)); num++;
+        pipe.writeObject(randomMap(rnd, 10, 10)); num++;
+        pipe.writeObject(randomMap(rnd, 300, 300)); num++;
+        pipe.writeObject(BigInteger.valueOf(10)); num++;
+        pipe.writeObject(new BigInteger(new byte[300])); num++;
+        pipe.writeObject(BigDecimal.valueOf(10)); num++;
+
+        pipe.writeByte(T_REMOTE); pipe.writeLong(1); num++;
+
+        pipe.writeByte(T_REMOTE_T); pipe.writeLong(1); pipe.writeLong(2); num++;
+
+        pipe.writeByte(T_REMOTE_TI); pipe.writeLong(1); pipe.writeLong(2);
+        RemoteInfo.examine(RemoteInfoTest.R30.class).writeTo(pipe); num++;
+
+        pipe.enableReferences();
+        var bi = new BigInteger("123");
+        pipe.writeObject(bi); num++;
+        pipe.writeObject(bi); num++;
+        pipe.disableReferences();
+
+        pipe.writeObject('x'); num++;
+
+        pipe.enableReferences();
+        bi = new BigInteger("234");
+        pipe.writeObject(bi); num++;
+        pipe.writeObject(bi);
+        pipe.disableReferences();
+
+        pipe.writeObject("end");
+
+        pipe.flush();
+        byte[] bytes = capture.getBytes();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+
+        for (int i=0; i<num; i++) {
+            pipe.skipObject();
+        }
+
+        assertEquals(bi, pipe.readObject());
+        assertEquals("end", pipe.readObject());
+    }
+
+    @Test
+    public void skipCustom() throws Exception {
+        var capture = new CaptureOutputStream();
+        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
+
+        Map<Object, Serializer> serializers = Map.of
+            (Custom1.class, Serializer.simple(Custom1.class),
+             Custom2.class, Serializer.simple(Custom2.class),
+             Custom3.class, Serializer.simple(Custom3.class)
+             );
+
+        TypeCodeMap tcm = TypeCodeMap.find(T_FIRST_CUSTOM, serializers);
+        pipe.initTypeCodeMap(tcm);
+
+        pipe.writeObject(new Custom1(1));
+        pipe.writeObject(Custom2.A);
+        pipe.writeObject(new Custom3(1));
+
+        pipe.writeObject("hello");
+
+        pipe.flush();
+        byte[] bytes = capture.getBytes();
+        var bin = new ByteArrayInputStream(bytes);
+        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
+        pipe.initTypeCodeMap(tcm);
+
+        pipe.skipObject();
+        pipe.skipObject();
+        pipe.skipObject();
+
+        assertEquals("hello", pipe.readObject());
+    }
+
+    public static record Custom1(int a) {
+    }
+
+    public static enum Custom2 {
+        A
+    }
+
+    public static class Custom3 {
+        public int a;
+
+        public Custom3() {
+        }
+
+        public Custom3(int a) {
+            this.a = a;
+        }
     }
 
     @Test
