@@ -74,7 +74,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#readObject()" tabindex="0">readObject()</a></li>
 <li><a href="#readThrowable()" tabindex="0">readThrowable()</a></li>
 <li><a href="#skipNBytes(long)" tabindex="0">skipNBytes(long)</a></li>
-<li><a href="#skipObject()" tabindex="0">skipObject()</a></li>
+<li><a href="#skipObject(java.util.function.Consumer)" tabindex="0">skipObject(Consumer)</a></li>
 <li><a href="#writeObject(java.lang.Object)" tabindex="0">writeObject(Object)</a></li>
 <li><a href="#writeNull()" tabindex="0">writeNull()</a></li>
 <li><a href="#transferTo(java.io.OutputStream,long)" tabindex="0">transferTo(OutputStream, long)</a></li>
@@ -255,7 +255,7 @@ public Pipe uploadFile(String name, Pipe pipe) {
 <div class="block">Skips over and discards exactly n bytes of data from this pipe.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#skipObject()" class="member-name-link">skipObject</a>()</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#skipObject(java.util.function.Consumer)" class="member-name-link">skipObject</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;remoteConsumer)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Skip an object instead of reading it.</div>
 </div>
@@ -444,14 +444,17 @@ public Pipe uploadFile(String name, Pipe pipe) {
 </section>
 </li>
 <li>
-<section class="detail" id="skipObject()">
+<section class="detail" id="skipObject(java.util.function.Consumer)">
 <h3>skipObject</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">skipObject</span>()
+<div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">skipObject</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;remoteConsumer)</span>
          throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Skip an object instead of reading it. If references are enabled, the object is still
  read and remembered, in case it's referenced later.</div>
 <dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>remoteConsumer</code> - receives all client-side remote objects, which aren't truly
+ skipped; can pass null to do nothing with them</dd>
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
 </dl>

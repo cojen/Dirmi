@@ -69,7 +69,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#supportedTypes()" tabindex="0">supportedTypes()</a></li>
 <li><a href="#write(org.cojen.dirmi.Pipe,java.lang.Object)" tabindex="0">write(Pipe, Object)</a></li>
 <li><a href="#read(org.cojen.dirmi.Pipe)" tabindex="0">read(Pipe)</a></li>
-<li><a href="#skip(org.cojen.dirmi.Pipe)" tabindex="0">skip(Pipe)</a></li>
+<li><a href="#skip(org.cojen.dirmi.Pipe,java.util.function.Consumer)" tabindex="0">skip(Pipe, Consumer)</a></li>
 <li><a href="#descriptor()" tabindex="0">descriptor()</a></li>
 <li><a href="#adapt(java.lang.Object)" tabindex="0">adapt(Object)</a></li>
 </ol>
@@ -131,7 +131,8 @@ loadScripts(document, 'script');</script>
 <div class="block">Generates and returns a serializer for a record type, an enum type, or a simple class.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#skip(org.cojen.dirmi.Pipe)" class="member-name-link">skip</a><wbr>(<a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a>&nbsp;pipe)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#skip(org.cojen.dirmi.Pipe,java.util.function.Consumer)" class="member-name-link">skip</a><wbr>(<a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a>&nbsp;pipe,
+ <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;remoteConsumer)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Skip an object instead of reading it.</div>
 </div>
@@ -214,13 +215,17 @@ loadScripts(document, 'script');</script>
 </section>
 </li>
 <li>
-<section class="detail" id="skip(org.cojen.dirmi.Pipe)">
+<section class="detail" id="skip(org.cojen.dirmi.Pipe,java.util.function.Consumer)">
 <h3>skip</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">skip</span><wbr><span class="parameters">(<a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a>&nbsp;pipe)</span>
+<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">skip</span><wbr><span class="parameters">(<a href="Pipe.html" title="interface in org.cojen.dirmi">Pipe</a>&nbsp;pipe,
+ <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/util/function/Consumer.html" title="class or interface in java.util.function" class="external-link">Consumer</a>&lt;<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;remoteConsumer)</span>
            throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Skip an object instead of reading it.</div>
+<div class="block">Skip an object instead of reading it. By default, the read method is called.</div>
 <dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>remoteConsumer</code> - receives all client-side remote objects, which aren't truly
+ skipped; can pass null to do nothing with them</dd>
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
 </dl>
