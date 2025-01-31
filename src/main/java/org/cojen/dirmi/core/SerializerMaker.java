@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import java.util.function.Consumer;
+
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
@@ -110,7 +112,7 @@ public final class SerializerMaker {
     private Variable mWritePipeVar, mWriteObjectVar;
     private MethodMaker mReadMaker;
     private Variable mReadPipeVar;
-    private Variable mSkipPipeVar;
+    private Variable mSkipPipeVar, mConsumerVar;
     private StringBuilder mDescriptorBuilder;
     private String mEffectiveDescriptor;
 
@@ -201,7 +203,7 @@ public final class SerializerMaker {
                 String name = comp.getName();
                 CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.invoke(name));
                 CoreUtils.readParam(mReadPipeVar, readParamVars[i]);
-                CoreUtils.skipParam(mSkipPipeVar, paramTypes[i]);
+                CoreUtils.skipParam(mSkipPipeVar, mConsumerVar, paramTypes[i]);
                 appendToDescriptor(name, comp.getType());
             }
         }
@@ -241,7 +243,7 @@ public final class SerializerMaker {
                 String name = field.getName();
                 CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.field(name));
                 CoreUtils.readParam(mReadPipeVar, readObjectVar.field(name));
-                CoreUtils.skipParam(mSkipPipeVar, field.getType());
+                CoreUtils.skipParam(mSkipPipeVar, mConsumerVar, field.getType());
                 appendToDescriptor(name, field.getType());
             }
         }
@@ -370,7 +372,9 @@ public final class SerializerMaker {
         mReadMaker = mMaker.addMethod(Object.class, "read", Pipe.class).public_();
         mReadPipeVar = mReadMaker.param(0);
 
-        mSkipPipeVar = mMaker.addMethod(null, "skip", Pipe.class).public_().param(0);
+        mm = mMaker.addMethod(null, "skip", Pipe.class, Consumer.class).public_();
+        mSkipPipeVar = mm.param(0);
+        mConsumerVar = mm.param(1);
 
         mDescriptorBuilder = new StringBuilder();
     }

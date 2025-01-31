@@ -26,6 +26,8 @@ import java.io.OutputStream;
 
 import java.nio.channels.ByteChannel;
 
+import java.util.function.Consumer;
+
 /**
  * A pipe is a bidirectional stream which supports basic object serialization. Only simple
  * types and collections can be serialized, and the original classes aren't necessarily
@@ -158,8 +160,11 @@ public interface Pipe extends Closeable, Flushable, ObjectInput, ObjectOutput, L
     /**
      * Skip an object instead of reading it. If references are enabled, the object is still
      * read and remembered, in case it's referenced later.
+     *
+     * @param remoteConsumer receives all client-side remote objects, which aren't truly
+     * skipped; can pass null to do nothing with them
      */
-    void skipObject() throws IOException;
+    void skipObject(Consumer<Object> remoteConsumer) throws IOException;
 
     /**
      * Write an object (or null) to the pipe.

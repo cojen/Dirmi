@@ -366,9 +366,9 @@ public final class CoreUtils {
         }
     }
 
-    static void skipParam(Variable pipeVar, Class<?> type) {
+    static void skipParam(Variable pipeVar, Variable consumerVar, Class<?> type) {
         if (type == null || !type.isPrimitive()) {
-            pipeVar.invoke("skipObject");
+            pipeVar.invoke("skipObject", consumerVar);
         } else {
             int amount;
             if (type == int.class || type == float.class) {

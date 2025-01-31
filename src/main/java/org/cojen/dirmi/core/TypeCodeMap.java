@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.util.function.Consumer;
+
 import org.cojen.dirmi.Serializer;
 
 import static org.cojen.dirmi.core.TypeCodes.*;
@@ -208,9 +210,11 @@ final class TypeCodeMap {
      *
      * @param typeCode must be a custom type code
      */
-    void skipCustom(BufferedPipe pipe, int typeCode) throws IOException {
+    void skipCustom(BufferedPipe pipe, Consumer<Object> remoteConsumer, int typeCode)
+        throws IOException
+    {
         try {
-            mCustomSerializers[typeCode - T_FIRST_CUSTOM].skip(pipe);
+            mCustomSerializers[typeCode - T_FIRST_CUSTOM].skip(pipe, remoteConsumer);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new InvalidObjectException("Unknown type: " + typeCode);
         }
@@ -454,8 +458,8 @@ final class TypeCodeMap {
             return obj;
         }
 
-        void skip(BufferedPipe pipe) throws IOException {
-            mSerializer.skip(pipe);
+        void skip(BufferedPipe pipe, Consumer<Object> remoteConsumer) throws IOException {
+            mSerializer.skip(pipe, remoteConsumer);
         }
 
         @Override

@@ -20,7 +20,10 @@ import java.io.IOException;
 
 import java.util.Set;
 
+import java.util.function.Consumer;
+
 import org.cojen.dirmi.core.SerializerMaker;
+import org.cojen.dirmi.core.Stub;
 
 /**
  * Supports writing and reading of object instances to/from a pipe.
@@ -56,10 +59,16 @@ public interface Serializer {
     Object read(Pipe pipe) throws IOException;
 
     /**
-     * Skip an object instead of reading it.
+     * Skip an object instead of reading it. By default, the read method is called.
+     *
+     * @param remoteConsumer receives all client-side remote objects, which aren't truly
+     * skipped; can pass null to do nothing with them
      */
-    default void skip(Pipe pipe) throws IOException {
-        read(pipe);
+    default void skip(Pipe pipe, Consumer<Object> remoteConsumer) throws IOException {
+        Object obj = read(pipe);
+        if (remoteConsumer != null && obj instanceof Stub) {
+            remoteConsumer.accept(obj);
+        }
     }
 
     /**

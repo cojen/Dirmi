@@ -1033,11 +1033,6 @@ public class PipeTest {
 
         pipe.writeByte(T_REMOTE); pipe.writeLong(1); num++;
 
-        pipe.writeByte(T_REMOTE_T); pipe.writeLong(1); pipe.writeLong(2); num++;
-
-        pipe.writeByte(T_REMOTE_TI); pipe.writeLong(1); pipe.writeLong(2);
-        RemoteInfo.examine(RemoteInfoTest.R30.class).writeTo(pipe); num++;
-
         pipe.enableReferences();
         var bi = new BigInteger("123");
         pipe.writeObject(bi); num++;
@@ -1060,7 +1055,7 @@ public class PipeTest {
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
 
         for (int i=0; i<num; i++) {
-            pipe.skipObject();
+            pipe.skipObject(null);
         }
 
         assertEquals(bi, pipe.readObject());
@@ -1093,9 +1088,9 @@ public class PipeTest {
         pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
         pipe.initTypeCodeMap(tcm);
 
-        pipe.skipObject();
-        pipe.skipObject();
-        pipe.skipObject();
+        pipe.skipObject(null);
+        pipe.skipObject(null);
+        pipe.skipObject(null);
 
         assertEquals("hello", pipe.readObject());
     }

@@ -48,6 +48,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import java.util.function.Consumer;
+
 import org.cojen.dirmi.ClosedException;
 import org.cojen.dirmi.NoSuchObjectException;
 import org.cojen.dirmi.Pipe;
@@ -563,7 +565,7 @@ class BufferedPipe implements Pipe {
     }
 
     @Override
-    public final void skipObject() throws IOException {
+    public final void skipObject(Consumer<Object> remoteConsumer) throws IOException {
         if (mInRefLookup != null) {
             requireInput(1);
             int pos = mInPos;
@@ -584,11 +586,16 @@ class BufferedPipe implements Pipe {
             case T_REFERENCE_L: case T_FLOAT: case T_INT: skipNBytes(4); return;
 
             case T_REMOTE: case T_DOUBLE: case T_LONG: skipNBytes(8); return;
-            case T_REMOTE_T: skipNBytes(16); return;
 
-            // Note: There's no RemoteInfo.skipFrom method because RemoteInfo is written with
-            // references enabled.
-            case T_REMOTE_TI: skipNBytes(16); RemoteInfo.readFrom(this); return;
+            case T_REMOTE_T: accept(remoteConsumer, objectFor(readLong(), readLong())); return;
+
+            case T_REMOTE_TI: {
+                long id = readLong();
+                long typeId = readLong();
+                RemoteInfo info = RemoteInfo.readFrom(this);
+                accept(remoteConsumer, objectFor(id, typeId, info));
+                return;
+            }
 
             case T_NULL: case T_VOID: case T_OBJECT: case T_TRUE: case T_FALSE: return;
             case T_CHAR: case T_SHORT: skipNBytes(2); return;
@@ -604,29 +611,37 @@ class BufferedPipe implements Pipe {
             case T_FLOAT_ARRAY_L: case T_INT_ARRAY_L: skipNBytes(readInt() << 2L); return;
             case T_DOUBLE_ARRAY: case T_LONG_ARRAY: skipNBytes(readUnsignedByte() << 3L); return;
             case T_DOUBLE_ARRAY_L: case T_LONG_ARRAY_L: skipNBytes(readInt() << 3L); return;
-            case T_OBJECT_ARRAY: skipObjectArray(readUnsignedByte()); return;
-            case T_OBJECT_ARRAY_L: skipObjectArray(readInt()); return;
-            case T_LIST: case T_SET: skipObjects(readUnsignedByte()); return;
-            case T_LIST_L: case T_SET_L: skipObjects(readInt()); return;
-            case T_MAP: skipObjects(readUnsignedByte() << 1L); return;
-            case T_MAP_L: skipObjects(readInt() << 1L); return;
-            case T_BIG_DECIMAL: skipNBytes(4); skipObject(); return;
+            case T_OBJECT_ARRAY: skipObjectArray(remoteConsumer, readUnsignedByte()); return;
+            case T_OBJECT_ARRAY_L: skipObjectArray(remoteConsumer, readInt()); return;
+            case T_LIST: case T_SET: skipObjects(remoteConsumer, readUnsignedByte()); return;
+            case T_LIST_L: case T_SET_L: skipObjects(remoteConsumer, readInt()); return;
+            case T_MAP: skipObjects(remoteConsumer, readUnsignedByte() << 1L); return;
+            case T_MAP_L: skipObjects(remoteConsumer, readInt() << 1L); return;
+            case T_BIG_DECIMAL: skipNBytes(4); skipObject(remoteConsumer); return;
 
             // Note: This case isn't expected because Throwables and StackTraceElements are
             // written with references enabled.
             case T_THROWABLE: case T_STACK_TRACE: readObject(); return;
 
-            case T_CUSTOM_2: mTypeCodeMap.skipCustom(this, readUnsignedShort()); return;
-            case T_CUSTOM_4: mTypeCodeMap.skipCustom(this, readInt()); return;
+            case T_CUSTOM_2:
+                mTypeCodeMap.skipCustom(this, remoteConsumer, readUnsignedShort()); return;
 
-            default: mTypeCodeMap.skipCustom(this, typeCode); return;
+            case T_CUSTOM_4: mTypeCodeMap.skipCustom(this, remoteConsumer, readInt()); return;
+
+            default: mTypeCodeMap.skipCustom(this, remoteConsumer, typeCode); return;
             }
         }
     }
 
-    void skipObjects(long amount) throws IOException {
+    private static void accept(Consumer<Object> remoteConsumer, Object remote) {
+        if (remoteConsumer != null) {
+            remoteConsumer.accept(remote);
+        }
+    }
+
+    void skipObjects(Consumer<Object> remoteConsumer, long amount) throws IOException {
         for (int i=0; i<amount; i++) {
-            skipObject();
+            skipObject(remoteConsumer);
         }
     }
 
@@ -1183,13 +1198,13 @@ class BufferedPipe implements Pipe {
         return array;
     }
 
-    private void skipObjectArray(int length) throws IOException {
+    private void skipObjectArray(Consumer<Object> remoteConsumer, int length) throws IOException {
         int componentTypeCode = readTypeCode();
         if (componentTypeCode == T_OBJECT_ARRAY || componentTypeCode == T_OBJECT_ARRAY_L) {
             readTypeCode(); // componentTypeCode
             skipNBytes(1); // extraDims
         }
-        skipObjects(length);
+        skipObjects(remoteConsumer, length);
     }
 
     private int readTypeCode() throws IOException {

@@ -20,6 +20,8 @@ import java.io.IOException;
 
 import java.net.ServerSocket;
 
+import java.util.ArrayList;
+
 import java.util.function.BiConsumer;
 
 import org.junit.*;
@@ -204,12 +206,43 @@ public class RemotePipeTest {
         assertNotSame(mSession, handler.session);
     }
 
+    @Test
+    public void skipObject() throws Exception {
+        R1 root = mSession.root();
+
+        Pipe pipe = root.stuff(null, false);
+        pipe.flush();
+        assertSame(root, pipe.readObject());
+        assertEquals("hello", pipe.readObject());
+        assertSame(root, pipe.readObject());
+        pipe.recycle();
+
+        var remotes = new ArrayList<>();
+
+        pipe = root.stuff(null, true);
+        pipe.flush();
+        for (int i=1; i<=4; i++) {
+            pipe.skipObject(remotes::add);
+        }
+        pipe.recycle();
+
+        assertEquals(3, remotes.size());
+        assertSame(root, remotes.get(0));
+        assertSame(root, remotes.get(1));
+        assertTrue(remotes.get(2) instanceof R2);
+    }
+
     public static interface R1 extends Remote {
         Pipe echo(int a, Pipe pipe, String b) throws IOException;
+
+        Pipe stuff(Pipe pipe, boolean r2) throws IOException;
 
         Pipe failedRecycle(int a, Pipe pipe) throws IOException;
 
         Pipe exception(Pipe pipe) throws IOException;
+    }
+
+    public static interface R2 extends Remote {
     }
 
     private static class R1Server implements R1 {
@@ -218,6 +251,19 @@ public class RemotePipeTest {
             pipe.writeInt(a);
             pipe.writeObject(b);
             pipe.writeObject(pipe.toString());
+            pipe.flush();
+            pipe.recycle();
+            return null;
+        }
+
+        @Override
+        public Pipe stuff(Pipe pipe, boolean r2) throws IOException {
+            pipe.writeObject(this);
+            pipe.writeObject("hello");
+            pipe.writeObject(this);
+            if (r2) {
+                pipe.writeObject(new R2Server());
+            }
             pipe.flush();
             pipe.recycle();
             return null;
@@ -242,5 +288,8 @@ public class RemotePipeTest {
         public Pipe exception(Pipe pipe) {
             throw new IllegalStateException("foo");
         }
+    }
+
+    private static class R2Server implements R2 {
     }
 }
