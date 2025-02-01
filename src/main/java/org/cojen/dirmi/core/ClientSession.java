@@ -161,7 +161,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         mEngine.changeIdentity(this, newSession.id);
 
-        var newRoot = (StubInvoker) newSession.mRoot;
+        var newRoot = ((Stub) newSession.mRoot).invoker();
         Object removed = newSession.mStubs.remove(newRoot);
         assert newRoot == removed;
         assert newSession.mStubs.size() == 0;
@@ -176,7 +176,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         cServerSessionIdHandle.setRelease(this, newSession.mServerSessionId);
 
-        var root = (StubInvoker) mRoot;
+        var root = ((Stub) mRoot).invoker();
         mStubs.changeIdentity(root, newRoot.id);
 
         Map<String, RemoteInfo> typeMap;
@@ -219,7 +219,7 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
-        StubInvoker.cSupportHandle.setRelease(mRoot, newSupport);
+        StubInvoker.cSupportHandle.setRelease(root, newSupport);
 
         // For all restorable stubs, update the MethodIdWriter and set a support object that
         // allows them to restore on demand.
