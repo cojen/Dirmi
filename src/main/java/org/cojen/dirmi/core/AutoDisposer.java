@@ -114,7 +114,7 @@ public final class AutoDisposer extends ReferenceQueue<Stub> implements Runnable
         }
 
         void removed() {
-            if (mInvoker.support().session() instanceof CoreSession session) {
+            if (mInvoker.support().trySession() instanceof CoreSession session) {
                 // Note: Although the pipe isn't flushed immediately, this operation might
                 // still block. If it does, then no dispose messages will be sent for any
                 // sessions until the blocked one automatically disconnects. This can be

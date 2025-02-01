@@ -82,6 +82,11 @@ final class DisposedStubSupport implements StubSupport {
     }
 
     @Override
+    public CoreSession<?> trySession() {
+        return mSession;
+    }
+
+    @Override
     public boolean isLenientRestorable() {
         return mSession != null && mRestorable;
     }

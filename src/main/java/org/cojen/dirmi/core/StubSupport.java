@@ -30,6 +30,13 @@ import org.cojen.dirmi.Session;
 public interface StubSupport {
     Session session();
 
+    /**
+     * @return null if disposed
+     */
+    default Session trySession() {
+        return session();
+    }
+
     public default boolean isLenientRestorable() {
         return false;
     }
