@@ -32,21 +32,8 @@ public abstract class Skeleton<R> extends Item {
 
     private static final Object BATCHING = new Object();
 
-    private final Throwable mException;
-
     public Skeleton(long id) {
         super(id);
-        mException = null;
-    }
-
-    /**
-     * Constructs a broken skeleton. The associated server should be null.
-     * 
-     * @see SkeletonFactory
-     */
-    public Skeleton(Throwable exception, long id) {
-        super(id);
-        mException = exception;
     }
 
     public abstract Class<R> type();
@@ -74,8 +61,8 @@ public abstract class Skeleton<R> extends Item {
      * Called when an exception is thrown when invoking a remote method. The original exception
      * is returned or else a suitable replacement is returned if this is a broken skeleton.
      */
-    public final Throwable checkException(Throwable exception) {
-        return mException == null ? exception : mException;
+    public Throwable checkException(Throwable exception) {
+        return exception;
     }
 
     public static void batchedResultCheck(Object server, String methodName, Object result) {

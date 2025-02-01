@@ -79,24 +79,21 @@ final class SkeletonMaker<R> {
         CoreUtils.allowAccess(mFactoryMaker);
 
         mSkeletonMaker = mFactoryMaker.another(type.getName())
-            .extend(Skeleton.class).final_().sourceFile(sourceFile);
+            .extend(CoreSkeleton.class).final_().sourceFile(sourceFile);
 
         // Need to define the skeleton constructor (and its dependencies) early in order for
         // the factory to see it.
 
-        mSkeletonMaker.addField(SkeletonSupport.class, "support").private_().final_();
         mSkeletonMaker.addField(mType, "server").private_().final_();
 
         // Regular skeleton constructor.
         MethodMaker mm = mSkeletonMaker.addConstructor(long.class, SkeletonSupport.class, mType);
-        mm.invokeSuperConstructor(mm.param(0));
-        mm.field("support").set(mm.param(1));
+        mm.invokeSuperConstructor(mm.param(0), mm.param(1));
         mm.field("server").set(mm.param(2));
 
         // Broken skeleton constructor.
         mm = mSkeletonMaker.addConstructor(Throwable.class, long.class, SkeletonSupport.class);
-        mm.invokeSuperConstructor(mm.param(0), mm.param(1));
-        mm.field("support").set(mm.param(2));
+        mm.invokeSuperConstructor(mm.param(0), mm.param(1), mm.param(2));
         mm.field("server").set(null);
     }
 
