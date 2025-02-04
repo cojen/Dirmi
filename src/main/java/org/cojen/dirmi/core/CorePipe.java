@@ -89,6 +89,7 @@ final class CorePipe extends BufferedPipe {
 
     @Override
     void writeStub(Stub stub) throws IOException {
+        refModeOffIfDisabled();
         requireOutput(9);
         int end = mOutEnd;
         byte[] buf = mOutBuffer;
@@ -106,6 +107,7 @@ final class CorePipe extends BufferedPipe {
      * @param typeCode T_REMOTE_T or T_REMOTE_TI
      */
     void writeSkeletonHeader(byte typeCode, Skeleton skeleton) throws IOException {
+        refModeOffIfDisabled();
         requireOutput(17);
         int end = mOutEnd;
         byte[] buf = mOutBuffer;

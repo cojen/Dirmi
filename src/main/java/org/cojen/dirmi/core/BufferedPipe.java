@@ -2383,6 +2383,17 @@ class BufferedPipe implements Pipe {
         }
     }
 
+    /**
+     * If necessary, writes T_REF_MODE_OFF before writing an object.
+     */
+    protected void refModeOffIfDisabled() throws IOException {
+        ReferenceMap refMap = mOutRefMap;
+        if (refMap != null && refMap.isDisabled()) {
+            write(T_REF_MODE_OFF);
+            mOutRefMap = null;
+        }
+    }
+
     @Override
     public final SocketAddress localAddress() {
         return mLocalAddress;
