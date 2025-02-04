@@ -63,6 +63,21 @@ final class SkeletonMap extends ItemMap<Skeleton> {
     synchronized Skeleton remove(long id) {
         Skeleton skeleton = super.remove(id);
         if (id >= 0 && skeleton != null) { // only remove server if id isn't an alias
+            skeleton.disposed();
+            removeServer(skeleton.server());
+        }
+        return skeleton;
+    }
+
+    /**
+     * Same as remove except doesn't call Skeleton.disposed, allowing it to be resurrected
+     * later.
+     *
+     * @see AutoSkeleton
+     */
+    synchronized Skeleton removeAuto(long id) {
+        Skeleton skeleton = super.remove(id);
+        if (id >= 0 && skeleton != null) { // only remove server if id isn't an alias
             removeServer(skeleton.server());
         }
         return skeleton;

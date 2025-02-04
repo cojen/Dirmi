@@ -61,7 +61,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     static final int
         C_PING = 1, C_PONG = 2, C_MESSAGE = 3, C_KNOWN_TYPE = 4, C_REQUEST_CONNECTION = 5,
         C_REQUEST_INFO = 6, C_REQUEST_INFO_TERM = 7, C_INFO_FOUND = 8, C_INFO_NOT_FOUND = 9,
-        C_SKELETON_DISPOSE = 10, C_STUB_DISPOSE = 11, C_ACKNOWLEDGED_S = 12, C_ACKNOWLEDGED_L = 13;
+        C_SKELETON_DISPOSE = 10, C_STUB_DISPOSE = 11, C_ACKNOWLEDGED_S = 12, C_ACKNOWLEDGED_L = 13,
+        C_SKELETON_AUTO_DISPOSE = 14;
 
     static final int R_CLOSED = 1, R_DISCONNECTED = 2, R_PING_FAILURE = 4, R_CONTROL_FAILURE = 8;
 
@@ -801,6 +802,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                             detached(skeleton, true);
                         }
                         break;
+                    case C_SKELETON_AUTO_DISPOSE:
+                        skeleton = mSkeletons.getOrNull(pipe.readLong());
+                        long transportCount = pipe.readLong();
+                        if (skeleton != null && skeleton.shouldDispose(transportCount)) {
+                            mSkeletons.removeAuto(skeleton.id);
+                            // Pass newTask=true to prevent blocking the control thread.
+                            detached(skeleton, true);
+                        }
+                        break;
                     case C_STUB_DISPOSE:
                         id = pipe.readLong();
                         stubDispose(id, "Object is disposed by remote endpoint");
@@ -1233,15 +1243,49 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     /**
      * @param message optional
      */
-    final boolean stubDisposeAndNotify(Stub stub, String message, boolean flush) {
+    final boolean stubDisposeAndNotify(Stub stub, String message) {
         long id = stub.id;
         if (stubDispose(id, message)) {
             // Notify the remote side to dispose the associated skeleton. If the command cannot
             // be sent, the skeleton will be disposed anyhow due to disconnect.
-            trySendCommandAndId(C_SKELETON_DISPOSE, id, flush);
+            trySendCommandAndId(C_SKELETON_DISPOSE, id, true);
             return true;
         } else {
             return false;
+        }
+    }
+
+    /**
+     * Note: Although the pipe isn't flushed immediately, this operation might still block. If
+     * it does, then no dispose messages will be sent for any sessions until the blocked one
+     * automatically disconnects. This can be prevented by running a task in a separate thread,
+     * but that would end up creating a new temporary object. Ideally, the task option should
+     * only be used when the pipe's output buffer is full.
+     *
+     * @see AutoDisposer
+     */
+    final void autoDispose(Stub stub) {
+        long id = stub.id;
+        if (stubDispose(id, null)) {
+            long transportCount = stub.invoker().resetTransportCount();
+            mControlLock.lock();
+            try {
+                // Notify the remote side to dispose the associated skeleton. If the command
+                // cannot be sent, the skeleton will be disposed anyhow due to disconnect.
+                CorePipe pipe = controlPipe();
+                if (transportCount != 0) {
+                    pipe.write(C_SKELETON_AUTO_DISPOSE);
+                    pipe.writeLong(id);
+                    pipe.writeLong(transportCount);
+                } else {
+                    pipe.write(C_SKELETON_DISPOSE);
+                    pipe.writeLong(id);
+                }
+            } catch (IOException e) {
+                // Ignore.
+            } finally {
+                mControlLock.unlock();
+            }
         }
     }
 
@@ -1345,6 +1389,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     }
 
     private void writeSkeleton(CorePipe pipe, Skeleton skeleton) throws IOException {
+        skeleton = skeleton.transport();
+
         if (mKnownTypes.tryGet(skeleton.typeId()) != null) {
             // Write the remote identifier and the remote type.
             pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_T, skeleton);

@@ -78,8 +78,10 @@ final class SkeletonMaker<R> {
             .implement(SkeletonFactory.class).final_().sourceFile(sourceFile);
         CoreUtils.allowAccess(mFactoryMaker);
 
+        Class<?> baseClass = mServerInfo.isAutoDispose() ? AutoSkeleton.class : CoreSkeleton.class;
+
         mSkeletonMaker = mFactoryMaker.another(type.getName())
-            .extend(CoreSkeleton.class).final_().sourceFile(sourceFile);
+            .extend(baseClass).final_().sourceFile(sourceFile);
 
         // Need to define the skeleton constructor (and its dependencies) early in order for
         // the factory to see it.

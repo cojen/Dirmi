@@ -35,6 +35,7 @@ final class StubMap extends ItemMap<StubInvoker> {
             if (existing.id == invoker.id) {
                 Stub selected = ((StubInvoker) existing).select();
                 if (selected != null) {
+                    selected.invoker().incTransportCount();
                     return selected;
                 }
                 break;

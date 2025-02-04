@@ -69,4 +69,9 @@ final class CoreSkeletonSupport implements SkeletonSupport {
     public void uncaught(Throwable e) {
         mSession.uncaught(e);
     }
+
+    @Override
+    public <R> Skeleton<R> skeletonFor(R server) {
+        return mSession.mSkeletons.skeletonFor(server);
+    }
 }

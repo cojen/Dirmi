@@ -85,7 +85,7 @@ public final class CoreUtils {
             throw new IllegalArgumentException();
         }
         if (stub.support() instanceof CoreStubSupport css) {
-            return css.session().stubDisposeAndNotify(stub, null, true);
+            return css.session().stubDisposeAndNotify(stub, null);
         }
         return false;
     }

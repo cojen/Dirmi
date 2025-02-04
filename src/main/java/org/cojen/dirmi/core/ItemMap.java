@@ -161,6 +161,19 @@ class ItemMap<I extends Item> {
     }
 
     /**
+     * Like tryGet but performs a synchronized double check.
+     */
+    final I getOrNull(long id) {
+        I item = tryGet(id);
+        if (item == null) {
+            synchronized (this) {
+                item = tryGet(id);
+            }
+        }
+        return item;
+    }
+
+    /**
      * Remove an item from the map by its identifier.
      */
     @SuppressWarnings("unchecked")

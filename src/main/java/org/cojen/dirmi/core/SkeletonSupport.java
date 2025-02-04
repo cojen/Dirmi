@@ -59,4 +59,9 @@ public interface SkeletonSupport {
     void dispose(Skeleton<?> skeleton);
 
     void uncaught(Throwable e);
+
+    /**
+     * @see AutoSkeleton
+     */
+    <R> Skeleton<R> skeletonFor(R server);
 }

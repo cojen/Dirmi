@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi;
 
+import java.io.IOException;
+
 import java.net.ServerSocket;
 
 import org.junit.*;
@@ -147,6 +149,67 @@ public class AutoDisposeTest {
         }
     }
 
+    @Test
+    public void race() throws Exception {
+        // Test that an auto disposed object isn't disposed before all the server side
+        // instances have been received.
+
+        R2Server.mDetached = 0;
+
+        R1 root = mSession.root();
+
+        R2 first = root.r2();
+
+        Pipe p = root.receive(null);
+        p.flush();
+        R2 second = (R2) p.readObject();
+        second.updateAndWaitForAck("hello");
+
+        // Allow the r2 objects to be locally collected, but the remote skeleton for the second
+        // cannot be disposed yet.
+        first = null;
+        second = null;
+
+        // Wait for the first r2 object to be disposed and detached.
+        waitForDetached(1);
+
+        assertTrue(root.doFlush());
+
+        // Force a few collections, which should have no effect.
+        for (int i=1; i<=2; i++) {
+            System.gc();
+            Thread.sleep(1000);
+        }
+
+        assertEquals(1, R2Server.mDetached);
+
+        second = (R2) p.readObject();
+        p.close();
+        p = null;
+
+        assertEquals("hello", second.getMessage());
+        second = null;
+
+        // Wait for the second r2 object to be disposed and detached.
+        waitForDetached(2);
+    }
+
+    private static void waitForDetached(int detached) throws Exception {
+        for (int i=0; i<100; i++) {
+            System.gc();
+            int actual = R2Server.mDetached;
+            if (actual == detached) {
+                return;
+            }
+            if (actual > detached) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+
+        assertEquals(detached, R2Server.mDetached);
+    }
+
     private static long extractId(Object obj) {
         String str = obj.toString();
         int ix = str.indexOf("id=");
@@ -171,12 +234,18 @@ public class AutoDisposeTest {
 
         @Restorable
         R2 r2() throws RemoteException;
+
+        Pipe receive(Pipe pipe) throws IOException;
+
+        boolean doFlush() throws IOException;
     }
 
     @AutoDispose
     public static interface R2 extends Remote {
         @NoReply
         void update(String msg) throws RemoteException;
+
+        void updateAndWaitForAck(String msg) throws RemoteException;
 
         String getMessage() throws RemoteException;
     }
@@ -210,6 +279,30 @@ public class AutoDisposeTest {
             }
             return mR2;
         }
+
+        @Override
+        public synchronized Pipe receive(Pipe pipe) throws IOException {
+            mPipe = pipe;
+            mR2 = new R2Server();
+            pipe.writeObject(mR2);
+            pipe.flush();
+            pipe.writeObject(mR2);
+            return null;
+        }
+
+        private Pipe mPipe;
+
+        @Override
+        public synchronized boolean doFlush() throws IOException {
+            if (mPipe == null) {
+                return false;
+            } else {
+                mPipe.flush();
+                mPipe.close();
+                mPipe = null;
+                return true;
+            }
+        }
     }
 
     private static class R2Server implements R2, SessionAware {
@@ -219,6 +312,11 @@ public class AutoDisposeTest {
 
         @Override
         public void update(String msg) {
+            mMessage = msg;
+        }
+
+        @Override
+        public void updateAndWaitForAck(String msg) {
             mMessage = msg;
         }
 

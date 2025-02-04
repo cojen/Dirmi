@@ -115,13 +115,7 @@ public final class AutoDisposer extends ReferenceQueue<Stub> implements Runnable
 
         void removed() {
             if (mInvoker.support().trySession() instanceof CoreSession session) {
-                // Note: Although the pipe isn't flushed immediately, this operation might
-                // still block. If it does, then no dispose messages will be sent for any
-                // sessions until the blocked one automatically disconnects. This can be
-                // prevented by running a task in a separate thread, but that would end up
-                // creating a new temporary object. Ideally, the task option should only be
-                // used when the pipe's output buffer is full.
-                session.stubDisposeAndNotify(mInvoker, null, false);
+                session.autoDispose(mInvoker);
             }
         }
     }

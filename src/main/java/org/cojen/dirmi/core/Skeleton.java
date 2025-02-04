@@ -65,6 +65,35 @@ public abstract class Skeleton<R> extends Item {
         return exception;
     }
 
+    /**
+     * Called when the Skeleton has been explicitly disposed.
+     *
+     * @see AutoSkeleton
+     */
+    public void disposed() {
+    }
+
+    /**
+     * Called when the Skeleton is about to be written over a Pipe, returning the actual
+     * Skeleton which should be used.
+     *
+     * @see AutoSkeleton
+     */
+    public Skeleton transport() {
+        return this;
+    }
+
+    /**
+     * Called when the Skeleton supports automatic disposal, and it has been unreferenced.
+     *
+     * @param transportCount number of transport counts recorded by the remote stub
+     * @return true if Skeleton should be disposed
+     * @see AutoSkeleton
+     */
+    public boolean shouldDispose(long transportCount) {
+        return true;
+    }
+
     public static void batchedResultCheck(Object server, String methodName, Object result) {
         if (result == null) {
             nullBatchedResult(server, methodName);

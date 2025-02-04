@@ -125,12 +125,42 @@ public non-sealed class StubInvoker extends Stub {
     }
 
     /**
+     * Called to track the number of times the remote side has referenced this stub invoker
+     * instance. It only needs to do anything for invokers which support automatic disposal.
+     */
+    void incTransportCount() {
+    }
+
+    /**
+     * Clears the transport count value, and returns the old value. This operation is only
+     * valid for invokers which support automatic disposal. If zero is returned (although not
+     * expected), the remote skeleton should be forcibly disposed.
+     */
+    long resetTransportCount() {
+        return 0;
+    }
+
+    /**
      * Base class for invokers which support automatic disposal. This class must not declare
      * any new public instance methods because they can conflict with user-specified remote
      * methods which have the same signature.
      */
     private static abstract class WithRef extends StubInvoker {
         private StubWrapper.Factory wrapperFactory;
+
+        private volatile long transportCount = 1L;
+
+        private static final VarHandle cTransportCountHandle;
+
+        static {
+            try {
+                var lookup = MethodHandles.lookup();
+                cTransportCountHandle = lookup.findVarHandle
+                    (WithRef.class, "transportCount", long.class);
+            } catch (Throwable e) {
+                throw CoreUtils.rethrow(e);
+            }
+        }
 
         public WithRef(long id, StubSupport support, MethodIdWriter miw,
                        StubWrapper.Factory wrapperFactory)
@@ -143,6 +173,16 @@ public non-sealed class StubInvoker extends Stub {
             StubWrapper wrapper = wrapperFactory.newWrapper(this);
             wrapperFactory = null; // not needed anymore
             return wrapper;
+        }
+
+        @Override
+        void incTransportCount() {
+            cTransportCountHandle.getAndAdd(this, 1L);
+        }
+
+        @Override
+        long resetTransportCount() {
+            return (long) cTransportCountHandle.getAndSet(this, 0L);
         }
     }
 
