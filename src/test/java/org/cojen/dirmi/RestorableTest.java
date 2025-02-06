@@ -775,6 +775,7 @@ public class RestorableTest {
                 Thread.sleep(100);
             }
 
+            // FIXME: This failure has been observed a few times.
             fail("Didn't reconnect");
         }
 
