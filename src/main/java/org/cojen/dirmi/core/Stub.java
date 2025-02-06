@@ -19,8 +19,9 @@ package org.cojen.dirmi.core;
 import org.cojen.dirmi.Remote;
 
 /**
- * Base class for remote stubs. It must not declare any new public instance methods because
- * they can conflict with user-specified remote methods which have the same signature.
+ * Base class for remote stubs. It must not declare any new public or protected instance
+ * methods because they can conflict with user-specified remote methods which have the same
+ * signature.
  *
  * @author Brian S O'Neill
  */

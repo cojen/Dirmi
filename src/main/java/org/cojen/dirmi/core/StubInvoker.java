@@ -22,8 +22,8 @@ import java.lang.invoke.VarHandle;
 
 /**
  * Base class for remote stubs which actually invoke the remote methods over the pipe. This
- * class must not declare any new public instance methods because they can conflict with
- * user-specified remote methods which have the same signature.
+ * class must not declare any new public or protected instance methods because they can
+ * conflict with user-specified remote methods which have the same signature.
  *
  * @author Brian S. O'Neill
  */
@@ -142,8 +142,8 @@ public non-sealed class StubInvoker extends Stub {
 
     /**
      * Base class for invokers which support automatic disposal. This class must not declare
-     * any new public instance methods because they can conflict with user-specified remote
-     * methods which have the same signature.
+     * any new public or protected instance methods because they can conflict with
+     * user-specified remote methods which have the same signature.
      */
     private static abstract class WithRef extends StubInvoker {
         private StubWrapper.Factory wrapperFactory;
@@ -188,9 +188,9 @@ public non-sealed class StubInvoker extends Stub {
 
     /**
      * Base class for invokers which support automatic disposal and don't have any methods for
-     * which "isUnacknowledged" is true. This class must not declare any new public instance
-     * methods because they can conflict with user-specified remote methods which have the same
-     * signature.
+     * which "isUnacknowledged" is true. This class must not declare any new public or
+     * protected instance methods because they can conflict with user-specified remote methods
+     * which have the same signature.
      */
     public static abstract class WithBasicRef extends WithRef {
         private AutoDisposer.BasicRef ref;
@@ -218,9 +218,9 @@ public non-sealed class StubInvoker extends Stub {
 
     /**
      * Base class for invokers which support automatic disposal and have at least one method
-     * for which "isUnacknowledged" is true. This class must not declare any new public
-     * instance methods because they can conflict with user-specified remote methods which have
-     * the same signature.
+     * for which "isUnacknowledged" is true. This class must not declare any new public or
+     * protected instance methods because they can conflict with user-specified remote methods
+     * which have the same signature.
      */
     public static abstract class WithCountedRef extends WithRef {
         protected AutoDisposer.CountedRef ref;

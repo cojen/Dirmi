@@ -20,8 +20,8 @@ import java.lang.invoke.MethodHandle;
 
 /**
  * Base class for remote stubs which delegate to an invoker for supporting AutoDispose. This
- * class must not declare any new public instance methods because they can conflict with
- * user-specified remote methods which have the same signature.
+ * class must not declare any new public or protected instance methods because they can
+ * conflict with user-specified remote methods which have the same signature.
  *
  * @author Brian S. O'Neill
  */
