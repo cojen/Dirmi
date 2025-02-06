@@ -133,8 +133,8 @@ final class ClientSession<R> extends CoreSession<R> {
     }
 
     private boolean isRootDisposed() {
-        return mRoot instanceof StubInvoker stub
-            && StubInvoker.cSupportHandle.getAcquire(stub) instanceof DisposedStubSupport;
+        return mRoot instanceof Stub s
+            && StubInvoker.cSupportHandle.getAcquire(s.invoker()) instanceof DisposedStubSupport;
     }
 
     @SuppressWarnings("unchecked")
