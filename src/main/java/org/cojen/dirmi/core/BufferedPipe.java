@@ -490,13 +490,13 @@ class BufferedPipe implements Pipe {
             case T_REFERENCE:       return readReference(readUnsignedByte());
             case T_REFERENCE_L:     return readReference(readInt());
 
-            case T_REMOTE:          simple = objectFor(readLong()); break loop;
-            case T_REMOTE_T:        simple = objectFor(readLong(), readLong()); break loop;
+            case T_REMOTE:          simple = serverFor(readLong()); break loop;
+            case T_REMOTE_T:        simple = stubFor(readLong(), readLong()); break loop;
             case T_REMOTE_TI: {
                 long id = readLong();
                 long typeId = readLong();
                 RemoteInfo info = RemoteInfo.readFrom(this);
-                simple = objectFor(id, typeId, info);
+                simple = stubFor(id, typeId, info);
                 break loop;
             }
 
@@ -587,13 +587,13 @@ class BufferedPipe implements Pipe {
 
             case T_REMOTE: case T_DOUBLE: case T_LONG: skipNBytes(8); return;
 
-            case T_REMOTE_T: accept(remoteConsumer, objectFor(readLong(), readLong())); return;
+            case T_REMOTE_T: accept(remoteConsumer, stubFor(readLong(), readLong())); return;
 
             case T_REMOTE_TI: {
                 long id = readLong();
                 long typeId = readLong();
                 RemoteInfo info = RemoteInfo.readFrom(this);
-                accept(remoteConsumer, objectFor(id, typeId, info));
+                accept(remoteConsumer, stubFor(id, typeId, info));
                 return;
             }
 
@@ -646,17 +646,17 @@ class BufferedPipe implements Pipe {
     }
 
     // CorePipe subclass must override this method.
-    Object objectFor(long id) throws IOException {
+    Object serverFor(long id) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
     // CorePipe subclass must override this method.
-    Object objectFor(long id, long typeId) throws IOException {
+    Object stubFor(long id, long typeId) throws IOException {
         throw new NoSuchObjectException(id);
     }
 
     // CorePipe subclass must override this method.
-    Object objectFor(long id, long typeId, RemoteInfo info) throws IOException {
+    Object stubFor(long id, long typeId, RemoteInfo info) throws IOException {
         throw new NoSuchObjectException(id);
     }
 

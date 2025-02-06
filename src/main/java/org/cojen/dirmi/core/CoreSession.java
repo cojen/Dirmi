@@ -1125,7 +1125,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     void reverseConnect(long id) {
     }
 
-    final Object objectFor(long id) throws IOException {
+    final Object serverFor(long id) throws IOException {
         try {
             return mSkeletons.get(id).server();
         } catch (NoSuchObjectException e) {
@@ -1134,7 +1134,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    final Object objectFor(long id, long typeId) throws IOException {
+    final Object stubFor(long id, long typeId) throws IOException {
         try {
             StubFactory factory = mStubFactories.get(typeId);
             return mStubs.findStub(id, factory, this);
@@ -1144,7 +1144,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    final Object objectFor(long id, long typeId, RemoteInfo info) {
+    final Object stubFor(long id, long typeId, RemoteInfo info) {
         boolean found = true;
 
         Class<?> type;

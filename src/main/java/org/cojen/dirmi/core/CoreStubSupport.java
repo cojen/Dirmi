@@ -129,7 +129,7 @@ final class CoreStubSupport implements StubSupport {
         throws T
     {
         try {
-            return mSession.objectFor(aliasId, typeId);
+            return mSession.stubFor(aliasId, typeId);
         } catch (Throwable e) {
             throw CoreUtils.remoteException(mSession, remoteFailureException, e);
         }

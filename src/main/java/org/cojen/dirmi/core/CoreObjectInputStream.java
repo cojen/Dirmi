@@ -52,16 +52,16 @@ public final class CoreObjectInputStream extends ObjectInputStream {
     @Override
     protected Object resolveObject(Object obj) throws IOException {
         if (obj instanceof MarshalledStub) {
-            return mPipe.objectFor(((MarshalledStub) obj).id);
+            return mPipe.serverFor(((MarshalledStub) obj).id);
         } else if (obj instanceof MarshalledSkeleton ms) {
             byte[] infoBytes = ms.infoBytes;
             if (infoBytes == null) {
-                return mPipe.objectFor(ms.id, ms.typeId);
+                return mPipe.stubFor(ms.id, ms.typeId);
             }
             var bin = new ByteArrayInputStream(infoBytes);
             var pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
             RemoteInfo info = RemoteInfo.readFrom(pipe);
-            return mPipe.objectFor(ms.id, ms.typeId, info);
+            return mPipe.stubFor(ms.id, ms.typeId, info);
         } else {
             return obj;
         }
