@@ -27,26 +27,35 @@ final class StubMap extends ItemMap<StubInvoker> {
      *
      * @param invoker must be a new instance
      */
-    synchronized Stub putAndSelectStub(StubInvoker invoker) {
-        Item[] items = mItems;
-        int slot = ((int) invoker.id) & (items.length - 1);
+    Stub putAndSelectStub(StubInvoker invoker) {
+        Stub selected;
 
-        for (Item existing = items[slot]; existing != null; existing = existing.mNext) {
-            if (existing.id == invoker.id) {
-                Stub selected = ((StubInvoker) existing).select();
-                if (selected != null) {
-                    selected.invoker().incTransportCount();
-                    return selected;
+        existing: {
+            synchronized (this) {
+                Item[] items = mItems;
+                int slot = ((int) invoker.id) & (items.length - 1);
+
+                for (Item existing = items[slot]; existing != null; existing = existing.mNext) {
+                    if (existing.id == invoker.id) {
+                        selected = ((StubInvoker) existing).select();
+                        if (selected != null) {
+                            break existing;
+                        }
+                        break;
+                    }
                 }
-                break;
+
+                // Must init before calling doPut because upon doing so the invoker can be
+                // obtained by other threads.
+                selected = invoker.init();
+
+                doPut(items, invoker, slot);
+
+                return selected;
             }
         }
 
-        // Must init before calling doPut because upon doing so the invoker can be obtained by
-        // other threads.
-        Stub selected = invoker.init();
-
-        doPut(items, invoker, slot);
+        selected.invoker().incTransportCount();
 
         return selected;
     }
