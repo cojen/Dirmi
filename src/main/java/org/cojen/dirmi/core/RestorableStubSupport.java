@@ -183,7 +183,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
                     .compareAndExchange(stub, this, newSupport);
                 if (result != newSupport && result instanceof DisposedStubSupport) {
                     // Locally dispose the restored stub.
-                    dispose(stub);
+                    mNewSupport.session().stubDispose(stub);
                 }
                 return;
             } catch (RuntimeException | Error e) {
