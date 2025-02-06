@@ -23,20 +23,21 @@ package org.cojen.dirmi.core;
  */
 final class StubMap extends ItemMap<StubInvoker> {
     /**
-     * Returns the given invoker, an existing invoker, or a wrapper.
+     * Returns a new invoker, an existing invoker, or a wrapper.
      *
-     * @param invoker must be a new instance
+     * @param factory used when a new invoker must be created
+     * @param session used when a new invoker must be created
      */
-    Stub putAndSelectStub(StubInvoker invoker) {
+    Stub findStub(long id, StubFactory factory, CoreSession session) {
         Stub selected;
 
         existing: {
             synchronized (this) {
                 Item[] items = mItems;
-                int slot = ((int) invoker.id) & (items.length - 1);
+                int slot = ((int) id) & (items.length - 1);
 
                 for (Item existing = items[slot]; existing != null; existing = existing.mNext) {
-                    if (existing.id == invoker.id) {
+                    if (existing.id == id) {
                         selected = ((StubInvoker) existing).select();
                         if (selected != null) {
                             break existing;
@@ -45,14 +46,16 @@ final class StubMap extends ItemMap<StubInvoker> {
                     }
                 }
 
-                // Must init before calling doPut because upon doing so the invoker can be
-                // obtained by other threads.
+                StubInvoker invoker = factory.newStub(id, session.stubSupport());
+
+                // Must init first because upon calling doPut the invoker can be obtained by
+                // other threads.
                 selected = invoker.init();
 
                 doPut(items, invoker, slot);
-
-                return selected;
             }
+
+            return selected;
         }
 
         selected.invoker().incTransportCount();

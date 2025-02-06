@@ -1137,7 +1137,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     final Object objectFor(long id, long typeId) throws IOException {
         try {
             StubFactory factory = mStubFactories.get(typeId);
-            return mStubs.putAndSelectStub(factory.newStub(id, stubSupport()));
+            return mStubs.findStub(id, factory, this);
         } catch (NoSuchObjectException e) {
             e.remoteAddress(remoteAddress());
             throw e;
@@ -1166,7 +1166,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
-        return mStubs.putAndSelectStub(factory.newStub(id, stubSupport()));
+        return mStubs.findStub(id, factory, this);
     }
 
     private void trySendCommandAndId(int command, long id) {
