@@ -320,9 +320,6 @@ public class RemoteInfoTest {
         @Disposer
         void close() throws RemoteException;
 
-        default void fake() {
-        }
-
         @Override
         String toString();
     }

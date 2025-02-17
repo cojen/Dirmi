@@ -135,15 +135,7 @@ final class RemoteInfo {
                 continue;
             }
 
-            RemoteMethod candidate;
-            try {
-                candidate = new RemoteMethod(m, ann);
-            } catch (IllegalArgumentException e) {
-                if (m.isDefault()) {
-                    continue;
-                }
-                throw e;
-            }
+            var candidate = new RemoteMethod(m, ann);
 
             RemoteMethod existing = methodMap.putIfAbsent(candidate, candidate);
 
