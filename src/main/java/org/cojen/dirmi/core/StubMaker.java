@@ -59,18 +59,18 @@ final class StubMaker {
      *
      * @param type non-null client-side remote interface to examine
      * @param typeId server-side type id
-     * @param info server-side type information
+     * @param serverInfo server-side type information
      * @throws IllegalArgumentException if type is malformed
      * @throws NoClassDefFoundError if the remote failure class isn't found or if the batched
      * remote object class isn't found
      */
-    static StubFactory factoryFor(Class<?> type, long typeId, RemoteInfo info) {
-        var key = new TypeInfoKey(type, info);
+    static StubFactory factoryFor(Class<?> type, long typeId, RemoteInfo serverInfo) {
+        var key = new TypeInfoKey(type, serverInfo);
         var mh = cCache.get(key);
         if (mh == null) synchronized (cCache) {
             mh = cCache.get(key);
             if (mh == null) {
-                mh = new StubMaker(type, info).finishFactory();
+                mh = new StubMaker(type, serverInfo).finishFactory();
                 cCache.put(key, mh);
             }
         }
@@ -89,10 +89,10 @@ final class StubMaker {
     private final ClassMaker mStubMaker;
     private final ClassMaker mWrapperMaker;
 
-    private StubMaker(Class<?> type, RemoteInfo info) {
+    private StubMaker(Class<?> type, RemoteInfo serverInfo) {
         mType = type;
         mClientInfo = RemoteInfo.examine(type);
-        mServerInfo = info;
+        mServerInfo = serverInfo;
 
         String sourceFile = StubMaker.class.getSimpleName();
 
@@ -116,7 +116,7 @@ final class StubMaker {
         mStubMaker = mFactoryMaker.another(type.getName())
             .public_().implement(type).final_().sourceFile(sourceFile);
 
-        if (!info.isAutoDispose()) {
+        if (!serverInfo.isAutoDispose()) {
             mStubMaker.extend(StubInvoker.class);
             mWrapperMaker = null;
         } else {
