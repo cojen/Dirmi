@@ -171,25 +171,47 @@ final class StubMaker {
      * remote object class isn't found
      */
     private Class<?> finishStub() {
-        MethodMaker ctor = mStubMaker.addConstructor
-            (long.class, StubSupport.class, MethodIdWriter.class);
-
         StubWrapper.Factory wrapperFactory;
 
-        if (mWrapperMaker == null) {
-            wrapperFactory = null;
-            ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2));
-        } else {
+        addConstructor: {
+            MethodMaker ctor = mStubMaker.addConstructor
+                (long.class, StubSupport.class, MethodIdWriter.class);
+
+            if (mWrapperMaker == null) {
+                ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2));
+                wrapperFactory = null;
+                break addConstructor;
+            }
+
             // Cannot call init until the wrapper class is defined, but it cannot be defined
             // until the invoker is defined. There's a cyclic dependency.
             wrapperFactory = new StubWrapper.Factory();
             var factoryVar = ctor.var(StubWrapper.Factory.class).setExact(wrapperFactory);
             ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2), factoryVar);
 
-            MethodMaker mm = mWrapperMaker.addConstructor(mStubMaker);
-            mm.invokeSuperConstructor(mm.param(0));
+            MethodMaker wrapperCtor = mWrapperMaker.addConstructor(mStubMaker);
+            wrapperCtor.invokeSuperConstructor(wrapperCtor.param(0));
         }
 
+        addStubMethods();
+
+        Class<?> stubClass = mStubMaker.finish();
+
+        if (mWrapperMaker != null) {
+            MethodHandles.Lookup lookup = mWrapperMaker.finishHidden();
+            try {
+                wrapperFactory.init
+                    (lookup.findConstructor
+                     (lookup.lookupClass(), MethodType.methodType(void.class, stubClass)));
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
+
+        return stubClass;
+    }
+
+    private void addStubMethods() {
         var it = new JoinedIterator<>(mClientInfo.remoteMethods(), mServerInfo.remoteMethods());
 
         RemoteMethod lastServerMethod = null;
@@ -543,21 +565,6 @@ final class StubMaker {
 
             batchedImmediateMethodId = -1;
         }
-
-        Class<?> stubClass = mStubMaker.finish();
-
-        if (mWrapperMaker != null) {
-            MethodHandles.Lookup lookup = mWrapperMaker.finishHidden();
-            try {
-                wrapperFactory.init
-                    (lookup.findConstructor
-                     (lookup.lookupClass(), MethodType.methodType(void.class, stubClass)));
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
-        }
-
-        return stubClass;
     }
 
     /**
