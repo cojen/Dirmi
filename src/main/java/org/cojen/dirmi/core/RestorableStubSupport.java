@@ -179,9 +179,9 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
                 mNewSupport.session().mStubs.stealIdentity(stub, newStub);
                 newSupport = (StubSupport) StubInvoker.cSupportHandle.getAcquire(newStub);
                 // Use CAS to detect if the stub has called dispose.
-                var result = (StubSupport) StubInvoker.cSupportHandle
+                var witness = (StubSupport) StubInvoker.cSupportHandle
                     .compareAndExchange(stub, this, newSupport);
-                if (result != newSupport && result instanceof DisposedStubSupport) {
+                if (witness != this && witness instanceof DisposedStubSupport) {
                     // Locally dispose the restored stub.
                     mNewSupport.session().stubDispose(stub);
                 }
