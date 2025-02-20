@@ -67,8 +67,8 @@ public non-sealed class StubInvoker extends Stub {
     }
 
     /**
-     * Is called by StubMap.putAndSelectStub to finish initialization of this stub instance and
-     * return a selected stub.
+     * Is called by StubMap.findStub to finish initialization of this stub instance and return
+     * a selected stub.
      *
      * Note: This method must not be public or else it can conflict with a user-specified
      * remote method which has the same signature.
@@ -80,8 +80,8 @@ public non-sealed class StubInvoker extends Stub {
     }
 
     /**
-     * Is called by StubMap.putAndSelectStub to select this stub instance or wrapper. If null
-     * is returned, then the wrapper was reclaimed and so this stub instance should be rejected
+     * Is called by StubMap.findStub to select this stub instance or wrapper. If null is
+     * returned, then the wrapper was reclaimed and so this stub instance should be rejected
      * entirely.
      *
      * Note: This method must not be public or else it can conflict with a user-specified
@@ -203,8 +203,8 @@ public non-sealed class StubInvoker extends Stub {
 
         @Override
         final Stub init() {
-            // Only bother creating the ref object until it's determined that this object is
-            // needed. See StubMap.putAndSelectStub.
+            // Create the ref object and return a strong reference to the wrapper instance to
+            // ensure that it doesn't get GC'd too soon.
             var wrapper = initWrapper();
             ref = new AutoDisposer.BasicRef(wrapper, this);
             return wrapper;
@@ -233,8 +233,8 @@ public non-sealed class StubInvoker extends Stub {
 
         @Override
         final Stub init() {
-            // Only bother creating the ref object until it's determined that this object is
-            // needed. See StubMap.putAndSelectStub.
+            // Create the ref object and return a strong reference to the wrapper instance to
+            // ensure that it doesn't get GC'd too soon.
             var wrapper = initWrapper();
             ref = new AutoDisposer.CountedRef(wrapper, this);
             return wrapper;
