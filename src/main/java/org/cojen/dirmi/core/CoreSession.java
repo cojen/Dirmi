@@ -48,6 +48,7 @@ import org.cojen.dirmi.Remote;
 import org.cojen.dirmi.RemoteException;
 import org.cojen.dirmi.Session;
 import org.cojen.dirmi.SessionAware;
+import org.cojen.dirmi.UnimplementedException;
 
 import org.cojen.dirmi.io.CaptureOutputStream;
 
@@ -1596,6 +1597,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                         uncaught(e);
                     } else if (e instanceof ObjectStreamException ||
                                e instanceof ClassNotFoundException ||
+                               e instanceof UnimplementedException ||
                                !(e instanceof IOException))
                     {
                         uncaught(e);

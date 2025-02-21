@@ -18,8 +18,8 @@ package org.cojen.dirmi.core;
 
 /**
  * Wraps an exception caught when invoking a server-side piped or no-reply method. Is used by
- * SkeletonSupport to distinguish a general I/O exception from something which should be logged
- * as being uncaught.
+ * CoreSession to distinguish a general I/O exception from something which should be logged as
+ * being uncaught.
  *
  * @author Brian S O'Neill
  */
