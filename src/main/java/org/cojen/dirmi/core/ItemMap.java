@@ -226,7 +226,7 @@ class ItemMap<I extends Item> {
     }
 
     /**
-     * Moves all items from this given map into this one.
+     * Moves all items from the given map into this one.
      */
     final synchronized void moveAll(ItemMap<I> from) {
         from.forEachToRemove(item -> {

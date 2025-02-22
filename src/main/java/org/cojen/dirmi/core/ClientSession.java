@@ -161,7 +161,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         mEngine.changeIdentity(this, newSession.id);
 
-        var newRoot = ((Stub) newSession.mRoot).invoker();
+        StubInvoker newRoot = ((Stub) newSession.mRoot).invoker();
         Object removed = newSession.mStubs.remove(newRoot);
         assert newRoot == removed;
         assert newSession.mStubs.size() == 0;
@@ -176,7 +176,7 @@ final class ClientSession<R> extends CoreSession<R> {
 
         cServerSessionIdHandle.setRelease(this, newSession.mServerSessionId);
 
-        var root = ((Stub) mRoot).invoker();
+        StubInvoker root = ((Stub) mRoot).invoker();
         mStubs.changeIdentity(root, newRoot.id);
 
         Map<String, RemoteInfo> typeMap;
@@ -219,10 +219,9 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
-        StubInvoker.cSupportHandle.setRelease(root, newSupport);
-
         // For all restorable stubs, update the MethodIdWriter and set a support object that
-        // allows them to restore on demand.
+        // allows them to restore on demand. Note that the root is implicitly restorable, and
+        // so it must be updated too.
 
         Map<RemoteInfo, MethodIdWriter> writers = new HashMap<>();
 
@@ -261,9 +260,8 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
             }
 
-            if (stub != mRoot) {
-                StubInvoker.cSupportHandle.setRelease(stub, restorableSupport);
-            }
+            StubInvoker.cSupportHandle.setRelease
+                (stub, stub == mRoot ? newSupport : restorableSupport);
         });
 
         unclose();
