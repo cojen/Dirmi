@@ -25,6 +25,7 @@ import java.io.OutputStream;
 
 import java.net.SocketAddress;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -219,13 +220,16 @@ final class ClientSession<R> extends CoreSession<R> {
             return false;
         }
 
-        // For all restorable stubs, update the MethodIdWriter and set a support object that
-        // allows them to restore on demand. Note that the root is implicitly restorable, and
-        // so it must be updated too.
+        // For all restorable stubs (including the root), update the MethodIdWriter. For all
+        // non-root restorable stubs, set a support object that allows them to restore on
+        // demand. The root will have already been restored.
 
         Map<RemoteInfo, MethodIdWriter> writers = new HashMap<>();
 
         var restorableSupport = new RestorableStubSupport(newSupport);
+
+        // Used to collect all the non-root restorable stubs.
+        var restorableStubs = new ArrayList<StubInvoker>();
 
         mStubs.forEach(stub -> {
             if (!stub.isRestorable() && stub != mRoot) {
@@ -260,11 +264,32 @@ final class ClientSession<R> extends CoreSession<R> {
                 }
             }
 
-            StubInvoker.cSupportHandle.setRelease
-                (stub, stub == mRoot ? newSupport : restorableSupport);
+            StubSupport effectiveSupport;
+
+            if (stub == mRoot) {
+                effectiveSupport = newSupport;
+            } else {
+                effectiveSupport = restorableSupport;
+                restorableStubs.add(stub);
+            }
+
+            StubInvoker.cSupportHandle.setRelease(stub, effectiveSupport);
         });
 
         unclose();
+
+        // Attempt to eagerly restore the stubs, but they might be restored concurrently on
+        // demand at this point.
+
+        for (StubInvoker stub : restorableStubs) {
+            try {
+                restorableSupport.restore(stub, Throwable.class);
+            } catch (Throwable e) {
+                // Unable to eagerly restore, so leave it alone. The next remote call against
+                // the stub will attempt to restore again, throwing an exception to the caller
+                // if it fails.
+            }
+        }
 
         return false;
     }

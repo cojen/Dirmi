@@ -43,7 +43,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
     }
 
     @Override
-    public Session session() {
+    public CoreSession session() {
         return mNewSupport.session();
     }
 
@@ -146,7 +146,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends Throwable> void restore(StubInvoker stub, Class<T> remoteFailureException)
+    final <T extends Throwable> void restore(StubInvoker stub, Class<T> remoteFailureException)
         throws T
     {
         // Use a latch in order for only one thread to attempt the stub restore. Other threads
@@ -174,17 +174,23 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
 
             var origin = (MethodHandle) StubInvoker.cOriginHandle.getAcquire(stub);
 
+            CoreSession session = session();
+
             try {
                 StubInvoker newStub = ((Stub) origin.invoke()).invoker();
-                mNewSupport.session().mStubs.stealIdentity(stub, newStub);
+                session.mStubs.stealIdentity(stub, newStub);
+
                 newSupport = (StubSupport) StubInvoker.cSupportHandle.getAcquire(newStub);
+
                 // Use CAS to detect if the stub has called dispose.
                 var witness = (StubSupport) StubInvoker.cSupportHandle
                     .compareAndExchange(stub, this, newSupport);
+
                 if (witness != this && witness instanceof DisposedStubSupport) {
                     // Locally dispose the restored stub.
-                    mNewSupport.session().stubDispose(stub);
+                    session.stubDispose(stub);
                 }
+
                 return;
             } catch (RuntimeException | Error e) {
                 throw e;
@@ -204,7 +210,7 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
                     de.setStackTrace(e.getStackTrace());
                     e = de;
 
-                    mNewSupport.session().stubDispose(stub.id, message);
+                    session.stubDispose(stub.id, message);
                 }
 
                 throw CoreUtils.remoteException(this, remoteFailureException, e);
