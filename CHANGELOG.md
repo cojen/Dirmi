@@ -4,6 +4,12 @@ Changelog
 v2.4.2
 ------
 * Added a pipe method for skipping a fixed amount of bytes, and added a method to skip objects.
+* Added support for data methods.
+* Fixed a race condition which caused AutoDisposed objects to be disposed of prematurely.
+* Fixed disposed stub cleanup by calling the correct method.
+* Fixed handling of root stub reconnect when declared as AutoDispose.
+* Eagerly attempt to restore stubs after a reconnect.
+* Eagerly disable reference mode when writing stubs and skeletons.
 
 v2.4.1 (2024-11-01)
 ------
