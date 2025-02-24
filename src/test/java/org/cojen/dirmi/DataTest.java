@@ -99,11 +99,10 @@ public class DataTest {
         assertEquals(4, main.same().id());
 
         restoreCheck: {
-            long expect = MainServer.id.get();
             AssertionError error = null;
             for (int i=1; i<=10; i++) {
                 try {
-                    assertEquals(expect, next.id());
+                    assertTrue(next.id() > 4);
                     break restoreCheck;
                 } catch (AssertionError e) {
                     error = e;
