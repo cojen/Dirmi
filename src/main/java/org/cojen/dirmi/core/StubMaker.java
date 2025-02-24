@@ -27,7 +27,10 @@ import java.lang.ref.Reference;
 import java.lang.reflect.UndeclaredThrowableException;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.SortedSet;
 
 import org.cojen.maker.AnnotationMaker;
 import org.cojen.maker.ClassMaker;
@@ -37,6 +40,8 @@ import org.cojen.maker.MethodMaker;
 import org.cojen.maker.Variable;
 
 import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Data;
+import org.cojen.dirmi.DataUnavailableException;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.Pipe;
 import org.cojen.dirmi.RemoteException;
@@ -89,12 +94,15 @@ final class StubMaker {
     private final ClassMaker mStubMaker;
     private final ClassMaker mWrapperMaker;
 
+    // Is set by the addStubMethods method if there are any data methods.
+    private ClassMaker mContainerMaker;
+
     private StubMaker(Class<?> type, RemoteInfo serverInfo) {
         mType = type;
         mClientInfo = RemoteInfo.examine(type);
         mServerInfo = serverInfo;
 
-        String sourceFile = StubMaker.class.getSimpleName();
+        String sourceFile = getClass().getSimpleName();
 
         Class<?> superClass;
         {
@@ -173,16 +181,13 @@ final class StubMaker {
     private Class<?> finishStub() {
         StubWrapper.Factory wrapperFactory;
 
-        addConstructor: {
-            MethodMaker ctor = mStubMaker.addConstructor
-                (long.class, StubSupport.class, MethodIdWriter.class);
+        MethodMaker ctor = mStubMaker.addConstructor
+            (long.class, StubSupport.class, MethodIdWriter.class);
 
-            if (mWrapperMaker == null) {
-                ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2));
-                wrapperFactory = null;
-                break addConstructor;
-            }
-
+        if (mWrapperMaker == null) {
+            ctor.invokeSuperConstructor(ctor.param(0), ctor.param(1), ctor.param(2));
+            wrapperFactory = null;
+        } else {
             // Cannot call init until the wrapper class is defined, but it cannot be defined
             // until the invoker is defined. There's a cyclic dependency.
             wrapperFactory = new StubWrapper.Factory();
@@ -194,6 +199,40 @@ final class StubMaker {
         }
 
         addStubMethods();
+
+        if (mContainerMaker != null) {
+            Class<?> containerClass = finishContainer();
+
+            ctor.field("data").setRelease(ctor.new_(containerClass));
+
+            addFactoryPipeDataMethod("readDataAndUnlatch");
+            addFactoryPipeDataMethod("readOrSkipData");
+
+            {
+                MethodMaker mm = mFactoryMaker.addMethod
+                    (DataContainer.class, "getData", StubInvoker.class).protected_().override();
+                var stubVar = mm.param(0).cast(mStubMaker);
+                mm.return_(stubVar.field("data").getAcquire().cast(DataContainer.class));
+            }
+
+            {
+                MethodMaker mm = mFactoryMaker.addMethod
+                    (null, "setData", StubInvoker.class, DataContainer.class)
+                    .protected_().override();
+
+                var stubVar = mm.param(0).cast(mStubMaker);
+                var dataVar = mm.param(1);
+
+                dataVar.instanceOf(containerClass).ifTrue(() -> {
+                    stubVar.field("data").setRelease(dataVar.cast(containerClass));
+                }, () -> {
+                    // The DataContainer type has changed, and so the data is unavailable. This
+                    // case isn't expected, but handle it as best as possible.
+                    var uDataVar = mm.new_(containerClass, "mismatch");
+                    stubVar.field("data").setRelease(uDataVar);
+                });
+            }
+        }
 
         Class<?> stubClass = mStubMaker.finish();
 
@@ -211,6 +250,13 @@ final class StubMaker {
         return stubClass;
     }
 
+    private void addFactoryPipeDataMethod(String which) {
+        MethodMaker mm = mFactoryMaker.addMethod
+            (null, which, StubInvoker.class, Pipe.class).protected_().override();
+        var stubVar = mm.param(0).cast(mStubMaker);
+        stubVar.field("data").getAcquire().cast(DataContainer.class).invoke(which, mm.param(1));
+    }
+
     private void addStubMethods() {
         var it = new JoinedIterator<>(mClientInfo.remoteMethods(), mServerInfo.remoteMethods());
 
@@ -224,7 +270,9 @@ final class StubMaker {
             RemoteMethod clientMethod = pair.a;
             RemoteMethod serverMethod = pair.b;
 
-            if (serverMethod != lastServerMethod && serverMethod != null) {
+            if (serverMethod != lastServerMethod
+                && serverMethod != null && !serverMethod.isData())
+            {
                 serverMethodId++;
                 lastServerMethod = serverMethod;
             }
@@ -232,6 +280,7 @@ final class StubMaker {
             final Object returnType;
             final String methodName;
             final Object[] ptypes;
+            final boolean isData;
 
             if (serverMethod != null && serverMethod.isBatchedImmediate()) {
                 // No stub method is actually generated for this variant. The skeleton variant
@@ -257,6 +306,7 @@ final class StubMaker {
                         ptypes[i++] = classForEx(pname);
                     }
                     returnType = returnClass;
+                    isData = serverMethod.isData();
                 } catch (ClassNotFoundException e) {
                     // Can't be implemented, so skip it.
                     continue;
@@ -269,6 +319,7 @@ final class StubMaker {
                 returnType = clientMethod.returnType();
                 methodName = clientMethod.name();
                 ptypes = clientMethod.parameterTypes().toArray(Object[]::new);
+                isData = clientMethod.isData();
             }
 
             MethodMaker mm = mStubMaker.addMethod(returnType, methodName, ptypes).public_();
@@ -359,6 +410,10 @@ final class StubMaker {
                 // allows RemoteInfo.examineStub to work properly without consulting the remote
                 // interface, which might not have all the server-side methods anyhow.
 
+                if (method.isData()) {
+                    mm.addAnnotation(Data.class, true);
+                }
+
                 if (method.isDisposer()) {
                     mm.addAnnotation(Disposer.class, true);
                 }
@@ -392,6 +447,23 @@ final class StubMaker {
             if (clientMethod != null && clientMethod.isPiped() != method.isPiped()) {
                 // Not expected.
                 mm.new_(IncompatibleClassChangeError.class).throw_();
+                continue;
+            }
+
+            if (isData) {
+                if (mContainerMaker == null) {
+                    mContainerMaker = mFactoryMaker.another(mType.getName())
+                        .extend(DataContainer.class).implement(mType).final_()
+                        .sourceFile(getClass().getSimpleName());
+
+                    mStubMaker.addField(mType, "data");
+                }
+
+                var resultVar = mm.field("data").getAcquire().invoke(methodName);
+                if (resultVar != null) {
+                    mm.return_(resultVar);
+                }
+
                 continue;
             }
 
@@ -725,5 +797,177 @@ final class StubMaker {
      */
     private Class<?> classForEx(String name) throws ClassNotFoundException {
         return CoreUtils.loadClassByNameOrDescriptor(name, mStubMaker.classLoader());
+    }
+
+    private Class<?> finishContainer() {
+        mContainerMaker.addConstructor().invokeSuperConstructor();
+
+        {
+            MethodMaker ctor = mContainerMaker.addConstructor(Object.class);
+            ctor.invokeSuperConstructor(ctor.param(0));
+        }
+
+        var cmp = new DataMethodComparator();
+        SortedSet<RemoteMethod> clientMethods = mClientInfo.dataMethods(cmp);
+        SortedSet<RemoteMethod> serverMethods = mServerInfo.dataMethods(cmp);
+
+        {
+            MethodMaker mm = mContainerMaker.addMethod(null, "readDataAndUnlatch", Pipe.class)
+                .protected_().override();
+            var pipeVar = mm.param(0);
+
+            pipeVar.ifEq(null, () -> {
+                mm.invoke("dataUnavailable", mm.this_(), null);
+                mm.return_();
+            });
+
+            Label tryStart = mm.label().here();
+
+            var it = new JoinedIterator<>(clientMethods, serverMethods, cmp);
+            Set<ObjectInputFilter> serializedFilters = null;
+
+            while (it.hasNext()) {
+                JoinedIterator.Pair<RemoteMethod> pair = it.next();
+                RemoteMethod clientMethod = pair.a;
+                RemoteMethod serverMethod = pair.b;
+
+                if (serverMethod == null) {
+                    String name = clientMethod.name();
+                    mContainerMaker.addMethod
+                        (clientMethod.returnType(), name).public_()
+                        .new_(DataUnavailableException.class, name).throw_();
+                    continue;
+                }
+
+                String type = serverMethod.returnType();
+
+                if (clientMethod == null) {
+                    CoreUtils.skipParam(pipeVar, null, mm.var(type).classType());
+                    continue;
+                }
+
+                String name = serverMethod.name();
+                MethodMaker elementMaker = mContainerMaker.addMethod(type, name).public_();
+
+                if (isVoid(type)) {
+                    continue;
+                }
+
+                mContainerMaker.addField(type, name).private_();
+                elementMaker.invoke("awaitData", elementMaker.this_());
+                elementMaker.return_(elementMaker.field(name));
+
+                if (serverMethod.isSerializedReturnType()) {
+                    if (serializedFilters == null) {
+                        serializedFilters = new LinkedHashSet<>();
+                    }
+                    serializedFilters.add(clientMethod.objectInputFilter());
+                    continue;
+                }
+
+                var dataVar = mm.var(type);
+                CoreUtils.readParam(pipeVar, dataVar);
+                mm.field(name).set(dataVar);
+            }
+
+            if (serializedFilters != null) {
+                ObjectInputFilter fullFilter = null;
+                for (ObjectInputFilter filter : serializedFilters) {
+                    if (fullFilter == null) {
+                        fullFilter = filter;
+                    } else {
+                        fullFilter = ObjectInputFilter.merge(fullFilter, filter);
+                    }
+                }
+
+                var inVar = mm.new_(CoreObjectInputStream.class, pipeVar);
+                var filterVar = mm.var(ObjectInputFilter.class).setExact(fullFilter);
+                inVar.invoke("setObjectInputFilter", filterVar);
+ 
+                it = new JoinedIterator<>(clientMethods, serverMethods, cmp);
+
+                while (it.hasNext()) {
+                    JoinedIterator.Pair<RemoteMethod> pair = it.next();
+                    RemoteMethod clientMethod = pair.a;
+                    RemoteMethod serverMethod = pair.b;
+
+                    if (serverMethod == null || !serverMethod.isSerializedReturnType()) {
+                        continue;
+                    }
+
+                    var dataVar = inVar.invoke("readObject");
+
+                    if (clientMethod != null) {
+                        String type = serverMethod.returnType();
+                        if (type != null) {
+                            dataVar = dataVar.cast(type);
+                        }
+                        mm.field(serverMethod.name()).set(dataVar);
+                    }
+                }
+            }
+
+            mm.catch_(tryStart, Throwable.class, exVar -> {
+                mm.invoke("dataUnavailable", mm.this_(), exVar);
+                exVar.throw_();
+            });
+
+            mm.invoke("dataAvailable", mm.this_());
+        }
+
+        {
+            MethodMaker mm = mContainerMaker.addMethod(null, "readOrSkipData", Pipe.class)
+                .protected_().override();
+            var pipeVar = mm.param(0);
+
+            Label doSkip = mm.label();
+
+            mm.invoke("relatch", mm.this_()).ifFalse(doSkip);
+            mm.invoke("readDataAndUnlatch", pipeVar);
+            mm.return_();
+
+            doSkip.here();
+
+            boolean hasSerialized = false;
+            int primitiveSize = 0;
+
+            for (RemoteMethod m : serverMethods) {
+                if (m.isSerializedReturnType()) {
+                    hasSerialized = true;
+                    continue;
+                }
+
+                String type = m.returnType();
+                int size = CoreUtils.primitiveSize(type);
+
+                if (size >= 0) {
+                    primitiveSize += size;
+                    continue;
+                }
+
+                if (primitiveSize > 0) {
+                    pipeVar.invoke("skipNBytes", primitiveSize);
+                    primitiveSize = 0;
+                }
+
+                CoreUtils.skipParam(pipeVar, null, mm.var(type).classType());
+            }
+
+            if (primitiveSize > 0) {
+                pipeVar.invoke("skipNBytes", primitiveSize);
+            }
+
+            if (hasSerialized) {
+                var inVar = mm.new_(CoreObjectInputStream.class, pipeVar);
+
+                for (RemoteMethod m : serverMethods) {
+                    if (m.isSerializedReturnType()) {
+                        inVar.invoke("readObject");
+                    }
+                }
+            }
+        }
+
+        return mContainerMaker.finishHidden().lookupClass();
     }
 }

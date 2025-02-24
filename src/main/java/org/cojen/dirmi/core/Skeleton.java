@@ -58,6 +58,12 @@ public abstract class Skeleton<R> extends Item {
     public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
 
     /**
+     * Writes any optional Data fields over the pipe, but doesn't flush.
+     */
+    public void writeDataFields(Pipe pipe) throws IOException {
+    }
+
+    /**
      * Called when an exception is thrown when invoking a remote method. The original exception
      * is returned or else a suitable replacement is returned if this is a broken skeleton.
      */

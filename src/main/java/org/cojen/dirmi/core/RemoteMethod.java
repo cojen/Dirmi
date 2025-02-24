@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.cojen.dirmi.Batched;
+import org.cojen.dirmi.Data;
 import org.cojen.dirmi.Disposer;
 import org.cojen.dirmi.NoReply;
 import org.cojen.dirmi.Pipe;
@@ -48,7 +49,7 @@ import org.cojen.dirmi.Unbatched;
 final class RemoteMethod implements Comparable<RemoteMethod> {
     private static final int F_UNDECLARED_EX = 1, F_DISPOSER = 2,
         F_BATCHED = 4, F_UNBATCHED = 8, F_RESTORABLE = 16, F_PIPED = 32, F_NOREPLY = 64,
-        F_SERIALIZED = 128, F_UNIMPLEMENTED = 256, F_LENIENT = 512;
+        F_SERIALIZED = 128, F_UNIMPLEMENTED = 256, F_LENIENT = 512, F_DATA = 1024;
 
     private final int mFlags;
     private final String mName;
@@ -236,7 +237,18 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
             }
         }
 
-        {
+        if (m.isAnnotationPresent(Data.class)) {
+            if (!mParameterTypes.isEmpty()) {
+                throw new IllegalArgumentException
+                    ("Data method cannot have any parameters: " + m);
+            }
+            if ((flags & ~F_SERIALIZED) != 0) {
+                throw new IllegalArgumentException
+                    ("Data method cannot have any other annotations except @Serialized: " + m);
+            }
+            flags |= F_DATA;
+            mExceptionTypes = Collections.emptySet();
+        } else {
             Class<?>[] exceptionTypes = m.getExceptionTypes();
 
             if (exceptionTypes.length == 0) {
@@ -374,11 +386,25 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
     }
 
     /**
+     * Returns true if the method is Serialized and the return type is an object type.
+     */
+    boolean isSerializedReturnType() {
+        return isSerialized() && CoreUtils.isObjectType(returnType());
+    }
+
+    /**
      * Returns a non-null filter if this method is Serialized and this RemoteMethod instance
      * was constructed locally. That is, it didn't come from the readFrom method.
      */
     ObjectInputFilter objectInputFilter() {
         return mObjectInputFilter;
+    }
+
+    /**
+     * @see Data
+     */
+    boolean isData() {
+        return (mFlags & F_DATA) != 0;
     }
 
     /**
@@ -432,10 +458,10 @@ final class RemoteMethod implements Comparable<RemoteMethod> {
 
     /**
      * Given another method with the same signature, returns true if the annotations match well
-     * enough such that wire protocol matches.
+     * enough such that the wire protocol matches.
      */
     boolean isCompatibleWith(RemoteMethod other) {
-        int mask = F_BATCHED | F_NOREPLY | F_SERIALIZED;
+        int mask = F_BATCHED | F_NOREPLY | F_SERIALIZED | F_DATA;
         return (mFlags & mask) == (other.mFlags & mask);
     }
 

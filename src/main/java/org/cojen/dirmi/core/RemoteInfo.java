@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -261,6 +262,28 @@ final class RemoteInfo {
     }
 
     /**
+     * Returns all of the data methods into a new set with the given comparator.
+     */
+    SortedSet<RemoteMethod> dataMethods(Comparator<RemoteMethod> cmp) {
+        var dataMethods = new TreeSet<RemoteMethod>(cmp);
+
+        for (RemoteMethod m : remoteMethods()) {
+            if (m.isData()) {
+                dataMethods.add(m);
+            }
+        }
+
+        return dataMethods;
+    }
+
+    /**
+     * Returns an iterator over all the regular (non-data) remote methods.
+     */
+    Iterator<RemoteMethod> nonDataMethods() {
+        return mRemoteMethods.stream().filter(m -> !m.isData()).iterator();
+    }
+
+    /**
      * Returns true if this type is likely assignable by the other type.
      */
     boolean isAssignableFrom(RemoteInfo other) {
@@ -292,10 +315,24 @@ final class RemoteInfo {
      * a corresponding method.
      */
     int[] methodIdMap(RemoteInfo to) {
-        int[] mapping = new int[mRemoteMethods.size()];
-        Arrays.fill(mapping, Integer.MIN_VALUE);
+        int numMethods = 0;
 
-        var it = new JoinedIterator<>(mRemoteMethods, to.mRemoteMethods);
+        // Determine what the synthetic id mappings should start from by counting up the number
+        // of originally non-synthetic mappings.
+        int fromSyntheticMethodId = -1;
+
+        for (RemoteMethod m : mRemoteMethods) {
+            if (m.isData()) {
+                continue;
+            }
+            numMethods++;
+            if (!m.isUnimplemented()) {
+                fromSyntheticMethodId++;
+            }
+        }
+
+        int[] mapping = new int[numMethods];
+        Arrays.fill(mapping, Integer.MIN_VALUE);
 
         RemoteMethod lastFromMethod = null;
         int fromMethodId = -1;
@@ -303,14 +340,7 @@ final class RemoteInfo {
         RemoteMethod lastToMethod = null;
         int toMethodId = -1;
 
-        // Determine what the synthetic id mappings should start from by counting up the number
-        // of originally non-synthetic mappings.
-        int fromSyntheticMethodId = -1;
-        for (RemoteMethod m : mRemoteMethods) {
-            if (!m.isUnimplemented()) {
-                fromSyntheticMethodId++;
-            }
-        }
+        var it = new JoinedIterator<>(nonDataMethods(), to.nonDataMethods());
 
         while (it.hasNext()) {
             JoinedIterator.Pair<RemoteMethod> pair = it.next();

@@ -129,7 +129,10 @@ final class CoreStubSupport implements StubSupport {
         throws T
     {
         try {
-            return mSession.stubFor(aliasId, typeId);
+            // The pipe is null, and so data methods are unavailable to objects returned by a
+            // batched method. Making the data be available might require special out-of-band
+            // replies, so don't support it for now.
+            return mSession.stubFor(aliasId, typeId, null);
         } catch (Throwable e) {
             throw CoreUtils.remoteException(mSession, remoteFailureException, e);
         }

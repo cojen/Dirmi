@@ -1135,17 +1135,17 @@ abstract class CoreSession<R> extends Item implements Session<R> {
         }
     }
 
-    final Object stubFor(long id, long typeId) throws IOException {
+    final Object stubFor(long id, long typeId, CorePipe pipe) throws IOException {
         try {
             StubFactory factory = mStubFactories.get(typeId);
-            return mStubs.findStub(id, factory, this);
+            return mStubs.findStub(id, factory, this, pipe);
         } catch (NoSuchObjectException e) {
             e.remoteAddress(remoteAddress());
             throw e;
         }
     }
 
-    final Object stubFor(long id, long typeId, RemoteInfo info) {
+    final Object stubFor(long id, long typeId, RemoteInfo info, CorePipe pipe) throws IOException {
         boolean found = true;
 
         Class<?> type;
@@ -1167,7 +1167,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             mStubFactoriesByClass.putIfAbsent(type, factory);
         }
 
-        return mStubs.findStub(id, factory, this);
+        return mStubs.findStub(id, factory, this, pipe);
     }
 
     private void trySendCommandAndId(int command, long id) {
@@ -1199,11 +1199,34 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             factory = StubMaker.factoryFor(type, 0, RemoteInfo.examine(type));
         }
 
-        long id = IdGenerator.nextNegative();
         StubInvoker stub = factory.newStub
-            (id, DisposedStubSupport.newLenientRestorable(this, cause));
+            (IdGenerator.nextNegative(), DisposedStubSupport.newLenientRestorable(this, cause));
+
         mStubs.put(stub);
+
+        try {
+            // Any data fields will be unavailable.
+            factory.readOrSkipData(stub, null);
+        } catch (IOException e) {
+            // Not expected.
+        }
+
         return stub;
+    }
+
+    /**
+     * Copy any data fields from one stub into another, of the same type.
+     *
+     * @throws IllegalArgumentException if the stub types are different
+     */
+    final void copyData(StubInvoker from, StubInvoker to) {
+        Class<?> fromType = RemoteExaminer.remoteType(from);
+        Class<?> toType = RemoteExaminer.remoteType(to);
+        if (fromType != toType) {
+            throw new IllegalArgumentException(fromType + " != " + toType);
+        }
+        StubFactory factory = mStubFactoriesByClass.get(toType);
+        factory.setData(to, factory.getData(from));
     }
 
     final CoreStubSupport stubSupport() {
@@ -1401,6 +1424,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             pipe.writeSkeletonHeader((byte) TypeCodes.T_REMOTE_TI, skeleton);
             info.writeTo(pipe);
         }
+
+        skeleton.writeDataFields(pipe);
     }
 
     static MarshalledSkeleton marshallSkeleton(CorePipe pipe, Object server) {

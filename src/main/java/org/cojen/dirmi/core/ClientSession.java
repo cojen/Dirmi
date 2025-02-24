@@ -103,6 +103,14 @@ final class ClientSession<R> extends CoreSession<R> {
         StubInvoker.setRootOrigin(root);
     }
 
+    /**
+     * Reads any optional root Data fields from the pipe.
+     */
+    void readRootDataFields(CorePipe pipe) throws IOException {
+        var root = ((Stub) mRoot).invoker();
+        mStubFactoriesByClass.get(mRootType).readDataAndUnlatch(root, pipe);
+    }
+
     @Override
     boolean close(int reason, CorePipe controlPipe) {
         if (mSettings.reconnectDelayMillis < 0 || mEngine.isClosed() || isClosed() ||
@@ -219,6 +227,9 @@ final class ClientSession<R> extends CoreSession<R> {
             close(R_DISCONNECTED, null);
             return false;
         }
+
+        // Copy any data fields into the existing root.
+        copyData(newRoot, root);
 
         // For all restorable stubs (including the root), update the MethodIdWriter. For all
         // non-root restorable stubs, set a support object that allows them to restore on

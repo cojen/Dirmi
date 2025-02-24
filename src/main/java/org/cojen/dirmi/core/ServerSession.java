@@ -72,6 +72,13 @@ final class ServerSession<R> extends CoreSession<R> {
         pipe.writeLong(mRoot.typeId());
     }
 
+    /**
+     * Writes any optional root Data fields over the pipe, but doesn't flush.
+     */
+    void writeRootDataFields(Pipe pipe) throws IOException {
+        mRoot.writeDataFields(pipe);
+    }
+
     @Override
     boolean close(int reason, CorePipe controlPipe) {
         boolean justClosed = super.close(reason, null); // pass null to force close

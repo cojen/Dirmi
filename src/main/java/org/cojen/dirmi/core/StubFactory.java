@@ -36,10 +36,56 @@ public abstract class StubFactory extends Item implements MethodIdWriter {
     }
 
     /**
+     * Creates a new stub instance. If it has any data fields, then they're in a latched state
+     * until readDataAndUnlatch or readOrSkipData is called.
+     *
      * @param id remote object identifier
      * @param support for invoking remote methods
      */
     protected abstract StubInvoker newStub(long id, StubSupport support);
+
+    /**
+     * If any data fields are defined, reads and sets them into a DataContainer.
+     *
+     * <p>Note: This method isn't defined in StubInvoker because the generated code cannot be
+     * package-private.
+     *
+     * @param pipe can pass null if data is unavailable
+     */
+    protected void readDataAndUnlatch(StubInvoker stub, Pipe pipe) throws IOException {
+    }
+
+    /**
+     * If any data fields are defined, reads and sets them into a DataContainer. If they're
+     * already set, then they are skipped.
+     *
+     * <p>Note: This method isn't defined in StubInvoker because the generated code cannot be
+     * package-private.
+     *
+     * @param pipe can pass null if data is unavailable
+     */
+    protected void readOrSkipData(StubInvoker stub, Pipe pipe) throws IOException {
+    }
+
+    /**
+     * Returns a non-null DataContainer instance if any fields are defined.
+     *
+     * <p>Note: This method isn't defined in StubInvoker because the generated code cannot be
+     * package-private.
+     */
+    protected DataContainer getData(StubInvoker stub) {
+        return null;
+    }
+
+    /**
+     * If any data fields are defined, explicitly set them. If the given DataContainer is null
+     * or is the wrong type, then the data is set to be unavailable.
+     *
+     * <p>Note: This method isn't defined in StubInvoker because the generated code cannot be
+     * package-private.
+     */
+    protected void setData(StubInvoker stub, DataContainer data) {
+    }
 
     /**
      * Writes byte methodIds.

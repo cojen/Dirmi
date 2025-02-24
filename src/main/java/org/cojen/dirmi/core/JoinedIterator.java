@@ -16,6 +16,7 @@
 
 package org.cojen.dirmi.core;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -27,17 +28,27 @@ import java.util.NoSuchElementException;
  */
 final class JoinedIterator<E extends Comparable<E>> implements Iterator<JoinedIterator.Pair<E>> {
     private final Iterator<E> aIt, bIt;
+    private final Comparator<E> mComparator;
 
     private E aElement, bElement;
     private Pair<E> pair;
 
     JoinedIterator(Iterator<E> a, Iterator<E> b) {
-        aIt = a;
-        bIt = b;
+        this(a, b, null);
     }
 
     JoinedIterator(Iterable<E> a, Iterable<E> b) {
-        this(a.iterator(), b.iterator());
+        this(a, b, null);
+    }
+
+    JoinedIterator(Iterator<E> a, Iterator<E> b, Comparator<E> cmp) {
+        aIt = a;
+        bIt = b;
+        mComparator = cmp;
+    }
+
+    JoinedIterator(Iterable<E> a, Iterable<E> b, Comparator<E> cmp) {
+        this(a.iterator(), b.iterator(), cmp);
     }
 
     @Override
@@ -68,7 +79,11 @@ final class JoinedIterator<E extends Comparable<E>> implements Iterator<JoinedIt
         } else if (be == null) {
             cmp = -1;
         } else {
-            cmp = ae.compareTo(be);
+            if (mComparator == null) {
+                cmp = ae.compareTo(be);
+            } else {
+                cmp = mComparator.compare(ae, be);
+            }
         }
 
         pair = new Pair<E>();

@@ -16,6 +16,8 @@
 
 package org.cojen.dirmi.core;
 
+import java.io.IOException;
+
 /**
  * 
  *
@@ -27,8 +29,13 @@ final class StubMap extends ItemMap<StubInvoker> {
      *
      * @param factory used when a new invoker must be created
      * @param session used when a new invoker must be created
+     * @param pipe used to read or skip optional remote object data; pass null if unavailable
+     * @throws IOException if failed to read remote object data
      */
-    Stub findStub(long id, StubFactory factory, CoreSession session) {
+    Stub findStub(long id, StubFactory factory, CoreSession session, CorePipe pipe)
+        throws IOException
+    {
+        StubInvoker invoker;
         Stub selected;
 
         existing: {
@@ -38,7 +45,8 @@ final class StubMap extends ItemMap<StubInvoker> {
 
                 for (Item existing = items[slot]; existing != null; existing = existing.mNext) {
                     if (existing.id == id) {
-                        selected = ((StubInvoker) existing).select();
+                        invoker = ((StubInvoker) existing);
+                        selected = invoker.select();
                         if (selected != null) {
                             break existing;
                         }
@@ -46,7 +54,7 @@ final class StubMap extends ItemMap<StubInvoker> {
                     }
                 }
 
-                StubInvoker invoker = factory.newStub(id, session.stubSupport());
+                invoker = factory.newStub(id, session.stubSupport());
 
                 // Must init first because upon calling doPut the invoker can be obtained by
                 // other threads.
@@ -55,10 +63,16 @@ final class StubMap extends ItemMap<StubInvoker> {
                 doPut(items, invoker, slot);
             }
 
+            // Read any data fields outside the synchronized block.
+            factory.readDataAndUnlatch(invoker, pipe);
+
             return selected;
         }
 
         selected.invoker().incTransportCount();
+
+        // Read or skip any data fields outside the synchronized block.
+        factory.readOrSkipData(invoker, pipe);
 
         return selected;
     }

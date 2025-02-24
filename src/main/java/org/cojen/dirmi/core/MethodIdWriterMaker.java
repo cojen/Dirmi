@@ -81,7 +81,7 @@ final class MethodIdWriterMaker {
         ClassMaker cm = ClassMaker.begin(null, MethodHandles.lookup())
             .implement(MethodIdWriter.class).final_();
         cm.addConstructor();
-        
+
         MethodMaker mm = cm.addMethod(null, "writeMethodId", Pipe.class, int.class, String.class);
         mm.public_();
 

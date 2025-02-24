@@ -67,12 +67,14 @@ final class SkeletonMaker<R> {
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mSkeletonMaker;
 
+    private int mNumDataMethods;
+
     private SkeletonMaker(Class<R> type) {
         mType = type;
         mServerInfo = RemoteInfo.examine(type);
         mTypeId = IdGenerator.next();
 
-        String sourceFile = SkeletonMaker.class.getSimpleName();
+        String sourceFile = getClass().getSimpleName();
 
         mFactoryMaker = ClassMaker.begin(type.getName(), type.getClassLoader(), CoreUtils.MAKER_KEY)
             .implement(SkeletonFactory.class).final_().sourceFile(sourceFile);
@@ -162,6 +164,17 @@ final class SkeletonMaker<R> {
             mm.return_(mm.this_().invoke(mType, "server", null));
         }
 
+        // Sets mNumDataMethods as a side-effect.
+        addInvokeMethod();
+
+        if (mNumDataMethods > 0) {
+            addWriteDataFieldsMethod();
+        }
+
+        return mSkeletonMaker.finishLookup();
+    }
+
+    private void addInvokeMethod() {
         Map<Integer, CaseInfo> caseMap = defineInvokers();
 
         MethodMaker mm = mSkeletonMaker.addMethod
@@ -213,8 +226,6 @@ final class SkeletonMaker<R> {
         var typeNameVar = mm.var(Class.class).set(mType).invoke("getName");
         var messageVar = mm.concat(typeNameVar, '#', methodIdVar);
         mm.new_(UnimplementedException.class, messageVar).throw_();
-
-        return mSkeletonMaker.finishLookup();
     }
 
     /**
@@ -245,6 +256,11 @@ final class SkeletonMaker<R> {
         int methodId = 0;
 
         for (RemoteMethod rm : serverMethods) {
+            if (rm.isData()) {
+                mNumDataMethods++;
+                continue;
+            }
+
             String name = generateMethodName(methodNames, rm);
 
             caseMap.put(methodId++, new CaseInfo(rm, name));
@@ -480,6 +496,60 @@ final class SkeletonMaker<R> {
                 return mm.invoke(serverMethodName, pipeVar, contextVar);
             }
             return mm.invoke(serverMethodName, pipeVar, contextVar, supportVar);
+        }
+    }
+
+    private void addWriteDataFieldsMethod() {
+        MethodMaker mm = mSkeletonMaker.addMethod(null, "writeDataFields", Pipe.class);
+        mm.public_().override();
+
+        var pipeVar = mm.param(0);
+        var serverVar = mm.field("server").get();
+
+        Variable commonExVar = null;
+        Label commonHandler = null;
+
+        Variable outVar = null;
+
+        for (RemoteMethod m : mServerInfo.dataMethods(new DataMethodComparator())) {
+            Label invokeStart = mm.label().here();
+            var dataVar = serverVar.invoke(m.name());
+            Label invokeEnd = mm.label().here();
+            Label doWrite = mm.label().goto_();
+
+            var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
+            if (commonExVar == null) {
+                commonExVar = mm.var(Throwable.class);
+                commonHandler = mm.label();
+            }
+            commonExVar.set(exVar);
+            commonHandler.goto_();
+
+            doWrite.here();
+
+            if (m.isSerializedReturnType()) {
+                if (outVar == null) {
+                    outVar = mm.new_(CoreObjectOutputStream.class, pipeVar);
+                }
+                CoreUtils.writeParam(outVar, dataVar);
+            } else if (dataVar != null) {
+                assert outVar == null;
+                CoreUtils.writeParam(pipeVar, dataVar);
+            }
+        }
+
+        if (outVar != null) {
+            outVar.invoke("drain");
+        }
+
+        Label tryEnd = mm.label().here();
+
+        mm.return_();
+
+        if (commonExVar != null) {
+            commonHandler.here();
+            checkException(commonExVar);
+            mm.new_(UncaughtException.class, commonExVar).throw_();
         }
     }
 }

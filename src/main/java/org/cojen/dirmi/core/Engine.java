@@ -342,11 +342,10 @@ public final class Engine implements Environment {
 
             session.writeHeader(pipe, clientSessionId);
             serverInfo.writeTo(pipe);
+
             LinkedHashMap<String, Object> serverCustomTypes = settings.writeSerializerTypes(pipe);
             pipe.writeNull(); // optional metadata
             pipe.flush();
-
-            CloseTimeout.cancelOrFail(timeoutTask);
 
             TypeCodeMap tcm = settings.mergeSerializerTypes
                 (firstCustomTypeCode, serverCustomTypes, clientCustomTypes);
@@ -356,6 +355,11 @@ public final class Engine implements Environment {
             // Assign the state after the call to initTypeCodeMap, to prevent race conditions
             // when a new connection is accepted too soon. See ServerSession.accepted.
             session.mState = Session.State.CONNECTED;
+
+            session.writeRootDataFields(pipe);
+            pipe.flush();
+
+            CloseTimeout.cancelOrFail(timeoutTask);
 
             session.controlPipe(pipe);
             session.startTasks();
@@ -445,14 +449,17 @@ public final class Engine implements Environment {
 
             Object metadata = pipe.readObject();
 
-            CloseTimeout.cancelOrFail(timeoutTask);
-
             session.init(serverSessionId, type, bname, rootTypeId, serverInfo, rootId);
 
             TypeCodeMap tcm = settings.mergeSerializerTypes
                 (firstCustomTypeCode, clientCustomTypes, serverCustomTypes);
 
             session.initTypeCodeMap(tcm);
+
+            session.readRootDataFields(pipe);
+
+            CloseTimeout.cancelOrFail(timeoutTask);
+
             session.controlPipe(pipe);
 
             if (register) {

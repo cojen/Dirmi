@@ -180,6 +180,9 @@ final class RestorableStubSupport extends ConcurrentHashMap<StubInvoker, CountDo
                 StubInvoker newStub = ((Stub) origin.invoke()).invoker();
                 session.mStubs.stealIdentity(stub, newStub);
 
+                // Copy any data fields into the existing stub.
+                session.copyData(newStub, stub);
+
                 newSupport = (StubSupport) StubInvoker.cSupportHandle.getAcquire(newStub);
 
                 // Use CAS to detect if the stub has called dispose.

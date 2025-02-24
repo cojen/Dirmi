@@ -198,6 +198,20 @@ public final class CoreUtils {
     }
 
     /**
+     * @return size in bytes, or else -1 if the type isn't primitive
+     */
+    static int primitiveSize(String desc) {
+        return switch (desc) {
+            case "V" -> 0;
+            case "B", "Z" -> 1;
+            case "S", "C" -> 2;
+            case "I", "F" -> 4;
+            case "J", "D" -> 8;
+            default -> -1;
+        };
+    }
+
+    /**
      * @return false if handler was null or if it threw an exception itself
      */
     static boolean acceptException(BiConsumer<Session<?>, Throwable> h, Session<?> s, Throwable e) {
