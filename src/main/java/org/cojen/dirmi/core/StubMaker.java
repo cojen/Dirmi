@@ -390,7 +390,9 @@ final class StubMaker {
             RemoteMethod method = serverMethod;
             int methodId = serverMethodId;
 
-            if (method == null) {
+            if (method == null ||
+                (clientMethod != null && !clientMethod.isData() && serverMethod.isData()))
+            {
                 // If the server method isn't implemented, use the client definition as a best
                 // guess for now.
                 method = clientMethod;
@@ -457,6 +459,12 @@ final class StubMaker {
                         .sourceFile(getClass().getSimpleName());
 
                     mStubMaker.addField(mType, "data");
+                }
+
+                if (clientMethod == null) {
+                    // Only exists on the server side, and so it will be skipped.
+                    mm.new_(DataUnavailableException.class, method.name()).throw_();
+                    continue;
                 }
 
                 var resultVar = mm.field("data").getAcquire().invoke(methodName);
@@ -671,6 +679,10 @@ final class StubMaker {
     private void writeParams(MethodMaker mm, Variable pipeVar,
                              RemoteMethod method, int methodId, Object[] ptypes)
     {
+        if (methodId < 0) {
+            throw new AssertionError();
+        }
+
         String writeName = "writeMethodId";
 
         if (methodId >= mServerInfo.remoteMethods().size()) {

@@ -20,6 +20,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import java.util.function.BiPredicate;
 
+import org.cojen.maker.ClassMaker;
+import org.cojen.maker.MethodMaker;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
@@ -33,15 +36,26 @@ public class DataTest {
         org.junit.runner.JUnitCore.main(DataTest.class.getName());
     }
 
+    private Environment mEnv;
+
+    @Before
+    public void setup() {
+        mEnv = Environment.create();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        mEnv.close();
+    }
+
     @Test
     public void basic() throws Exception {
-        var env = Environment.create();
-        env.reconnectDelayMillis(0);
+        mEnv.reconnectDelayMillis(0);
         var server = new MainServer(false);
         assertFalse(server.nothing);
-        env.export("main", server);
-        env.connector(Connector.local(env));
-        var session = env.connect(Main.class, "main", null);
+        mEnv.export("main", server);
+        mEnv.connector(Connector.local(mEnv));
+        var session = mEnv.connect(Main.class, "main", null);
 
         var main = session.root();
 
@@ -128,8 +142,90 @@ public class DataTest {
         main.uninstallHandler();
 
         assertEquals("broken", server.error.getMessage());
+    }
 
-        env.close();
+    @Test
+    public void mismatch() throws Exception {
+        // Launch the server with a different set of data methods.
+
+        Class<?> iface, server;
+        {
+            ClassMaker cm = ClassMaker.beginExplicit(Main.class.getName(), new Loader(), null)
+                .public_().interface_().implement(Remote.class);
+            cm.addMethod(int.class, "id").public_().abstract_()
+                .addAnnotation(Data.class, true);
+            cm.addMethod(String.class, "name").public_().abstract_()
+                .addAnnotation(Data.class, true);
+            cm.addMethod(String.class, "message").public_().abstract_()
+                .addAnnotation(Data.class, true);
+            cm.addMethod(Object.class, "obj").public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(cm, "same").public_().abstract_().throws_(RemoteException.class);
+            cm.addMethod(null, "installHandler").public_().abstract_()
+                .addAnnotation(Data.class, true);
+            iface = cm.finish();
+
+            cm = ClassMaker.begin(null, iface.getClassLoader()).implement(iface).public_();
+            cm.addConstructor().public_();
+            cm.addMethod(int.class, "id").public_().return_(123);
+            cm.addMethod(String.class, "name").public_().return_("myname");
+            cm.addMethod(String.class, "message").public_().return_("message");
+            cm.addMethod(Object.class, "obj").public_().return_("obj");
+            MethodMaker mm = cm.addMethod(iface, "same").public_();
+            mm.return_(mm.this_());
+            cm.addMethod(null, "installHandler").public_();
+            server = cm.finish();
+        }
+
+        mEnv.export("main", server.getConstructor().newInstance());
+
+        mEnv.connector(Connector.local(mEnv));
+        var session = mEnv.connect(Main.class, "main", null);
+        var main = session.root();
+
+        try {
+            main.id();
+            fail();
+        } catch (DataUnavailableException e) {
+            // Return type differs.
+        }
+
+        assertEquals("myname", main.name());
+
+        try {
+            main.value();
+            fail();
+        } catch (DataUnavailableException e) {
+            // Isn't defined on the server.
+        }
+
+        try {
+            main.nothing();
+            fail();
+        } catch (DataUnavailableException e) {
+            // Isn't defined on the server.
+        }
+
+        try {
+            main.obj();
+            fail();
+        } catch (DataUnavailableException e) {
+            // Isn't a data method on the server.
+        }
+
+        assertEquals(main, main.same());
+
+        try {
+            main.installHandler();
+            fail();
+        }  catch (UnimplementedException e) {
+            // The client expects a true remote call, but the server provides data.
+        }
+    }
+
+    private static class Loader extends ClassLoader {
+        Loader() {
+            super(DataTest.class.getClassLoader());
+        }
     }
 
     public static interface Main extends Remote {
