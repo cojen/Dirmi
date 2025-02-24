@@ -139,7 +139,7 @@ public final class Engine implements Environment {
 
         if (obj != null) {
             // Validate the remote object.
-            RemoteExaminer.remoteType(obj);
+            RemoteInfo.examine(RemoteExaminer.remoteType(obj));
         }
 
         mMainLock.lock();

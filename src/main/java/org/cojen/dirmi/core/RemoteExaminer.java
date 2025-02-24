@@ -25,17 +25,24 @@ import java.lang.reflect.Modifier;
  */
 final class RemoteExaminer {
     /**
-     * Returns the remote interface implemented by the given remote object.
+     * Returns the remote interface implemented by the given remote object, but doesn't fully
+     * validate it.
      *
      * @throws NullPointerException if object is null
-     * @throws IllegalArgumentException if object is malformed
+     * @throws IllegalArgumentException if more than one remote interface is defined, or if no
+     * remote interface is implemented at all
      */
     static Class<?> remoteType(Object obj) {
         return remoteTypeForClass(obj.getClass());
     }
 
     /**
-     * @throws IllegalArgumentException if object is null or malformed
+     * Returns the remote interface implemented by the given class, but doesn't fully validate
+     * it.
+     *
+     * @throws NullPointerException if clazz is null
+     * @throws IllegalArgumentException if more than one remote interface is defined, or if no
+     * remote interface is implemented at all
      */
     static Class<?> remoteTypeForClass(Class<?> clazz) {
         // Only consider the one that implements Remote.
