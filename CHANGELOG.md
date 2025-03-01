@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.4.2
+v2.4.2 (2025-03-01)
 ------
 * Added a pipe method for skipping a fixed amount of bytes, and added a method to skip objects.
 * Added support for data methods.
