@@ -101,6 +101,7 @@ final class SkeletonMaker<R> {
         mm.field("server").set(null);
     }
 
+    @SuppressWarnings("unchecked")
     private SkeletonFactory<R> finishFactory() {
         // Need to finish the factory before the skeleton because it's needed by the skeleton.
         mFactoryMaker.addConstructor();
@@ -275,7 +276,7 @@ final class SkeletonMaker<R> {
 
             mm.private_();
 
-            final var pipeVar = mm.param(0);
+            final Variable pipeVar = mm.param(0);
             final var contextVar = mm.param(1);
 
             List<String> paramTypes = rm.parameterTypes();

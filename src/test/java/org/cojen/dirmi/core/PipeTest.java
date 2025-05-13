@@ -892,7 +892,7 @@ public class PipeTest {
         assertEquals(huge.length, pipe.readInt());
 
         byte[] readHuge = pipe.readDecode(null, huge.length, (obj, len, buf, off) -> {
-            assertEquals(null, obj);
+            assertNull(null, obj);
             assertEquals(huge.length, len);
             return Arrays.copyOfRange(buf, off, off + len);
         });
