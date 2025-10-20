@@ -59,7 +59,7 @@ final class ClientSession<R> extends CoreSession<R> {
     ClientSession(Engine engine, Settings settings,
                   SocketAddress localAddr, SocketAddress remoteAddr)
     {
-        super(engine, settings);
+        super(IdGenerator.next(), engine, settings);
 
         mState = State.CONNECTED;
 
@@ -355,7 +355,6 @@ final class ClientSession<R> extends CoreSession<R> {
                     // Connection was rejected.
                     Object message = pipe.readObject();
                     throw new RemoteException(String.valueOf(message));
-
                 }
 
                 CloseTimeout.cancelOrFail(timeoutTask);

@@ -231,7 +231,7 @@ class ItemMap<I extends Item> {
      */
     final void putUnique(I item) {
         while (putIfAbsent(item) != item) {
-            Item.cIdHandle.setRelease(item, IdGenerator.random());
+            Item.cIdHandle.setRelease(item, IdGenerator.randomNonZero());
         }
     }
 

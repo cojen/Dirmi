@@ -46,8 +46,16 @@ final class IdGenerator {
         }
     }
 
-    static long random() {
-        return rnd.nextLong();
+    /**
+     * Returns a random number not from the sequence.
+     */
+    static long randomNonZero() {
+        while (true) {
+            long id = rnd.nextLong();
+            if (id != 0) {
+                return id;
+            }
+        }
     }
 
     /**

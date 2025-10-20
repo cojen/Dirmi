@@ -472,7 +472,7 @@ public final class Engine implements Environment {
                     if (sessions == null) {
                         mClientSessions = sessions = new ItemMap<>();
                     }
-                    sessions.putUnique(session);
+                    sessions.put(session);
                 } finally {
                     mMainLock.unlock();
                 }
