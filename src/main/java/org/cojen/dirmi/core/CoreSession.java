@@ -129,7 +129,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
     private volatile CounterMap mAcknowledgedMap;
 
     CoreSession(Engine engine, Settings settings) {
-        super(IdGenerator.next());
+        super(IdGenerator.random());
         mEngine = engine;
         mSettings = settings;
         mStubs = new StubMap();

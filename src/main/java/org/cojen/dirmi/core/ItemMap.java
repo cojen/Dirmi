@@ -226,6 +226,16 @@ class ItemMap<I extends Item> {
     }
 
     /**
+     * Puts an item in the map, unless an existing item exists with the same id. If so, a new
+     * id is randomly selected, and then the put is attempted again.
+     */
+    final void putUnique(I item) {
+        while (putIfAbsent(item) != item) {
+            Item.cIdHandle.setRelease(item, IdGenerator.random());
+        }
+    }
+
+    /**
      * Moves all items from the given map into this one.
      */
     final synchronized void moveAll(ItemMap<I> from) {

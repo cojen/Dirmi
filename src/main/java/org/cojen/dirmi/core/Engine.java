@@ -335,7 +335,7 @@ public final class Engine implements Environment {
                 if (sessions == null) {
                     mServerSessions = sessions = new ItemMap<>();
                 }
-                sessions.put(session);
+                sessions.putUnique(session);
             } finally {
                 mMainLock.unlock();
             }
@@ -472,7 +472,7 @@ public final class Engine implements Environment {
                     if (sessions == null) {
                         mClientSessions = sessions = new ItemMap<>();
                     }
-                    sessions.put(session);
+                    sessions.putUnique(session);
                 } finally {
                     mMainLock.unlock();
                 }

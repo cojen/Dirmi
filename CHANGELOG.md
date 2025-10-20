@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.4.4
+------
+* Generate session identifiers using a secure random number generator.
+
 v2.4.3 (2025-06-20)
 ------
 * Updated some dependencies.

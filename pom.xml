@@ -5,7 +5,7 @@
   <artifactId>cojen-dirmi</artifactId>
   <packaging>jar</packaging>
   <name>Dirmi</name>
- <version>2.4.3</version>
+ <version>2.4.4</version>
   <description>
     Bidirectional remote method invocation.
   </description>

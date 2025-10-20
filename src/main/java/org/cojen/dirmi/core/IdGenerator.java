@@ -28,12 +28,13 @@ import java.security.SecureRandom;
  * @author Brian S O'Neill
  */
 final class IdGenerator {
+    private static final SecureRandom rnd;
     private static final long sequenceMask;
     private static long sequence;
     private static final VarHandle sequenceHandle;
 
     static {
-        var rnd = new SecureRandom();
+        rnd = new SecureRandom();
         sequenceMask = rnd.nextLong();
         sequence = rnd.nextLong();
 
@@ -43,6 +44,10 @@ final class IdGenerator {
         } catch (Throwable e) {
             throw CoreUtils.rethrow(e);
         }
+    }
+
+    static long random() {
+        return rnd.nextLong();
     }
 
     /**
