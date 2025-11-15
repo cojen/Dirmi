@@ -70,7 +70,8 @@ public interface Environment extends Closeable, Executor {
      * @param closeExecutor when true, the {@code Executor} is closed when the {@code
      * Environment} is closed
      * @throws IllegalArgumentException if {@code closeExecutor} is true and the given {@code
-     * Executor} doesn't implement {@link Closeable} or {@link ExecutorService}
+     * Executor} doesn't implement {@link AutoCloseable} or {@link ExecutorService}
+     * @throws NullPointerException if the given executor is null
      */
     static Environment create(Executor executor, boolean closeExecutor) {
         Objects.requireNonNull(executor);

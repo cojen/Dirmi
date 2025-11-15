@@ -16,7 +16,6 @@
 
 package org.cojen.dirmi.core;
 
-import java.io.Closeable;
 import java.io.IOException;
 
 import java.net.Socket;
@@ -240,7 +239,7 @@ public final class CoreUtils {
         return (i | (i >> 16)) + 1;
     }
 
-    public static void closeQuietly(Closeable c) {
+    public static void closeQuietly(AutoCloseable c) {
         try {
             if (c != null) {
                 c.close();

@@ -118,7 +118,7 @@ public final class Engine implements Environment {
         if (executor == null) {
             executor = Executors.newCachedThreadPool(TFactory.THE);
         } else if (closeExecutor) {
-            if (!(executor instanceof Closeable) && !(executor instanceof ExecutorService)) {
+            if (!(executor instanceof AutoCloseable) && !(executor instanceof ExecutorService)) {
                 throw new IllegalArgumentException();
             }
         }
@@ -703,7 +703,7 @@ public final class Engine implements Environment {
         if (mCloseExecutor) {
             if (mExecutor instanceof ExecutorService es) {
                 es.shutdown();
-            } else if (mExecutor instanceof Closeable c) {
+            } else if (mExecutor instanceof AutoCloseable c) {
                 CoreUtils.closeQuietly(c);
             }
         }
