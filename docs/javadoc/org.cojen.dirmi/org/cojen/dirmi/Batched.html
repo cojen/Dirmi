@@ -65,9 +65,9 @@ loadScripts(document, 'script');</script>
 <section class="class-description" id="class-description">
 <hr>
 <div class="horizontal-scroll">
-<div class="type-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/annotation/Documented.html" title="class or interface in java.lang.annotation" class="external-link">@Documented</a>
-<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/annotation/Retention.html" title="class or interface in java.lang.annotation" class="external-link">@Retention</a>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/annotation/RetentionPolicy.html#RUNTIME" title="class or interface in java.lang.annotation" class="external-link">RUNTIME</a>)
-<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/annotation/Target.html" title="class or interface in java.lang.annotation" class="external-link">@Target</a>(<a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/annotation/ElementType.html#METHOD" title="class or interface in java.lang.annotation" class="external-link">METHOD</a>)
+<div class="type-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/annotation/Documented.html" title="class or interface in java.lang.annotation" class="external-link">@Documented</a>
+<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/annotation/Retention.html" title="class or interface in java.lang.annotation" class="external-link">@Retention</a>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/annotation/RetentionPolicy.html#RUNTIME" title="class or interface in java.lang.annotation" class="external-link">RUNTIME</a>)
+<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/annotation/Target.html" title="class or interface in java.lang.annotation" class="external-link">@Target</a>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/annotation/ElementType.html#METHOD" title="class or interface in java.lang.annotation" class="external-link">METHOD</a>)
 </span><span class="modifiers">public @interface </span><span class="element-name type-name-label">Batched</span></div>
 <div class="block">Designates a remote method as being batched, which can be used to reduce transport
 overhead. Method calls are sent to the remote endpoint, but the pipe isn't immediately
@@ -91,7 +91,7 @@ RemoteAccess login(String user, String password) throws RemoteException, AuthFai
 <p>Batched methods can declare throwing any exception, and any exception thrown by the
 remote endpoint aborts the batch operation. The exception is thrown to the caller of the
 method that flushed the batch. If this method does not declare throwing the proper exception
-type, it's wrapped by <a href="https://docs.oracle.com/en/java/javase/23/docs/api/java.base/java/lang/reflect/UndeclaredThrowableException.html" title="class or interface in java.lang.reflect" class="external-link"><code>UndeclaredThrowableException</code></a>. Any <code>Remote</code> objects
+type, it's wrapped by <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/reflect/UndeclaredThrowableException.html" title="class or interface in java.lang.reflect" class="external-link"><code>UndeclaredThrowableException</code></a>. Any <code>Remote</code> objects
 returned from batched method calls at or after the exception point will be disposed, and so
 they should not be used.</div>
 <dl class="notes">
