@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.4.4
+v2.4.4 (2026-05-24)
 ------
 * Generate server session identifiers using a secure random number generator.
 * Custom Executor only needs to implement AutoCloseable instead of Closeable.
