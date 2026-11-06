@@ -179,10 +179,10 @@ final class SkeletonMaker<R> {
         Map<Integer, CaseInfo> caseMap = defineInvokers();
 
         MethodMaker mm = mSkeletonMaker.addMethod
-            (Object.class, "invoke", Pipe.class, Object.class).public_();
+            (Object.class, "invoke", Object.class, Pipe.class).public_();
 
-        final var pipeVar = mm.param(0);
-        final var contextVar = mm.param(1);
+        final var contextVar = mm.param(0);
+        final var pipeVar = mm.param(1);
 
         var methodIdVar = CoreUtils.readIntId(pipeVar, caseMap.size());
 
@@ -351,7 +351,7 @@ final class SkeletonMaker<R> {
                 var exVar = mm.catch_(invokeStart, invokeEnd, Throwable.class);
                 checkException(exVar);
 
-                contextVar.set(mm.invoke("batchInvokeFailure", pipeVar, contextVar, exVar));
+                contextVar.set(mm.invoke("batchInvokeFailure", contextVar, pipeVar, exVar));
 
                 if (aliasIdVar != null) {
                     var supportVar = mm.param(2);
@@ -361,7 +361,7 @@ final class SkeletonMaker<R> {
 
                 mm.return_(contextVar);
             } else if (isPiped) {
-                var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
+                var batchResultVar = mm.invoke("batchFinish", contextVar, pipeVar);
                 Label invokeStart = mm.label();
                 // If the batch result is less than 0, then no batch was in progress.
                 batchResultVar.ifLt(0, invokeStart);
@@ -382,7 +382,7 @@ final class SkeletonMaker<R> {
 
                 mm.new_(UncaughtException.class, exVar).throw_();
             } else {
-                var batchResultVar = mm.invoke("batchFinish", pipeVar, contextVar);
+                var batchResultVar = mm.invoke("batchFinish", contextVar, pipeVar);
 
                 Label invokeStart = mm.label();
                 Label finished = mm.label();

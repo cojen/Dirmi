@@ -1610,7 +1610,7 @@ abstract class CoreSession<R> extends Item implements Session<R> {
                 Object context = null;
                 do {
                     Skeleton skeleton = mSkeletons.get(mPipe.readLong());
-                    context = skeleton.invoke(mPipe, context);
+                    context = skeleton.invoke(context, mPipe);
                     skeleton = null;
                 } while (context != Skeleton.STOP_READING);
             } catch (Throwable e) {

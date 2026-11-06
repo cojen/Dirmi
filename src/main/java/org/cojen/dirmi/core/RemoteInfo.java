@@ -284,6 +284,19 @@ final class RemoteInfo {
     }
 
     /**
+     * Counts the number of regular (non-data) remote methods by iterating over them.
+     */
+    int numNonDataMethods() {
+        int num = 0;
+        for (RemoteMethod m : mRemoteMethods) {
+            if (!m.isData()) {
+                num++;
+            }
+        }
+        return num;
+    }
+
+    /**
      * Returns true if this type is likely assignable by the other type.
      */
     boolean isAssignableFrom(RemoteInfo other) {

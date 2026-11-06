@@ -248,7 +248,7 @@ final class ServerSession<R> extends CoreSession<R> {
         }
 
         @Override
-        public Object invoke(Pipe pipe, Object context) {
+        public Object invoke(Object context, Pipe pipe) {
             var cp = (CorePipe) pipe;
             cp.mMode = CorePipe.M_CLIENT;
             recycleConnection(cp);

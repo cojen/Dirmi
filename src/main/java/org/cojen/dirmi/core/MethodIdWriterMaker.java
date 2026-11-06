@@ -19,6 +19,8 @@ package org.cojen.dirmi.core;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
+import java.util.Arrays;
+
 import org.cojen.maker.ClassMaker;
 import org.cojen.maker.Label;
 import org.cojen.maker.MethodMaker;
@@ -32,7 +34,31 @@ import org.cojen.dirmi.UnimplementedException;
  * @author Brian S O'Neill
  */
 final class MethodIdWriterMaker {
-    private static final SoftCache<IntArrayKey, MethodIdWriter> cCache = new SoftCache<>();
+    private static final class Key {
+        private final int[] mMapping;
+        private final int mNumCurrent;
+        private final int mHash;
+
+        Key(int[] mapping, int numCurrent) {
+            mMapping = mapping;
+            mNumCurrent = numCurrent;
+            mHash = numCurrent + Arrays.hashCode(mapping);
+        }
+
+        @Override
+        public int hashCode() {
+            return mHash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return this == obj || obj instanceof Key other
+                && mNumCurrent == other.mNumCurrent
+                && Arrays.equals(mMapping, other.mMapping);
+        }
+    }
+
+    private static final SoftCache<Key, MethodIdWriter> cCache = new SoftCache<>();
 
     /**
      * @param original server-side RemoteInfo that a StubInvoker is coded to use
@@ -64,12 +90,14 @@ final class MethodIdWriterMaker {
             return MethodIdWriter.Unimplemented.THE;
         }
 
-        var key = new IntArrayKey(mapping);
+        int numCurrent = current.numNonDataMethods();
+        var key = new Key(mapping, numCurrent);
+
         var writer = cCache.get(key);
         if (writer == null) synchronized (cCache) {
             writer = cCache.get(key);
             if (writer == null) {
-                writer = makeWriter(mapping);
+                writer = makeWriter(mapping, numCurrent);
                 cCache.put(key, writer);
             }
         }
@@ -77,7 +105,7 @@ final class MethodIdWriterMaker {
         return writer;
     }
 
-    private static MethodIdWriter makeWriter(int[] mapping) {
+    private static MethodIdWriter makeWriter(int[] mapping, int numCurrent) {
         ClassMaker cm = ClassMaker.begin(null, MethodHandles.lookup())
             .implement(MethodIdWriter.class).final_();
         cm.addConstructor();
@@ -90,7 +118,6 @@ final class MethodIdWriterMaker {
             var cases = new int[mapping.length];
             var labels = new Label[mapping.length];
 
-            int maxCurrentId = 0;
             int numMatches = 0;
 
             for (int i=0; i<mapping.length; i++) {
@@ -100,7 +127,6 @@ final class MethodIdWriterMaker {
                     labels[i] = defaultLabel;
                 } else {
                     labels[i] = mm.label();
-                    maxCurrentId = Math.max(maxCurrentId, idCurrent);
                     numMatches++;
                 }
             }
@@ -136,7 +162,7 @@ final class MethodIdWriterMaker {
                     writeLabel.here();
                 }
 
-                CoreUtils.writeIntId(pipeVar, maxCurrentId, idCurrentVar);
+                CoreUtils.writeIntId(pipeVar, numCurrent, idCurrentVar);
 
                 mm.return_();
 

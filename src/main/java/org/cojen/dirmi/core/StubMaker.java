@@ -90,6 +90,7 @@ final class StubMaker {
     private final Class<?> mType;
     private final RemoteInfo mClientInfo;
     private final RemoteInfo mServerInfo;
+    private final int mNumNonDataServerMethods;
     private final ClassMaker mFactoryMaker;
     private final ClassMaker mStubMaker;
     private final ClassMaker mWrapperMaker;
@@ -101,15 +102,15 @@ final class StubMaker {
         mType = type;
         mClientInfo = RemoteInfo.examine(type);
         mServerInfo = serverInfo;
+        mNumNonDataServerMethods = mServerInfo.numNonDataMethods();
 
         String sourceFile = getClass().getSimpleName();
 
         Class<?> superClass;
         {
-            int numMethods = mServerInfo.remoteMethods().size();
-            if (numMethods < 256) {
+            if (mNumNonDataServerMethods < 256) {
                 superClass = StubFactory.BW.class;
-            } else if (numMethods < 65536) {
+            } else if (mNumNonDataServerMethods < 65536) {
                 superClass = StubFactory.SW.class;
             } else {
                 // Impossible case.
@@ -263,7 +264,7 @@ final class StubMaker {
         RemoteMethod lastServerMethod = null;
         int serverMethodId = -1;
         int batchedImmediateMethodId = -1;
-        int syntheticMethodId = mServerInfo.remoteMethods().size();
+        int syntheticMethodId = mNumNonDataServerMethods;
 
         while (it.hasNext()) {
             JoinedIterator.Pair<RemoteMethod> pair = it.next();
@@ -685,7 +686,7 @@ final class StubMaker {
 
         String writeName = "writeMethodId";
 
-        if (methodId >= mServerInfo.remoteMethods().size()) {
+        if (methodId >= mNumNonDataServerMethods) {
             writeName = "writeSyntheticMethodId";
         }
 

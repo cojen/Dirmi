@@ -52,13 +52,19 @@ public abstract class Skeleton<R> extends Item {
      * then it should be logged. Any type of IOException should be treated as a communication
      * failure and need not be logged.
      *
-     * @param pipe pipe for reading method arguments and for writing any response
+     * <p>Note: The Pipe parameter isn't first so as not to conflict with an invoker method.
+     * See SkeletonMaker.defineInvokers.
+     *
      * @return the original or modified context; caller should stop reading if is STOP_READING
+     * @param pipe pipe for reading method arguments and for writing any response
      */
-    public abstract Object invoke(Pipe pipe, Object context) throws Throwable;
+    public abstract Object invoke(Object context, Pipe pipe) throws Throwable;
 
     /**
      * Writes any optional Data fields over the pipe, but doesn't flush.
+     *
+     * <p>Note: Although the Pipe parameter is first, it doesn't conflict with an invoker
+     * method because there's only one parameter. See SkeletonMaker.defineInvokers.
      */
     public void writeDataFields(Pipe pipe) throws IOException {
     }
@@ -127,9 +133,13 @@ public abstract class Skeleton<R> extends Item {
     }
 
     /**
+     * <p>Note: The Pipe parameter isn't first to be consistent with the other batch methods.
+     * If the context parameter is dropped, then the exception parameter must be first so as
+     * not to conflict with an invoker method. See SkeletonMaker.defineInvokers.
+     *
      * @return the original or modified context
      */
-    public static Object batchInvokeFailure(Pipe pipe, Object context, Throwable exception) {
+    public static Object batchInvokeFailure(Object context, Pipe pipe, Throwable exception) {
         // If the batch contains remote objects which must be disposed of, then reason is
         // written as the exception object itself. Enable reference tracking to avoid writing
         // the same exception instance out multiple times. It's disabled when batchFinish is
@@ -141,10 +151,13 @@ public abstract class Skeleton<R> extends Item {
     /**
      * If in a batch, writes the batch responses.
      *
+     * <p>Note: The Pipe parameter isn't first so as not to conflict with an invoker method.
+     * See SkeletonMaker.defineInvokers.
+     *
      * @return -1 if no batch, 0 if the batch finished normally, or 1 if the batch sequence
      * finished with an exception
      */
-    public static int batchFinish(Pipe pipe, Object context) throws IOException {
+    public static int batchFinish(Object context, Pipe pipe) throws IOException {
         if (context == null) {
             return -1;
         } else if (context instanceof Throwable) {
