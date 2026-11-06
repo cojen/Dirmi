@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.4.5
+------
+* Fixed a race condition when multiple writers write to the same PipedOutputStream.
+
 v2.4.4 (2026-05-24)
 ------
 * Generate server session identifiers using a secure random number generator.
