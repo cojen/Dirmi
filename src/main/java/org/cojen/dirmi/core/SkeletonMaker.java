@@ -320,7 +320,6 @@ final class SkeletonMaker<R> {
                 Label skip = mm.label();
 
                 if (aliasIdVar == null) {
-                    skip = mm.label();
                     exceptionVar.ifNe(null, skip);
                 } else {
                     exceptionVar.ifEq(null, invokeStart);
@@ -542,8 +541,6 @@ final class SkeletonMaker<R> {
         if (outVar != null) {
             outVar.invoke("drain");
         }
-
-        Label tryEnd = mm.label().here();
 
         mm.return_();
 
