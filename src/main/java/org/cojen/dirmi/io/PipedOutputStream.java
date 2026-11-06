@@ -126,7 +126,6 @@ public final class PipedOutputStream extends OutputStream {
                 checkConnected();
             }
         } catch (InterruptedException e) {
-            mData = null;
             throw new InterruptedIOException("Thread interrupted");
         }
     }
