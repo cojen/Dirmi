@@ -708,24 +708,6 @@ public class PipeTest {
     }
 
     @Test
-    public void voidObject() throws Exception {
-        var capture = new CaptureOutputStream();
-        var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
-
-        Object obj = new Object();
-        pipe.writeObject(Void.TYPE);
-        pipe.writeObject(Void.TYPE);
-
-        pipe.flush();
-        byte[] bytes = capture.getBytes();
-        var bin = new ByteArrayInputStream(bytes);
-        pipe = new BufferedPipe(bin, OutputStream.nullOutputStream());
-
-        assertEquals(Void.TYPE, pipe.readObject());
-        assertEquals(Void.TYPE, pipe.readObject());
-    }
-
-    @Test
     public void plainObject() throws Exception {
         var capture = new CaptureOutputStream();
         var pipe = new BufferedPipe(InputStream.nullInputStream(), capture);
@@ -987,7 +969,6 @@ public class PipeTest {
         int num = 0;
 
         pipe.writeObject(null); num++;
-        pipe.writeObject(void.class); num++;
         pipe.writeObject(new Object()); num++;
         pipe.writeObject(true); num++;
         pipe.writeObject(false); num++;

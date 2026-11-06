@@ -122,7 +122,6 @@ final class TypeCodeMap {
         mCustomSerializers = new Custom[0];
         mEntries = new Entry[CoreUtils.roundUpPower2(T_FIRST_CUSTOM - 1)];
 
-        put(Void.TYPE.getClass(), T_VOID);
         put(Object.class, T_OBJECT);
         put(Boolean.class, T_TRUE);
         put(Character.class, T_CHAR);
