@@ -68,6 +68,7 @@ public final class PipedOutputStream extends OutputStream {
         mLock.lock();
         try {
             checkConnected();
+            waitForWriteCompletion();
 
             byte[] bytes = mTinyBuf;
             if (bytes == null) {
@@ -100,6 +101,7 @@ public final class PipedOutputStream extends OutputStream {
         mLock.lock();
         try {
             checkConnected();
+            waitForWriteCompletion();
 
             mData = bytes;
             mOffset = offset;
@@ -181,7 +183,7 @@ public final class PipedOutputStream extends OutputStream {
         int b = mData[offset] & 0xff;
         if (--mLength <= 0) {
             mData = null;
-            mWriteCondition.signal();
+            mWriteCondition.signalAll();
         } else {
             mOffset = offset + 1;
         }
@@ -205,7 +207,7 @@ public final class PipedOutputStream extends OutputStream {
         amt += length;
         if ((mLength -= length) <= 0) {
             mData = null;
-            mWriteCondition.signal();
+            mWriteCondition.signalAll();
         } else {
             mOffset += length;
         }
@@ -224,7 +226,7 @@ public final class PipedOutputStream extends OutputStream {
                 amt += n;
                 if ((mLength -= n) <= 0) {
                     mData = null;
-                    mWriteCondition.signal();
+                    mWriteCondition.signalAll();
                 } else {
                     mOffset += n;
                 }

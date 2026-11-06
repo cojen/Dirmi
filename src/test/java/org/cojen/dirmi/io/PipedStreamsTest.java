@@ -20,6 +20,9 @@ import java.io.InterruptedIOException;
 
 import java.util.Random;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.*;
 import static org.junit.Assert.*;
 
@@ -246,5 +249,40 @@ public class PipedStreamsTest {
 
         reader.interrupt();
         reader.join();
+    }
+
+    @Test
+    public void concurrentWriters() throws Exception {
+        var done = new CountDownLatch(2);
+
+        Thread w1 = new Thread(() -> {
+            try {
+                mOut.write("AAAA".getBytes()); done.countDown();
+            } catch (Exception e) {
+            }
+        });
+
+        Thread w2 = new Thread(() -> {
+            try {
+                mOut.write("BBBB".getBytes()); done.countDown();
+            } catch (Exception e) {
+            }
+        });
+
+        w1.start();
+        Thread.sleep(200); // let w1 publish its data and block
+        w2.start();
+        Thread.sleep(200); // w2 now overwrites w1's data
+
+        // Drain 8 bytes: expect all of AAAA and BBBB, in either order.
+        byte[] buf = new byte[8];
+        int total = 0;
+        while (total < 8) {
+            total += mIn.read(buf, total, 8 - total);
+        }
+
+        assertTrue(done.await(2, TimeUnit.SECONDS));
+        var s = new String(buf);
+        assertTrue(s.equals("AAAABBBB") || s.equals("BBBBAAAA"));
     }
 }
