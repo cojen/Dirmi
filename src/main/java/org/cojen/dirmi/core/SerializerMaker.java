@@ -222,11 +222,11 @@ public final class SerializerMaker {
         Field[] fields = mType.getFields();
         Arrays.sort(fields, Comparator.comparing(Field::getName));
 
-        // Skip static and transient fields.
+        // Skip static, final, and transient fields.
         for (int i=0; i<fields.length; i++) {
             Field field = fields[i];
             int mods = field.getModifiers();
-            if (Modifier.isStatic(mods) || Modifier.isTransient(mods)) {
+            if ((mods & (Modifier.STATIC | Modifier.FINAL | Modifier.TRANSIENT)) != 0) {
                 fields[i] = null;
             }
         }

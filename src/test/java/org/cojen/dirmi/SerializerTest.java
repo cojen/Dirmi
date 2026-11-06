@@ -231,30 +231,34 @@ public class SerializerTest {
 
     public static class SomeClass {
         public SomeClass() {
+            this.e = "e";
         }
 
         SomeClass(String b, String c, String d) {
             this.b = b;
             this.c = c;
             this.d = d;
+            this.e = "e";
         }
 
         public static String a;
         public transient String b;
         String c;
         public String d;
+        public final String e;
 
         @Override
         public boolean equals(Object obj) {
             var other = (SomeClass) obj;
             return Objects.equals(b, other.b)
                 && Objects.equals(c, other.c)
-                && Objects.equals(d, other.d);
+                && Objects.equals(d, other.d)
+                && Objects.equals(e, other.e);
         }
 
         @Override
         public String toString() {
-            return "b=" + b + ", c=" + c + ", d=" + d;
+            return "b=" + b + ", c=" + c + ", d=" + d + ", e=" + e;
         }
     }
 
