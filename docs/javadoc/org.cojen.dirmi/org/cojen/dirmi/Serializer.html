@@ -176,7 +176,7 @@ if no adaptation is required.</div>
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type"><a href="Serializer.html" title="interface in org.cojen.dirmi">Serializer</a></span>&nbsp;<span class="element-name">simple</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/27/docs/api/java.base/java/lang/Class.html" title="class in java.lang" class="external-link">Class</a>&lt;?&gt;&nbsp;type)</span></div>
 <div class="block">Generates and returns a serializer for a record type, an enum type, or a simple class. A
 simple class must have a public no-arg constructor, and only public fields are
-serialized. Static and transient fields aren't serialized either.</div>
+serialized. Static, final, or transient fields aren't serialized either.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/27/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class in java.lang" class="external-link">IllegalArgumentException</a></code> - if the given type isn't supported</dd>
