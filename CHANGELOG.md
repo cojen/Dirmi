@@ -3,6 +3,7 @@ Changelog
 
 v2.4.5
 ------
+* Fixed string encoding/decoding issues which could corrupt the pipe data stream.
 * Fixed a bug during reconnect in which a transient failure would stop the reconnect.
 * Fixed a race condition when multiple writers write to the same PipedOutputStream.
 

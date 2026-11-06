@@ -720,9 +720,11 @@ class BufferedPipe implements Pipe {
         final var chars = new char[length];
         int cpos = 0;
         int pos;
+        int extra = 0;
 
         outer: while (true) {
-            requireInput(Math.min(length, MAX_BUFFER_SIZE));
+            requireInput(Math.min(length + extra, MAX_BUFFER_SIZE));
+            extra = 0;
 
             final byte[] buf = mInBuffer;
             pos = mInPos;
@@ -751,7 +753,7 @@ class BufferedPipe implements Pipe {
                         if (pos >= end) {
                             // Need two bytes for this character. Backup and read some more.
                             --pos;
-                            length++;
+                            extra = 1;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -765,7 +767,7 @@ class BufferedPipe implements Pipe {
                         if (pos + 1 >= end) {
                             // Need three bytes for this character. Backup and read some more.
                             --pos;
-                            length += 2;
+                            extra = 2;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -781,7 +783,7 @@ class BufferedPipe implements Pipe {
                         if (pos + 2 >= end) {
                             // Need four bytes for this character. Backup and read some more.
                             --pos;
-                            length += 3;
+                            extra = 3;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -841,9 +843,11 @@ class BufferedPipe implements Pipe {
         final int clength = length;
         int cpos = 0;
         int pos;
+        int extra = 0;
 
         while (true) {
-            requireInput(Math.min(length, MAX_BUFFER_SIZE));
+            requireInput(Math.min(length + extra, MAX_BUFFER_SIZE));
+            extra = 0;
 
             final byte[] buf = mInBuffer;
             pos = mInPos;
@@ -873,7 +877,7 @@ class BufferedPipe implements Pipe {
                         if (pos >= end) {
                             // Need two bytes for this character. Backup and read some more.
                             --pos;
-                            length++;
+                            extra = 1;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -887,7 +891,7 @@ class BufferedPipe implements Pipe {
                         if (pos + 1 >= end) {
                             // Need three bytes for this character. Backup and read some more.
                             --pos;
-                            length += 2;
+                            extra = 2;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -902,7 +906,7 @@ class BufferedPipe implements Pipe {
                         if (pos + 2 >= end) {
                             // Need four bytes for this character. Backup and read some more.
                             --pos;
-                            length += 3;
+                            extra = 3;
                             break chunk;
                         }
                         int c2 = buf[pos++];
@@ -1589,16 +1593,6 @@ class BufferedPipe implements Pipe {
                 if (c <= 0x7ff) {
                     utfLen++;
                 } else {
-                    if (c >= 0xd800 && c <= 0xdbff) {
-                        // Found a high surrogate. Verify that surrogate pair is
-                        // well-formed. Low surrogate must follow high surrogate.
-                        if (i + 1 < strLen) {
-                            int c2 = v.charAt(i + 1);
-                            if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-                                i++;
-                            }
-                        }
-                    }
                     utfLen += 2;
                 }
             }
@@ -1667,25 +1661,7 @@ class BufferedPipe implements Pipe {
                 buf[end++] = (byte) (0xc0 | ((c >> 6) & 0x1f));
                 buf[end++] = (byte) (0x80 | (c & 0x3f));
             } else {
-                pair: {
-                    if (c >= 0xd800 && c <= 0xdbff) {
-                        // Found a high surrogate. Verify that surrogate pair is
-                        // well-formed. Low surrogate must follow high surrogate.
-                        if (from + 1 >= to) {
-                            // Don't span the chunk range.
-                            break loop;
-                        }
-                        int c2 = v.charAt(from + 1);
-                        if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-                            c = 0x10000 + (((c & 0x3ff) << 10) | (c2 & 0x3ff));
-                            from++;
-                            buf[end++] = (byte) (0xf0 | (c >> 18));
-                            buf[end++] = (byte) (0x80 | ((c >> 12) & 0x3f));
-                            break pair;
-                        }
-                    }
-                    buf[end++] = (byte) (0xe0 | (c >> 12));
-                }
+                buf[end++] = (byte) (0xe0 | (c >> 12));
                 buf[end++] = (byte) (0x80 | ((c >> 6) & 0x3f));
                 buf[end++] = (byte) (0x80 | (c & 0x3f));
             }
