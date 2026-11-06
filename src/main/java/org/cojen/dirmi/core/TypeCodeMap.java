@@ -67,6 +67,10 @@ final class TypeCodeMap {
         return tcm;
     }
 
+    // The type code of the first custom serializer, which can be higher than T_FIRST_CUSTOM
+    // when the remote side defines more standard types.
+    private final int mFirstCustom;
+
     private final Custom[] mCustomSerializers;
 
     private Entry[] mEntries;
@@ -78,6 +82,8 @@ final class TypeCodeMap {
      */
     @SuppressWarnings("unchecked")
     private TypeCodeMap(int typeCode, Map<Object, Serializer> serializers) {
+        mFirstCustom = Math.max(typeCode, T_FIRST_CUSTOM);
+
         if (serializers == null || serializers.isEmpty()) {
             mCustomSerializers = STANDARD.mCustomSerializers;
             mEntries = new Entry[8];
@@ -104,7 +110,7 @@ final class TypeCodeMap {
                     custom = new Custom4(clazz, typeCode, serializer);
                 }
 
-                mCustomSerializers[typeCode - T_FIRST_CUSTOM] = custom;
+                mCustomSerializers[typeCode - mFirstCustom] = custom;
 
                 if (key instanceof Class) {
                     put(clazz, custom);
@@ -120,6 +126,7 @@ final class TypeCodeMap {
      */
     private TypeCodeMap() {
         mCustomSerializers = new Custom[0];
+        mFirstCustom = T_FIRST_CUSTOM;
         mEntries = new Entry[CoreUtils.roundUpPower2(T_FIRST_CUSTOM - 1)];
 
         put(Object.class, T_OBJECT);
@@ -182,7 +189,7 @@ final class TypeCodeMap {
         case T_STACK_TRACE: return StackTraceElement.class;
         }
 
-        typeCode -= T_FIRST_CUSTOM;
+        typeCode -= mFirstCustom;
         if (typeCode >= 0) {
             Custom[] customs = mCustomSerializers;
             if (typeCode < customs.length) {
@@ -198,7 +205,7 @@ final class TypeCodeMap {
      */
     Object readCustom(BufferedPipe pipe, int typeCode) throws IOException {
         try {
-            return mCustomSerializers[typeCode - T_FIRST_CUSTOM].read(pipe);
+            return mCustomSerializers[typeCode - mFirstCustom].read(pipe);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new InvalidObjectException("Unknown type: " + typeCode);
         }
@@ -213,7 +220,7 @@ final class TypeCodeMap {
         throws IOException
     {
         try {
-            mCustomSerializers[typeCode - T_FIRST_CUSTOM].skip(pipe, remoteConsumer);
+            mCustomSerializers[typeCode - mFirstCustom].skip(pipe, remoteConsumer);
         } catch (ArrayIndexOutOfBoundsException e) {
             throw new InvalidObjectException("Unknown type: " + typeCode);
         }

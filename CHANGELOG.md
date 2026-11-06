@@ -10,6 +10,8 @@ v2.4.5
 * Fixed a bug which prevented remote methods from being named "invoke" or "batchFinish". This
   is because the generated method signature conflicted with an internal helper method.
 * Fixed simple serializers which contain final fields or overrides of inherited fields.
+* Fixed how custom type codes are selected, preventing client-server compatibility issues when
+  new standard types are defined.
 
 v2.4.4 (2026-05-24)
 ------
