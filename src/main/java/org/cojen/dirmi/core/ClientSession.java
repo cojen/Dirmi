@@ -225,7 +225,9 @@ final class ClientSession<R> extends CoreSession<R> {
             flushControlPipe();
         } catch (IOException | InterruptedException e) {
             close(R_DISCONNECTED, null);
-            return false;
+            reconnectFailureNotify(e);
+            // Keep trying to reconnect if failure is likely transient.
+            return e instanceof IOException;
         }
 
         // Copy any data fields into the existing root.
