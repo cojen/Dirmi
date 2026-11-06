@@ -605,18 +605,18 @@ class BufferedPipe implements Pipe {
                 skipNBytes(readUnsignedByte()); return;
             case T_BOOLEAN_ARRAY_L: case T_BYTE_ARRAY_L: case T_BIG_INTEGER_L:
                 skipNBytes(readInt()); return;
-            case T_CHAR_ARRAY: case T_SHORT_ARRAY: skipNBytes(readUnsignedByte() << 1L); return;
-            case T_CHAR_ARRAY_L: case T_SHORT_ARRAY_L: skipNBytes(readInt() << 1L); return;
-            case T_FLOAT_ARRAY: case T_INT_ARRAY: skipNBytes(readUnsignedByte() << 2L); return;
-            case T_FLOAT_ARRAY_L: case T_INT_ARRAY_L: skipNBytes(readInt() << 2L); return;
-            case T_DOUBLE_ARRAY: case T_LONG_ARRAY: skipNBytes(readUnsignedByte() << 3L); return;
-            case T_DOUBLE_ARRAY_L: case T_LONG_ARRAY_L: skipNBytes(readInt() << 3L); return;
+            case T_CHAR_ARRAY: case T_SHORT_ARRAY: skipNBytes(shl(readUnsignedByte(), 1L)); return;
+            case T_CHAR_ARRAY_L: case T_SHORT_ARRAY_L: skipNBytes(shl(readInt(), 1L)); return;
+            case T_FLOAT_ARRAY: case T_INT_ARRAY: skipNBytes(shl(readUnsignedByte(), 2L)); return;
+            case T_FLOAT_ARRAY_L: case T_INT_ARRAY_L: skipNBytes(shl(readInt(), 2L)); return;
+            case T_DOUBLE_ARRAY: case T_LONG_ARRAY: skipNBytes(shl(readUnsignedByte(), 3L)); return;
+            case T_DOUBLE_ARRAY_L: case T_LONG_ARRAY_L: skipNBytes(shl(readInt(), 3L)); return;
             case T_OBJECT_ARRAY: skipObjectArray(remoteConsumer, readUnsignedByte()); return;
             case T_OBJECT_ARRAY_L: skipObjectArray(remoteConsumer, readInt()); return;
             case T_LIST: case T_SET: skipObjects(remoteConsumer, readUnsignedByte()); return;
             case T_LIST_L: case T_SET_L: skipObjects(remoteConsumer, readInt()); return;
-            case T_MAP: skipObjects(remoteConsumer, readUnsignedByte() << 1L); return;
-            case T_MAP_L: skipObjects(remoteConsumer, readInt() << 1L); return;
+            case T_MAP: skipObjects(remoteConsumer, shl(readUnsignedByte(), 1L)); return;
+            case T_MAP_L: skipObjects(remoteConsumer, shl(readInt(), 1L)); return;
             case T_BIG_DECIMAL: skipNBytes(4); skipObject(remoteConsumer); return;
 
             // Note: This case isn't expected because Throwables and StackTraceElements are
@@ -631,6 +631,12 @@ class BufferedPipe implements Pipe {
             default: mTypeCodeMap.skipCustom(this, remoteConsumer, typeCode); return;
             }
         }
+    }
+
+    // Workaround a Java language design mistake. When shifting by a long amount, the left
+    // operand isn't automatically cast to a long first.
+    private static long shl(int value, long amount) {
+        return ((long) value) << amount;
     }
 
     private static void accept(Consumer<Object> remoteConsumer, Object remote) {
