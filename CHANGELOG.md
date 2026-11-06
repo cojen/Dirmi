@@ -5,7 +5,7 @@ v2.4.5
 ------
 * Fixed string encoding/decoding issues which could corrupt the pipe data stream.
 * Fixed a bug during reconnect in which a transient failure would stop the reconnect.
-* Fixed remote interfaces which have more that 255 methods, when some of them are data methods.
+* Fixed remote interfaces which have more than 255 methods, when some of them are data methods.
   The wrong remote method was being invoked.
 * Fixed a bug which prevented remote methods from being named "invoke" or "batchFinish". This
   is because the generated method signature conflicted with an internal helper method.
