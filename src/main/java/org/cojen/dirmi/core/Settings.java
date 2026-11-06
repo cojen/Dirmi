@@ -95,7 +95,7 @@ final class Settings implements Cloneable {
         }
 
         int size = serializers.size();
-        var typeMap = new LinkedHashMap<String, Object>(size * 2);
+        var typeMap = new LinkedHashMap<String, Object>(Math.max(size, size * 2));
             
         pipe.writeByte(TypeCodes.T_FIRST_CUSTOM);
         pipe.writeInt(size);
