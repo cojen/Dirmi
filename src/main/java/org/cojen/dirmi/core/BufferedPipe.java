@@ -1242,7 +1242,7 @@ class BufferedPipe implements Pipe {
     }
 
     private Map<?,?> readMap(int length) throws IOException {
-        var map = new LinkedHashMap<Object, Object>(hashCapacity(length >> 1));
+        var map = new LinkedHashMap<Object, Object>(hashCapacity(length));
         stashReference(map);
         for (int i=0; i<length; i++) {
             map.put(readObject(), readObject());
