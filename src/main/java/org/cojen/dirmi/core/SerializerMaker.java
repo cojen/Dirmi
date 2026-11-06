@@ -219,15 +219,10 @@ public final class SerializerMaker {
         }
 
         // For consistency, write/read the fields in sorted order.
-        Field[] fields = mType.getFields();
-        Arrays.sort(fields, Comparator.comparing(Field::getName));
-
-        // Skip static, final, and transient fields.
-        for (int i=0; i<fields.length; i++) {
-            Field field = fields[i];
-            int mods = field.getModifiers();
-            if ((mods & (Modifier.STATIC | Modifier.FINAL | Modifier.TRANSIENT)) != 0) {
-                fields[i] = null;
+        var fields = new TreeMap<String, Field>();
+        for (Class<?> clazz = mType; clazz != null; clazz = clazz.getSuperclass()) {
+            for (Field field : clazz.getDeclaredFields()) {
+                fields.putIfAbsent(field.getName(), field);
             }
         }
 
@@ -237,15 +232,26 @@ public final class SerializerMaker {
 
         var readObjectVar = mReadMaker.new_(mType);
 
-        for (int i=0; i<fields.length; i++) {
-            Field field = fields[i];
-            if (field != null && !shouldSkip(field)) {
-                String name = field.getName();
-                CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.field(name));
-                CoreUtils.readParam(mReadPipeVar, readObjectVar.field(name));
-                CoreUtils.skipParam(mSkipPipeVar, mConsumerVar, field.getType());
-                appendToDescriptor(name, field.getType());
+        for (Field field : fields.values()) {
+            // Note: The skip checks should be performed after gathering all the fields, in
+            // case an inherited field has a different type than the overridden one. Fields
+            // defined in subclasses should always win.
+
+            // Fields must be public and not static, final, or transient.
+            int mask = Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL | Modifier.TRANSIENT;
+            if ((field.getModifiers() & mask) != Modifier.PUBLIC) {
+                continue;
             }
+
+            if (shouldSkip(field)) {
+                continue;
+            }
+
+            String name = field.getName();
+            CoreUtils.writeParam(mWritePipeVar, mWriteObjectVar.field(name));
+            CoreUtils.readParam(mReadPipeVar, readObjectVar.field(name));
+            CoreUtils.skipParam(mSkipPipeVar, mConsumerVar, field.getType());
+            appendToDescriptor(name, field.getType());
         }
 
         // With respect to memory ordering, treat the field stores as if they were final.
