@@ -1289,9 +1289,15 @@ abstract class CoreSession<R> extends Item implements Session<R> {
      * @see AutoDisposer
      */
     final void autoDispose(Stub stub) {
-        long id = stub.id;
-        if (stubDispose(id, null)) {
+        try {
+            long id = stub.id;
+
+            if (!stubDispose(id, null)) {
+                return;
+            }
+
             long transportCount = stub.invoker().resetTransportCount();
+
             mControlLock.lock();
             try {
                 // Notify the remote side to dispose the associated skeleton. If the command
@@ -1310,6 +1316,8 @@ abstract class CoreSession<R> extends Item implements Session<R> {
             } finally {
                 mControlLock.unlock();
             }
+        } catch (Throwable e) {
+            uncaught(e);
         }
     }
 
