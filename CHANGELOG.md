@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.4.5
+v2.4.5 (2026-11-06)
 ------
 * Fixed string encoding/decoding issues which could corrupt the pipe data stream.
 * Fixed a bug during reconnect in which a transient failure would stop the reconnect.
