@@ -207,7 +207,7 @@ final class TypeCodeMap {
         try {
             return mCustomSerializers[typeCode - mFirstCustom].read(pipe);
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new InvalidObjectException("Unknown type: " + typeCode);
+            throw new InvalidObjectException("Unknown type: " + typeCode, e);
         }
     }
 
@@ -222,7 +222,7 @@ final class TypeCodeMap {
         try {
             mCustomSerializers[typeCode - mFirstCustom].skip(pipe, remoteConsumer);
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw new InvalidObjectException("Unknown type: " + typeCode);
+            throw new InvalidObjectException("Unknown type: " + typeCode, e);
         }
     }
 
