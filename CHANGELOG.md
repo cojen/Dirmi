@@ -12,6 +12,8 @@ v2.4.5
 * Fixed simple serializers which contain final fields or overrides of inherited fields.
 * Fixed how custom type codes are selected, preventing client-server compatibility issues when
   new standard types are defined.
+* Perform strict serializer descriptor validation, preventing hangs when the two sides aren't
+  using the same kind of serializer.
 
 v2.4.4 (2026-05-24)
 ------

@@ -74,7 +74,11 @@ public final class SerializerMaker {
             return s;
         }
 
-        var descString = ((String) descriptor).intern();
+        if (!(descriptor instanceof String descString)) {
+            return null;
+        }
+
+        descString = descString.intern();
         var key = new WithDescriptor(type, descString);
 
         var serializer = cCache.get(key);
@@ -83,7 +87,14 @@ public final class SerializerMaker {
             serializer = cCache.get(key);
 
             if (serializer == null) {
-                var maker = new SerializerMaker(type, descString).make();
+                SerializerMaker maker;
+
+                try {
+                    maker = new SerializerMaker(type, descString).make();
+                } catch (IllegalArgumentException e) {
+                    // Descriptor parse failure.
+                    return null;
+                }
 
                 var canonicalKey = new WithDescriptor(type, maker.mEffectiveDescriptor);
                 serializer = cCache.get(canonicalKey);
@@ -416,35 +427,51 @@ public final class SerializerMaker {
     /**
      * Returns a field name to descriptor mapping, or null if the descriptor is null.
      */
-    private static Map<String, String> parseDescriptorMap(String descriptor) {
+    private static Map<String, String> parseDescriptorMap(String descriptor)
+        throws IllegalArgumentException
+    {
         if (descriptor == null) {
             return null;
         }
 
         var map = new HashMap<String, String>();
 
-        for (int ix = 0;;) {
+        int length = descriptor.length();
+
+        for (int ix = 0; ix < length;) {
             int ix2 = descriptor.indexOf(';', ix);
             if (ix2 < 0) {
-                break;
+                throw new IllegalArgumentException();
             }
 
             String name = descriptor.substring(ix, ix2);
             ix = ix2 + 1;
 
             ix2 = ix;
-            int c;
-            while ((c = descriptor.charAt(ix2)) == '[') ix2++;
 
-            if (c == 'L') {
-                ix2 = descriptor.indexOf(';', ix2 + 1) + 1;
-            } else {
+            while (ix2 < length && descriptor.charAt(ix2) == '[') {
                 ix2++;
             }
 
-            String desc = descriptor.substring(ix, ix2);
+            if (ix2 >= length) {
+                throw new IllegalArgumentException();
+            }
 
-            map.put(name, desc);
+            char c = descriptor.charAt(ix2);
+
+            if (c == 'L') {
+                ix2 = descriptor.indexOf(';', ix2 + 1);
+                if (ix2 < 0) {
+                    throw new IllegalArgumentException();
+                }
+                ix2++;
+            } else if ("ZBCSIJFD".indexOf(c) >= 0) {
+                ix2++;
+            } else {
+                throw new IllegalArgumentException();
+            }
+
+            map.put(name, descriptor.substring(ix, ix2));
 
             ix = ix2;
         }
